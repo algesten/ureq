@@ -1,0 +1,6 @@
+[package]
+name = "superagent"
+version = "0.1.0"
+authors = ["Martin Algesten <martin@algesten.se>"]
+
+[dependencies]
