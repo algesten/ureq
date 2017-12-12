@@ -1,6 +1,20 @@
 [package]
-name = "superagent"
+name = "ureq"
 version = "0.1.0"
 authors = ["Martin Algesten <martin@algesten.se>"]
 
 [dependencies]
+ascii = "0.9"
+base64 = "*"
+chrono = "0.4"
+chunked_transfer = "0.3"
+dns-lookup = "0.9.1"
+encoding = "0.2"
+lazy_static = "1"
+mime_guess = "1"
+qstring = "0.5"
+rustls = "0.12"
+serde_json = "1"
+url = "1.6"
+webpki = "0.18.0-alpha3"
+webpki-roots = "0.14.0"
