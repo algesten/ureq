@@ -6,7 +6,6 @@ authors = ["Martin Algesten <martin@algesten.se>"]
 [dependencies]
 ascii = "0.9"
 base64 = "*"
-chrono = "0.4"
 chunked_transfer = "0.3"
 dns-lookup = "0.9.1"
 encoding = "0.2"

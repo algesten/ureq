@@ -1,6 +1,5 @@
 extern crate ascii;
 extern crate base64;
-extern crate chrono;
 extern crate chunked_transfer;
 extern crate dns_lookup;
 extern crate encoding;
