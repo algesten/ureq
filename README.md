@@ -2,6 +2,20 @@
 
 > Minimal request library in rust.
 
+# UNDER CONSTRUCTION
+
+- [x] Somewhat finished API
+- [x] TLS
+- [x] Header handling
+- [x] Transfer-Encoding: chunked
+- [x] Ergonomic JSON handling
+- [ ] Auth headers
+- [ ] Test harness for end-to-end tests
+- [ ] Cookie jar in agent
+- [ ] Forms with application/x-www-form-urlencoded
+- [ ] multipart/form-data
+- [ ] Connection reuse/keep-alive with pool
+
 ## Usage
 
 ```rust

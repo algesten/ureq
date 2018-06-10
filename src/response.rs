@@ -12,8 +12,6 @@ use error::Error;
 const DEFAULT_CONTENT_TYPE: &'static str = "text/plain";
 const DEFAULT_CHARACTER_SET: &'static str = "utf-8";
 
-// buffered
-//  "text/", "/json", or "x-www-form-urlencoded"
 pub struct Response {
     status_line: AsciiString,
     index: (usize, usize), // index into status_line where we split: HTTP/1.1 200 OK
