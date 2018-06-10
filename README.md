@@ -15,6 +15,8 @@
 - [ ] Forms with application/x-www-form-urlencoded
 - [ ] multipart/form-data
 - [ ] Connection reuse/keep-alive with pool
+- [ ] Expect 100-continue
+- [ ] Always chunked RFC2616 #3.6
 
 ## Usage
 
