@@ -16,7 +16,6 @@ pub struct Request {
 
     // from request itself
     headers: Vec<Header>,
-    auth: Option<(String, String)>,
     query: QString,
     timeout: u32,
     timeout_read: u32,
@@ -62,7 +61,6 @@ impl Request {
             method,
             path,
             headers: agent.headers.clone(),
-            auth: agent.auth.clone(),
             redirects: 5,
             ..Default::default()
         }
@@ -454,7 +452,9 @@ impl Request {
         S: Into<String>,
         T: Into<String>,
     {
-        self.auth = Some((kind.into(), pass.into()));
+        let s = format!("Authorization: {} {}", kind.into(), pass.into());
+        let header = s.parse::<Header>().expect("Failed to parse header");
+        add_header(header, &mut self.headers);
         self
     }
 
@@ -503,11 +503,5 @@ impl Request {
         URL_BASE
             .join(&self.path)
             .map_err(|e| Error::BadUrl(format!("{}", e)))
-    }
-}
-
-fn add_request_header(request: &mut Request, k: String, v: String) {
-    if let Ok(h) = Header::from_str(&format!("{}: {}", k, v)) {
-        request.headers.push(h)
     }
 }

@@ -1,7 +1,7 @@
 use std::str::FromStr;
 use std::sync::Mutex;
 
-use header::Header;
+use header::{Header, add_header};
 use util::*;
 
 // to get to share private fields
@@ -12,7 +12,6 @@ include!("conn.rs");
 #[derive(Debug, Default, Clone)]
 pub struct Agent {
     pub headers: Vec<Header>,
-    pub auth: Option<(String, String)>,
     pub pool: Arc<Mutex<Option<ConnectionPool>>>,
 }
 
@@ -27,7 +26,6 @@ impl Agent {
     pub fn build(&self) -> Self {
         Agent {
             headers: self.headers.clone(),
-            auth: self.auth.clone(),
             pool: Arc::new(Mutex::new(Some(ConnectionPool::new()))),
         }
     }
@@ -134,7 +132,9 @@ impl Agent {
         S: Into<String>,
         T: Into<String>,
     {
-        self.auth = Some((kind.into(), pass.into()));
+        let s = format!("Authorization: {} {}", kind.into(), pass.into());
+        let header = s.parse::<Header>().expect("Failed to parse header");
+        add_header(header, &mut self.headers);
         self
     }
 
@@ -209,12 +209,6 @@ impl Agent {
         S: Into<String>,
     {
         self.request("PATCH", path)
-    }
-}
-
-fn add_agent_header(agent: &mut Agent, k: String, v: String) {
-    if let Ok(h) = Header::from_str(&format!("{}: {}", k, v)) {
-        agent.headers.push(h);
     }
 }
 
