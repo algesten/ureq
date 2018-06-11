@@ -9,7 +9,7 @@
 - [x] Header handling
 - [x] Transfer-Encoding: chunked
 - [x] Ergonomic JSON handling
-- [ ] Test harness for end-to-end tests
+- [x] Test harness for end-to-end tests
 - [ ] Limit read length on Content-Size
 - [ ] Auth headers
 - [ ] Cookie jar in agent

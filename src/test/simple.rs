@@ -1,5 +1,7 @@
-use super::super::*;
+use std::io::Read;
 use test;
+
+use super::super::*;
 
 #[test]
 fn header_passing() {
@@ -22,4 +24,31 @@ fn body_as_text() {
     let resp = get("test://host/body_as_text").call();
     let text = resp.into_string().unwrap();
     assert_eq!(text, "Hello World!");
+}
+
+#[test]
+fn body_as_json() {
+    test::set_handler("/body_as_json", |_req, _url| {
+        test::make_stream(
+            200,
+            "OK",
+            vec![],
+            "{\"hello\":\"world\"}".to_string().into_bytes(),
+        )
+    });
+    let resp = get("test://host/body_as_json").call();
+    let json = resp.into_json().unwrap();
+    assert_eq!(json["hello"], "world");
+}
+
+#[test]
+fn body_as_reader() {
+    test::set_handler("/body_as_reader", |_req, _url| {
+        test::make_stream(200, "OK", vec![], "abcdefgh".to_string().into_bytes())
+    });
+    let resp = get("test://host/body_as_reader").call();
+    let mut reader = resp.into_reader();
+    let mut text = String::new();
+    reader.read_to_string(&mut text).unwrap();
+    assert_eq!(text, "abcdefgh");
 }
