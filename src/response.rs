@@ -132,12 +132,18 @@ impl Response {
 
     pub fn into_reader(self) -> impl Read {
         let is_chunked = self.get("transfer-encoding")
-            .map(|enc| enc.eq_ignore_ascii_case("chunked"))
+            .map(|enc| enc.len() > 0) // whatever it says, do chunked
             .unwrap_or(false);
+        let len = self.get("content-length").and_then(|l| l.parse::<usize>().ok());
         let reader = self.reader.expect("No reader in response?!");
         match is_chunked {
             true => Box::new(chunked_transfer::Decoder::new(reader)),
-            false => reader,
+            false => {
+                match len {
+                    Some(len) => Box::new(LimitedRead::new(reader, len)),
+                    None => reader,
+                }
+            },
         }
     }
 
@@ -271,5 +277,39 @@ fn read_next_line<R: Read>(reader: &mut R) -> IoResult<AsciiString> {
         prev_byte_was_cr = byte == b'\r';
 
         buf.push(byte);
+    }
+}
+
+struct LimitedRead {
+    reader: Box<Read + Send>,
+    limit: usize,
+    position: usize,
+}
+
+impl LimitedRead {
+    fn new(reader: Box<Read + Send>, limit: usize) -> Self {
+        LimitedRead {
+            reader,
+            limit,
+            position: 0,
+        }
+    }
+}
+
+impl Read for LimitedRead {
+    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
+        let left = self.limit - self.position;
+        let from = if left < buf.len() {
+            &mut buf[0..left]
+        } else {
+            buf
+        };
+        match self.reader.read(from) {
+            Ok(amount) => {
+                self.position += amount;
+                Ok(amount)
+            },
+            Err(e) => Err(e)
+        }
     }
 }

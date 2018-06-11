@@ -9,6 +9,7 @@ use url::Url;
 use util::vecread::VecRead;
 
 mod simple;
+mod body_read;
 
 type RequestHandler = Fn(&Request, &Url) -> Result<Stream, Error> + Send + 'static;
 
