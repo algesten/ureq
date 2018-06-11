@@ -33,6 +33,7 @@ impl ConnectionPool {
         let mut stream = match url.scheme() {
             "http" => connect_http(request, &url),
             "https" => connect_https(request, &url),
+            "test" => connect_test(request, &url),
             _ => Err(Error::UnknownScheme(url.scheme().to_string())),
         }?;
 
@@ -190,4 +191,15 @@ where
         writer.write_all(&buf[0..len])?;
     }
     Ok(())
+}
+
+#[cfg(not(test))]
+fn connect_test(_request: &Request, url: &Url) -> Result<Stream, Error> {
+    Err(Error::UnknownScheme(url.scheme().to_string()))
+}
+
+#[cfg(test)]
+fn connect_test(request: &Request, url: &Url) -> Result<Stream, Error> {
+    use test;
+    test::resolve_handler(request, url)
 }

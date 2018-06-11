@@ -7,6 +7,7 @@ use std::net::TcpStream;
 pub enum Stream {
     Http(TcpStream),
     Https(rustls::ClientSession, TcpStream),
+    #[cfg(test)] Test(Box<Read + Send>, Box<Write + Send>),
 }
 
 impl Read for Stream {
@@ -14,6 +15,7 @@ impl Read for Stream {
         match self {
             Stream::Http(sock) => sock.read(buf),
             Stream::Https(sess, sock) => rustls::Stream::new(sess, sock).read(buf),
+            #[cfg(test)] Stream::Test(reader, _) => reader.read(buf),
         }
     }
 }
@@ -23,12 +25,14 @@ impl Write for Stream {
         match self {
             Stream::Http(sock) => sock.write(buf),
             Stream::Https(sess, sock) => rustls::Stream::new(sess, sock).write(buf),
+            #[cfg(test)] Stream::Test(_, writer) => writer.write(buf),
         }
     }
     fn flush(&mut self) -> Result<()> {
         match self {
             Stream::Http(sock) => sock.flush(),
             Stream::Https(sess, sock) => rustls::Stream::new(sess, sock).flush(),
+            #[cfg(test)] Stream::Test(_, writer) => writer.flush(),
         }
     }
 }

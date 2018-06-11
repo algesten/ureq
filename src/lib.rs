@@ -20,6 +20,9 @@ mod header;
 mod stream;
 mod util;
 
+#[cfg(test)]
+mod test;
+
 pub use agent::{Agent, Request, Response};
 pub use header::Header;
 
@@ -125,7 +128,7 @@ where
 mod tests {
     use super::*;
 
-    #[test]
+    //#[test]
     fn connect_http_google() {
         let resp = get("http://www.google.com/").call();
         println!("{:?}", resp);
@@ -133,7 +136,7 @@ mod tests {
         assert_eq!("text/html", resp.content_type());
     }
 
-    #[test]
+    //#[test]
     fn connect_https_google() {
         let resp = get("https://www.google.com/").call();
         println!("{:?}", resp);

@@ -1,7 +1,7 @@
 #[allow(dead_code)]
 mod macros;
 mod serde_macros;
-mod vecread;
+pub mod vecread;
 
 use base64;
 use mime_guess::get_mime_type_str;
