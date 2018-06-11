@@ -10,6 +10,7 @@
 - [x] Transfer-Encoding: chunked
 - [x] Ergonomic JSON handling
 - [x] Test harness for end-to-end tests
+- [x] Always chunked RFC2616 #3.6
 - [x] Limit read length on Content-Size
 - [x] Auth headers
 - [x] Repeated headers
@@ -18,7 +19,6 @@
 - [ ] multipart/form-data
 - [ ] Connection reuse/keep-alive with pool
 - [ ] Expect 100-continue
-- [ ] Always chunked RFC2616 #3.6
 
 ## Usage
 
