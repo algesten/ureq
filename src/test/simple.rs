@@ -17,6 +17,38 @@ fn header_passing() {
 }
 
 #[test]
+fn repeat_non_x_header() {
+    test::set_handler("/repeat_non_x_header", |req, _url| {
+        assert!(req.has("Accept"));
+        assert_eq!(req.get("Accept").unwrap(), "baz");
+        test::make_stream(200, "OK", vec![], vec![])
+    });
+    let resp = get("test://host/repeat_non_x_header")
+        .set("Accept", "bar")
+        .set("Accept", "baz")
+        .call();
+    assert_eq!(*resp.status(), 200);
+}
+
+#[test]
+fn repeat_x_header() {
+    test::set_handler("/repeat_x_header", |req, _url| {
+        assert!(req.has("X-Forwarded-For"));
+        assert_eq!(req.get("X-Forwarded-For").unwrap(), "130.240.19.2");
+        assert_eq!(req.get_all("X-Forwarded-For"), vec![
+            "130.240.19.2",
+            "130.240.19.3",
+        ]);
+        test::make_stream(200, "OK", vec![], vec![])
+    });
+    let resp = get("test://host/repeat_x_header")
+        .set("X-Forwarded-For", "130.240.19.2")
+        .set("X-Forwarded-For", "130.240.19.3")
+        .call();
+    assert_eq!(*resp.status(), 200);
+}
+
+#[test]
 fn body_as_text() {
     test::set_handler("/body_as_text", |_req, _url| {
         test::make_stream(200, "OK", vec![], "Hello World!".to_string().into_bytes())

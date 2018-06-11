@@ -56,3 +56,11 @@ impl FromStr for Header {
         Ok(Header { line, index })
     }
 }
+
+pub fn add_header(header: Header, headers: &mut Vec<Header>) {
+    if !header.name().to_lowercase().starts_with("x-") {
+        let name = header.name();
+        headers.retain(|h| h.name() != name);
+    }
+    headers.push(header);
+}

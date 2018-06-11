@@ -53,7 +53,9 @@ impl Agent {
         K: Into<String>,
         V: Into<String>,
     {
-        add_agent_header(self, header.into(), value.into());
+        let s = format!("{}: {}", header.into(), value.into());
+        let header = s.parse::<Header>().expect("Failed to parse header");
+        add_header(header, &mut self.headers);
         self
     }
 
@@ -87,7 +89,9 @@ impl Agent {
         I: IntoIterator<Item = (K, V)>,
     {
         for (k, v) in headers.into_iter() {
-            add_agent_header(self, k.into(), v.into());
+            let s = format!("{}: {}", k.into(), v.into());
+            let header = s.parse::<Header>().expect("Failed to parse header");
+            add_header(header, &mut self.headers);
         }
         self
     }

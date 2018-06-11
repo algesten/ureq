@@ -10,8 +10,9 @@
 - [x] Transfer-Encoding: chunked
 - [x] Ergonomic JSON handling
 - [x] Test harness for end-to-end tests
-- [ ] Limit read length on Content-Size
-- [ ] Auth headers
+- [x] Limit read length on Content-Size
+- [x] Auth headers
+- [x] Repeated headers
 - [ ] Cookie jar in agent
 - [ ] Forms with application/x-www-form-urlencoded
 - [ ] multipart/form-data
