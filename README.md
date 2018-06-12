@@ -14,7 +14,7 @@
 - [x] Limit read length on Content-Size
 - [x] Auth headers
 - [x] Repeated headers
-- [ ] Cookie jar in agent
+- [x] Cookie jar in agent
 - [ ] Forms with application/x-www-form-urlencoded
 - [ ] multipart/form-data
 - [ ] Connection reuse/keep-alive with pool

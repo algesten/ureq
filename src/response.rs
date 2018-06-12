@@ -17,7 +17,7 @@ pub struct Response {
     index: (usize, usize), // index into status_line where we split: HTTP/1.1 200 OK
     status: u16,
     headers: Vec<Header>,
-    reader: Option<Box<Read + Send + 'static>>,
+    stream: Option<Stream>,
 }
 
 impl ::std::fmt::Debug for Response {
@@ -135,13 +135,13 @@ impl Response {
             .map(|enc| enc.len() > 0) // whatever it says, do chunked
             .unwrap_or(false);
         let len = self.header("content-length").and_then(|l| l.parse::<usize>().ok());
-        let reader = self.reader.expect("No reader in response?!");
+        let reader = self.stream.expect("No reader in response?!");
         match is_chunked {
             true => Box::new(chunked_transfer::Decoder::new(reader)),
             false => {
                 match len {
                     Some(len) => Box::new(LimitedRead::new(reader, len)),
-                    None => reader,
+                    None => Box::new(reader) as Box<Read>,
                 }
             },
         }
@@ -202,12 +202,17 @@ impl Response {
             index,
             status,
             headers,
-            reader: None,
+            stream: None,
         })
     }
 
-    fn set_reader<R>(&mut self, reader: R) where R: Read + Send + 'static {
-        self.reader = Some(Box::new(reader));
+    fn set_stream(&mut self, stream: Stream) {
+        self.stream = Some(stream);
+    }
+
+    #[cfg(test)]
+    pub fn to_write_vec(&self) -> Vec<u8> {
+        self.stream.as_ref().unwrap().to_write_vec()
     }
 
 }
@@ -243,7 +248,7 @@ impl FromStr for Response {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut read = VecRead::from_str(s);
         let mut resp = Self::do_from_read(&mut read)?;
-        resp.set_reader(read);
+        resp.set_stream(Stream::Read(Box::new(read)));
         Ok(resp)
     }
 }
@@ -281,13 +286,13 @@ fn read_next_line<R: Read>(reader: &mut R) -> IoResult<AsciiString> {
 }
 
 struct LimitedRead {
-    reader: Box<Read + Send>,
+    reader: Stream,
     limit: usize,
     position: usize,
 }
 
 impl LimitedRead {
-    fn new(reader: Box<Read + Send>, limit: usize) -> Self {
+    fn new(reader: Stream, limit: usize) -> Self {
         LimitedRead {
             reader,
             limit,

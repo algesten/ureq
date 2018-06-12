@@ -1,6 +1,7 @@
 extern crate ascii;
 extern crate base64;
 extern crate chunked_transfer;
+extern crate cookie;
 extern crate dns_lookup;
 extern crate encoding;
 #[macro_use]
@@ -28,6 +29,7 @@ pub use header::Header;
 
 // re-export
 pub use serde_json::{to_value, Map, Value};
+pub use cookie::Cookie;
 
 /// Agents keep state between requests.
 ///
@@ -131,16 +133,20 @@ mod tests {
     #[test]
     fn connect_http_google() {
         let resp = get("http://www.google.com/").call();
-        println!("{:?}", resp);
-        assert_eq!("text/html; charset=ISO-8859-1", resp.header("content-type").unwrap());
+        assert_eq!(
+            "text/html; charset=ISO-8859-1",
+            resp.header("content-type").unwrap()
+        );
         assert_eq!("text/html", resp.content_type());
     }
 
     #[test]
     fn connect_https_google() {
         let resp = get("https://www.google.com/").call();
-        println!("{:?}", resp);
-        assert_eq!("text/html; charset=ISO-8859-1", resp.header("content-type").unwrap());
+        assert_eq!(
+            "text/html; charset=ISO-8859-1",
+            resp.header("content-type").unwrap()
+        );
         assert_eq!("text/html", resp.content_type());
     }
 }

@@ -8,7 +8,7 @@ lazy_static! {
 
 #[derive(Clone, Default)]
 pub struct Request {
-    pool: Arc<Mutex<Option<ConnectionPool>>>,
+    state: Arc<Mutex<Option<AgentState>>>,
 
     // via agent
     method: String,
@@ -57,7 +57,7 @@ impl Payload {
 impl Request {
     fn new(agent: &Agent, method: String, path: String) -> Request {
         Request {
-            pool: Arc::clone(&agent.pool),
+            state: Arc::clone(&agent.state),
             method,
             path,
             headers: agent.headers.clone(),
@@ -90,26 +90,31 @@ impl Request {
     ///
     /// println!("{:?}", r);
     /// ```
-    pub fn call(&self) -> Response {
+    pub fn call(&mut self) -> Response {
         self.do_call(Payload::Empty)
     }
 
-    fn do_call(&self, payload: Payload) -> Response {
-        let mut lock = self.pool.lock().unwrap();
+    fn do_call(&mut self, payload: Payload) -> Response {
+        let mut state = self.state.lock().unwrap();
         self.to_url()
             .and_then(|url| {
-                if lock.is_none() {
-                    // create a one off pool.
-                    ConnectionPool::new().connect(self, &self.method, &url, self.redirects, payload)
-                } else {
-                    // reuse connection pool.
-                    lock.as_mut().unwrap().connect(
+                if state.is_none() {
+                    // create a one off pool/jar.
+                    ConnectionPool::new().connect(
                         self,
                         &self.method,
                         &url,
                         self.redirects,
+                        None,
                         payload,
                     )
+                } else {
+                    // reuse connection pool.
+                    let state = state.as_mut().unwrap();
+                    let jar = &mut state.jar;
+                    state
+                        .pool
+                        .connect(self, &self.method, &url, self.redirects, Some(jar), payload)
                 }
             })
             .unwrap_or_else(|e| e.into())
@@ -127,7 +132,7 @@ impl Request {
     /// println!("{:?}", r);
     /// }
     /// ```
-    pub fn send_json(&self, data: serde_json::Value) -> Response {
+    pub fn send_json(&mut self, data: serde_json::Value) -> Response {
         self.do_call(Payload::JSON(data))
     }
 
@@ -139,7 +144,7 @@ impl Request {
     ///     .send_str("Hello World!");
     /// println!("{:?}", r);
     /// ```
-    pub fn send_str<S>(&self, data: S) -> Response
+    pub fn send_str<S>(&mut self, data: S) -> Response
     where
         S: Into<String>,
     {
@@ -151,7 +156,7 @@ impl Request {
     ///
     ///
     ///
-    pub fn send<R>(&self, reader: R) -> Response
+    pub fn send<R>(&mut self, reader: R) -> Response
     where
         R: Read + Send + 'static,
     {

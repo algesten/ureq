@@ -26,10 +26,23 @@ impl ConnectionPool {
         method: &str,
         url: &Url,
         redirects: u32,
+        mut jar: Option<&mut CookieJar>,
         payload: Payload,
     ) -> Result<Response, Error> {
         //
-        // open connection
+
+        let hostname = url.host_str().unwrap_or("localhost"); // is localhost a good alternative?
+        let is_secure = url.scheme().eq_ignore_ascii_case("https");
+
+        let cookie_headers: Vec<_> = {
+            match jar.as_ref() {
+                None => vec![],
+                Some(jar) => match_cookies(jar, hostname, url.path(), is_secure),
+            }
+        };
+        let headers = request.headers.iter().chain(cookie_headers.iter());
+
+        // open socket
         let mut stream = match url.scheme() {
             "http" => connect_http(request, &url),
             "https" => connect_https(request, &url),
@@ -43,15 +56,33 @@ impl ConnectionPool {
         if !request.has("host") {
             write!(prelude, "Host: {}\r\n", url.host().unwrap())?;
         }
-        for header in request.headers.iter() {
+        for header in headers {
             write!(prelude, "{}: {}\r\n", header.name(), header.value())?;
         }
         write!(prelude, "\r\n")?;
 
         stream.write_all(&mut prelude[..])?;
 
-        // start reading the response to check it it's a redirect
+        // start reading the response to process cookies and redirects.
         let mut resp = Response::from_read(&mut stream);
+
+        // squirrel away cookies
+        if let Some(add_jar) = jar.as_mut() {
+            for raw_cookie in resp.all("set-cookie").iter() {
+                let to_parse = if raw_cookie.to_lowercase().contains("domain=") {
+                    raw_cookie.to_string()
+                } else {
+                    format!("{}; Domain={}", raw_cookie, hostname)
+                };
+                match Cookie::parse_encoded(&to_parse[..]) {
+                    Err(_) => (), // ignore unparseable cookies
+                    Ok(mut cookie) => {
+                        let cookie = cookie.into_owned();
+                        add_jar.add(cookie)
+                    }
+                }
+            }
+        }
 
         // handle redirects
         if resp.redirect() {
@@ -70,10 +101,10 @@ impl ConnectionPool {
                 return match resp.status {
                     301 | 302 | 303 => {
                         send_payload(&request, payload, &mut stream)?;
-                        self.connect(request, "GET", &new_url, redirects - 1, Payload::Empty)
+                        self.connect(request, "GET", &new_url, redirects - 1, jar, Payload::Empty)
                     }
                     307 | 308 | _ => {
-                        self.connect(request, method, &new_url, redirects - 1, payload)
+                        self.connect(request, method, &new_url, redirects - 1, jar, payload)
                     }
                 };
             }
@@ -83,7 +114,7 @@ impl ConnectionPool {
         send_payload(&request, payload, &mut stream)?;
 
         // since it is not a redirect, give away the incoming stream to the response object
-        resp.set_reader(stream);
+        resp.set_stream(stream);
 
         // release the response
         Ok(resp)
@@ -191,6 +222,35 @@ where
         writer.write_all(&buf[0..len])?;
     }
     Ok(())
+}
+
+// TODO check so cookies can't be set for tld:s
+fn match_cookies<'a>(jar: &'a CookieJar, domain: &str, path: &str, is_secure: bool) -> Vec<Header> {
+    jar.iter()
+        .filter(|c| {
+            // if there is a domain, it must be matched. if there is no domain, then ignore cookie
+            let domain_ok = c.domain()
+                .map(|cdom| domain.contains(cdom))
+                .unwrap_or(false);
+            // a path must match the beginning of request path. no cookie path, we say is ok. is it?!
+            let path_ok = c.path()
+                .map(|cpath| path.find(cpath).map(|pos| pos == 0).unwrap_or(false))
+                .unwrap_or(true);
+            // either the cookie isnt secure, or we're not doing a secure request.
+            let secure_ok = !c.secure() || is_secure;
+
+            domain_ok && path_ok && secure_ok
+        })
+        .map(|c| {
+            let name = c.name().to_string();
+            let value = c.value().to_string();
+            let nameval = Cookie::new(name, value).encoded().to_string();
+            let head = format!("Cookie: {}", nameval);
+            head.parse::<Header>().ok()
+        })
+        .filter(|o| o.is_some())
+        .map(|o| o.unwrap())
+        .collect()
 }
 
 #[cfg(not(test))]

@@ -44,7 +44,7 @@ pub fn make_response(
     buf.append(&mut body);
     let read = VecRead::from_vec(buf);
     let write: Vec<u8> = vec![];
-    Ok(Stream::Test(Box::new(read), Box::new(write)))
+    Ok(Stream::Test(Box::new(read), write))
 }
 
 pub fn resolve_handler(req: &Request, url: &Url) -> Result<Stream, Error> {

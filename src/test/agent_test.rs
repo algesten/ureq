@@ -42,10 +42,15 @@ fn agent_cookies() {
     assert!(agent.cookie("foo").is_some());
     assert_eq!(agent.cookie("foo").unwrap().value(), "bar baz");
 
-    test::set_handler("/agent_cookies", |req, _url| {
+    test::set_handler("/agent_cookies", |_req, _url| {
         test::make_response(200, "OK", vec![], vec![])
     });
 
-    agent.get("test://host/agent_cookies").call();
+    let resp = agent.get("test://host/agent_cookies").call();
+
+    let vec = resp.to_write_vec();
+    let s = String::from_utf8_lossy(&vec);
+
+    assert!(s.contains("Cookie: foo=bar%20baz\r\n"));
 
 }

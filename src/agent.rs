@@ -1,7 +1,8 @@
+use cookie::{Cookie, CookieJar};
 use std::str::FromStr;
 use std::sync::Mutex;
 
-use header::{Header, add_header};
+use header::{add_header, Header};
 use util::*;
 
 // to get to share private fields
@@ -11,8 +12,23 @@ include!("conn.rs");
 
 #[derive(Debug, Default, Clone)]
 pub struct Agent {
-    pub headers: Vec<Header>,
-    pub pool: Arc<Mutex<Option<ConnectionPool>>>,
+    headers: Vec<Header>,
+    state: Arc<Mutex<Option<AgentState>>>,
+}
+
+#[derive(Debug)]
+struct AgentState {
+    pool: ConnectionPool,
+    jar: CookieJar,
+}
+
+impl AgentState {
+    fn new() -> Self {
+        AgentState {
+            pool: ConnectionPool::new(),
+            jar: CookieJar::new(),
+        }
+    }
 }
 
 impl Agent {
@@ -26,7 +42,7 @@ impl Agent {
     pub fn build(&self) -> Self {
         Agent {
             headers: self.headers.clone(),
-            pool: Arc::new(Mutex::new(Some(ConnectionPool::new()))),
+            state: Arc::new(Mutex::new(Some(AgentState::new()))),
         }
     }
 
@@ -158,6 +174,43 @@ impl Agent {
         S: Into<String>,
     {
         Request::new(&self, method.into(), path.into())
+    }
+
+    /// Gets a cookie in this agent by name. Cookies are available
+    /// either by setting it in the agent, or by making requests
+    /// that `Set-Cookie` in the agent.
+    ///
+    /// ```
+    /// let agent = ureq::agent().build();
+    ///
+    /// agent.get("http://www.google.com").call();
+    ///
+    /// assert!(agent.cookie("NID").is_some());
+    /// ```
+    pub fn cookie(&self, name: &str) -> Option<Cookie<'static>> {
+        let state = self.state.lock().unwrap();
+        state
+            .as_ref()
+            .and_then(|state| state.jar.get(name))
+            .map(|c| c.clone())
+    }
+
+    /// Set a cookie in this agent.
+    ///
+    /// ```
+    /// let agent = ureq::agent().build();
+    ///
+    /// let cookie = ureq::Cookie::new("name", "value");
+    /// agent.set_cookie(cookie);
+    /// ```
+    pub fn set_cookie(&self, cookie: Cookie<'static>) {
+        let mut state = self.state.lock().unwrap();
+        match state.as_mut() {
+            None => (),
+            Some(state) => {
+                state.jar.add_original(cookie);
+            }
+        }
     }
 
     pub fn get<S>(&self, path: S) -> Request
