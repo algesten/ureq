@@ -53,7 +53,7 @@ impl Response {
     }
 
     /// The header corresponding header value for the give name, if any.
-    pub fn get<'a>(&self, name: &'a str) -> Option<&str> {
+    pub fn header<'a>(&self, name: &'a str) -> Option<&str> {
         self.headers
             .iter()
             .find(|h| h.is_name(name))
@@ -62,11 +62,11 @@ impl Response {
 
     /// Tells if the response has the named header.
     pub fn has<'a>(&self, name: &'a str) -> bool {
-        self.get(name).is_some()
+        self.header(name).is_some()
     }
 
     /// All headers corresponding values for the give name, or empty vector.
-    pub fn get_all<'a>(&self, name: &'a str) -> Vec<&str> {
+    pub fn all<'a>(&self, name: &'a str) -> Vec<&str> {
         self.headers
             .iter()
             .filter(|h| h.is_name(name))
@@ -105,11 +105,11 @@ impl Response {
     ///
     /// ```
     /// let resp = ureq::get("https://www.google.com/").call();
-    /// assert_eq!("text/html; charset=ISO-8859-1", resp.get("content-type").unwrap());
+    /// assert_eq!("text/html; charset=ISO-8859-1", resp.header("content-type").unwrap());
     /// assert_eq!("text/html", resp.content_type());
     /// ```
     pub fn content_type(&self) -> &str {
-        self.get("content-type")
+        self.header("content-type")
             .map(|header| {
                 header
                     .find(";")
@@ -119,7 +119,7 @@ impl Response {
             .unwrap_or(DEFAULT_CONTENT_TYPE)
     }
     pub fn charset(&self) -> &str {
-        self.get("content-type")
+        self.header("content-type")
             .and_then(|header| {
                 header.find(";").and_then(|semi| {
                     (&header[semi + 1..])
@@ -131,10 +131,10 @@ impl Response {
     }
 
     pub fn into_reader(self) -> impl Read {
-        let is_chunked = self.get("transfer-encoding")
+        let is_chunked = self.header("transfer-encoding")
             .map(|enc| enc.len() > 0) // whatever it says, do chunked
             .unwrap_or(false);
-        let len = self.get("content-length").and_then(|l| l.parse::<usize>().ok());
+        let len = self.header("content-length").and_then(|l| l.parse::<usize>().ok());
         let reader = self.reader.expect("No reader in response?!");
         match is_chunked {
             true => Box::new(chunked_transfer::Decoder::new(reader)),

@@ -7,20 +7,20 @@ use super::super::*;
 fn header_passing() {
     test::set_handler("/header_passing", |req, _url| {
         assert!(req.has("X-Foo"));
-        assert_eq!(req.get("X-Foo").unwrap(), "bar");
+        assert_eq!(req.header("X-Foo").unwrap(), "bar");
         test::make_stream(200, "OK", vec!["X-Bar: foo"], vec![])
     });
     let resp = get("test://host/header_passing").set("X-Foo", "bar").call();
     assert_eq!(*resp.status(), 200);
     assert!(resp.has("X-Bar"));
-    assert_eq!(resp.get("X-Bar").unwrap(), "foo");
+    assert_eq!(resp.header("X-Bar").unwrap(), "foo");
 }
 
 #[test]
 fn repeat_non_x_header() {
     test::set_handler("/repeat_non_x_header", |req, _url| {
         assert!(req.has("Accept"));
-        assert_eq!(req.get("Accept").unwrap(), "baz");
+        assert_eq!(req.header("Accept").unwrap(), "baz");
         test::make_stream(200, "OK", vec![], vec![])
     });
     let resp = get("test://host/repeat_non_x_header")
@@ -34,8 +34,8 @@ fn repeat_non_x_header() {
 fn repeat_x_header() {
     test::set_handler("/repeat_x_header", |req, _url| {
         assert!(req.has("X-Forwarded-For"));
-        assert_eq!(req.get("X-Forwarded-For").unwrap(), "130.240.19.2");
-        assert_eq!(req.get_all("X-Forwarded-For"), vec![
+        assert_eq!(req.header("X-Forwarded-For").unwrap(), "130.240.19.2");
+        assert_eq!(req.all("X-Forwarded-For"), vec![
             "130.240.19.2",
             "130.240.19.3",
         ]);

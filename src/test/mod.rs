@@ -8,7 +8,7 @@ use stream::Stream;
 use url::Url;
 use util::vecread::VecRead;
 
-mod agent;
+mod agent_test;
 mod auth;
 mod simple;
 mod body_read;

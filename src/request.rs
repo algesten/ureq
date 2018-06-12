@@ -189,9 +189,9 @@ impl Request {
     /// let req = ureq::get("/my_page")
     ///     .set("X-API-Key", "foobar")
     ///     .build();
-    /// assert_eq!("foobar", req.get("x-api-Key").unwrap());
+    /// assert_eq!("foobar", req.header("x-api-Key").unwrap());
     /// ```
-    pub fn get<'a>(&self, name: &'a str) -> Option<&str> {
+    pub fn header<'a>(&self, name: &'a str) -> Option<&str> {
         self.headers
             .iter()
             .find(|h| h.is_name(name))
@@ -207,7 +207,7 @@ impl Request {
     /// assert_eq!(true, req.has("x-api-Key"));
     /// ```
     pub fn has<'a>(&self, name: &'a str) -> bool {
-        self.get(name).is_some()
+        self.header(name).is_some()
     }
 
     /// All headers corresponding values for the give name, or empty vector.
@@ -217,12 +217,12 @@ impl Request {
     ///     .set("X-Forwarded-For", "1.2.3.4")
     ///     .set("X-Forwarded-For", "2.3.4.5")
     ///     .build();
-    /// assert_eq!(req.get_all("x-forwarded-for"), vec![
+    /// assert_eq!(req.all("x-forwarded-for"), vec![
     ///     "1.2.3.4",
     ///     "2.3.4.5",
     /// ]);
     /// ```
-    pub fn get_all<'a>(&self, name: &'a str) -> Vec<&str> {
+    pub fn all<'a>(&self, name: &'a str) -> Vec<&str> {
         self.headers
             .iter()
             .filter(|h| h.is_name(name))

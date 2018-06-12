@@ -5,7 +5,7 @@ use super::super::*;
 #[test]
 fn basic_auth() {
     test::set_handler("/basic_auth", |req, _url| {
-        assert_eq!(req.get("Authorization").unwrap(), "Basic bWFydGluOnJ1YmJlcm1hc2hndW0=");
+        assert_eq!(req.header("Authorization").unwrap(), "Basic bWFydGluOnJ1YmJlcm1hc2hndW0=");
         test::make_stream(200, "OK", vec![], vec![])
     });
     let resp = get("test://host/basic_auth")
@@ -17,7 +17,7 @@ fn basic_auth() {
 #[test]
 fn kind_auth() {
     test::set_handler("/kind_auth", |req, _url| {
-        assert_eq!(req.get("Authorization").unwrap(), "Digest abcdefgh123");
+        assert_eq!(req.header("Authorization").unwrap(), "Digest abcdefgh123");
         test::make_stream(200, "OK", vec![], vec![])
     });
     let resp = get("test://host/kind_auth")

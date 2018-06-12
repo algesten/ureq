@@ -60,7 +60,7 @@ impl ConnectionPool {
             }
 
             // the location header
-            let location = resp.get("location");
+            let location = resp.header("location");
             if let Some(location) = location {
                 // join location header to current url in case it it relative
                 let new_url = url.join(location)
@@ -155,14 +155,14 @@ fn send_payload(request: &Request, payload: Payload, stream: &mut Stream) -> IoR
     //
     let (size, reader) = payload.into_read();
 
-    let do_chunk = request.get("transfer-encoding")
+    let do_chunk = request.header("transfer-encoding")
         // if the user has set an encoding header, obey that.
         .map(|enc| enc.eq_ignore_ascii_case("chunked"))
         // if the content has a size
         .ok_or_else(|| size.
         // or if the user set a content-length header
         or_else(||
-            request.get("content-length").map(|len| len.parse::<usize>().unwrap_or(0)))
+            request.header("content-length").map(|len| len.parse::<usize>().unwrap_or(0)))
         // and that size is larger than 1MB, chunk,
         .map(|size| size > CHUNK_SIZE))
         // otherwise, assume chunking since it can be really big.

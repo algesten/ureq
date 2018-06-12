@@ -128,19 +128,19 @@ where
 mod tests {
     use super::*;
 
-    //#[test]
+    #[test]
     fn connect_http_google() {
         let resp = get("http://www.google.com/").call();
         println!("{:?}", resp);
-        assert_eq!("text/html; charset=ISO-8859-1", resp.get("content-type").unwrap());
+        assert_eq!("text/html; charset=ISO-8859-1", resp.header("content-type").unwrap());
         assert_eq!("text/html", resp.content_type());
     }
 
-    //#[test]
+    #[test]
     fn connect_https_google() {
         let resp = get("https://www.google.com/").call();
         println!("{:?}", resp);
-        assert_eq!("text/html; charset=ISO-8859-1", resp.get("content-type").unwrap());
+        assert_eq!("text/html; charset=ISO-8859-1", resp.header("content-type").unwrap());
         assert_eq!("text/html", resp.content_type());
     }
 }
