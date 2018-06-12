@@ -6,7 +6,7 @@ use super::super::*;
 #[test]
 fn transfer_encoding_bogus() {
     test::set_handler("/transfer_encoding_bogus", |_req, _url| {
-        test::make_stream(
+        test::make_response(
             200,
             "OK",
             vec![
@@ -27,7 +27,7 @@ fn transfer_encoding_bogus() {
 #[test]
 fn content_length_limited() {
     test::set_handler("/content_length_limited", |_req, _url| {
-        test::make_stream(
+        test::make_response(
             200,
             "OK",
             vec!["Content-Length: 4"],
@@ -45,7 +45,7 @@ fn content_length_limited() {
  // content-length should be ignnored when chunked
  fn ignore_content_length_when_chunked() {
     test::set_handler("/ignore_content_length_when_chunked", |_req, _url| {
-        test::make_stream(
+        test::make_response(
             200,
             "OK",
             vec!["Content-Length: 4", "transfer-encoding: chunked"],

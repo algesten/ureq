@@ -8,7 +8,7 @@ fn header_passing() {
     test::set_handler("/header_passing", |req, _url| {
         assert!(req.has("X-Foo"));
         assert_eq!(req.header("X-Foo").unwrap(), "bar");
-        test::make_stream(200, "OK", vec!["X-Bar: foo"], vec![])
+        test::make_response(200, "OK", vec!["X-Bar: foo"], vec![])
     });
     let resp = get("test://host/header_passing").set("X-Foo", "bar").call();
     assert_eq!(*resp.status(), 200);
@@ -21,7 +21,7 @@ fn repeat_non_x_header() {
     test::set_handler("/repeat_non_x_header", |req, _url| {
         assert!(req.has("Accept"));
         assert_eq!(req.header("Accept").unwrap(), "baz");
-        test::make_stream(200, "OK", vec![], vec![])
+        test::make_response(200, "OK", vec![], vec![])
     });
     let resp = get("test://host/repeat_non_x_header")
         .set("Accept", "bar")
@@ -39,7 +39,7 @@ fn repeat_x_header() {
             "130.240.19.2",
             "130.240.19.3",
         ]);
-        test::make_stream(200, "OK", vec![], vec![])
+        test::make_response(200, "OK", vec![], vec![])
     });
     let resp = get("test://host/repeat_x_header")
         .set("X-Forwarded-For", "130.240.19.2")
@@ -51,7 +51,7 @@ fn repeat_x_header() {
 #[test]
 fn body_as_text() {
     test::set_handler("/body_as_text", |_req, _url| {
-        test::make_stream(200, "OK", vec![], "Hello World!".to_string().into_bytes())
+        test::make_response(200, "OK", vec![], "Hello World!".to_string().into_bytes())
     });
     let resp = get("test://host/body_as_text").call();
     let text = resp.into_string().unwrap();
@@ -61,7 +61,7 @@ fn body_as_text() {
 #[test]
 fn body_as_json() {
     test::set_handler("/body_as_json", |_req, _url| {
-        test::make_stream(
+        test::make_response(
             200,
             "OK",
             vec![],
@@ -76,7 +76,7 @@ fn body_as_json() {
 #[test]
 fn body_as_reader() {
     test::set_handler("/body_as_reader", |_req, _url| {
-        test::make_stream(200, "OK", vec![], "abcdefgh".to_string().into_bytes())
+        test::make_response(200, "OK", vec![], "abcdefgh".to_string().into_bytes())
     });
     let resp = get("test://host/body_as_reader").call();
     let mut reader = resp.into_reader();

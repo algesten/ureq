@@ -28,7 +28,7 @@ where
     handlers.insert(path.to_string(), Box::new(handler));
 }
 
-pub fn make_stream(
+pub fn make_response(
     status: u16,
     status_text: &str,
     headers: Vec<&str>,

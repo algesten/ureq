@@ -11,7 +11,7 @@ fn agent_reuse_headers() {
     test::set_handler("/agent_reuse_headers", |req, _url| {
         assert!(req.has("Authorization"));
         assert_eq!(req.header("Authorization").unwrap(), "Foo 12345");
-        test::make_stream(200, "OK", vec!["X-Call: 1"], vec![])
+        test::make_response(200, "OK", vec!["X-Call: 1"], vec![])
     });
 
     let resp = agent.get("test://host/agent_reuse_headers").call();
@@ -20,7 +20,7 @@ fn agent_reuse_headers() {
     test::set_handler("/agent_reuse_headers", |req, _url| {
         assert!(req.has("Authorization"));
         assert_eq!(req.header("Authorization").unwrap(), "Foo 12345");
-        test::make_stream(200, "OK", vec!["X-Call: 2"], vec![])
+        test::make_response(200, "OK", vec!["X-Call: 2"], vec![])
     });
 
     let resp = agent.get("test://host/agent_reuse_headers").call();
@@ -34,17 +34,16 @@ fn agent_cookies() {
         .build();
 
     test::set_handler("/agent_cookies", |_req, _url| {
-        test::make_stream(200, "OK", vec!["Set-Cookie: foo=bar; Path=/; HttpOnly"], vec![])
+        test::make_response(200, "OK", vec!["Set-Cookie: foo=bar%20baz; Path=/; HttpOnly"], vec![])
     });
 
     agent.get("test://host/agent_cookies").call();
 
     assert!(agent.cookie("foo").is_some());
-    assert_eq!(agent.cookie("foo").unwrap().value(), "bar");
+    assert_eq!(agent.cookie("foo").unwrap().value(), "bar baz");
 
     test::set_handler("/agent_cookies", |req, _url| {
-        assert_eq!(req.header("Cookie").unwrap(), "");
-        test::make_stream(200, "OK", vec![], vec![])
+        test::make_response(200, "OK", vec![], vec![])
     });
 
     agent.get("test://host/agent_cookies").call();
