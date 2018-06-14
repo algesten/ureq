@@ -246,9 +246,10 @@ fn parse_status_line(line: &str) -> Result<((usize, usize), u16), Error> {
 impl FromStr for Response {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut read = VecRead::from_str(s);
-        let mut resp = Self::do_from_read(&mut read)?;
-        resp.set_stream(Stream::Read(Box::new(read)));
+        let bytes = s.as_bytes().to_owned();
+        let mut cursor = Cursor::new(bytes);
+        let mut resp = Self::do_from_read(&mut cursor)?;
+        resp.set_stream(Stream::Read(Box::new(cursor)));
         Ok(resp)
     }
 }

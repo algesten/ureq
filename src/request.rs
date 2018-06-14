@@ -1,6 +1,8 @@
 use qstring::QString;
 use serde_json;
 use std::sync::Arc;
+use std::io::Cursor;
+use std::io::empty;
 
 lazy_static! {
     static ref URL_BASE: Url = { Url::parse("http://localhost/").expect("Failed to parse URL_BASE") };
@@ -39,15 +41,18 @@ impl Default for Payload {
 impl Payload {
     fn into_read(self) -> (Option<usize>, Box<Read + 'static>) {
         match self {
-            Payload::Empty => (Some(0), Box::new(VecRead::from_str(""))),
+            Payload::Empty => (Some(0), Box::new(empty())),
             Payload::Text(s) => {
-                let read = VecRead::from_str(&s);
-                (Some(read.len()), Box::new(read))
+                let bytes = s.into_bytes();
+                let len = bytes.len();
+                let cursor = Cursor::new(bytes);
+                (Some(len), Box::new(cursor))
             }
             Payload::JSON(v) => {
-                let vec = serde_json::to_vec(&v).expect("Bad JSON in payload");
-                let read = VecRead::from_vec(vec);
-                (Some(read.len()), Box::new(read))
+                let bytes = serde_json::to_vec(&v).expect("Bad JSON in payload");
+                let len = bytes.len();
+                let cursor = Cursor::new(bytes);
+                (Some(len), Box::new(cursor))
             }
             Payload::Reader(read) => (None, read),
         }

@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 use url::Url;
-use util::vecread::VecRead;
+use std::io::Cursor;
 
 mod agent_test;
 mod auth;
@@ -42,9 +42,9 @@ pub fn make_response(
     }
     write!(&mut buf, "\r\n").ok();
     buf.append(&mut body);
-    let read = VecRead::from_vec(buf);
+    let cursor = Cursor::new(buf);
     let write: Vec<u8> = vec![];
-    Ok(Stream::Test(Box::new(read), write))
+    Ok(Stream::Test(Box::new(cursor), write))
 }
 
 pub fn resolve_handler(req: &Request, url: &Url) -> Result<Stream, Error> {
