@@ -9,7 +9,7 @@ use std::time::Duration;
 pub enum Stream {
     Http(TcpStream),
     Https(TlsStream<TcpStream>),
-    Read(Box<Read>),
+    Cursor(Cursor<Vec<u8>>),
     #[cfg(test)]
     Test(Box<Read + Send>, Vec<u8>),
 }
@@ -29,7 +29,7 @@ impl Read for Stream {
         match self {
             Stream::Http(sock) => sock.read(buf),
             Stream::Https(stream) => stream.read(buf),
-            Stream::Read(read) => read.read(buf),
+            Stream::Cursor(read) => read.read(buf),
             #[cfg(test)]
             Stream::Test(reader, _) => reader.read(buf),
         }
@@ -41,7 +41,7 @@ impl Write for Stream {
         match self {
             Stream::Http(sock) => sock.write(buf),
             Stream::Https(stream) => stream.write(buf),
-            Stream::Read(_) => panic!("Write to read stream"),
+            Stream::Cursor(_) => panic!("Write to read only stream"),
             #[cfg(test)]
             Stream::Test(_, writer) => writer.write(buf),
         }
@@ -50,7 +50,7 @@ impl Write for Stream {
         match self {
             Stream::Http(sock) => sock.flush(),
             Stream::Https(stream) => stream.flush(),
-            Stream::Read(_) => panic!("Flush read stream"),
+            Stream::Cursor(_) => panic!("Flush read only stream"),
             #[cfg(test)]
             Stream::Test(_, writer) => writer.flush(),
         }

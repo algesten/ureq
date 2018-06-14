@@ -249,7 +249,7 @@ impl FromStr for Response {
         let bytes = s.as_bytes().to_owned();
         let mut cursor = Cursor::new(bytes);
         let mut resp = Self::do_from_read(&mut cursor)?;
-        resp.set_stream(Stream::Read(Box::new(cursor)));
+        resp.set_stream(Stream::Cursor(cursor));
         Ok(resp)
     }
 }
