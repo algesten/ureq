@@ -118,6 +118,16 @@ impl Response {
             })
             .unwrap_or(DEFAULT_CONTENT_TYPE)
     }
+
+    /// The character set part of the "Content-Type" header.native_tls
+    ///
+    /// Example:
+    ///
+    /// ```
+    /// let resp = ureq::get("https://www.google.com/").call();
+    /// assert_eq!("text/html; charset=ISO-8859-1", resp.header("content-type").unwrap());
+    /// assert_eq!("ISO-8859-1", resp.charset());
+    /// ```
     pub fn charset(&self) -> &str {
         self.header("content-type")
             .and_then(|header| {
@@ -130,6 +140,32 @@ impl Response {
             .unwrap_or(DEFAULT_CHARACTER_SET)
     }
 
+    /// Turn this response into a `impl Read` of the body.
+    ///
+    /// 1. If "Transfer-Encoding: chunked", the returned reader will unchunk it
+    ///    and any "Content-Length" header is ignored.
+    /// 2. If "Content-Length" is set, the returned reader is limited to this byte
+    ///    length regardless of how many bytes the server sends.
+    /// 3. If no length header, the reader is until server stream end.
+    ///
+    /// Example:
+    ///
+    /// ```
+    /// use std::io::Read;
+    ///
+    /// let resp =
+    ///     ureq::get("https://raw.githubusercontent.com/algesten/ureq/master/.gitignore").call();
+    ///
+    /// assert!(resp.has("Content-Length"));
+    /// let len = resp.header("Content-Length")
+    ///     .and_then(|s| s.parse::<usize>().ok()).unwrap();
+    ///
+    /// let mut reader = resp.into_reader();
+    /// let mut bytes = vec![];
+    /// reader.read_to_end(&mut bytes);
+    ///
+    /// assert_eq!(bytes.len(), len);
+    /// ```
     pub fn into_reader(self) -> impl Read {
         let is_chunked = self.header("transfer-encoding")
             .map(|enc| enc.len() > 0) // whatever it says, do chunked
@@ -147,6 +183,23 @@ impl Response {
         }
     }
 
+    /// Turn this response into a String of the response body. Attempts to respect the
+    /// character encoding of the "Content-Type" and falls back to `utf-8`.
+    ///
+    /// This is potentially memory inefficient for large bodies since the
+    /// implementation first reads the reader to end into a `Vec<u8>` and then
+    /// attempts to decode it using the charset.
+    ///
+    /// Example:
+    ///
+    /// ```
+    /// let resp =
+    ///     ureq::get("https://raw.githubusercontent.com/algesten/ureq/master/.gitignore").call();
+    ///
+    /// let text = resp.into_string().unwrap();
+    ///
+    /// assert!(text.contains("target"));
+    /// ```
     pub fn into_string(self) -> IoResult<String> {
         let encoding = encoding_from_whatwg_label(self.charset())
             .or_else(|| encoding_from_whatwg_label(DEFAULT_CHARACTER_SET))
@@ -156,6 +209,18 @@ impl Response {
         Ok(encoding.decode(&buf, DecoderTrap::Replace).unwrap())
     }
 
+    /// Turn this response into a (serde) JSON value of the response body.
+    ///
+    /// Example:
+    ///
+    /// ```
+    /// let resp =
+    ///     ureq::get("https://raw.githubusercontent.com/algesten/ureq/master/src/test/hello_world.json").call();
+    ///
+    /// let json = resp.into_json().unwrap();
+    ///
+    /// assert_eq!(json["hello"], "world");
+    /// ```
     pub fn into_json(self) -> IoResult<serde_json::Value> {
         let reader = self.into_reader();
         serde_json::from_reader(reader).map_err(|e| {
@@ -166,6 +231,17 @@ impl Response {
         })
     }
 
+    /// Construct a response with a status, status text and a string body.
+    ///
+    /// This is hopefully useful for unit tests.
+    ///
+    /// Example:
+    ///
+    /// ```
+    /// let resp = ureq::Response::new(401, "Authorization Required", "Please log in");
+    ///
+    /// assert_eq!(*resp.status(), 401);
+    /// ```
     pub fn new(status: u16, status_text: &str, body: &str) -> Self {
         let r = format!("HTTP/1.1 {} {}\r\n\r\n{}\n", status, status_text, body);
         (r.as_ref() as &str)
@@ -173,6 +249,21 @@ impl Response {
             .unwrap_or_else(|e| e.into())
     }
 
+    /// Create a response from a Read trait impl.
+    ///
+    /// This is hopefully useful for unit tests.
+    ///
+    /// Example:
+    ///
+    /// ```
+    /// use std::io::Cursor;
+    ///
+    /// let text = "HTTP/1.1 401 Authorization Required\r\n\r\nPlease log in\n";
+    /// let read = Cursor::new(text.to_string().into_bytes());
+    /// let resp = ureq::Response::from_read(read);
+    ///
+    /// assert_eq!(*resp.status(), 401);
+    /// ```
     pub fn from_read(reader: impl Read) -> Self
     {
         Self::do_from_read(reader).unwrap_or_else(|e| e.into())
