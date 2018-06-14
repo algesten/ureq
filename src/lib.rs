@@ -12,11 +12,11 @@ extern crate serde_json;
 extern crate native_tls;
 extern crate url;
 
-#[macro_use]
 mod agent;
 mod error;
 mod header;
-mod util;
+mod macros;
+mod serde_macros;
 
 #[cfg(test)]
 mod test;
