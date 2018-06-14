@@ -1,17 +1,17 @@
 use agent::Request;
+use agent::Stream;
 use error::Error;
 use header::Header;
 use std::collections::HashMap;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
-use stream::Stream;
 use url::Url;
 use util::vecread::VecRead;
 
 mod agent_test;
 mod auth;
-mod simple;
 mod body_read;
+mod simple;
 
 type RequestHandler = Fn(&Request, &Url) -> Result<Stream, Error> + Send + 'static;
 

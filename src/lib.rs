@@ -16,7 +16,6 @@ extern crate url;
 mod agent;
 mod error;
 mod header;
-mod stream;
 mod util;
 
 #[cfg(test)]

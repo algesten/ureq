@@ -9,6 +9,7 @@ use util::*;
 include!("request.rs");
 include!("response.rs");
 include!("conn.rs");
+include!("stream.rs");
 
 #[derive(Debug, Default, Clone)]
 pub struct Agent {
