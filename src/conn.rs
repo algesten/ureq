@@ -1,14 +1,12 @@
 use dns_lookup;
-use rustls;
 use std::io::Write;
 use std::net::IpAddr;
 use std::net::SocketAddr;
 use std::net::TcpStream;
 use std::time::Duration;
 use stream::Stream;
+use native_tls::TlsConnector;
 use url::Url;
-use webpki;
-use webpki_roots;
 
 const CHUNK_SIZE: usize = 1024 * 1024;
 
@@ -134,19 +132,11 @@ fn connect_https(request: &Request, url: &Url) -> Result<Stream, Error> {
     let hostname = url.host_str().unwrap();
     let port = url.port().unwrap_or(443);
 
-    // TODO let user override TLS roots.
-    let mut config = rustls::ClientConfig::new();
-    config
-        .root_store
-        .add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
-    let rc_config = Arc::new(config);
-
     let socket = connect_host(request, hostname, port)?;
+    let connector = TlsConnector::builder()?.build()?;
+    let stream = connector.connect(hostname, socket)?;
 
-    webpki::DNSNameRef::try_from_ascii_str(&hostname)
-        .map_err(|_| Error::ConnectionFailed(format!("Invalid TLS name: {}", hostname)))
-        .map(|webpki| rustls::ClientSession::new(&rc_config, webpki))
-        .map(|client| Stream::Https(client, socket))
+    Ok(Stream::Https(stream))
 }
 
 fn connect_host(request: &Request, hostname: &str, port: u16) -> Result<TcpStream, Error> {

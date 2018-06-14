@@ -8,11 +8,9 @@ extern crate encoding;
 extern crate lazy_static;
 extern crate mime_guess;
 extern crate qstring;
-extern crate rustls;
 extern crate serde_json;
+extern crate native_tls;
 extern crate url;
-extern crate webpki;
-extern crate webpki_roots;
 
 #[macro_use]
 mod agent;

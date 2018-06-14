@@ -19,6 +19,7 @@
 - [ ] multipart/form-data
 - [ ] Connection reuse/keep-alive with pool
 - [ ] Expect 100-continue
+- [ ] Use `rustls` when ring v0.13 is released.
 
 ## Usage
 
