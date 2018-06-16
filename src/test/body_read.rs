@@ -42,7 +42,7 @@ fn content_length_limited() {
 }
 
 #[test]
- // content-length should be ignnored when chunked
+ // content-length should be ignored when chunked
  fn ignore_content_length_when_chunked() {
     test::set_handler("/ignore_content_length_when_chunked", |_req, _url| {
         test::make_response(

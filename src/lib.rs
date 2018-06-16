@@ -48,6 +48,7 @@ mod test;
 
 pub use agent::{Agent, Request, Response};
 pub use header::Header;
+pub use error::Error;
 
 // re-export
 pub use serde_json::{to_value as serde_to_value, Map as SerdeMap, Value as SerdeValue};

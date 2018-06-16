@@ -14,7 +14,20 @@ const DEFAULT_CHARACTER_SET: &'static str = "utf-8";
 
 /// Response instances are created as results of firing off requests.
 ///
+/// The `Response` is used to read response headers and decide what to do with the body.
+/// Note that the socket connection is open and the body not read until one of
+/// [`into_reader()`](#method.into_reader), [`into_json()`](#method.into_json) or
+/// [`into_string()`](#method.into_string) consumes the response.
 ///
+/// ```
+/// let response = ureq::get("https://www.google.com").call();
+///
+/// // socket is still open and the response body has not been read.
+///
+/// let text = response.into_string().unwrap();
+///
+/// // response is consumed, and body has been read.
+/// ```
 pub struct Response {
     error: Option<Error>,
     status_line: AsciiString,
@@ -36,6 +49,24 @@ impl ::std::fmt::Debug for Response {
 }
 
 impl Response {
+    /// Construct a response with a status, status text and a string body.
+    ///
+    /// This is hopefully useful for unit tests.
+    ///
+    /// Example:
+    ///
+    /// ```
+    /// let resp = ureq::Response::new(401, "Authorization Required", "Please log in");
+    ///
+    /// assert_eq!(*resp.status(), 401);
+    /// ```
+    pub fn new(status: u16, status_text: &str, body: &str) -> Self {
+        let r = format!("HTTP/1.1 {} {}\r\n\r\n{}\n", status, status_text, body);
+        (r.as_ref() as &str)
+            .parse::<Response>()
+            .unwrap_or_else(|e| e.into())
+    }
+
     /// The entire status line like: `HTTP/1.1 200 OK`
     pub fn status_line(&self) -> &str {
         self.status_line.as_str()
@@ -274,24 +305,6 @@ impl Response {
                 format!("Failed to read JSON: {}", e),
             )
         })
-    }
-
-    /// Construct a response with a status, status text and a string body.
-    ///
-    /// This is hopefully useful for unit tests.
-    ///
-    /// Example:
-    ///
-    /// ```
-    /// let resp = ureq::Response::new(401, "Authorization Required", "Please log in");
-    ///
-    /// assert_eq!(*resp.status(), 401);
-    /// ```
-    pub fn new(status: u16, status_text: &str, body: &str) -> Self {
-        let r = format!("HTTP/1.1 {} {}\r\n\r\n{}\n", status, status_text, body);
-        (r.as_ref() as &str)
-            .parse::<Response>()
-            .unwrap_or_else(|e| e.into())
     }
 
     /// Create a response from a Read trait impl.
