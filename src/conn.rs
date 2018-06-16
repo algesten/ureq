@@ -18,7 +18,7 @@ impl ConnectionPool {
         url: &Url,
         redirects: u32,
         mut jar: Option<&mut CookieJar>,
-        payload: Payload,
+        body: SizedReader,
     ) -> Result<Response, Error> {
         //
 
@@ -32,6 +32,12 @@ impl ConnectionPool {
             }
         };
         let headers = request.headers.iter().chain(cookie_headers.iter());
+
+        let do_chunk = request.header("transfer-encoding")
+            // if the user has set an encoding header, obey that.
+            .map(|enc| enc.len() > 0)
+            // otherwise, no chunking.
+            .unwrap_or(false);
 
         // open socket
         let mut stream = match url.scheme() {
@@ -49,6 +55,13 @@ impl ConnectionPool {
         }
         for header in headers {
             write!(prelude, "{}: {}\r\n", header.name(), header.value())?;
+        }
+        // chunking and Content-Length headers are mutually exclusive
+        // also don't write this if the user has set it themselves
+        if !do_chunk && !request.has("content-length") {
+            if let Some(size) = body.size {
+                write!(prelude, "Content-Length: {}\r\n", size)?;
+            }
         }
         write!(prelude, "\r\n")?;
 
@@ -91,18 +104,19 @@ impl ConnectionPool {
                 // perform the redirect differently depending on 3xx code.
                 return match resp.status {
                     301 | 302 | 303 => {
-                        send_payload(&request, payload, &mut stream)?;
-                        self.connect(request, "GET", &new_url, redirects - 1, jar, Payload::Empty)
+                        send_body(body, do_chunk, &mut stream)?;
+                        let empty = Payload::Empty.into_read();
+                        self.connect(request, "GET", &new_url, redirects - 1, jar, empty)
                     }
                     307 | 308 | _ => {
-                        self.connect(request, method, &new_url, redirects - 1, jar, payload)
+                        self.connect(request, method, &new_url, redirects - 1, jar, body)
                     }
                 };
             }
         }
 
-        // send the payload (which can be empty now depending on redirects)
-        send_payload(&request, payload, &mut stream)?;
+        // send the body (which can be empty now depending on redirects)
+        send_body(body, do_chunk, &mut stream)?;
 
         // since it is not a redirect, give away the incoming stream to the response object
         resp.set_stream(stream);
@@ -112,28 +126,11 @@ impl ConnectionPool {
     }
 }
 
-
-fn send_payload(request: &Request, payload: Payload, stream: &mut Stream) -> IoResult<()> {
-    //
-    let (size, reader) = payload.into_read();
-
-    let do_chunk = request.header("transfer-encoding")
-        // if the user has set an encoding header, obey that.
-        .map(|enc| enc.eq_ignore_ascii_case("chunked"))
-        // if the content has a size
-        .ok_or_else(|| size.
-        // or if the user set a content-length header
-        or_else(||
-            request.header("content-length").map(|len| len.parse::<usize>().unwrap_or(0)))
-        // and that size is larger than 1MB, chunk,
-        .map(|size| size > CHUNK_SIZE))
-        // otherwise, assume chunking since it can be really big.
-        .unwrap_or(true);
-
+fn send_body(body: SizedReader, do_chunk: bool, stream: &mut Stream) -> IoResult<()> {
     if do_chunk {
-        pipe(reader, chunked_transfer::Encoder::new(stream))?;
+        pipe(body.reader, chunked_transfer::Encoder::new(stream))?;
     } else {
-        pipe(reader, stream)?;
+        pipe(body.reader, stream)?;
     }
 
     Ok(())

@@ -1,9 +1,9 @@
-use qstring::QString;
 use super::SerdeValue;
-use std::sync::Arc;
-use std::io::Cursor;
-use std::io::empty;
+use qstring::QString;
 use serde_json;
+use std::io::empty;
+use std::io::Cursor;
+use std::sync::Arc;
 
 lazy_static! {
     static ref URL_BASE: Url = { Url::parse("http://localhost/").expect("Failed to parse URL_BASE") };
@@ -48,23 +48,34 @@ impl Default for Payload {
     }
 }
 
+struct SizedReader {
+    size: Option<usize>,
+    reader: Box<Read + 'static>,
+}
+
+impl SizedReader {
+    fn new(size: Option<usize>, reader: Box<Read + 'static>) -> Self {
+        SizedReader { size, reader }
+    }
+}
+
 impl Payload {
-    fn into_read(self) -> (Option<usize>, Box<Read + 'static>) {
+    fn into_read(self) -> SizedReader {
         match self {
-            Payload::Empty => (Some(0), Box::new(empty())),
+            Payload::Empty => SizedReader::new(Some(0), Box::new(empty())),
             Payload::Text(s) => {
                 let bytes = s.into_bytes();
                 let len = bytes.len();
                 let cursor = Cursor::new(bytes);
-                (Some(len), Box::new(cursor))
+                SizedReader::new(Some(len), Box::new(cursor))
             }
             Payload::JSON(v) => {
                 let bytes = serde_json::to_vec(&v).expect("Bad JSON in payload");
                 let len = bytes.len();
                 let cursor = Cursor::new(bytes);
-                (Some(len), Box::new(cursor))
+                SizedReader::new(Some(len), Box::new(cursor))
             }
-            Payload::Reader(read) => (None, read),
+            Payload::Reader(read) => SizedReader::new(None, read),
         }
     }
 }
@@ -121,21 +132,28 @@ impl Request {
                         &url,
                         self.redirects,
                         None,
-                        payload,
+                        payload.into_read(),
                     )
                 } else {
                     // reuse connection pool.
                     let state = state.as_mut().unwrap();
                     let jar = &mut state.jar;
-                    state
-                        .pool
-                        .connect(self, &self.method, &url, self.redirects, Some(jar), payload)
+                    state.pool.connect(
+                        self,
+                        &self.method,
+                        &url,
+                        self.redirects,
+                        Some(jar),
+                        payload.into_read(),
+                    )
                 }
             })
             .unwrap_or_else(|e| e.into())
     }
 
     /// Send data a json value.
+    ///
+    /// The `Content-Length` header is implicitly set to the length of the serialized value.
     ///
     /// ```
     /// #[macro_use]

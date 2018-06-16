@@ -15,6 +15,8 @@
 - [x] Auth headers
 - [x] Repeated headers
 - [x] Cookie jar in agent
+- [ ] Write tests for send body content-length
+- [ ] Write tests for send body chunked
 - [ ] Forms with application/x-www-form-urlencoded
 - [ ] multipart/form-data
 - [ ] Connection reuse/keep-alive with pool
