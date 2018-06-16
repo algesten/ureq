@@ -41,8 +41,8 @@
 //!
 //! ```
 //! let resp = ureq::post("http://my-server.com/ingest")
-//!     .set("Transfer-Encoding", "chunked")`
-//!     .send("Hello world");
+//!     .set("Transfer-Encoding", "chunked")
+//!     .send_str("Hello world");
 //! ```
 
 extern crate ascii;

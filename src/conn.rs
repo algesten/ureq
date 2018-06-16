@@ -22,6 +22,12 @@ impl ConnectionPool {
     ) -> Result<Response, Error> {
         //
 
+        let do_chunk = request.header("transfer-encoding")
+            // if the user has set an encoding header, obey that.
+            .map(|enc| enc.len() > 0)
+            // otherwise, no chunking.
+            .unwrap_or(false);
+
         let hostname = url.host_str().unwrap_or("localhost"); // is localhost a good alternative?
         let is_secure = url.scheme().eq_ignore_ascii_case("https");
 
@@ -31,13 +37,23 @@ impl ConnectionPool {
                 Some(jar) => match_cookies(jar, hostname, url.path(), is_secure),
             }
         };
-        let headers = request.headers.iter().chain(cookie_headers.iter());
+        let extra_headers = {
+            let mut extra = vec![];
 
-        let do_chunk = request.header("transfer-encoding")
-            // if the user has set an encoding header, obey that.
-            .map(|enc| enc.len() > 0)
-            // otherwise, no chunking.
-            .unwrap_or(false);
+            // chunking and Content-Length headers are mutually exclusive
+            // also don't write this if the user has set it themselves
+            if !do_chunk && !request.has("content-length") {
+                if let Some(size) = body.size {
+                    extra.push(format!("Content-Length: {}\r\n", size).parse::<Header>()?);
+                }
+            }
+            extra
+        };
+        let headers = request
+            .headers
+            .iter()
+            .chain(cookie_headers.iter())
+            .chain(extra_headers.iter());
 
         // open socket
         let mut stream = match url.scheme() {
@@ -55,13 +71,6 @@ impl ConnectionPool {
         }
         for header in headers {
             write!(prelude, "{}: {}\r\n", header.name(), header.value())?;
-        }
-        // chunking and Content-Length headers are mutually exclusive
-        // also don't write this if the user has set it themselves
-        if !do_chunk && !request.has("content-length") {
-            if let Some(size) = body.size {
-                write!(prelude, "Content-Length: {}\r\n", size)?;
-            }
         }
         write!(prelude, "\r\n")?;
 

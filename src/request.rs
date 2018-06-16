@@ -35,6 +35,16 @@ pub struct Request {
     redirects: u32,
 }
 
+impl ::std::fmt::Debug for Request {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::result::Result<(), ::std::fmt::Error> {
+        write!(
+            f,
+            "Request[{} {}, {}, {:?}]",
+            self.method, self.path, self.query, self.headers
+        )
+    }
+}
+
 enum Payload {
     Empty,
     Text(String),
