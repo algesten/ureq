@@ -11,7 +11,7 @@ fn content_length_on_str() {
         .send_str("Hello World!!!");
     let vec = resp.to_write_vec();
     let s = String::from_utf8_lossy(&vec);
-    assert!(s.contains("\r\nContent-Length: 14\r\n"))
+    assert!(s.contains("\r\nContent-Length: 14\r\n"));
 }
 
 #[test]
@@ -25,5 +25,19 @@ fn content_length_on_json() {
         .send_json(SerdeValue::Object(json));
     let vec = resp.to_write_vec();
     let s = String::from_utf8_lossy(&vec);
-    assert!(s.contains("\r\nContent-Length: 20\r\n"))
+    assert!(s.contains("\r\nContent-Length: 20\r\n"));
+}
+
+#[test]
+fn content_length_and_chunked() {
+    test::set_handler("/content_length_and_chunked", |_req, _url| {
+        test::make_response(200, "OK", vec![], vec![])
+    });
+    let resp = post("test://host/content_length_and_chunked")
+        .set("Transfer-Encoding", "chunked")
+        .send_str("Hello World!!!");
+    let vec = resp.to_write_vec();
+    let s = String::from_utf8_lossy(&vec);
+    assert!(s.contains("Transfer-Encoding: chunked\r\n"));
+    assert!(!s.contains("\r\nContent-Length:\r\n"));
 }
