@@ -136,7 +136,7 @@ impl Response {
     /// Tells if this response is "synthetic".
     ///
     /// The [methods](struct.Request.html#method.call) [firing](struct.Request.html#method.send)
-    /// [off](struct.Request.html#method.send_str) [a request](struct.Request.html#method.send_json)
+    /// [off](struct.Request.html#method.send_str) [requests](struct.Request.html#method.send_json)
     /// all return a `Response`; there is no rust style `Result`.
     ///
     /// Rather than exposing a custom error type through results, this library has opted
@@ -147,7 +147,7 @@ impl Response {
     /// of whether a failure originated in the remote server (500, 502) etc, or some transient
     /// network failure, the code path of handling that would most often be the same.
     ///
-    /// The specific mapping of error to code can be seen in the (`Error`)[struct.Error.html].
+    /// The specific mapping of error to code can be seen in the [`Error`](enum.Error.html) doc.
     ///
     /// However if the distinction is important, this method can be used to tell. Also see
     /// [error()](struct.Response.html#method.synthetic_error) to see the actual underlying error.
