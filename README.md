@@ -4,19 +4,6 @@
 
 # UNDER CONSTRUCTION
 
-- [x] Somewhat finished API
-- [x] TLS
-- [x] Header handling
-- [x] Transfer-Encoding: chunked
-- [x] Ergonomic JSON handling
-- [x] Test harness for end-to-end tests
-- [x] Always chunked RFC2616 #3.6
-- [x] Limit read length on Content-Size
-- [x] Auth headers
-- [x] Repeated headers
-- [x] Cookie jar in agent
-- [x] Write tests for send body content-length
-- [x] Write tests for send body chunked
 - [ ] Forms with application/x-www-form-urlencoded
 - [ ] multipart/form-data
 - [ ] Connection reuse/keep-alive with pool

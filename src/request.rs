@@ -72,7 +72,7 @@ impl SizedReader {
 impl Payload {
     fn into_read(self) -> SizedReader {
         match self {
-            Payload::Empty => SizedReader::new(Some(0), Box::new(empty())),
+            Payload::Empty => SizedReader::new(None, Box::new(empty())),
             Payload::Text(s) => {
                 let bytes = s.into_bytes();
                 let len = bytes.len();
@@ -134,28 +134,28 @@ impl Request {
         let mut state = self.state.lock().unwrap();
         self.to_url()
             .and_then(|url| {
-                if state.is_none() {
-                    // create a one off pool/jar.
-                    ConnectionPool::new().connect(
-                        self,
-                        &self.method,
-                        &url,
-                        self.redirects,
-                        None,
-                        payload.into_read(),
-                    )
-                } else {
-                    // reuse connection pool.
-                    let state = state.as_mut().unwrap();
-                    let jar = &mut state.jar;
-                    state.pool.connect(
-                        self,
-                        &self.method,
-                        &url,
-                        self.redirects,
-                        Some(jar),
-                        payload.into_read(),
-                    )
+                match state.as_mut() {
+                    None =>
+                        // create a one off pool/jar.
+                        ConnectionPool::new().connect(
+                            self,
+                            &self.method,
+                            &url,
+                            self.redirects,
+                            None,
+                            payload.into_read(),
+                        ),
+                    Some(state) => {
+                        let jar = &mut state.jar;
+                        state.pool.connect(
+                            self,
+                            &self.method,
+                            &url,
+                            self.redirects,
+                            Some(jar),
+                            payload.into_read(),
+                        )
+                    },
                 }
             })
             .unwrap_or_else(|e| e.into())

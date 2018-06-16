@@ -29,6 +29,11 @@ impl ConnectionPool {
             .unwrap_or(false);
 
         let hostname = url.host_str().unwrap_or("localhost"); // is localhost a good alternative?
+        let query_string = if request.query.len() > 0 {
+            format!("{}", request.query)
+        } else {
+            "".to_string()
+        };
         let is_secure = url.scheme().eq_ignore_ascii_case("https");
 
         let cookie_headers: Vec<_> = {
@@ -65,7 +70,7 @@ impl ConnectionPool {
 
         // send the request start + headers
         let mut prelude: Vec<u8> = vec![];
-        write!(prelude, "{} {} HTTP/1.1\r\n", method, url.path())?;
+        write!(prelude, "{} {}{} HTTP/1.1\r\n", method, url.path(), query_string)?;
         if !request.has("host") {
             write!(prelude, "Host: {}\r\n", url.host().unwrap())?;
         }
