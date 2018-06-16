@@ -22,6 +22,28 @@
 //! To maintain a state, cookies, between requests, you use an [agent](struct.Agent.html).
 //! Agents also follow the build pattern. Agents are created with `ureq::agent().build()`.
 //!
+//! # Content-Length
+//!
+//! The library will set the content length on the request when using
+//! [`.send_str()`](struct.Request.html#method.send_str) or
+//! [`.send_json()`](struct.Request.html#method.send_json). In other cases the user
+//! can optionally `request.set("Content-Length", 1234)`.
+//!
+//! For responses, if the `Content-Length` header is present, the methods that reads the
+//! body (as string, json or read trait) are all limited to the length specified in the header.
+//!
+//! # Transfer-Encoding: chunked
+//!
+//! Dechunking is a response body is done automatically if the response headers contains
+//! a `Transfer-Encoding` header.
+//!
+//! Sending a chunked request body is done by setting the header prior to sending a body.
+//!
+//! ```
+//! let resp = ureq::post("http://my-server.com/ingest")
+//!     .set("Transfer-Encoding", "chunked")`
+//!     .send("Hello world");
+//! ```
 
 extern crate ascii;
 extern crate base64;

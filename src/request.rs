@@ -171,6 +171,8 @@ impl Request {
 
     /// Send data as a string.
     ///
+    /// The `Content-Length` header is implicitly set to the length of the serialized value.
+    ///
     /// ```
     /// let r = ureq::post("/my_page")
     ///     .content_type("text/plain")
@@ -187,6 +189,7 @@ impl Request {
 
     /// Send data from a reader.
     ///
+    /// The `Content-Length` header is not set because we can't know the length of the reader.
     ///
     ///
     pub fn send<R>(&mut self, reader: R) -> Response
