@@ -12,7 +12,11 @@ use error::Error;
 const DEFAULT_CONTENT_TYPE: &'static str = "text/plain";
 const DEFAULT_CHARACTER_SET: &'static str = "utf-8";
 
+/// Response instances are created as results of firing off requests.
+///
+///
 pub struct Response {
+    error: Option<Error>,
     status_line: AsciiString,
     index: (usize, usize), // index into status_line where we split: HTTP/1.1 200 OK
     status: u16,
@@ -32,22 +36,22 @@ impl ::std::fmt::Debug for Response {
 }
 
 impl Response {
-    /// The entire status line like: HTTP/1.1 200 OK
+    /// The entire status line like: `HTTP/1.1 200 OK`
     pub fn status_line(&self) -> &str {
         self.status_line.as_str()
     }
 
-    /// The http version: HTTP/1.1
+    /// The http version: `HTTP/1.1`
     pub fn http_version(&self) -> &str {
         &self.status_line.as_str()[0..self.index.0]
     }
 
-    /// The status as a u16: 200
+    /// The status as a u16: `200`
     pub fn status(&self) -> &u16 {
         &self.status
     }
 
-    /// The status text: OK
+    /// The status text: `OK`
     pub fn status_text(&self) -> &str {
         &self.status_line.as_str()[self.index.1 + 1..].trim()
     }
@@ -170,15 +174,14 @@ impl Response {
         let is_chunked = self.header("transfer-encoding")
             .map(|enc| enc.len() > 0) // whatever it says, do chunked
             .unwrap_or(false);
-        let len = self.header("content-length").and_then(|l| l.parse::<usize>().ok());
+        let len = self.header("content-length")
+            .and_then(|l| l.parse::<usize>().ok());
         let reader = self.stream.expect("No reader in response?!");
         match is_chunked {
             true => Box::new(chunked_transfer::Decoder::new(reader)),
-            false => {
-                match len {
-                    Some(len) => Box::new(LimitedRead::new(reader, len)),
-                    None => Box::new(reader) as Box<Read>,
-                }
+            false => match len {
+                Some(len) => Box::new(LimitedRead::new(reader, len)),
+                None => Box::new(reader) as Box<Read>,
             },
         }
     }
@@ -264,13 +267,11 @@ impl Response {
     ///
     /// assert_eq!(*resp.status(), 401);
     /// ```
-    pub fn from_read(reader: impl Read) -> Self
-    {
+    pub fn from_read(reader: impl Read) -> Self {
         Self::do_from_read(reader).unwrap_or_else(|e| e.into())
     }
 
-    fn do_from_read(mut reader: impl Read) -> Result<Response, Error>
-    {
+    fn do_from_read(mut reader: impl Read) -> Result<Response, Error> {
         //
         // HTTP/1.1 200 OK\r\n
         let status_line = read_next_line(&mut reader).map_err(|_| Error::BadStatus)?;
@@ -305,7 +306,6 @@ impl Response {
     pub fn to_write_vec(&self) -> Vec<u8> {
         self.stream.as_ref().unwrap().to_write_vec()
     }
-
 }
 
 fn parse_status_line(line: &str) -> Result<((usize, usize), u16), Error> {
@@ -405,8 +405,8 @@ impl Read for LimitedRead {
             Ok(amount) => {
                 self.position += amount;
                 Ok(amount)
-            },
-            Err(e) => Err(e)
+            }
+            Err(e) => Err(e),
         }
     }
 }

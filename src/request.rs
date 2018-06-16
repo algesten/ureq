@@ -1,13 +1,23 @@
 use qstring::QString;
-use serde_json;
+use super::SerdeValue;
 use std::sync::Arc;
 use std::io::Cursor;
 use std::io::empty;
+use serde_json;
 
 lazy_static! {
     static ref URL_BASE: Url = { Url::parse("http://localhost/").expect("Failed to parse URL_BASE") };
 }
 
+/// Request instances are builders that creates a request.
+///
+/// ```
+/// let mut request = ureq::get("https://www.google.com/");
+///
+/// let response = request
+///     .query("foo", "bar baz") // add ?foo=bar%20baz
+///     .call();                 // run the request
+/// ```
 #[derive(Clone, Default)]
 pub struct Request {
     state: Arc<Mutex<Option<AgentState>>>,
@@ -28,7 +38,7 @@ pub struct Request {
 enum Payload {
     Empty,
     Text(String),
-    JSON(serde_json::Value),
+    JSON(SerdeValue),
     Reader(Box<Read + 'static>),
 }
 
@@ -137,7 +147,7 @@ impl Request {
     /// println!("{:?}", r);
     /// }
     /// ```
-    pub fn send_json(&mut self, data: serde_json::Value) -> Response {
+    pub fn send_json(&mut self, data: SerdeValue) -> Response {
         self.do_call(Payload::JSON(data))
     }
 
@@ -248,7 +258,7 @@ impl Request {
     ///
     /// fn main() {
     /// let r = ureq::get("/my_page")
-    ///     .set_map(map!{
+    ///     .set_map(map! {
     ///         "X-API-Key" => "foobar",
     ///         "Accept" => "application/json"
     ///     })
@@ -304,7 +314,7 @@ impl Request {
     ///
     /// fn main() {
     /// let r = ureq::get("/my_page")
-    ///     .query_map(map!{
+    ///     .query_map(map! {
     ///         "format" => "json",
     ///         "dest" => "/login"
     ///     })

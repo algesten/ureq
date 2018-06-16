@@ -10,6 +10,34 @@ include!("response.rs");
 include!("conn.rs");
 include!("stream.rs");
 
+/// Agents keep state between requests.
+///
+/// By default, no state, such as cookies, is kept between requests.
+/// But by creating an agent as entry point for the request, we
+/// can keep a state.
+///
+/// ```
+/// let agent = ureq::agent().build();
+///
+/// let auth = agent
+///     .post("/login")
+///     .auth("martin", "rubbermashgum")
+///     .call(); // blocks. puts auth cookies in agent.
+///
+/// if !auth.ok() {
+///     println!("Noes!");
+/// }
+///
+/// let secret = agent
+///     .get("/my-protected-page")
+///     .call(); // blocks and waits for request.
+///
+/// if !secret.ok() {
+///     println!("Wot?!");
+/// }
+///
+/// println!("Secret is: {}", secret.into_string().unwrap());
+/// ```
 #[derive(Debug, Default, Clone)]
 pub struct Agent {
     headers: Vec<Header>,
@@ -32,6 +60,16 @@ impl AgentState {
 }
 
 impl Agent {
+    /// Creates a new agent. Typically you'd use [`ureq::agent()`](fn.agent.html) to
+    /// do this.
+    ///
+    /// ```
+    /// let agent = ureq::Agent::new()
+    ///     .set("X-My-Header", "Foo") // present on all requests from this agent
+    ///     .build();
+    ///
+    /// agent.get("/foo");
+    /// ```
     pub fn new() -> Agent {
         Default::default()
     }
@@ -83,7 +121,7 @@ impl Agent {
     ///
     /// fn main() {
     /// let agent = ureq::agent()
-    ///     .set_map(map!{
+    ///     .set_map(map! {
     ///         "X-API-Key" => "foobar",
     ///         "Accept" => "application/json"
     ///     })
@@ -213,54 +251,71 @@ impl Agent {
         }
     }
 
+    /// Make a GET request from this agent.
     pub fn get<S>(&self, path: S) -> Request
     where
         S: Into<String>,
     {
         self.request("GET", path)
     }
+
+    /// Make a HEAD request from this agent.
     pub fn head<S>(&self, path: S) -> Request
     where
         S: Into<String>,
     {
         self.request("HEAD", path)
     }
+
+    /// Make a POST request from this agent.
     pub fn post<S>(&self, path: S) -> Request
     where
         S: Into<String>,
     {
         self.request("POST", path)
     }
+
+    /// Make a PUT request from this agent.
     pub fn put<S>(&self, path: S) -> Request
     where
         S: Into<String>,
     {
         self.request("PUT", path)
     }
+
+    /// Make a DELETE request from this agent.
     pub fn delete<S>(&self, path: S) -> Request
     where
         S: Into<String>,
     {
         self.request("DELETE", path)
     }
+
+    /// Make a TRACE request from this agent.
     pub fn trace<S>(&self, path: S) -> Request
     where
         S: Into<String>,
     {
         self.request("TRACE", path)
     }
+
+    /// Make a OPTIONS request from this agent.
     pub fn options<S>(&self, path: S) -> Request
     where
         S: Into<String>,
     {
         self.request("OPTIONS", path)
     }
+
+    /// Make a CONNECT request from this agent.
     pub fn connect<S>(&self, path: S) -> Request
     where
         S: Into<String>,
     {
         self.request("CONNECT", path)
     }
+
+    /// Make a PATCH request from this agent.
     pub fn patch<S>(&self, path: S) -> Request
     where
         S: Into<String>,

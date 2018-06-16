@@ -247,32 +247,32 @@ macro_rules! json_internal {
     //////////////////////////////////////////////////////////////////////////
 
     (null) => {
-        $crate::Value::Null
+        $crate::SerdeValue::Null
     };
 
     (true) => {
-        $crate::Value::Bool(true)
+        $crate::SerdeValue::Bool(true)
     };
 
     (false) => {
-        $crate::Value::Bool(false)
+        $crate::SerdeValue::Bool(false)
     };
 
     ([]) => {
-        $crate::Value::Array(vec![])
+        $crate::SerdeValue::Array(vec![])
     };
 
     ([ $($tt:tt)+ ]) => {
-        $crate::Value::Array(json_internal!(@array [] $($tt)+))
+        $crate::SerdeValue::Array(json_internal!(@array [] $($tt)+))
     };
 
     ({}) => {
-        $crate::Value::Object($crate::Map::new())
+        $crate::SerdeValue::Object($crate::SerdeMap::new())
     };
 
     ({ $($tt:tt)+ }) => {
-        $crate::Value::Object({
-            let mut object = $crate::Map::new();
+        $crate::SerdeValue::Object({
+            let mut object = $crate::SerdeMap::new();
             json_internal!(@object object () ($($tt)+) ($($tt)+));
             object
         })
@@ -281,6 +281,6 @@ macro_rules! json_internal {
     // Any Serialize type: numbers, strings, struct literals, variables etc.
     // Must be below every other rule.
     ($other:expr) => {
-        $crate::to_value(&$other).unwrap()
+        $crate::serde_to_value(&$other).unwrap()
     };
 }
