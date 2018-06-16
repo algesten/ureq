@@ -102,6 +102,48 @@ impl Response {
         self.client_error() || self.server_error()
     }
 
+    /// Tells if this response is "synthetic".
+    ///
+    /// The [methods](struct.Request.html#method.call) [firing](struct.Request.html#method.send)
+    /// [off](struct.Request.html#method.send_str) [a request](struct.Request.html#method.send_json)
+    /// all return a `Response`; there is no rust style `Result`.
+    ///
+    /// Rather than exposing a custom error type through results, this library has opted
+    /// for representing potential connection/TLS/etc errors as HTTP response codes.
+    /// These invented codes are called "synthetic".
+    ///
+    /// The idea is that from a library user's point of view the distinction
+    /// of whether a failure originated in the remote server (500, 502) etc, or some transient
+    /// network failure, the code path of handling that would most often be the same.
+    ///
+    /// The specific mapping of error to code can be seen in the (`Error`)[struct.Error.html].
+    ///
+    /// However if the distinction is important, this method can be used to tell. Also see
+    /// [error()](struct.Response.html#method.synthetic_error) to see the actual underlying error.
+    ///
+    /// ```
+    /// // scheme that this library doesn't understand
+    /// let resp = ureq::get("borkedscheme://www.google.com").call();
+    ///
+    /// // it's an error
+    /// assert!(resp.error());
+    ///
+    /// // synthetic error code 400
+    /// assert_eq!(*resp.status(), 400);
+    ///
+    /// // tell that it's synthetic.
+    /// assert!(resp.synthetic());
+    /// ```
+    pub fn synthetic(&self) -> bool {
+        self.error.is_some()
+    }
+
+    /// Get the actual underlying error when the response is
+    /// ["synthetic"](struct.Response.html#method.synthetic).
+    pub fn synthetic_error(&self) -> &Option<Error> {
+        &self.error
+    }
+
     /// The content type part of the "Content-Type" header without
     /// the charset.
     ///
@@ -290,6 +332,7 @@ impl Response {
         }
 
         Ok(Response {
+            error: None,
             status_line,
             index,
             status,
@@ -347,7 +390,12 @@ impl FromStr for Response {
 
 impl Into<Response> for Error {
     fn into(self) -> Response {
-        Response::new(self.status(), self.status_text(), &self.body_text())
+        let status = self.status();
+        let status_text = self.status_text().to_string();
+        let body_text = self.body_text();
+        let mut resp = Response::new(status, &status_text, &body_text);
+        resp.error = Some(self);
+        resp
     }
 }
 
