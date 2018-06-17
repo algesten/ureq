@@ -29,11 +29,14 @@ impl ConnectionPool {
             .unwrap_or(false);
 
         let hostname = url.host_str().unwrap_or("localhost"); // is localhost a good alternative?
-        let query_string = if request.query.len() > 0 {
-            format!("{}", request.query)
-        } else {
-            "".to_string()
+
+        let query_string = match (url.query(), request.query.len() > 0) {
+            (Some(urlq), true) => format!("?{}{}", urlq, request.query),
+            (Some(urlq), false) => format!("?{}", urlq),
+            (None, true) => format!("?{}", request.query),
+            (None, false) => "".to_string(),
         };
+
         let is_secure = url.scheme().eq_ignore_ascii_case("https");
 
         let cookie_headers: Vec<_> = {

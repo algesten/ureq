@@ -84,3 +84,14 @@ fn body_as_reader() {
     reader.read_to_string(&mut text).unwrap();
     assert_eq!(text, "abcdefgh");
 }
+
+#[test]
+fn escape_path() {
+    test::set_handler("/escape_path%20here", |_req, _url| {
+        test::make_response(200, "OK", vec![], vec![])
+    });
+    let resp = get("test://host/escape_path here").call();
+    let vec = resp.to_write_vec();
+    let s = String::from_utf8_lossy(&vec);
+    assert!(s.contains("GET /escape_path%20here HTTP/1.1"))
+}

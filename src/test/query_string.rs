@@ -27,3 +27,28 @@ fn escaped_query_string() {
     let s = String::from_utf8_lossy(&vec);
     assert!(s.contains("GET /escaped_query_string?foo=bar&baz=yo%20lo HTTP/1.1"))
 }
+
+#[test]
+fn query_in_path() {
+    test::set_handler("/query_in_path", |_req, _url| {
+        test::make_response(200, "OK", vec![], vec![])
+    });
+    let resp = get("test://host/query_in_path?foo=bar").call();
+    let vec = resp.to_write_vec();
+    let s = String::from_utf8_lossy(&vec);
+    assert!(s.contains("GET /query_in_path?foo=bar HTTP/1.1"))
+}
+
+#[test]
+fn query_in_path_and_req() {
+    test::set_handler("/query_in_path_and_req", |_req, _url| {
+        test::make_response(200, "OK", vec![], vec![])
+    });
+    let resp = get("test://host/query_in_path_and_req?foo=bar")
+        .query("baz", "1 2 3")
+        .call();
+    let vec = resp.to_write_vec();
+    let s = String::from_utf8_lossy(&vec);
+    println!("{}", s);
+    assert!(s.contains("GET /query_in_path_and_req?foo=barbaz=1%202%203 HTTP/1.1"))
+}
