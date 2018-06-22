@@ -233,7 +233,8 @@ impl Response {
     /// use std::io::Read;
     ///
     /// let resp =
-    ///     ureq::get("https://raw.githubusercontent.com/algesten/ureq/master/.gitignore").call();
+    ///     ureq::get("https://s3.amazonaws.com/foosrvr/hello_world.json")
+    ///         .call();
     ///
     /// assert!(resp.has("Content-Length"));
     /// let len = resp.header("Content-Length")
@@ -272,11 +273,12 @@ impl Response {
     ///
     /// ```
     /// let resp =
-    ///     ureq::get("https://raw.githubusercontent.com/algesten/ureq/master/.gitignore").call();
+    ///     ureq::get("https://s3.amazonaws.com/foosrvr/hello_world.json")
+    ///         .call();
     ///
     /// let text = resp.into_string().unwrap();
     ///
-    /// assert!(text.contains("target"));
+    /// assert!(text.contains("hello"));
     /// ```
     pub fn into_string(self) -> IoResult<String> {
         let encoding = encoding_from_whatwg_label(self.charset())
@@ -293,7 +295,8 @@ impl Response {
     ///
     /// ```
     /// let resp =
-    ///     ureq::get("https://s3.amazonaws.com/foosrvr/hello_world.json").call();
+    ///     ureq::get("https://s3.amazonaws.com/foosrvr/hello_world.json")
+    ///         .call();
     ///
     /// let json = resp.into_json().unwrap();
     ///
