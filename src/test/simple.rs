@@ -59,6 +59,7 @@ fn body_as_text() {
 }
 
 #[test]
+#[cfg(feature = "json")]
 fn body_as_json() {
     test::set_handler("/body_as_json", |_req, _url| {
         test::make_response(

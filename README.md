@@ -5,6 +5,7 @@
 ## Usage
 
 ```rust
+// requires feature: `ureq = { version = "*", features = ["json"] }`
 #[macro_use]
 extern crate ureq;
 
@@ -24,6 +25,21 @@ fn main() {
     }
 }
 ```
+
+## Features
+
+To enable a minimal dependency tree, some features are off by default.
+You can control them when including `ureq` as a dependency.
+
+```
+    ureq = { version = "*", features = ["json", "charset"] }
+```
+
+* `tls` enables https. This is enabled by default.
+* `json` enables `response.into_json()` and `request.send_json()` serde json.
+* `charset` enables interpreting the charset part of
+  `Content-Type: text/plain; charset=iso-8859-1`. Without this, the library
+  defaults to rust's built in `utf-8`.
 
 ## Motivation
 

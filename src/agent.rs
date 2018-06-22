@@ -89,7 +89,7 @@ impl Agent {
     /// ```
     /// let agent = ureq::agent()
     ///     .set("X-API-Key", "foobar")
-    ///     .set("Accept", "application/json")
+    ///     .set("Accept", "text/plain")
     ///     .build();
     ///
     /// let r = agent
@@ -97,7 +97,7 @@ impl Agent {
     ///     .call();
     ///
     ///  if r.ok() {
-    ///      println!("yay got {}", r.into_json().unwrap());
+    ///      println!("yay got {}", r.into_string().unwrap());
     ///  } else {
     ///      println!("Oh no error!");
     ///  }
@@ -123,7 +123,7 @@ impl Agent {
     /// let agent = ureq::agent()
     ///     .set_map(map! {
     ///         "X-API-Key" => "foobar",
-    ///         "Accept" => "application/json"
+    ///         "Accept" => "text/plain"
     ///     })
     ///     .build();
     ///
@@ -132,7 +132,7 @@ impl Agent {
     ///     .call();
     ///
     /// if r.ok() {
-    ///     println!("yay got {}", r.into_json().unwrap());
+    ///     println!("yay got {}", r.into_string().unwrap());
     /// }
     /// }
     /// ```
@@ -402,6 +402,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "json")]
     fn parse_simple_json() {
         let s = format!("HTTP/1.1 200 OK\r\n\r\n{{\"hello\":\"world\"}}");
         let resp = s.parse::<Response>().unwrap();

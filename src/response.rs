@@ -1,11 +1,14 @@
 use ascii::AsciiString;
 use chunked_transfer;
-use encoding::label::encoding_from_whatwg_label;
-use encoding::{DecoderTrap, EncoderTrap};
 use std::io::Error as IoError;
 use std::io::ErrorKind;
 use std::io::Read;
 use std::io::Result as IoResult;
+
+#[cfg(feature = "charset")]
+use encoding::label::encoding_from_whatwg_label;
+#[cfg(feature = "charset")]
+use encoding::{DecoderTrap, EncoderTrap};
 
 use error::Error;
 
@@ -254,8 +257,8 @@ impl Response {
         }
     }
 
-    /// Turn this response into a String of the response body. Attempts to respect the
-    /// character encoding of the `Content-Type` header and falls back to `utf-8`.
+    /// Turn this response into a String of the response body. By default uses `utf-8`,
+    /// but can work with charset, see below.
     ///
     /// This is potentially memory inefficient for large bodies since the
     /// implementation first reads the reader to end into a `Vec<u8>` and then
@@ -272,16 +275,37 @@ impl Response {
     ///
     /// assert!(text.contains("hello"));
     /// ```
+    ///
+    /// ## Charset support
+    ///
+    /// Requires feature `ureq = { version = "*", features = ["charset"] }`
+    ///
+    /// Attempts to respect the character encoding of the `Content-Type` header and
+    /// falls back to `utf-8`.
+    ///
+    /// I.e. `Content-Length: text/plain; charset=iso-8859-1` would be decoded in latin-1.
+    ///
     pub fn into_string(self) -> IoResult<String> {
-        let encoding = encoding_from_whatwg_label(self.charset())
-            .or_else(|| encoding_from_whatwg_label(DEFAULT_CHARACTER_SET))
-            .unwrap();
-        let mut buf: Vec<u8> = vec![];
-        self.into_reader().read_to_end(&mut buf)?;
-        Ok(encoding.decode(&buf, DecoderTrap::Replace).unwrap())
+        #[cfg(feature = "charset")]
+        {
+            let encoding = encoding_from_whatwg_label(self.charset())
+                .or_else(|| encoding_from_whatwg_label(DEFAULT_CHARACTER_SET))
+                .unwrap();
+            let mut buf: Vec<u8> = vec![];
+            self.into_reader().read_to_end(&mut buf)?;
+            Ok(encoding.decode(&buf, DecoderTrap::Replace).unwrap())
+        }
+        #[cfg(not(feature = "charset"))]
+        {
+            let mut buf: Vec<u8> = vec![];
+            self.into_reader().read_to_end(&mut buf)?;
+            Ok(String::from_utf8_lossy(&buf).to_string())
+        }
     }
 
     /// Turn this response into a (serde) JSON value of the response body.
+    ///
+    /// Requires feature `ureq = { version = "*", features = ["json"] }`
     ///
     /// Example:
     ///
@@ -294,6 +318,7 @@ impl Response {
     ///
     /// assert_eq!(json["hello"], "world");
     /// ```
+    #[cfg(feature = "json")]
     pub fn into_json(self) -> IoResult<serde_json::Value> {
         let reader = self.into_reader();
         serde_json::from_reader(reader).map_err(|e| {
@@ -480,4 +505,3 @@ fn charset_from_content_type(header: Option<&str>) -> &str {
         })
         .unwrap_or(DEFAULT_CHARACTER_SET)
 }
-

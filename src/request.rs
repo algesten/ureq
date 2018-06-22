@@ -1,9 +1,12 @@
-use super::SerdeValue;
 use qstring::QString;
-use serde_json;
 use std::io::empty;
 use std::io::Cursor;
 use std::sync::Arc;
+
+#[cfg(feature = "json")]
+use super::SerdeValue;
+#[cfg(feature = "json")]
+use serde_json;
 
 lazy_static! {
     static ref URL_BASE: Url = { Url::parse("http://localhost/").expect("Failed to parse URL_BASE") };
@@ -48,7 +51,7 @@ impl ::std::fmt::Debug for Request {
 enum Payload {
     Empty,
     Text(String, String),
-    JSON(SerdeValue),
+    #[cfg(feature = "json")] JSON(SerdeValue),
     Reader(Box<Read + 'static>),
 }
 
@@ -73,15 +76,21 @@ impl Payload {
     fn into_read(self) -> SizedReader {
         match self {
             Payload::Empty => SizedReader::new(None, Box::new(empty())),
-            Payload::Text(text, charset) => {
-                let encoding = encoding_from_whatwg_label(&charset)
-                    .or_else(|| encoding_from_whatwg_label(DEFAULT_CHARACTER_SET))
-                    .unwrap();
-                let bytes = encoding.encode(&text, EncoderTrap::Replace).unwrap();
+            Payload::Text(text, _charset) => {
+                #[cfg(feature = "charset")]
+                let bytes = {
+                    let encoding = encoding_from_whatwg_label(&_charset)
+                        .or_else(|| encoding_from_whatwg_label(DEFAULT_CHARACTER_SET))
+                        .unwrap();
+                    encoding.encode(&text, EncoderTrap::Replace).unwrap()
+                };
+                #[cfg(not(feature = "charset"))]
+                let bytes = text.into_bytes();
                 let len = bytes.len();
                 let cursor = Cursor::new(bytes);
                 SizedReader::new(Some(len), Box::new(cursor))
             }
+            #[cfg(feature = "json")]
             Payload::JSON(v) => {
                 let bytes = serde_json::to_vec(&v).expect("Bad JSON in payload");
                 let len = bytes.len();
@@ -166,6 +175,8 @@ impl Request {
 
     /// Send data a json value.
     ///
+    /// Requires feature `ureq = { version = "*", features = ["json"] }`
+    ///
     /// The `Content-Length` header is implicitly set to the length of the serialized value.
     ///
     /// ```
@@ -178,6 +189,7 @@ impl Request {
     /// println!("{:?}", r);
     /// }
     /// ```
+    #[cfg(feature = "json")]
     pub fn send_json(&mut self, data: SerdeValue) -> Response {
         self.do_call(Payload::JSON(data))
     }
@@ -185,12 +197,19 @@ impl Request {
     /// Send data as a string.
     ///
     /// The `Content-Length` header is implicitly set to the length of the serialized value.
+    /// Defaults to `utf-8`
+    ///
+    /// ## Charset support
+    ///
+    /// Requires feature `ureq = { version = "*", features = ["charset"] }`
     ///
     /// If a `Content-Type` header is present and it contains a charset specification, we
     /// attempt to encode the string using that character set. If it fails, we fall back
     /// on utf-8.
     ///
     /// ```
+    /// // this example requires features = ["charset"]
+    ///
     /// let r = ureq::post("/my_page")
     ///     .set("Content-Type", "text/plain; charset=iso-8859-1")
     ///     .send_string("Hällo Wörld!");
@@ -231,11 +250,11 @@ impl Request {
     /// ```
     /// let r = ureq::get("/my_page")
     ///     .set("X-API-Key", "foobar")
-    ///     .set("Accept", "application/json")
+    ///     .set("Accept", "text/plain")
     ///     .call();
     ///
     ///  if r.ok() {
-    ///      println!("yay got {}", r.into_json().unwrap());
+    ///      println!("yay got {}", r.into_string().unwrap());
     ///  } else {
     ///      println!("Oh no error!");
     ///  }
@@ -308,12 +327,12 @@ impl Request {
     /// let r = ureq::get("/my_page")
     ///     .set_map(map! {
     ///         "X-API-Key" => "foobar",
-    ///         "Accept" => "application/json"
+    ///         "Accept" => "text/plain"
     ///     })
     ///     .call();
     ///
     /// if r.ok() {
-    ///     println!("yay got {}", r.into_json().unwrap());
+    ///     println!("yay got {}", r.into_string().unwrap());
     /// }
     /// }
     /// ```

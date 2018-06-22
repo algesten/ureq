@@ -1,13 +1,17 @@
 use dns_lookup;
-use native_tls::TlsConnector;
-use native_tls::TlsStream;
 use std::net::IpAddr;
 use std::net::SocketAddr;
 use std::net::TcpStream;
 use std::time::Duration;
 
+#[cfg(feature = "tls")]
+use native_tls::TlsConnector;
+#[cfg(feature = "tls")]
+use native_tls::TlsStream;
+
 pub enum Stream {
     Http(TcpStream),
+    #[cfg(feature = "tls")]
     Https(TlsStream<TcpStream>),
     Cursor(Cursor<Vec<u8>>),
     #[cfg(test)]
@@ -65,6 +69,7 @@ fn connect_http(request: &Request, url: &Url) -> Result<Stream, Error> {
     connect_host(request, hostname, port).map(|tcp| Stream::Http(tcp))
 }
 
+#[cfg(feature = "tls")]
 fn connect_https(request: &Request, url: &Url) -> Result<Stream, Error> {
     //
     let hostname = url.host_str().unwrap();
@@ -110,13 +115,18 @@ fn connect_host(request: &Request, hostname: &str, port: u16) -> Result<TcpStrea
     Ok(stream)
 }
 
+#[cfg(test)]
+fn connect_test(request: &Request, url: &Url) -> Result<Stream, Error> {
+    use test;
+    test::resolve_handler(request, url)
+}
+
 #[cfg(not(test))]
 fn connect_test(_request: &Request, url: &Url) -> Result<Stream, Error> {
     Err(Error::UnknownScheme(url.scheme().to_string()))
 }
 
-#[cfg(test)]
-fn connect_test(request: &Request, url: &Url) -> Result<Stream, Error> {
-    use test;
-    test::resolve_handler(request, url)
+#[cfg(not(feature = "tls"))]
+fn connect_https(request: &Request, url: &Url) -> Result<Stream, Error> {
+    Err(Error::UnknownScheme(url.scheme().to_string()))
 }

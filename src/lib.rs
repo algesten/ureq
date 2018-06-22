@@ -6,6 +6,7 @@
 //! * Obvious API
 //!
 //! ```
+//! // requires feature: `ureq = { version = "*", features = ["json"] }`
 //! #[macro_use]
 //! extern crate ureq;
 //!
@@ -37,7 +38,14 @@
 //! * [`.call()`](struct.Request.html#method.call) without a request body.
 //! * [`.send()`](struct.Request.html#method.send) with a request body as `Read`.
 //! * [`.send_string()`](struct.Request.html#method.send_string) body as string.
-//! * [`.send_json()`](struct.Request.html#method.send_json) body as serde json.
+//!
+//! # JSON
+//!
+//! By enabling the `ureq = { version = "*", features = ["json"] }` feature,
+//! the library supports serde json.
+//!
+//! * [`request.send_json()`](struct.Request.html#method.send_json) send body as serde json.
+//! * [`response.into_json()`](struct.Response.html#method.into_json) transform response to json.
 //!
 //! # Agents
 //!
@@ -70,12 +78,15 @@
 //!
 //! # Character encoding
 //!
+//! By enabling the `ureq = { version = "*", features = ["charset"] }` feature,
+//! the library supports sending/receiving other character sets than `utf-8`.
+//!
 //! For [`response.into_string()`](struct.Response.html#method.into_string) we read the
 //! header `Content-Type: text/plain; charset=iso-8859-1` and if it contains a charset
 //! specification, we try to decode the body using that encoding. In the absence of, or failing
 //! to interpret the charset, we fall back on `utf-8`.
 //!
-//! Similarly when using [`.send_string()`](struct.Request.html#method.send_string), to
+//! Similarly when using [`request.send_string()`](struct.Request.html#method.send_string),
 //! we first check if the user has set a `; charset=<whatwg charset>` and attempt
 //! to encode the request body using that.
 //!
@@ -84,18 +95,24 @@ extern crate base64;
 extern crate chunked_transfer;
 extern crate cookie;
 extern crate dns_lookup;
-extern crate encoding;
 #[macro_use]
 extern crate lazy_static;
-extern crate native_tls;
 extern crate qstring;
-extern crate serde_json;
 extern crate url;
+
+#[cfg(feature = "charset")]
+extern crate encoding;
+#[cfg(feature = "tls")]
+extern crate native_tls;
+#[cfg(feature = "json")]
+extern crate serde_json;
 
 mod agent;
 mod error;
 mod header;
 mod macros;
+
+#[cfg(feature = "json")]
 mod serde_macros;
 
 #[cfg(test)]
@@ -107,6 +124,7 @@ pub use header::Header;
 
 // re-export
 pub use cookie::Cookie;
+#[cfg(feature = "json")]
 pub use serde_json::{to_value as serde_to_value, Map as SerdeMap, Value as SerdeValue};
 
 /// Agents are used to keep state between requests.
@@ -214,6 +232,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "tls")]
     fn connect_https_google() {
         let resp = get("https://www.google.com/").call();
         assert_eq!(
