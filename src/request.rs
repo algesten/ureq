@@ -40,10 +40,13 @@ pub struct Request {
 
 impl ::std::fmt::Debug for Request {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::result::Result<(), ::std::fmt::Error> {
+        let url = self.to_url().unwrap();
+        let query = combine_query(&url, &self.query);
         write!(
             f,
-            "Request[{} {}, {}, {:?}]",
-            self.method, self.path, self.query, self.headers
+            "Request({} {}{}, {:?})",
+            self.method, url.path(), query,
+            self.headers
         )
     }
 }

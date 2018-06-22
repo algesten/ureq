@@ -2,11 +2,17 @@ use ascii::AsciiString;
 use error::Error;
 use std::str::FromStr;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 /// Wrapper type for a header line.
 pub struct Header {
     line: AsciiString,
     index: usize,
+}
+
+impl ::std::fmt::Debug for Header {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::result::Result<(), ::std::fmt::Error> {
+        write!(f, "{}", self.line)
+    }
 }
 
 impl Header {

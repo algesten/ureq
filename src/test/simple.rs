@@ -96,3 +96,32 @@ fn escape_path() {
     let s = String::from_utf8_lossy(&vec);
     assert!(s.contains("GET /escape_path%20here HTTP/1.1"))
 }
+
+#[test]
+fn request_debug() {
+    let req = get("/my/page")
+        .set("Authorization", "abcdef")
+        .set("Content-Length", "1234")
+        .set("Content-Type", "application/json")
+        .build();
+
+    let s = format!("{:?}", req);
+
+    assert_eq!(
+        s,
+        "Request(GET /my/page, [Authorization: abcdef, \
+         Content-Length: 1234, Content-Type: application/json])"
+    );
+
+    let req = get("/my/page?q=z")
+        .query("foo", "bar baz")
+        .set("Authorization", "abcdef")
+        .build();
+
+    let s = format!("{:?}", req);
+
+    assert_eq!(
+        s,
+        "Request(GET /my/page?q=z&foo=bar%20baz, [Authorization: abcdef])"
+    );
+}
