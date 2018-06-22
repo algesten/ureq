@@ -30,12 +30,7 @@ impl ConnectionPool {
 
         let hostname = url.host_str().unwrap_or("localhost"); // is localhost a good alternative?
 
-        let query_string = match (url.query(), request.query.len() > 0) {
-            (Some(urlq), true) => format!("?{}{}", urlq, request.query),
-            (Some(urlq), false) => format!("?{}", urlq),
-            (None, true) => format!("?{}", request.query),
-            (None, false) => "".to_string(),
-        };
+        let query_string = combine_query(&url, &request.query);
 
         let is_secure = url.scheme().eq_ignore_ascii_case("https");
 
@@ -196,4 +191,13 @@ fn match_cookies<'a>(jar: &'a CookieJar, domain: &str, path: &str, is_secure: bo
         .filter(|o| o.is_some())
         .map(|o| o.unwrap())
         .collect()
+}
+
+fn combine_query(url: &Url, query: &QString) -> String {
+    match (url.query(), query.len() > 0) {
+        (Some(urlq), true) => format!("?{}&{}", urlq, query),
+        (Some(urlq), false) => format!("?{}", urlq),
+        (None, true) => format!("?{}", query),
+        (None, false) => "".to_string(),
+    }
 }

@@ -49,5 +49,5 @@ fn query_in_path_and_req() {
     let vec = resp.to_write_vec();
     let s = String::from_utf8_lossy(&vec);
     println!("{}", s);
-    assert!(s.contains("GET /query_in_path_and_req?foo=barbaz=1%202%203 HTTP/1.1"))
+    assert!(s.contains("GET /query_in_path_and_req?foo=bar&baz=1%202%203 HTTP/1.1"))
 }
