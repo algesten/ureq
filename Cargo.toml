@@ -11,7 +11,7 @@ categories = ["web-programming::http-client"]
 
 [dependencies]
 ascii = "0.9"
-base64 = "*"
+base64 = "0.9"
 chunked_transfer = "0.3"
 cookie = { version = "0.10", features = ["percent-encode"] }
 dns-lookup = "0.9.1"
