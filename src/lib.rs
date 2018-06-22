@@ -14,7 +14,7 @@
 //! These top level http method functions create a [Request](struct.Request.html) instance
 //! which follows a build pattern. The builders are finished using
 //! [`.call()`](struct.Request.html#method.call),
-//! [`.send_str()`](struct.Request.html#method.send_str) or
+//! [`.send_string()`](struct.Request.html#method.send_string) or
 //! [`.send_json()`](struct.Request.html#method.send_json).
 //!
 //! # Agents
@@ -25,7 +25,7 @@
 //! # Content-Length
 //!
 //! The library will set the content length on the request when using
-//! [`.send_str()`](struct.Request.html#method.send_str) or
+//! [`.send_string()`](struct.Request.html#method.send_string) or
 //! [`.send_json()`](struct.Request.html#method.send_json). In other cases the user
 //! can optionally `request.set("Content-Length", 1234)`.
 //!
@@ -42,7 +42,7 @@
 //! ```
 //! let resp = ureq::post("http://my-server.com/ingest")
 //!     .set("Transfer-Encoding", "chunked")
-//!     .send_str("Hello world");
+//!     .send_string("Hello world");
 //! ```
 
 extern crate ascii;

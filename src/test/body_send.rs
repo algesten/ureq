@@ -8,7 +8,7 @@ fn content_length_on_str() {
         test::make_response(200, "OK", vec![], vec![])
     });
     let resp = get("test://host/content_length_on_str")
-        .send_str("Hello World!!!");
+        .send_string("Hello World!!!");
     let vec = resp.to_write_vec();
     let s = String::from_utf8_lossy(&vec);
     assert!(s.contains("\r\nContent-Length: 14\r\n"));
@@ -21,7 +21,7 @@ fn user_set_content_length_on_str() {
     });
     let resp = get("test://host/user_set_content_length_on_str")
         .set("Content-Length", "12345")
-        .send_str("Hello World!!!");
+        .send_string("Hello World!!!");
     let vec = resp.to_write_vec();
     let s = String::from_utf8_lossy(&vec);
     assert!(s.contains("\r\nContent-Length: 12345\r\n"));
@@ -48,7 +48,7 @@ fn content_length_and_chunked() {
     });
     let resp = post("test://host/content_length_and_chunked")
         .set("Transfer-Encoding", "chunked")
-        .send_str("Hello World!!!");
+        .send_string("Hello World!!!");
     let vec = resp.to_write_vec();
     let s = String::from_utf8_lossy(&vec);
     assert!(s.contains("Transfer-Encoding: chunked\r\n"));

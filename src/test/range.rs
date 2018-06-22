@@ -1,5 +1,4 @@
 use std::io::Read;
-use test;
 
 use super::super::*;
 

@@ -186,10 +186,10 @@ impl Request {
     /// ```
     /// let r = ureq::post("/my_page")
     ///     .content_type("text/plain")
-    ///     .send_str("Hello World!");
+    ///     .send_string("Hello World!");
     /// println!("{:?}", r);
     /// ```
-    pub fn send_str<S>(&mut self, data: S) -> Response
+    pub fn send_string<S>(&mut self, data: S) -> Response
     where
         S: Into<String>,
     {

@@ -136,7 +136,7 @@ impl Response {
     /// Tells if this response is "synthetic".
     ///
     /// The [methods](struct.Request.html#method.call) [firing](struct.Request.html#method.send)
-    /// [off](struct.Request.html#method.send_str) [requests](struct.Request.html#method.send_json)
+    /// [off](struct.Request.html#method.send_string) [requests](struct.Request.html#method.send_json)
     /// all return a `Response`; there is no rust style `Result`.
     ///
     /// Rather than exposing a custom error type through results, this library has opted
