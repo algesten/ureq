@@ -221,9 +221,9 @@ impl Response {
 
     /// Turn this response into a `impl Read` of the body.
     ///
-    /// 1. If "Transfer-Encoding: chunked", the returned reader will unchunk it
-    ///    and any "Content-Length" header is ignored.
-    /// 2. If "Content-Length" is set, the returned reader is limited to this byte
+    /// 1. If `Transfer-Encoding: chunked`, the returned reader will unchunk it
+    ///    and any `Content-Length` header is ignored.
+    /// 2. If `Content-Length` is set, the returned reader is limited to this byte
     ///    length regardless of how many bytes the server sends.
     /// 3. If no length header, the reader is until server stream end.
     ///
@@ -263,7 +263,7 @@ impl Response {
     }
 
     /// Turn this response into a String of the response body. Attempts to respect the
-    /// character encoding of the "Content-Type" and falls back to `utf-8`.
+    /// character encoding of the `Content-Type` header and falls back to `utf-8`.
     ///
     /// This is potentially memory inefficient for large bodies since the
     /// implementation first reads the reader to end into a `Vec<u8>` and then

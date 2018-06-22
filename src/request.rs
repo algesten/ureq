@@ -201,7 +201,16 @@ impl Request {
     ///
     /// The `Content-Length` header is not set because we can't know the length of the reader.
     ///
+    /// ```
+    /// use std::io::Cursor;
     ///
+    /// let text = "Hello there!\n";
+    /// let read = Cursor::new(text.to_string().into_bytes());
+    ///
+    /// let resp = ureq::post("/somewhere")
+    ///     .set("Content-Type", "text/plain")
+    ///     .send(read);
+    /// ```
     pub fn send<R>(&mut self, reader: R) -> Response
     where
         R: Read + Send + 'static,

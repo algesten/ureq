@@ -32,15 +32,18 @@
 //! [`ureq::put`](fn.put.html), etc).
 //!
 //! These top level http method functions create a [Request](struct.Request.html) instance
-//! which follows a build pattern. The builders are finished using
-//! [`.call()`](struct.Request.html#method.call),
-//! [`.send_string()`](struct.Request.html#method.send_string) or
-//! [`.send_json()`](struct.Request.html#method.send_json).
+//! which follows a build pattern. The builders are finished using:
+//!
+//! * [`.call()`](struct.Request.html#method.call) without a request body.
+//! * [`.send()`](struct.Request.html#method.send) with a request body as `Read`.
+//! * [`.send_string()`](struct.Request.html#method.send_string) body as string.
+//! * [`.send_json()`](struct.Request.html#method.send_json) body as serde json.
 //!
 //! # Agents
 //!
 //! To maintain a state, cookies, between requests, you use an [agent](struct.Agent.html).
-//! Agents also follow the build pattern. Agents are created with `ureq::agent().build()`.
+//! Agents also follow the build pattern. Agents are created with
+//! [`ureq::agent().build()`](struct.Agent.html).
 //!
 //! # Content-Length
 //!
