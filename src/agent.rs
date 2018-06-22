@@ -324,7 +324,6 @@ impl Agent {
     }
 }
 
-
 fn basic_auth(user: &str, pass: &str) -> String {
     let safe = match user.find(":") {
         Some(idx) => &user[..idx],
@@ -332,7 +331,6 @@ fn basic_auth(user: &str, pass: &str) -> String {
     };
     ::base64::encode(&format!("{}:{}", safe, pass))
 }
-
 
 fn mime_of<S: Into<String>>(s: S) -> String {
     let s = s.into();
@@ -345,7 +343,6 @@ fn mime_of<S: Into<String>>(s: S) -> String {
         },
     }.to_string()
 }
-
 
 #[cfg(test)]
 mod tests {

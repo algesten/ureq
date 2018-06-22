@@ -42,14 +42,16 @@ fn content_length_limited() {
 }
 
 #[test]
- // content-length should be ignored when chunked
- fn ignore_content_length_when_chunked() {
+// content-length should be ignored when chunked
+fn ignore_content_length_when_chunked() {
     test::set_handler("/ignore_content_length_when_chunked", |_req, _url| {
         test::make_response(
             200,
             "OK",
             vec!["Content-Length: 4", "transfer-encoding: chunked"],
-            "3\r\nhel\r\nb\r\nlo world!!!\r\n0\r\n\r\n".to_string().into_bytes(),
+            "3\r\nhel\r\nb\r\nlo world!!!\r\n0\r\n\r\n"
+                .to_string()
+                .into_bytes(),
         )
     });
     let resp = get("test://host/ignore_content_length_when_chunked").call();

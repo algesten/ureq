@@ -5,7 +5,10 @@ use super::super::*;
 #[test]
 fn basic_auth() {
     test::set_handler("/basic_auth", |req, _url| {
-        assert_eq!(req.header("Authorization").unwrap(), "Basic bWFydGluOnJ1YmJlcm1hc2hndW0=");
+        assert_eq!(
+            req.header("Authorization").unwrap(),
+            "Basic bWFydGluOnJ1YmJlcm1hc2hndW0="
+        );
         test::make_response(200, "OK", vec![], vec![])
     });
     let resp = get("test://host/basic_auth")

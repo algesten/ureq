@@ -54,9 +54,9 @@ extern crate encoding;
 #[macro_use]
 extern crate lazy_static;
 extern crate mime_guess;
+extern crate native_tls;
 extern crate qstring;
 extern crate serde_json;
-extern crate native_tls;
 extern crate url;
 
 mod agent;
@@ -69,12 +69,12 @@ mod serde_macros;
 mod test;
 
 pub use agent::{Agent, Request, Response};
-pub use header::Header;
 pub use error::Error;
+pub use header::Header;
 
 // re-export
-pub use serde_json::{to_value as serde_to_value, Map as SerdeMap, Value as SerdeValue};
 pub use cookie::Cookie;
+pub use serde_json::{to_value as serde_to_value, Map as SerdeMap, Value as SerdeValue};
 
 /// Agents are used to keep state between requests.
 pub fn agent() -> Agent {

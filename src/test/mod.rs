@@ -3,10 +3,10 @@ use agent::Stream;
 use error::Error;
 use header::Header;
 use std::collections::HashMap;
+use std::io::Cursor;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 use url::Url;
-use std::io::Cursor;
 
 mod agent_test;
 mod auth;

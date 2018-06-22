@@ -35,10 +35,10 @@ fn repeat_x_header() {
     test::set_handler("/repeat_x_header", |req, _url| {
         assert!(req.has("X-Forwarded-For"));
         assert_eq!(req.header("X-Forwarded-For").unwrap(), "130.240.19.2");
-        assert_eq!(req.all("X-Forwarded-For"), vec![
-            "130.240.19.2",
-            "130.240.19.3",
-        ]);
+        assert_eq!(
+            req.all("X-Forwarded-For"),
+            vec!["130.240.19.2", "130.240.19.3"]
+        );
         test::make_response(200, "OK", vec![], vec![])
     });
     let resp = get("test://host/repeat_x_header")

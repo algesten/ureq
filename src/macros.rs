@@ -1,4 +1,3 @@
-
 /// Create a `HashMap` from a shorthand notation.
 ///
 /// ```

@@ -1,6 +1,6 @@
-use std::io::Error as IoError;
 use native_tls::Error as TlsError;
 use native_tls::HandshakeError;
+use std::io::Error as IoError;
 use std::net::TcpStream;
 
 /// Errors that are translated to ["synthetic" responses](struct.Response.html#method.synthetic).
@@ -29,7 +29,6 @@ pub enum Error {
 }
 
 impl Error {
-
     /// For synthetic responses, this is the error code.
     pub fn status(&self) -> u16 {
         match self {
@@ -52,7 +51,7 @@ impl Error {
             Error::BadUrl(e) => {
                 println!("{}", e);
                 "Bad URL"
-            },
+            }
             Error::UnknownScheme(_) => "Unknown Scheme",
             Error::DnsFailed(_) => "Dns Failed",
             Error::ConnectionFailed(_) => "Connection Failed",

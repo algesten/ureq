@@ -7,8 +7,7 @@ fn content_length_on_str() {
     test::set_handler("/content_length_on_str", |_req, _url| {
         test::make_response(200, "OK", vec![], vec![])
     });
-    let resp = get("test://host/content_length_on_str")
-        .send_string("Hello World!!!");
+    let resp = post("test://host/content_length_on_str").send_string("Hello World!!!");
     let vec = resp.to_write_vec();
     let s = String::from_utf8_lossy(&vec);
     assert!(s.contains("\r\nContent-Length: 14\r\n"));
@@ -19,7 +18,7 @@ fn user_set_content_length_on_str() {
     test::set_handler("/user_set_content_length_on_str", |_req, _url| {
         test::make_response(200, "OK", vec![], vec![])
     });
-    let resp = get("test://host/user_set_content_length_on_str")
+    let resp = post("test://host/user_set_content_length_on_str")
         .set("Content-Length", "12345")
         .send_string("Hello World!!!");
     let vec = resp.to_write_vec();
@@ -33,9 +32,11 @@ fn content_length_on_json() {
         test::make_response(200, "OK", vec![], vec![])
     });
     let mut json = SerdeMap::new();
-    json.insert("Hello".to_string(), SerdeValue::String("World!!!".to_string()));
-    let resp = get("test://host/content_length_on_json")
-        .send_json(SerdeValue::Object(json));
+    json.insert(
+        "Hello".to_string(),
+        SerdeValue::String("World!!!".to_string()),
+    );
+    let resp = post("test://host/content_length_on_json").send_json(SerdeValue::Object(json));
     let vec = resp.to_write_vec();
     let s = String::from_utf8_lossy(&vec);
     assert!(s.contains("\r\nContent-Length: 20\r\n"));
