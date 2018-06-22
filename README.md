@@ -2,14 +2,6 @@
 
 > Minimal request library in rust.
 
-# UNDER CONSTRUCTION
-
-- [ ] Forms with application/x-www-form-urlencoded
-- [ ] multipart/form-data
-- [ ] Connection reuse/keep-alive with pool
-- [ ] Expect 100-continue
-- [ ] Use `rustls` when ring v0.13 is released.
-
 ## Usage
 
 ```rust
@@ -45,6 +37,15 @@ The async story in rust is in heavy development and when used
 currently pulls in a heavy dependency tree (tokio etc). Once
 more async support is in rust core and won't drag those
 dependencies, this library might change.
+
+
+## TODO
+
+- [ ] Forms with application/x-www-form-urlencoded
+- [ ] multipart/form-data
+- [ ] Connection reuse/keep-alive with pool
+- [ ] Expect 100-continue
+- [ ] Use `rustls` when ring v0.13 is released.
 
 ## License (MIT)
 
