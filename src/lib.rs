@@ -67,7 +67,18 @@
 //!     .set("Transfer-Encoding", "chunked")
 //!     .send_string("Hello world");
 //! ```
-
+//!
+//! # Character encoding
+//!
+//! For [`response.into_string()`](struct.Response.html#method.into_string) we read the
+//! header `Content-Type: text/plain; charset=iso-8859-1` and if it contains a charset
+//! specification, we try to decode the body using that encoding. In the absence of, or failing
+//! to interpret the charset, we fall back on `utf-8`.
+//!
+//! Similarly when using [`.send_string()`](struct.Request.html#method.send_string), to
+//! we first check if the user has set a `; charset=<whatwg charset>` and attempt
+//! to encode the request body using that.
+//!
 extern crate ascii;
 extern crate base64;
 extern crate chunked_transfer;

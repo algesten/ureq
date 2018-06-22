@@ -55,3 +55,19 @@ fn content_length_and_chunked() {
     assert!(s.contains("Transfer-Encoding: chunked\r\n"));
     assert!(!s.contains("\r\nContent-Length:\r\n"));
 }
+
+#[test]
+fn str_with_encoding() {
+    test::set_handler("/str_with_encoding", |_req, _url| {
+        test::make_response(200, "OK", vec![], vec![])
+    });
+    let resp = post("test://host/str_with_encoding")
+        .set("Content-Type", "text/plain; charset=iso-8859-1")
+        .send_string("Hällo Wörld!!!");
+    let vec = resp.to_write_vec();
+    assert_eq!(
+        &vec[vec.len() - 14..],
+        //H  ä    l    l    o    _   W   ö    r    l    d    !   !   !
+        [72, 228, 108, 108, 111, 32, 87, 246, 114, 108, 100, 33, 33, 33]
+    );
+}

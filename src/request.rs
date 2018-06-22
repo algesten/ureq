@@ -47,7 +47,7 @@ impl ::std::fmt::Debug for Request {
 
 enum Payload {
     Empty,
-    Text(String),
+    Text(String, String),
     JSON(SerdeValue),
     Reader(Box<Read + 'static>),
 }
@@ -73,8 +73,11 @@ impl Payload {
     fn into_read(self) -> SizedReader {
         match self {
             Payload::Empty => SizedReader::new(None, Box::new(empty())),
-            Payload::Text(s) => {
-                let bytes = s.into_bytes();
+            Payload::Text(text, charset) => {
+                let encoding = encoding_from_whatwg_label(&charset)
+                    .or_else(|| encoding_from_whatwg_label(DEFAULT_CHARACTER_SET))
+                    .unwrap();
+                let bytes = encoding.encode(&text, EncoderTrap::Replace).unwrap();
                 let len = bytes.len();
                 let cursor = Cursor::new(bytes);
                 SizedReader::new(Some(len), Box::new(cursor))
@@ -183,10 +186,14 @@ impl Request {
     ///
     /// The `Content-Length` header is implicitly set to the length of the serialized value.
     ///
+    /// If a `Content-Type` header is present and it contains a charset specification, we
+    /// attempt to encode the string using that character set. If it fails, we fall back
+    /// on utf-8.
+    ///
     /// ```
     /// let r = ureq::post("/my_page")
-    ///     .set("Content-Type", "text/plain")
-    ///     .send_string("Hello World!");
+    ///     .set("Content-Type", "text/plain; charset=iso-8859-1")
+    ///     .send_string("Hällo Wörld!");
     /// println!("{:?}", r);
     /// ```
     pub fn send_string<S>(&mut self, data: S) -> Response
@@ -194,7 +201,8 @@ impl Request {
         S: Into<String>,
     {
         let text = data.into();
-        self.do_call(Payload::Text(text))
+        let charset = charset_from_content_type(self.header("content-type")).to_string();
+        self.do_call(Payload::Text(text, charset))
     }
 
     /// Send data from a reader.

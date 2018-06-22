@@ -1,7 +1,7 @@
 use ascii::AsciiString;
 use chunked_transfer;
 use encoding::label::encoding_from_whatwg_label;
-use encoding::DecoderTrap;
+use encoding::{DecoderTrap, EncoderTrap};
 use std::io::Error as IoError;
 use std::io::ErrorKind;
 use std::io::Read;
@@ -208,15 +208,7 @@ impl Response {
     /// assert_eq!("ISO-8859-1", resp.charset());
     /// ```
     pub fn charset(&self) -> &str {
-        self.header("content-type")
-            .and_then(|header| {
-                header.find(";").and_then(|semi| {
-                    (&header[semi + 1..])
-                        .find("=")
-                        .map(|equal| (&header[semi + equal + 2..]).trim())
-                })
-            })
-            .unwrap_or(DEFAULT_CHARACTER_SET)
+        charset_from_content_type(self.header("content-type"))
     }
 
     /// Turn this response into a `impl Read` of the body.
@@ -476,3 +468,16 @@ impl Read for LimitedRead {
         }
     }
 }
+
+fn charset_from_content_type(header: Option<&str>) -> &str {
+    header
+        .and_then(|header| {
+            header.find(";").and_then(|semi| {
+                (&header[semi + 1..])
+                    .find("=")
+                    .map(|equal| (&header[semi + equal + 2..]).trim())
+            })
+        })
+        .unwrap_or(DEFAULT_CHARACTER_SET)
+}
+
