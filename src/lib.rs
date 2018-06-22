@@ -5,11 +5,31 @@
 //! * Minimal dependency tree
 //! * Obvious API
 //!
+//! ```
+//! #[macro_use]
+//! extern crate ureq;
+//!
+//! fn main() {
+//!     // sync post request of some json.
+//!     let resp = ureq::post("https://myapi.acme.com/ingest")
+//!         .set("X-My-Header", "Secret")
+//!         .send_json(json!({
+//!             "name": "martin",
+//!             "rust": true
+//!         }));
+//!
+//!     // .ok() tells if response is 200-299.
+//!     if resp.ok() {
+//!       // ....
+//!     }
+//! }
+//! ```
+//!
 //! # Plain requests
 //!
 //! Most standard methods (GET, POST, PUT etc), are supported as functions from the
 //! top of the library ([`ureq::get`](fn.get.html), [`ureq::post`](fn.post.html),
-//! [`ureq::put`](fn.out.html), etc).
+//! [`ureq::put`](fn.put.html), etc).
 //!
 //! These top level http method functions create a [Request](struct.Request.html) instance
 //! which follows a build pattern. The builders are finished using

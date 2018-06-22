@@ -6,18 +6,23 @@
 
 ```rust
 #[macro_use]
-extern create ureq;
+extern crate ureq;
 
-// sync post request of some json.
-let resp = ureq::post("https://myapi.acme.com/ingest")
-    .set("X-My-Header", "Secret")
-    .send_json(json!({
-        "name": "martin",
-        "rust": true
-    }));
+fn main() {
 
-// .ok() tells if response is 200-299.
-assert!(resp.unwrap().ok());
+    // sync post request of some json.
+    let resp = ureq::post("https://myapi.acme.com/ingest")
+        .set("X-My-Header", "Secret")
+        .send_json(json!({
+            "name": "martin",
+            "rust": true
+        }));
+
+    // .ok() tells if response is 200-299.
+    if resp.ok() {
+        // ...
+    }
+}
 ```
 
 ## Motivation
