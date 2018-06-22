@@ -185,7 +185,7 @@ impl Request {
     ///
     /// ```
     /// let r = ureq::post("/my_page")
-    ///     .content_type("text/plain")
+    ///     .set("Content-Type", "text/plain")
     ///     .send_string("Hello World!");
     /// println!("{:?}", r);
     /// ```
@@ -383,66 +383,6 @@ impl Request {
         let s = query.into();
         self.query.add_str(&s);
         self
-    }
-
-    /// Set the `Content-Type` header.
-    ///
-    /// The default is `application/json`.
-    ///
-    /// As a short-hand the `.content_type()` method accepts the
-    /// canonicalized MIME type name complete with
-    /// type/subtype, or simply the extension name such as
-    /// "xml", "json", "png".
-    ///
-    /// These are all the same.
-    ///
-    /// ```
-    /// ureq::post("/my_page")
-    ///     .set("Content-Type", "text/plain")
-    ///     .call();
-    ///
-    /// ureq::post("/my_page")
-    ///     .content_type("text/plain")
-    ///     .call();
-    ///
-    /// ureq::post("/my_page")
-    ///     .content_type("txt")
-    ///     .call();
-    /// ```
-    pub fn content_type<S>(&mut self, c: S) -> &mut Request
-    where
-        S: Into<String>,
-    {
-        self.set("Content-Type", mime_of(c))
-    }
-
-    /// Sets the `Accept` header in the same way as `content_type()`.
-    ///
-    /// The short-hand `.accept()` method accepts the
-    /// canonicalized MIME type name complete with
-    /// type/subtype, or simply the extension name such as
-    /// "xml", "json", "png".
-    ///
-    /// These are all the same.
-    ///
-    /// ```
-    /// ureq::get("/my_page")
-    ///     .set("Accept", "text/plain")
-    ///     .call();
-    ///
-    /// ureq::get("/my_page")
-    ///     .accept("text/plain")
-    ///     .call();
-    ///
-    /// ureq::get("/my_page")
-    ///     .accept("txt")
-    ///     .call();
-    /// ```
-    pub fn accept<S>(&mut self, accept: S) -> &mut Request
-    where
-        S: Into<String>,
-    {
-        self.set("Accept", mime_of(accept))
     }
 
     /// Timeout for the socket connection to be successful.

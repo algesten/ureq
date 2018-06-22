@@ -73,7 +73,6 @@ extern crate dns_lookup;
 extern crate encoding;
 #[macro_use]
 extern crate lazy_static;
-extern crate mime_guess;
 extern crate native_tls;
 extern crate qstring;
 extern crate serde_json;
