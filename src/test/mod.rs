@@ -13,6 +13,7 @@ mod auth;
 mod body_read;
 mod body_send;
 mod query_string;
+mod range;
 mod simple;
 
 type RequestHandler = Fn(&Request, &Url) -> Result<Stream, Error> + Send + 'static;
