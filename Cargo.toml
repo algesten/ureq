@@ -1,6 +1,6 @@
 [package]
 name = "ureq"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Martin Algesten <martin@algesten.se>"]
 description = "Minimal HTTP request library"
 license = "MIT/Apache-2.0"
