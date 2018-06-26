@@ -20,7 +20,6 @@ ascii = "0.9"
 base64 = "0.9"
 chunked_transfer = "0.3"
 cookie = { version = "0.10", features = ["percent-encode"] }
-dns-lookup = "0.9.1"
 lazy_static = "1"
 qstring = "0.6"
 url = "1.6"

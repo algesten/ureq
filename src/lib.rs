@@ -94,7 +94,6 @@ extern crate ascii;
 extern crate base64;
 extern crate chunked_transfer;
 extern crate cookie;
-extern crate dns_lookup;
 #[macro_use]
 extern crate lazy_static;
 extern crate qstring;

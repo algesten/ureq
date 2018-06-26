@@ -1,7 +1,6 @@
-use dns_lookup;
-use std::net::IpAddr;
 use std::net::SocketAddr;
 use std::net::TcpStream;
+use std::net::ToSocketAddrs;
 use std::time::Duration;
 
 #[cfg(feature = "tls")]
@@ -84,15 +83,16 @@ fn connect_https(request: &Request, url: &Url) -> Result<Stream, Error> {
 
 fn connect_host(request: &Request, hostname: &str, port: u16) -> Result<TcpStream, Error> {
     //
-    let ips: Vec<IpAddr> =
-        dns_lookup::lookup_host(hostname).map_err(|e| Error::DnsFailed(format!("{}", e)))?;
+    let ips: Vec<SocketAddr> = format!("{}:{}", hostname, port).to_socket_addrs()
+        .map_err(|e| Error::DnsFailed(format!("{}", e)))?
+        .collect();
 
     if ips.len() == 0 {
         return Err(Error::DnsFailed(format!("No ip address for {}", hostname)));
     }
 
     // pick first ip, or should we randomize?
-    let sock_addr = SocketAddr::new(ips[0], port);
+    let sock_addr = ips[0];
 
     // connect with a configured timeout.
     let stream = match request.timeout {
