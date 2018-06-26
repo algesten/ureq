@@ -479,6 +479,9 @@ impl LimitedRead {
 impl Read for LimitedRead {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         let left = self.limit - self.position;
+        if left <= 0 {
+            return Ok(0);
+        }
         let from = if left < buf.len() {
             &mut buf[0..left]
         } else {
