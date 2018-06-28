@@ -34,6 +34,8 @@ impl ConnectionPool {
 
         let is_secure = url.scheme().eq_ignore_ascii_case("https");
 
+        let is_head = request.method.eq_ignore_ascii_case("head");
+
         let cookie_headers: Vec<_> = {
             match jar.as_ref() {
                 None => vec![],
@@ -131,7 +133,7 @@ impl ConnectionPool {
         send_body(body, do_chunk, &mut stream)?;
 
         // since it is not a redirect, give away the incoming stream to the response object
-        resp.set_stream(stream);
+        resp.set_stream(stream, is_head);
 
         // release the response
         Ok(resp)

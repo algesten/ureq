@@ -37,6 +37,7 @@ pub struct Response {
     index: (usize, usize), // index into status_line where we split: HTTP/1.1 200 OK
     status: u16,
     headers: Vec<Header>,
+    is_head: bool,
     stream: Option<Stream>,
 }
 
@@ -242,12 +243,22 @@ impl Response {
     /// assert_eq!(bytes.len(), len);
     /// ```
     pub fn into_reader(self) -> impl Read {
+
         let is_chunked = self.header("transfer-encoding")
             .map(|enc| enc.len() > 0) // whatever it says, do chunked
             .unwrap_or(false);
+
         let len = self.header("content-length")
             .and_then(|l| l.parse::<usize>().ok());
+
         let reader = self.stream.expect("No reader in response?!");
+
+        // head requests never have a body
+        if self.is_head {
+            return Box::new(LimitedRead::new(reader, 0)) as Box<Read>;
+        }
+
+        // figure out how to make a reader
         match is_chunked {
             true => Box::new(chunked_transfer::Decoder::new(reader)),
             false => match len {
@@ -372,11 +383,13 @@ impl Response {
             index,
             status,
             headers,
+            is_head: false,
             stream: None,
         })
     }
 
-    fn set_stream(&mut self, stream: Stream) {
+    fn set_stream(&mut self, stream: Stream, is_head: bool) {
+        self.is_head = is_head;
         self.stream = Some(stream);
     }
 
@@ -418,7 +431,7 @@ impl FromStr for Response {
         let bytes = s.as_bytes().to_owned();
         let mut cursor = Cursor::new(bytes);
         let mut resp = Self::do_from_read(&mut cursor)?;
-        resp.set_stream(Stream::Cursor(cursor));
+        resp.set_stream(Stream::Cursor(cursor), false);
         Ok(resp)
     }
 }

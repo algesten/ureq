@@ -60,3 +60,23 @@ fn ignore_content_length_when_chunked() {
     reader.read_to_string(&mut text).unwrap();
     assert_eq!(text, "hello world!!!");
 }
+
+#[test]
+fn no_reader_on_head() {
+    test::set_handler("/no_reader_on_head", |_req, _url| {
+        // so this is technically illegal, we return a body for the HEAD request.
+        test::make_response(
+            200,
+            "OK",
+            vec!["Content-Length: 4", "transfer-encoding: chunked"],
+            "3\r\nhel\r\nb\r\nlo world!!!\r\n0\r\n\r\n"
+                .to_string()
+                .into_bytes(),
+        )
+    });
+    let resp = head("test://host/no_reader_on_head").call();
+    let mut reader = resp.into_reader();
+    let mut text = String::new();
+    reader.read_to_string(&mut text).unwrap();
+    assert_eq!(text, "");
+}
