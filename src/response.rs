@@ -250,13 +250,23 @@ impl Response {
     pub fn into_reader(self) -> impl Read {
         //
 
-        let is_chunked = self.header("transfer-encoding")
-            .map(|enc| enc.len() > 0) // whatever it says, do chunked
+        let is_http10 = self.http_version().eq_ignore_ascii_case("HTTP/1.0");
+        let is_close = self
+            .header("connection")
+            .map(|c| c.eq_ignore_ascii_case("close"))
             .unwrap_or(false);
 
         let is_head = (&self.unit).as_ref().map(|u| u.is_head).unwrap_or(false);
 
-        let len = if is_head {
+        let is_chunked = self.header("transfer-encoding")
+            .map(|enc| enc.len() > 0) // whatever it says, do chunked
+            .unwrap_or(false);
+
+        let use_chunked = !is_http10 && !is_head && is_chunked;
+
+        let expected_bytes = if is_http10 || is_close {
+            None
+        } else if is_head {
             // head requests never have a body
             Some(0)
         } else {
@@ -269,7 +279,7 @@ impl Response {
         let yolo = YoloRead { stream: stream_ptr };
         let unit = self.unit;
 
-        match (is_chunked && !is_head, len) {
+        match (use_chunked, expected_bytes) {
             (true, _) => Box::new(PoolReturnRead::new(
                 unit,
                 stream_ptr,
