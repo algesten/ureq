@@ -75,7 +75,7 @@ fn connect_https(request: &Request, url: &Url) -> Result<Stream, Error> {
     let port = url.port().unwrap_or(443);
 
     let socket = connect_host(request, hostname, port)?;
-    let connector = TlsConnector::builder()?.build()?;
+    let connector = TlsConnector::builder().build()?;
     let stream = connector.connect(hostname, socket)?;
 
     Ok(Stream::Https(stream))

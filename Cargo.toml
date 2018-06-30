@@ -23,6 +23,6 @@ cookie = { version = "0.10", features = ["percent-encode"] }
 lazy_static = "1"
 qstring = "0.6"
 url = "1.6"
-native-tls = { version = "0.1", optional = true }
+native-tls = { version = "0.2", optional = true }
 serde_json = { version = "1", optional = true }
 encoding = { version = "0.2", optional = true }
