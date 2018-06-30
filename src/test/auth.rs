@@ -4,9 +4,9 @@ use super::super::*;
 
 #[test]
 fn basic_auth() {
-    test::set_handler("/basic_auth", |req, _url| {
+    test::set_handler("/basic_auth", |unit| {
         assert_eq!(
-            req.header("Authorization").unwrap(),
+            unit.header("Authorization").unwrap(),
             "Basic bWFydGluOnJ1YmJlcm1hc2hndW0="
         );
         test::make_response(200, "OK", vec![], vec![])
@@ -19,8 +19,8 @@ fn basic_auth() {
 
 #[test]
 fn kind_auth() {
-    test::set_handler("/kind_auth", |req, _url| {
-        assert_eq!(req.header("Authorization").unwrap(), "Digest abcdefgh123");
+    test::set_handler("/kind_auth", |unit| {
+        assert_eq!(unit.header("Authorization").unwrap(), "Digest abcdefgh123");
         test::make_response(200, "OK", vec![], vec![])
     });
     let resp = get("test://host/kind_auth")

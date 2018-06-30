@@ -5,7 +5,7 @@ use super::super::*;
 
 #[test]
 fn transfer_encoding_bogus() {
-    test::set_handler("/transfer_encoding_bogus", |_req, _url| {
+    test::set_handler("/transfer_encoding_bogus", |_unit| {
         test::make_response(
             200,
             "OK",
@@ -26,7 +26,7 @@ fn transfer_encoding_bogus() {
 
 #[test]
 fn content_length_limited() {
-    test::set_handler("/content_length_limited", |_req, _url| {
+    test::set_handler("/content_length_limited", |_unit| {
         test::make_response(
             200,
             "OK",
@@ -44,7 +44,7 @@ fn content_length_limited() {
 #[test]
 // content-length should be ignored when chunked
 fn ignore_content_length_when_chunked() {
-    test::set_handler("/ignore_content_length_when_chunked", |_req, _url| {
+    test::set_handler("/ignore_content_length_when_chunked", |_unit| {
         test::make_response(
             200,
             "OK",
@@ -63,7 +63,7 @@ fn ignore_content_length_when_chunked() {
 
 #[test]
 fn no_reader_on_head() {
-    test::set_handler("/no_reader_on_head", |_req, _url| {
+    test::set_handler("/no_reader_on_head", |_unit| {
         // so this is technically illegal, we return a body for the HEAD request.
         test::make_response(
             200,

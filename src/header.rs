@@ -53,6 +53,30 @@ impl Header {
     }
 }
 
+pub fn get_header<'a, 'b>(headers: &'b Vec<Header>, name: &'a str) -> Option<&'b str> {
+    headers.iter().find(|h| h.is_name(name)).map(|h| h.value())
+}
+
+pub fn get_all_headers<'a, 'b>(headers: &'b Vec<Header>, name: &'a str) -> Vec<&'b str> {
+    headers
+        .iter()
+        .filter(|h| h.is_name(name))
+        .map(|h| h.value())
+        .collect()
+}
+
+pub fn has_header(headers: &Vec<Header>, name: &str) -> bool {
+    get_header(headers, name).is_some()
+}
+
+pub fn add_header(headers: &mut Vec<Header>, header: Header) {
+    if !header.name().to_lowercase().starts_with("x-") {
+        let name = header.name();
+        headers.retain(|h| h.name() != name);
+    }
+    headers.push(header);
+}
+
 impl FromStr for Header {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -67,12 +91,4 @@ impl FromStr for Header {
 
         Ok(Header { line, index })
     }
-}
-
-pub fn add_header(header: Header, headers: &mut Vec<Header>) {
-    if !header.name().to_lowercase().starts_with("x-") {
-        let name = header.name();
-        headers.retain(|h| h.name() != name);
-    }
-    headers.push(header);
 }

@@ -23,7 +23,7 @@ lazy_static! {
 /// ```
 #[derive(Clone, Default)]
 pub struct Request {
-    state: Arc<Mutex<Option<AgentState>>>,
+    agent: Arc<Mutex<Option<AgentState>>>,
 
     // via agent
     method: String,
@@ -32,9 +32,9 @@ pub struct Request {
     // from request itself
     headers: Vec<Header>,
     query: QString,
-    timeout: u32,
-    timeout_read: u32,
-    timeout_write: u32,
+    timeout_connect: u64,
+    timeout_read: u64,
+    timeout_write: u64,
     redirects: u32,
 }
 
@@ -64,7 +64,7 @@ impl Default for Payload {
     }
 }
 
-struct SizedReader {
+pub struct SizedReader {
     size: Option<usize>,
     reader: Box<Read + 'static>,
 }
@@ -108,7 +108,7 @@ impl Payload {
 impl Request {
     fn new(agent: &Agent, method: String, path: String) -> Request {
         Request {
-            state: Arc::clone(&agent.state),
+            agent: Arc::clone(&agent.state),
             method,
             path,
             headers: agent.headers.clone(),
@@ -132,11 +132,11 @@ impl Request {
 
     /// Executes the request and blocks the caller until done.
     ///
-    /// Use `.timeout()` and `.timeout_read()` to avoid blocking forever.
+    /// Use `.timeout_connect()` and `.timeout_read()` to avoid blocking forever.
     ///
     /// ```
     /// let r = ureq::get("/my_page")
-    ///     .timeout(10_000) // max 10 seconds
+    ///     .timeout_connect(10_000) // max 10 seconds
     ///     .call();
     ///
     /// println!("{:?}", r);
@@ -146,32 +146,11 @@ impl Request {
     }
 
     fn do_call(&mut self, payload: Payload) -> Response {
-        let mut state = self.state.lock().unwrap();
         self.to_url()
             .and_then(|url| {
-                match state.as_mut() {
-                    None =>
-                        // create a one off pool/jar.
-                        ConnectionPool::new().connect(
-                            self,
-                            &self.method,
-                            &url,
-                            self.redirects,
-                            None,
-                            payload.into_read(),
-                        ),
-                    Some(state) => {
-                        let jar = &mut state.jar;
-                        state.pool.connect(
-                            self,
-                            &self.method,
-                            &url,
-                            self.redirects,
-                            Some(jar),
-                            payload.into_read(),
-                        )
-                    },
-                }
+                let reader = payload.into_read();
+                let mut unit = Unit::new(&self, &url, &reader);
+                unit.connect(url, &self.method, self.redirects, reader)
             })
             .unwrap_or_else(|e| e.into())
     }
@@ -269,7 +248,7 @@ impl Request {
     {
         let s = format!("{}: {}", header.into(), value.into());
         let header = s.parse::<Header>().expect("Failed to parse header");
-        add_header(header, &mut self.headers);
+        add_header(&mut self.headers, header);
         self
     }
 
@@ -282,10 +261,7 @@ impl Request {
     /// assert_eq!("foobar", req.header("x-api-Key").unwrap());
     /// ```
     pub fn header<'a>(&self, name: &'a str) -> Option<&str> {
-        self.headers
-            .iter()
-            .find(|h| h.is_name(name))
-            .map(|h| h.value())
+        get_header(&self.headers, name)
     }
 
     /// Tells if the header has been set.
@@ -297,7 +273,7 @@ impl Request {
     /// assert_eq!(true, req.has("x-api-Key"));
     /// ```
     pub fn has<'a>(&self, name: &'a str) -> bool {
-        self.header(name).is_some()
+        has_header(&self.headers, name)
     }
 
     /// All headers corresponding values for the give name, or empty vector.
@@ -313,11 +289,7 @@ impl Request {
     /// ]);
     /// ```
     pub fn all<'a>(&self, name: &'a str) -> Vec<&str> {
-        self.headers
-            .iter()
-            .filter(|h| h.is_name(name))
-            .map(|h| h.value())
-            .collect()
+        get_all_headers(&self.headers, name)
     }
 
     /// Set many headers.
@@ -348,7 +320,7 @@ impl Request {
         for (k, v) in headers.into_iter() {
             let s = format!("{}: {}", k.into(), v.into());
             let header = s.parse::<Header>().expect("Failed to parse header");
-            add_header(header, &mut self.headers);
+            add_header(&mut self.headers, header);
         }
         self
     }
@@ -430,12 +402,12 @@ impl Request {
     ///
     /// ```
     /// let r = ureq::get("/my_page")
-    ///     .timeout(1_000) // wait max 1 second to connect
+    ///     .timeout_connect(1_000) // wait max 1 second to connect
     ///     .call();
     /// println!("{:?}", r);
     /// ```
-    pub fn timeout(&mut self, millis: u32) -> &mut Request {
-        self.timeout = millis;
+    pub fn timeout_connect(&mut self, millis: u64) -> &mut Request {
+        self.timeout_connect = millis;
         self
     }
 
@@ -449,7 +421,7 @@ impl Request {
     ///     .call();
     /// println!("{:?}", r);
     /// ```
-    pub fn timeout_read(&mut self, millis: u32) -> &mut Request {
+    pub fn timeout_read(&mut self, millis: u64) -> &mut Request {
         self.timeout_read = millis;
         self
     }
@@ -464,7 +436,7 @@ impl Request {
     ///     .call();
     /// println!("{:?}", r);
     /// ```
-    pub fn timeout_write(&mut self, millis: u32) -> &mut Request {
+    pub fn timeout_write(&mut self, millis: u64) -> &mut Request {
         self.timeout_write = millis;
         self
     }
@@ -508,7 +480,7 @@ impl Request {
     {
         let s = format!("Authorization: {} {}", kind.into(), pass.into());
         let header = s.parse::<Header>().expect("Failed to parse header");
-        add_header(header, &mut self.headers);
+        add_header(&mut self.headers, header);
         self
     }
 

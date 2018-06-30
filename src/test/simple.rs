@@ -5,9 +5,9 @@ use super::super::*;
 
 #[test]
 fn header_passing() {
-    test::set_handler("/header_passing", |req, _url| {
-        assert!(req.has("X-Foo"));
-        assert_eq!(req.header("X-Foo").unwrap(), "bar");
+    test::set_handler("/header_passing", |unit| {
+        assert!(unit.has("X-Foo"));
+        assert_eq!(unit.header("X-Foo").unwrap(), "bar");
         test::make_response(200, "OK", vec!["X-Bar: foo"], vec![])
     });
     let resp = get("test://host/header_passing").set("X-Foo", "bar").call();
@@ -18,9 +18,9 @@ fn header_passing() {
 
 #[test]
 fn repeat_non_x_header() {
-    test::set_handler("/repeat_non_x_header", |req, _url| {
-        assert!(req.has("Accept"));
-        assert_eq!(req.header("Accept").unwrap(), "baz");
+    test::set_handler("/repeat_non_x_header", |unit| {
+        assert!(unit.has("Accept"));
+        assert_eq!(unit.header("Accept").unwrap(), "baz");
         test::make_response(200, "OK", vec![], vec![])
     });
     let resp = get("test://host/repeat_non_x_header")
@@ -32,11 +32,11 @@ fn repeat_non_x_header() {
 
 #[test]
 fn repeat_x_header() {
-    test::set_handler("/repeat_x_header", |req, _url| {
-        assert!(req.has("X-Forwarded-For"));
-        assert_eq!(req.header("X-Forwarded-For").unwrap(), "130.240.19.2");
+    test::set_handler("/repeat_x_header", |unit| {
+        assert!(unit.has("X-Forwarded-For"));
+        assert_eq!(unit.header("X-Forwarded-For").unwrap(), "130.240.19.2");
         assert_eq!(
-            req.all("X-Forwarded-For"),
+            unit.all("X-Forwarded-For"),
             vec!["130.240.19.2", "130.240.19.3"]
         );
         test::make_response(200, "OK", vec![], vec![])
@@ -50,7 +50,7 @@ fn repeat_x_header() {
 
 #[test]
 fn body_as_text() {
-    test::set_handler("/body_as_text", |_req, _url| {
+    test::set_handler("/body_as_text", |_unit| {
         test::make_response(200, "OK", vec![], "Hello World!".to_string().into_bytes())
     });
     let resp = get("test://host/body_as_text").call();
@@ -61,7 +61,7 @@ fn body_as_text() {
 #[test]
 #[cfg(feature = "json")]
 fn body_as_json() {
-    test::set_handler("/body_as_json", |_req, _url| {
+    test::set_handler("/body_as_json", |_unit| {
         test::make_response(
             200,
             "OK",
@@ -76,7 +76,7 @@ fn body_as_json() {
 
 #[test]
 fn body_as_reader() {
-    test::set_handler("/body_as_reader", |_req, _url| {
+    test::set_handler("/body_as_reader", |_unit| {
         test::make_response(200, "OK", vec![], "abcdefgh".to_string().into_bytes())
     });
     let resp = get("test://host/body_as_reader").call();
@@ -88,7 +88,7 @@ fn body_as_reader() {
 
 #[test]
 fn escape_path() {
-    test::set_handler("/escape_path%20here", |_req, _url| {
+    test::set_handler("/escape_path%20here", |_unit| {
         test::make_response(200, "OK", vec![], vec![])
     });
     let resp = get("test://host/escape_path here").call();

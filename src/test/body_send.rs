@@ -4,7 +4,7 @@ use super::super::*;
 
 #[test]
 fn content_length_on_str() {
-    test::set_handler("/content_length_on_str", |_req, _url| {
+    test::set_handler("/content_length_on_str", |_unit| {
         test::make_response(200, "OK", vec![], vec![])
     });
     let resp = post("test://host/content_length_on_str").send_string("Hello World!!!");
@@ -15,7 +15,7 @@ fn content_length_on_str() {
 
 #[test]
 fn user_set_content_length_on_str() {
-    test::set_handler("/user_set_content_length_on_str", |_req, _url| {
+    test::set_handler("/user_set_content_length_on_str", |_unit| {
         test::make_response(200, "OK", vec![], vec![])
     });
     let resp = post("test://host/user_set_content_length_on_str")
@@ -29,7 +29,7 @@ fn user_set_content_length_on_str() {
 #[test]
 #[cfg(feature = "json")]
 fn content_length_on_json() {
-    test::set_handler("/content_length_on_json", |_req, _url| {
+    test::set_handler("/content_length_on_json", |_unit| {
         test::make_response(200, "OK", vec![], vec![])
     });
     let mut json = SerdeMap::new();
@@ -45,7 +45,7 @@ fn content_length_on_json() {
 
 #[test]
 fn content_length_and_chunked() {
-    test::set_handler("/content_length_and_chunked", |_req, _url| {
+    test::set_handler("/content_length_and_chunked", |_unit| {
         test::make_response(200, "OK", vec![], vec![])
     });
     let resp = post("test://host/content_length_and_chunked")
@@ -60,7 +60,7 @@ fn content_length_and_chunked() {
 #[test]
 #[cfg(feature = "charset")]
 fn str_with_encoding() {
-    test::set_handler("/str_with_encoding", |_req, _url| {
+    test::set_handler("/str_with_encoding", |_unit| {
         test::make_response(200, "OK", vec![], vec![])
     });
     let resp = post("test://host/str_with_encoding")

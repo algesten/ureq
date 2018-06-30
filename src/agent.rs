@@ -2,13 +2,14 @@ use cookie::{Cookie, CookieJar};
 use std::str::FromStr;
 use std::sync::Mutex;
 
-use header::{add_header, Header};
+use header::{add_header, get_header, get_all_headers, has_header, Header};
 
 // to get to share private fields
 include!("request.rs");
 include!("response.rs");
 include!("conn.rs");
 include!("stream.rs");
+include!("unit.rs");
 
 /// Agents keep state between requests.
 ///
@@ -45,7 +46,7 @@ pub struct Agent {
 }
 
 #[derive(Debug)]
-struct AgentState {
+pub struct AgentState {
     pool: ConnectionPool,
     jar: CookieJar,
 }
@@ -109,7 +110,7 @@ impl Agent {
     {
         let s = format!("{}: {}", header.into(), value.into());
         let header = s.parse::<Header>().expect("Failed to parse header");
-        add_header(header, &mut self.headers);
+        add_header(&mut self.headers, header);
         self
     }
 
@@ -145,7 +146,7 @@ impl Agent {
         for (k, v) in headers.into_iter() {
             let s = format!("{}: {}", k.into(), v.into());
             let header = s.parse::<Header>().expect("Failed to parse header");
-            add_header(header, &mut self.headers);
+            add_header(&mut self.headers, header);
         }
         self
     }
@@ -192,7 +193,7 @@ impl Agent {
     {
         let s = format!("Authorization: {} {}", kind.into(), pass.into());
         let header = s.parse::<Header>().expect("Failed to parse header");
-        add_header(header, &mut self.headers);
+        add_header(&mut self.headers, header);
         self
     }
 

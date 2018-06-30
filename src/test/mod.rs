@@ -1,4 +1,4 @@
-use agent::Request;
+use agent::Unit;
 use agent::Stream;
 use error::Error;
 use header::Header;
@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use std::io::Cursor;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
-use url::Url;
 
 mod agent_test;
 mod auth;
@@ -16,7 +15,7 @@ mod query_string;
 mod range;
 mod simple;
 
-type RequestHandler = Fn(&Request, &Url) -> Result<Stream, Error> + Send + 'static;
+type RequestHandler = Fn(&Unit) -> Result<Stream, Error> + Send + 'static;
 
 lazy_static! {
     pub static ref TEST_HANDLERS: Arc<Mutex<HashMap<String, Box<RequestHandler>>>> =
@@ -25,7 +24,7 @@ lazy_static! {
 
 pub fn set_handler<H>(path: &str, handler: H)
 where
-    H: Fn(&Request, &Url) -> Result<Stream, Error> + Send + 'static,
+    H: Fn(&Unit) -> Result<Stream, Error> + Send + 'static,
 {
     let mut handlers = TEST_HANDLERS.lock().unwrap();
     handlers.insert(path.to_string(), Box::new(handler));
@@ -50,9 +49,9 @@ pub fn make_response(
     Ok(Stream::Test(Box::new(cursor), write))
 }
 
-pub fn resolve_handler(req: &Request, url: &Url) -> Result<Stream, Error> {
+pub fn resolve_handler(unit: &Unit) -> Result<Stream, Error> {
     let mut handlers = TEST_HANDLERS.lock().unwrap();
-    let path = url.path();
+    let path = unit.url.path();
     let handler = handlers.remove(path).unwrap();
-    handler(req, url)
+    handler(unit)
 }

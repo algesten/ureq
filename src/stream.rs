@@ -60,28 +60,28 @@ impl Write for Stream {
     }
 }
 
-fn connect_http(request: &Request, url: &Url) -> Result<Stream, Error> {
+fn connect_http(unit: &Unit) -> Result<Stream, Error> {
     //
-    let hostname = url.host_str().unwrap();
-    let port = url.port().unwrap_or(80);
+    let hostname = unit.url.host_str().unwrap();
+    let port = unit.url.port().unwrap_or(80);
 
-    connect_host(request, hostname, port).map(|tcp| Stream::Http(tcp))
+    connect_host(unit, hostname, port).map(|tcp| Stream::Http(tcp))
 }
 
 #[cfg(feature = "tls")]
-fn connect_https(request: &Request, url: &Url) -> Result<Stream, Error> {
+fn connect_https(unit: &Unit) -> Result<Stream, Error> {
     //
-    let hostname = url.host_str().unwrap();
-    let port = url.port().unwrap_or(443);
+    let hostname = unit.url.host_str().unwrap();
+    let port = unit.url.port().unwrap_or(443);
 
-    let socket = connect_host(request, hostname, port)?;
+    let socket = connect_host(unit, hostname, port)?;
     let connector = TlsConnector::builder().build()?;
     let stream = connector.connect(hostname, socket)?;
 
     Ok(Stream::Https(stream))
 }
 
-fn connect_host(request: &Request, hostname: &str, port: u16) -> Result<TcpStream, Error> {
+fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<TcpStream, Error> {
     //
     let ips: Vec<SocketAddr> = format!("{}:{}", hostname, port).to_socket_addrs()
         .map_err(|e| Error::DnsFailed(format!("{}", e)))?
@@ -95,20 +95,20 @@ fn connect_host(request: &Request, hostname: &str, port: u16) -> Result<TcpStrea
     let sock_addr = ips[0];
 
     // connect with a configured timeout.
-    let stream = match request.timeout {
+    let stream = match unit.timeout_connect {
         0 => TcpStream::connect(&sock_addr),
-        _ => TcpStream::connect_timeout(&sock_addr, Duration::from_millis(request.timeout as u64)),
+        _ => TcpStream::connect_timeout(&sock_addr, Duration::from_millis(unit.timeout_connect as u64)),
     }.map_err(|err| Error::ConnectionFailed(format!("{}", err)))?;
 
     // rust's absurd api returns Err if we set 0.
-    if request.timeout_read > 0 {
+    if unit.timeout_read > 0 {
         stream
-            .set_read_timeout(Some(Duration::from_millis(request.timeout_read as u64)))
+            .set_read_timeout(Some(Duration::from_millis(unit.timeout_read as u64)))
             .ok();
     }
-    if request.timeout_write > 0 {
+    if unit.timeout_write > 0 {
         stream
-            .set_write_timeout(Some(Duration::from_millis(request.timeout_write as u64)))
+            .set_write_timeout(Some(Duration::from_millis(unit.timeout_write as u64)))
             .ok();
     }
 
@@ -116,17 +116,17 @@ fn connect_host(request: &Request, hostname: &str, port: u16) -> Result<TcpStrea
 }
 
 #[cfg(test)]
-fn connect_test(request: &Request, url: &Url) -> Result<Stream, Error> {
+fn connect_test(unit: &Unit) -> Result<Stream, Error> {
     use test;
-    test::resolve_handler(request, url)
+    test::resolve_handler(unit)
 }
 
 #[cfg(not(test))]
-fn connect_test(_request: &Request, url: &Url) -> Result<Stream, Error> {
-    Err(Error::UnknownScheme(url.scheme().to_string()))
+fn connect_test(unit: &Unit) -> Result<Stream, Error> {
+    Err(Error::UnknownScheme(unit.url.scheme().to_string()))
 }
 
 #[cfg(not(feature = "tls"))]
-fn connect_https(request: &Request, url: &Url) -> Result<Stream, Error> {
-    Err(Error::UnknownScheme(url.scheme().to_string()))
+fn connect_https(unit: &Unit) -> Result<Stream, Error> {
+    Err(Error::UnknownScheme(unit.url.scheme().to_string()))
 }

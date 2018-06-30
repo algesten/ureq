@@ -4,7 +4,7 @@ use super::super::*;
 
 #[test]
 fn no_query_string() {
-    test::set_handler("/no_query_string", |_req, _url| {
+    test::set_handler("/no_query_string", |_unit| {
         test::make_response(200, "OK", vec![], vec![])
     });
     let resp = get("test://host/no_query_string").call();
@@ -15,7 +15,7 @@ fn no_query_string() {
 
 #[test]
 fn escaped_query_string() {
-    test::set_handler("/escaped_query_string", |_req, _url| {
+    test::set_handler("/escaped_query_string", |_unit| {
         test::make_response(200, "OK", vec![], vec![])
     });
     let resp = get("test://host/escaped_query_string")
@@ -29,7 +29,7 @@ fn escaped_query_string() {
 
 #[test]
 fn query_in_path() {
-    test::set_handler("/query_in_path", |_req, _url| {
+    test::set_handler("/query_in_path", |_unit| {
         test::make_response(200, "OK", vec![], vec![])
     });
     let resp = get("test://host/query_in_path?foo=bar").call();
@@ -40,7 +40,7 @@ fn query_in_path() {
 
 #[test]
 fn query_in_path_and_req() {
-    test::set_handler("/query_in_path_and_req", |_req, _url| {
+    test::set_handler("/query_in_path_and_req", |_unit| {
         test::make_response(200, "OK", vec![], vec![])
     });
     let resp = get("test://host/query_in_path_and_req?foo=bar")
