@@ -108,10 +108,10 @@ extern crate serde_json;
 
 mod agent;
 mod body;
-mod conn;
 mod error;
 mod header;
 mod macros;
+mod pool;
 mod response;
 mod stream;
 

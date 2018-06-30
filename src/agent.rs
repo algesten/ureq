@@ -1,6 +1,6 @@
-use conn::ConnectionPool;
 use cookie::{Cookie, CookieJar};
 use error::Error;
+use pool::ConnectionPool;
 use response::{self, Response};
 use std::sync::Mutex;
 
