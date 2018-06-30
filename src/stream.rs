@@ -8,8 +8,6 @@ use std::net::ToSocketAddrs;
 use std::time::Duration;
 
 #[cfg(feature = "tls")]
-use native_tls::TlsConnector;
-#[cfg(feature = "tls")]
 use native_tls::TlsStream;
 
 const CHUNK_SIZE: usize = 1024 * 1024;
@@ -76,7 +74,8 @@ pub fn connect_http(unit: &Unit) -> Result<Stream, Error> {
 
 #[cfg(feature = "tls")]
 pub fn connect_https(unit: &Unit) -> Result<Stream, Error> {
-    //
+    use native_tls::TlsConnector;
+
     let hostname = unit.url.host_str().unwrap();
     let port = unit.url.port().unwrap_or(443);
 

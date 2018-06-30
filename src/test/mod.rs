@@ -2,7 +2,7 @@ use agent::Unit;
 use error::Error;
 use header::Header;
 use std::collections::HashMap;
-use std::io::{Write, Cursor};
+use std::io::{Cursor, Write};
 use std::sync::{Arc, Mutex};
 use stream::Stream;
 

@@ -196,12 +196,14 @@ impl Unit {
 fn match_cookies<'a>(jar: &'a CookieJar, domain: &str, path: &str, is_secure: bool) -> Vec<Header> {
     jar.iter()
         .filter(|c| {
-            // if there is a domain, it must be matched. if there is no domain, then ignore cookie
+            // if there is a domain, it must be matched.
+            // if there is no domain, then ignore cookie
             let domain_ok = c
                 .domain()
                 .map(|cdom| domain.contains(cdom))
                 .unwrap_or(false);
-            // a path must match the beginning of request path. no cookie path, we say is ok. is it?!
+            // a path must match the beginning of request path.
+            // no cookie path, we say is ok. is it?!
             let path_ok = c
                 .path()
                 .map(|cpath| path.find(cpath).map(|pos| pos == 0).unwrap_or(false))
