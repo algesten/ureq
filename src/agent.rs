@@ -1,4 +1,5 @@
 use cookie::{Cookie, CookieJar};
+use conn::ConnectionPool;
 use error::Error;
 use response::{self, Response};
 use std::sync::Mutex;
@@ -7,7 +8,6 @@ use header::{add_header, get_all_headers, get_header, has_header, Header};
 
 // to get to share private fields
 include!("request.rs");
-include!("conn.rs");
 include!("stream.rs");
 include!("unit.rs");
 
