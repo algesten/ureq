@@ -325,6 +325,11 @@ impl Agent {
     {
         self.request("PATCH", path)
     }
+
+    #[cfg(test)]
+    pub fn state(&self) -> &Arc<Mutex<Option<AgentState>>> {
+        &self.state
+    }
 }
 
 fn basic_auth(user: &str, pass: &str) -> String {

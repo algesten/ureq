@@ -20,6 +20,20 @@ impl ConnectionPool {
     pub fn try_get_connection(&mut self, url: &Url) -> Option<Stream> {
         self.recycle.remove(&PoolKey::new(url))
     }
+
+    #[cfg(test)]
+    pub fn len(&self) -> usize {
+        self.recycle.len()
+    }
+
+    #[cfg(test)]
+    pub fn get(&self, hostname: &str, port: u16) -> Option<&Stream> {
+        let key = PoolKey {
+            hostname: hostname.into(),
+            port,
+        };
+        self.recycle.get(&key)
+    }
 }
 
 #[derive(Debug, PartialEq, Clone, Eq, Hash)]
@@ -66,12 +80,16 @@ impl<R: Read + Sized> PoolReturnRead<R> {
             if let Some(agent) = state.as_mut() {
                 unsafe {
                     let stream = *Box::from_raw(self.stream);
+                    self.stream = ::std::ptr::null_mut();
+                    if !stream.is_poolable() {
+                        // just let it deallocate
+                        return;
+                    }
                     // insert back into pool
                     let key = PoolKey::new(&unit.url);
                     agent.pool().recycle.insert(key, stream);
                 }
             };
-            self.stream = ::std::ptr::null_mut();
         }
     }
 

@@ -35,6 +35,14 @@ impl ::std::fmt::Debug for Stream {
 }
 
 impl Stream {
+    pub fn is_poolable(&self) -> bool {
+        match self {
+            Stream::Http(_) => true,
+            Stream::Https(_) => true,
+            _ => false,
+        }
+    }
+
     #[cfg(test)]
     pub fn to_write_vec(&self) -> Vec<u8> {
         match self {
