@@ -1,6 +1,7 @@
 use url::Url;
-use stream::{connect_http, connect_https, connect_test, send_body};
+use stream::{connect_http, connect_https, connect_test};
 use std::io::Write;
+use body::{Payload, SizedReader, send_body};
 //
 
 pub struct Unit {

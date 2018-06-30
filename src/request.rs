@@ -1,21 +1,9 @@
 use qstring::QString;
-use std::io::empty;
-use std::io::Cursor;
 use std::io::Read;
 use std::sync::Arc;
 
-
 #[cfg(feature = "json")]
 use super::SerdeValue;
-#[cfg(feature = "json")]
-use serde_json;
-
-#[cfg(feature = "charset")]
-use encoding::label::encoding_from_whatwg_label;
-#[cfg(feature = "charset")]
-use encoding::EncoderTrap;
-#[cfg(feature = "charset")]
-use response::DEFAULT_CHARACTER_SET;
 
 lazy_static! {
     static ref URL_BASE: Url = { Url::parse("http://localhost/").expect("Failed to parse URL_BASE") };
@@ -60,59 +48,6 @@ impl ::std::fmt::Debug for Request {
     }
 }
 
-enum Payload {
-    Empty,
-    Text(String, String),
-    #[cfg(feature = "json")] JSON(SerdeValue),
-    Reader(Box<Read + 'static>),
-}
-
-impl Default for Payload {
-    fn default() -> Payload {
-        Payload::Empty
-    }
-}
-
-pub struct SizedReader {
-    pub size: Option<usize>,
-    pub reader: Box<Read + 'static>,
-}
-
-impl SizedReader {
-    fn new(size: Option<usize>, reader: Box<Read + 'static>) -> Self {
-        SizedReader { size, reader }
-    }
-}
-
-impl Payload {
-    fn into_read(self) -> SizedReader {
-        match self {
-            Payload::Empty => SizedReader::new(None, Box::new(empty())),
-            Payload::Text(text, _charset) => {
-                #[cfg(feature = "charset")]
-                let bytes = {
-                    let encoding = encoding_from_whatwg_label(&_charset)
-                        .or_else(|| encoding_from_whatwg_label(DEFAULT_CHARACTER_SET))
-                        .unwrap();
-                    encoding.encode(&text, EncoderTrap::Replace).unwrap()
-                };
-                #[cfg(not(feature = "charset"))]
-                let bytes = text.into_bytes();
-                let len = bytes.len();
-                let cursor = Cursor::new(bytes);
-                SizedReader::new(Some(len), Box::new(cursor))
-            }
-            #[cfg(feature = "json")]
-            Payload::JSON(v) => {
-                let bytes = serde_json::to_vec(&v).expect("Bad JSON in payload");
-                let len = bytes.len();
-                let cursor = Cursor::new(bytes);
-                SizedReader::new(Some(len), Box::new(cursor))
-            }
-            Payload::Reader(read) => SizedReader::new(None, read),
-        }
-    }
-}
 
 impl Request {
     fn new(agent: &Agent, method: String, path: String) -> Request {

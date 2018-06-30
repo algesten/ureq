@@ -107,6 +107,7 @@ extern crate native_tls;
 extern crate serde_json;
 
 mod agent;
+mod body;
 mod conn;
 mod error;
 mod header;

@@ -1,5 +1,4 @@
-use agent::{SizedReader, Unit};
-use chunked_transfer;
+use agent::Unit;
 use error::Error;
 use std::io::{Cursor, Read, Result as IoResult, Write};
 use std::net::SocketAddr;
@@ -9,8 +8,6 @@ use std::time::Duration;
 
 #[cfg(feature = "tls")]
 use native_tls::TlsStream;
-
-const CHUNK_SIZE: usize = 1024 * 1024;
 
 pub enum Stream {
     Http(TcpStream),
@@ -138,30 +135,4 @@ pub fn connect_test(unit: &Unit) -> Result<Stream, Error> {
 #[cfg(not(feature = "tls"))]
 pub fn connect_https(unit: &Unit) -> Result<Stream, Error> {
     Err(Error::UnknownScheme(unit.url.scheme().to_string()))
-}
-
-pub fn send_body(body: SizedReader, do_chunk: bool, stream: &mut Stream) -> IoResult<()> {
-    if do_chunk {
-        pipe(body.reader, chunked_transfer::Encoder::new(stream))?;
-    } else {
-        pipe(body.reader, stream)?;
-    }
-
-    Ok(())
-}
-
-fn pipe<R, W>(mut reader: R, mut writer: W) -> IoResult<()>
-where
-    R: Read,
-    W: Write,
-{
-    let mut buf = [0_u8; CHUNK_SIZE];
-    loop {
-        let len = reader.read(&mut buf)?;
-        if len == 0 {
-            break;
-        }
-        writer.write_all(&buf[0..len])?;
-    }
-    Ok(())
 }
