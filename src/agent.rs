@@ -57,6 +57,9 @@ impl AgentState {
             jar: CookieJar::new(),
         }
     }
+    pub fn pool(&mut self) -> &mut ConnectionPool {
+        &mut self.pool
+    }
 }
 
 impl Agent {

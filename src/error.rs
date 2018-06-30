@@ -48,9 +48,7 @@ impl Error {
     /// For synthetic responses, this is the status text.
     pub fn status_text(&self) -> &str {
         match self {
-            Error::BadUrl(_) => {
-                "Bad URL"
-            }
+            Error::BadUrl(_) => "Bad URL",
             Error::UnknownScheme(_) => "Unknown Scheme",
             Error::DnsFailed(_) => "Dns Failed",
             Error::ConnectionFailed(_) => "Connection Failed",

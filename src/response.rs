@@ -264,18 +264,23 @@ impl Response {
                 .and_then(|l| l.parse::<usize>().ok())
         };
 
-        let reader = self.stream.expect("No reader in response?!");
+        let stream = Box::new(self.stream.expect("No reader in response?!"));
+        let stream_ptr = Box::into_raw(stream);
+        let yolo = YoloRead { stream: stream_ptr };
         let unit = self.unit;
 
-        // figure out how to make a reader
         match (is_chunked && !is_head, len) {
-            (true, _) => {
-                Box::new(PoolReturnRead::new(unit, ChunkDecoder::new(reader))) as Box<Read>
-            }
-            (false, Some(len)) => {
-                Box::new(PoolReturnRead::new(unit, LimitedRead::new(reader, len)))
-            }
-            (false, None) => Box::new(PoolReturnRead::new(unit, reader)) as Box<Read>,
+            (true, _) => Box::new(PoolReturnRead::new(
+                unit,
+                stream_ptr,
+                ChunkDecoder::new(yolo),
+            )) as Box<Read>,
+            (false, Some(len)) => Box::new(PoolReturnRead::new(
+                unit,
+                stream_ptr,
+                LimitedRead::new(yolo, len),
+            )),
+            (false, None) => Box::new(yolo),
         }
     }
 
@@ -484,14 +489,33 @@ fn read_next_line<R: Read>(reader: &mut R) -> IoResult<AsciiString> {
     }
 }
 
+struct YoloRead {
+    stream: *mut Stream,
+}
+
+impl Read for YoloRead {
+    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
+        unsafe {
+            if self.stream.is_null() {
+                return Ok(0);
+            }
+            let amount = (*self.stream).read(buf)?;
+            if amount == 0 {
+                self.stream = ::std::ptr::null_mut();
+            }
+            Ok(amount)
+        }
+    }
+}
+
 struct LimitedRead {
-    reader: Stream,
+    reader: YoloRead,
     limit: usize,
     position: usize,
 }
 
 impl LimitedRead {
-    fn new(reader: Stream, limit: usize) -> Self {
+    fn new(reader: YoloRead, limit: usize) -> Self {
         LimitedRead {
             reader,
             limit,
