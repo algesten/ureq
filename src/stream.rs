@@ -18,6 +18,22 @@ pub enum Stream {
     Test(Box<Read + Send>, Vec<u8>),
 }
 
+impl ::std::fmt::Debug for Stream {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::result::Result<(), ::std::fmt::Error> {
+        write!(
+            f,
+            "Stream[{}]",
+            match self {
+                Stream::Http(_) => "http",
+                Stream::Https(_) => "https",
+                Stream::Cursor(_) => "cursor",
+                #[cfg(test)]
+                Stream::Test(_, _) => "test",
+            }
+        )
+    }
+}
+
 impl Stream {
     #[cfg(test)]
     pub fn to_write_vec(&self) -> Vec<u8> {

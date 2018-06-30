@@ -22,6 +22,18 @@ pub enum Payload {
     Reader(Box<Read + 'static>),
 }
 
+impl ::std::fmt::Debug for Payload {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::result::Result<(), ::std::fmt::Error> {
+        write!(f, "{}", match self {
+            Payload::Empty => "Empty",
+            Payload::Text(t, _) => &t,
+            #[cfg(feature = "json")]
+            Payload::JSON(_) => "JSON",
+            Payload::Reader(_) => "Reader",
+        })
+    }
+}
+
 impl Default for Payload {
     fn default() -> Payload {
         Payload::Empty

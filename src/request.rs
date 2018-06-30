@@ -6,8 +6,8 @@ use std::sync::Arc;
 use super::SerdeValue;
 
 lazy_static! {
-    static ref URL_BASE: Url = { Url::parse("http://localhost/")
-        .expect("Failed to parse URL_BASE") };
+    static ref URL_BASE: Url =
+        { Url::parse("http://localhost/").expect("Failed to parse URL_BASE") };
 }
 
 /// Request instances are builders that creates a request.
@@ -43,12 +43,13 @@ impl ::std::fmt::Debug for Request {
         write!(
             f,
             "Request({} {}{}, {:?})",
-            self.method, url.path(), query,
+            self.method,
+            url.path(),
+            query,
             self.headers
         )
     }
 }
-
 
 impl Request {
     fn new(agent: &Agent, method: String, path: String) -> Request {
@@ -95,7 +96,7 @@ impl Request {
             .and_then(|url| {
                 let reader = payload.into_read();
                 let unit = Unit::new(&self, &url, &reader);
-                connect(unit, url, &self.method, self.redirects, reader)
+                connect(unit, &self.method, true, self.redirects, reader)
             })
             .unwrap_or_else(|e| e.into())
     }

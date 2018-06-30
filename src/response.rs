@@ -1,12 +1,9 @@
 use agent::Unit;
 use ascii::AsciiString;
-use chunked_transfer;
+use chunked_transfer::Decoder as ChunkDecoder;
 use header::Header;
-use std::io::Cursor;
-use std::io::Error as IoError;
-use std::io::ErrorKind;
-use std::io::Read;
-use std::io::Result as IoResult;
+use pool::PoolReturnRead;
+use std::io::{Cursor, Error as IoError, ErrorKind, Read, Result as IoResult};
 use std::str::FromStr;
 use stream::Stream;
 
@@ -251,28 +248,34 @@ impl Response {
     /// assert_eq!(bytes.len(), len);
     /// ```
     pub fn into_reader(self) -> impl Read {
+        //
+
         let is_chunked = self.header("transfer-encoding")
             .map(|enc| enc.len() > 0) // whatever it says, do chunked
             .unwrap_or(false);
 
-        let len = self.header("content-length")
-            .and_then(|l| l.parse::<usize>().ok());
+        let is_head = (&self.unit).as_ref().map(|u| u.is_head).unwrap_or(false);
+
+        let len = if is_head {
+            // head requests never have a body
+            Some(0)
+        } else {
+            self.header("content-length")
+                .and_then(|l| l.parse::<usize>().ok())
+        };
 
         let reader = self.stream.expect("No reader in response?!");
-
-        // head requests never have a body
-        let is_head = self.unit.map(|u| u.is_head).unwrap_or(false);
-        if is_head {
-            return Box::new(LimitedRead::new(reader, 0)) as Box<Read>;
-        }
+        let unit = self.unit;
 
         // figure out how to make a reader
-        match is_chunked {
-            true => Box::new(chunked_transfer::Decoder::new(reader)),
-            false => match len {
-                Some(len) => Box::new(LimitedRead::new(reader, len)),
-                None => Box::new(reader) as Box<Read>,
-            },
+        match (is_chunked && !is_head, len) {
+            (true, _) => {
+                Box::new(PoolReturnRead::new(unit, ChunkDecoder::new(reader))) as Box<Read>
+            }
+            (false, Some(len)) => {
+                Box::new(PoolReturnRead::new(unit, LimitedRead::new(reader, len)))
+            }
+            (false, None) => Box::new(PoolReturnRead::new(unit, reader)) as Box<Read>,
         }
     }
 
