@@ -1,11 +1,10 @@
-use agent::Stream;
 use agent::Unit;
 use error::Error;
 use header::Header;
 use std::collections::HashMap;
-use std::io::Cursor;
-use std::io::Write;
+use std::io::{Write, Cursor};
 use std::sync::{Arc, Mutex};
+use stream::Stream;
 
 mod agent_test;
 mod auth;

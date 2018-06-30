@@ -74,8 +74,8 @@ impl Default for Payload {
 }
 
 pub struct SizedReader {
-    size: Option<usize>,
-    reader: Box<Read + 'static>,
+    pub size: Option<usize>,
+    pub reader: Box<Read + 'static>,
 }
 
 impl SizedReader {

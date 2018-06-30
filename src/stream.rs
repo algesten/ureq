@@ -1,11 +1,11 @@
+use agent::{SizedReader, Unit};
+use chunked_transfer;
+use error::Error;
+use std::io::{Cursor, Read, Result as IoResult, Write};
 use std::net::SocketAddr;
 use std::net::TcpStream;
 use std::net::ToSocketAddrs;
 use std::time::Duration;
-use std::io::Result as IoResult;
-use std::io::Write;
-use url::Url;
-use chunked_transfer;
 
 #[cfg(feature = "tls")]
 use native_tls::TlsConnector;
@@ -66,7 +66,7 @@ impl Write for Stream {
     }
 }
 
-fn connect_http(unit: &Unit) -> Result<Stream, Error> {
+pub fn connect_http(unit: &Unit) -> Result<Stream, Error> {
     //
     let hostname = unit.url.host_str().unwrap();
     let port = unit.url.port().unwrap_or(80);
@@ -75,7 +75,7 @@ fn connect_http(unit: &Unit) -> Result<Stream, Error> {
 }
 
 #[cfg(feature = "tls")]
-fn connect_https(unit: &Unit) -> Result<Stream, Error> {
+pub fn connect_https(unit: &Unit) -> Result<Stream, Error> {
     //
     let hostname = unit.url.host_str().unwrap();
     let port = unit.url.port().unwrap_or(443);
@@ -87,9 +87,10 @@ fn connect_https(unit: &Unit) -> Result<Stream, Error> {
     Ok(Stream::Https(stream))
 }
 
-fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<TcpStream, Error> {
+pub fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<TcpStream, Error> {
     //
-    let ips: Vec<SocketAddr> = format!("{}:{}", hostname, port).to_socket_addrs()
+    let ips: Vec<SocketAddr> = format!("{}:{}", hostname, port)
+        .to_socket_addrs()
         .map_err(|e| Error::DnsFailed(format!("{}", e)))?
         .collect();
 
@@ -103,7 +104,10 @@ fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<TcpStream, Err
     // connect with a configured timeout.
     let stream = match unit.timeout_connect {
         0 => TcpStream::connect(&sock_addr),
-        _ => TcpStream::connect_timeout(&sock_addr, Duration::from_millis(unit.timeout_connect as u64)),
+        _ => TcpStream::connect_timeout(
+            &sock_addr,
+            Duration::from_millis(unit.timeout_connect as u64),
+        ),
     }.map_err(|err| Error::ConnectionFailed(format!("{}", err)))?;
 
     // rust's absurd api returns Err if we set 0.
@@ -122,22 +126,22 @@ fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<TcpStream, Err
 }
 
 #[cfg(test)]
-fn connect_test(unit: &Unit) -> Result<Stream, Error> {
+pub fn connect_test(unit: &Unit) -> Result<Stream, Error> {
     use test;
     test::resolve_handler(unit)
 }
 
 #[cfg(not(test))]
-fn connect_test(unit: &Unit) -> Result<Stream, Error> {
+pub fn connect_test(unit: &Unit) -> Result<Stream, Error> {
     Err(Error::UnknownScheme(unit.url.scheme().to_string()))
 }
 
 #[cfg(not(feature = "tls"))]
-fn connect_https(unit: &Unit) -> Result<Stream, Error> {
+pub fn connect_https(unit: &Unit) -> Result<Stream, Error> {
     Err(Error::UnknownScheme(unit.url.scheme().to_string()))
 }
 
-fn send_body(body: SizedReader, do_chunk: bool, stream: &mut Stream) -> IoResult<()> {
+pub fn send_body(body: SizedReader, do_chunk: bool, stream: &mut Stream) -> IoResult<()> {
     if do_chunk {
         pipe(body.reader, chunked_transfer::Encoder::new(stream))?;
     } else {

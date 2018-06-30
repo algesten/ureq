@@ -1,4 +1,3 @@
-use agent::Stream;
 use ascii::AsciiString;
 use chunked_transfer;
 use header::Header;
@@ -8,6 +7,7 @@ use std::io::ErrorKind;
 use std::io::Read;
 use std::io::Result as IoResult;
 use std::str::FromStr;
+use stream::Stream;
 
 #[cfg(feature = "json")]
 use serde_json;

@@ -112,6 +112,7 @@ mod error;
 mod header;
 mod macros;
 mod response;
+mod stream;
 
 #[cfg(feature = "json")]
 mod serde_macros;
