@@ -1,5 +1,5 @@
 use chunked_transfer;
-use std::io::{empty, Cursor, Read, Result as IoResult, Write};
+use std::io::{copy, empty, Cursor, Read, Result as IoResult};
 use stream::Stream;
 
 #[cfg(feature = "charset")]
@@ -13,8 +13,6 @@ use response::DEFAULT_CHARACTER_SET;
 use super::SerdeValue;
 #[cfg(feature = "json")]
 use serde_json;
-
-const CHUNK_SIZE: usize = 1024 * 1024;
 
 pub enum Payload {
     Empty,
@@ -71,28 +69,13 @@ impl Payload {
     }
 }
 
-pub fn send_body(body: SizedReader, do_chunk: bool, stream: &mut Stream) -> IoResult<()> {
+pub fn send_body(mut body: SizedReader, do_chunk: bool, stream: &mut Stream) -> IoResult<()> {
     if do_chunk {
-        pipe(body.reader, chunked_transfer::Encoder::new(stream))?;
+        let mut chunker = chunked_transfer::Encoder::new(stream);
+        copy(&mut body.reader, &mut chunker)?;
     } else {
-        pipe(body.reader, stream)?;
+        copy(&mut body.reader, stream)?;
     }
 
-    Ok(())
-}
-
-fn pipe<R, W>(mut reader: R, mut writer: W) -> IoResult<()>
-where
-    R: Read,
-    W: Write,
-{
-    let mut buf = [0_u8; CHUNK_SIZE];
-    loop {
-        let len = reader.read(&mut buf)?;
-        if len == 0 {
-            break;
-        }
-        writer.write_all(&buf[0..len])?;
-    }
     Ok(())
 }
