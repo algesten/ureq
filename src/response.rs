@@ -1,3 +1,4 @@
+use agent::Unit;
 use ascii::AsciiString;
 use chunked_transfer;
 use header::Header;
@@ -44,7 +45,7 @@ pub struct Response {
     index: (usize, usize), // index into status_line where we split: HTTP/1.1 200 OK
     status: u16,
     headers: Vec<Header>,
-    is_head: bool,
+    unit: Option<Unit>,
     stream: Option<Stream>,
 }
 
@@ -260,7 +261,8 @@ impl Response {
         let reader = self.stream.expect("No reader in response?!");
 
         // head requests never have a body
-        if self.is_head {
+        let is_head = self.unit.map(|u| u.is_head).unwrap_or(false);
+        if is_head {
             return Box::new(LimitedRead::new(reader, 0)) as Box<Read>;
         }
 
@@ -389,7 +391,7 @@ impl Response {
             index,
             status,
             headers,
-            is_head: false,
+            unit: None,
             stream: None,
         })
     }
@@ -432,7 +434,7 @@ impl FromStr for Response {
         let bytes = s.as_bytes().to_owned();
         let mut cursor = Cursor::new(bytes);
         let mut resp = Self::do_from_read(&mut cursor)?;
-        set_stream(&mut resp, Stream::Cursor(cursor), false);
+        set_stream(&mut resp, None, Stream::Cursor(cursor));
         Ok(resp)
     }
 }
@@ -448,8 +450,8 @@ impl Into<Response> for Error {
     }
 }
 
-pub fn set_stream(resp: &mut Response, stream: Stream, is_head: bool) {
-    resp.is_head = is_head;
+pub fn set_stream(resp: &mut Response, unit: Option<Unit>, stream: Stream) {
+    resp.unit = unit;
     resp.stream = Some(stream);
 }
 

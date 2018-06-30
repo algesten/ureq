@@ -1,7 +1,7 @@
-use url::Url;
-use stream::{connect_http, connect_https, connect_test};
+use body::{send_body, Payload, SizedReader};
 use std::io::Write;
-use body::{Payload, SizedReader, send_body};
+use stream::{connect_http, connect_https, connect_test};
+use url::Url;
 //
 
 pub struct Unit {
@@ -82,102 +82,6 @@ impl Unit {
         }
     }
 
-    fn connect(
-        &mut self,
-        url: Url,
-        method: &str,
-        redirects: u32,
-        body: SizedReader,
-    ) -> Result<Response, Error> {
-        //
-
-        // open socket
-        let mut stream = match url.scheme() {
-            "http" => connect_http(self),
-            "https" => connect_https(self),
-            "test" => connect_test(self),
-            _ => Err(Error::UnknownScheme(url.scheme().to_string())),
-        }?;
-
-        // send the request start + headers
-        let mut prelude: Vec<u8> = vec![];
-        write!(
-            prelude,
-            "{} {}{} HTTP/1.1\r\n",
-            method,
-            url.path(),
-            self.query_string
-        )?;
-        if !has_header(&self.headers, "host") {
-            write!(prelude, "Host: {}\r\n", url.host().unwrap())?;
-        }
-        for header in &self.headers {
-            write!(prelude, "{}: {}\r\n", header.name(), header.value())?;
-        }
-        write!(prelude, "\r\n")?;
-
-        stream.write_all(&mut prelude[..])?;
-
-        // start reading the response to process cookies and redirects.
-        let mut resp = Response::from_read(&mut stream);
-
-        // squirrel away cookies
-        {
-            let mut state = self.agent.lock().unwrap();
-            if let Some(add_jar) = state.as_mut().map(|state| &mut state.jar) {
-                for raw_cookie in resp.all("set-cookie").iter() {
-                    let to_parse = if raw_cookie.to_lowercase().contains("domain=") {
-                        raw_cookie.to_string()
-                    } else {
-                        format!("{}; Domain={}", raw_cookie, self.hostname)
-                    };
-                    match Cookie::parse_encoded(&to_parse[..]) {
-                        Err(_) => (), // ignore unparseable cookies
-                        Ok(mut cookie) => {
-                            let cookie = cookie.into_owned();
-                            add_jar.add(cookie)
-                        }
-                    }
-                }
-            }
-        }
-
-        // handle redirects
-        if resp.redirect() {
-            if redirects == 0 {
-                return Err(Error::TooManyRedirects);
-            }
-
-            // the location header
-            let location = resp.header("location");
-            if let Some(location) = location {
-                // join location header to current url in case it it relative
-                let new_url = url
-                    .join(location)
-                    .map_err(|_| Error::BadUrl(format!("Bad redirection: {}", location)))?;
-
-                // perform the redirect differently depending on 3xx code.
-                return match resp.status() {
-                    301 | 302 | 303 => {
-                        send_body(body, self.is_chunked, &mut stream)?;
-                        let empty = Payload::Empty.into_read();
-                        self.connect(new_url, "GET", redirects - 1, empty)
-                    }
-                    307 | 308 | _ => self.connect(new_url, method, redirects - 1, body),
-                };
-            }
-        }
-
-        // send the body (which can be empty now depending on redirects)
-        send_body(body, self.is_chunked, &mut stream)?;
-
-        // since it is not a redirect, give away the incoming stream to the response object
-        response::set_stream(&mut resp, stream, self.is_head);
-
-        // release the response
-        Ok(resp)
-    }
-
     #[cfg(test)]
     pub fn header<'a>(&self, name: &'a str) -> Option<&str> {
         get_header(&self.headers, name)
@@ -190,7 +94,102 @@ impl Unit {
     pub fn all<'a>(&self, name: &'a str) -> Vec<&str> {
         get_all_headers(&self.headers, name)
     }
+}
 
+pub fn connect(
+    unit: Unit,
+    url: Url,
+    method: &str,
+    redirects: u32,
+    body: SizedReader,
+) -> Result<Response, Error> {
+    //
+
+    // open socket
+    let mut stream = match url.scheme() {
+        "http" => connect_http(&unit),
+        "https" => connect_https(&unit),
+        "test" => connect_test(&unit),
+        _ => Err(Error::UnknownScheme(url.scheme().to_string())),
+    }?;
+
+    // send the request start + headers
+    let mut prelude: Vec<u8> = vec![];
+    write!(
+        prelude,
+        "{} {}{} HTTP/1.1\r\n",
+        method,
+        url.path(),
+        &unit.query_string
+    )?;
+    if !has_header(&unit.headers, "host") {
+        write!(prelude, "Host: {}\r\n", url.host().unwrap())?;
+    }
+    for header in &unit.headers {
+        write!(prelude, "{}: {}\r\n", header.name(), header.value())?;
+    }
+    write!(prelude, "\r\n")?;
+
+    stream.write_all(&mut prelude[..])?;
+
+    // start reading the response to process cookies and redirects.
+    let mut resp = Response::from_read(&mut stream);
+
+    // squirrel away cookies
+    {
+        let state = &mut unit.agent.lock().unwrap();
+        if let Some(add_jar) = state.as_mut().map(|state| &mut state.jar) {
+            for raw_cookie in resp.all("set-cookie").iter() {
+                let to_parse = if raw_cookie.to_lowercase().contains("domain=") {
+                    raw_cookie.to_string()
+                } else {
+                    format!("{}; Domain={}", raw_cookie, &unit.hostname)
+                };
+                match Cookie::parse_encoded(&to_parse[..]) {
+                    Err(_) => (), // ignore unparseable cookies
+                    Ok(mut cookie) => {
+                        let cookie = cookie.into_owned();
+                        add_jar.add(cookie)
+                    }
+                }
+            }
+        }
+    }
+
+    // handle redirects
+    if resp.redirect() {
+        if redirects == 0 {
+            return Err(Error::TooManyRedirects);
+        }
+
+        // the location header
+        let location = resp.header("location");
+        if let Some(location) = location {
+            // join location header to current url in case it it relative
+            let new_url = url
+                .join(location)
+                .map_err(|_| Error::BadUrl(format!("Bad redirection: {}", location)))?;
+
+            // perform the redirect differently depending on 3xx code.
+            return match resp.status() {
+                301 | 302 | 303 => {
+                    send_body(body, unit.is_chunked, &mut stream)?;
+                    let empty = Payload::Empty.into_read();
+                    connect(unit, new_url, "GET", redirects - 1, empty)
+                }
+                307 | 308 | _ => connect(unit, new_url, method, redirects - 1, body),
+            };
+        }
+    }
+
+    // send the body (which can be empty now depending on redirects)
+    send_body(body, unit.is_chunked, &mut stream)?;
+
+    // since it is not a redirect, give away the incoming stream to the response object
+    response::set_stream(&mut resp, Some(unit), stream);
+
+    // release the response
+    Ok(resp)
 }
 
 // TODO check so cookies can't be set for tld:s

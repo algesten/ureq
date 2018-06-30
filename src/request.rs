@@ -93,8 +93,8 @@ impl Request {
         self.to_url()
             .and_then(|url| {
                 let reader = payload.into_read();
-                let mut unit = Unit::new(&self, &url, &reader);
-                unit.connect(url, &self.method, self.redirects, reader)
+                let unit = Unit::new(&self, &url, &reader);
+                connect(unit, url, &self.method, self.redirects, reader)
             })
             .unwrap_or_else(|e| e.into())
     }
