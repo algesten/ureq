@@ -1,5 +1,5 @@
-use agent::Unit;
 use agent::Stream;
+use agent::Unit;
 use error::Error;
 use header::Header;
 use std::collections::HashMap;

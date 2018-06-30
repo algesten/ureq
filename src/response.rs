@@ -1,19 +1,26 @@
+use agent::Stream;
 use ascii::AsciiString;
 use chunked_transfer;
+use header::Header;
+use std::io::Cursor;
 use std::io::Error as IoError;
 use std::io::ErrorKind;
 use std::io::Read;
 use std::io::Result as IoResult;
+use std::str::FromStr;
+
+#[cfg(feature = "json")]
+use serde_json;
 
 #[cfg(feature = "charset")]
 use encoding::label::encoding_from_whatwg_label;
 #[cfg(feature = "charset")]
-use encoding::{DecoderTrap, EncoderTrap};
+use encoding::DecoderTrap;
 
 use error::Error;
 
-const DEFAULT_CONTENT_TYPE: &'static str = "text/plain";
-const DEFAULT_CHARACTER_SET: &'static str = "utf-8";
+pub const DEFAULT_CONTENT_TYPE: &'static str = "text/plain";
+pub const DEFAULT_CHARACTER_SET: &'static str = "utf-8";
 
 /// Response instances are created as results of firing off requests.
 ///
@@ -243,7 +250,6 @@ impl Response {
     /// assert_eq!(bytes.len(), len);
     /// ```
     pub fn into_reader(self) -> impl Read {
-
         let is_chunked = self.header("transfer-encoding")
             .map(|enc| enc.len() > 0) // whatever it says, do chunked
             .unwrap_or(false);
@@ -388,11 +394,6 @@ impl Response {
         })
     }
 
-    fn set_stream(&mut self, stream: Stream, is_head: bool) {
-        self.is_head = is_head;
-        self.stream = Some(stream);
-    }
-
     #[cfg(test)]
     pub fn to_write_vec(&self) -> Vec<u8> {
         self.stream.as_ref().unwrap().to_write_vec()
@@ -431,7 +432,7 @@ impl FromStr for Response {
         let bytes = s.as_bytes().to_owned();
         let mut cursor = Cursor::new(bytes);
         let mut resp = Self::do_from_read(&mut cursor)?;
-        resp.set_stream(Stream::Cursor(cursor), false);
+        set_stream(&mut resp, Stream::Cursor(cursor), false);
         Ok(resp)
     }
 }
@@ -445,6 +446,11 @@ impl Into<Response> for Error {
         resp.error = Some(self);
         resp
     }
+}
+
+pub fn set_stream(resp: &mut Response, stream: Stream, is_head: bool) {
+    resp.is_head = is_head;
+    resp.stream = Some(stream);
 }
 
 // application/x-www-form-urlencoded, application/json, and multipart/form-data
@@ -510,7 +516,7 @@ impl Read for LimitedRead {
     }
 }
 
-fn charset_from_content_type(header: Option<&str>) -> &str {
+pub fn charset_from_content_type(header: Option<&str>) -> &str {
     header
         .and_then(|header| {
             header.find(";").and_then(|semi| {
@@ -520,4 +526,77 @@ fn charset_from_content_type(header: Option<&str>) -> &str {
             })
         })
         .unwrap_or(DEFAULT_CHARACTER_SET)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn content_type_without_charset() {
+        let s = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\nOK";
+        let resp = s.parse::<Response>().unwrap();
+        assert_eq!("application/json", resp.content_type());
+    }
+
+    #[test]
+    fn content_type_with_charset() {
+        let s = "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=iso-8859-4\r\n\r\nOK";
+        let resp = s.parse::<Response>().unwrap();
+        assert_eq!("application/json", resp.content_type());
+    }
+
+    #[test]
+    fn content_type_default() {
+        let s = "HTTP/1.1 200 OK\r\n\r\nOK";
+        let resp = s.parse::<Response>().unwrap();
+        assert_eq!("text/plain", resp.content_type());
+    }
+
+    #[test]
+    fn charset() {
+        let s = "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=iso-8859-4\r\n\r\nOK";
+        let resp = s.parse::<Response>().unwrap();
+        assert_eq!("iso-8859-4", resp.charset());
+    }
+
+    #[test]
+    fn charset_default() {
+        let s = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\nOK";
+        let resp = s.parse::<Response>().unwrap();
+        assert_eq!("utf-8", resp.charset());
+    }
+
+    #[test]
+    fn chunked_transfer() {
+        let s = "HTTP/1.1 200 OK\r\nTransfer-Encoding: Chunked\r\n\r\n3\r\nhel\r\nb\r\nlo world!!!\r\n0\r\n\r\n";
+        let resp = s.parse::<Response>().unwrap();
+        assert_eq!("hello world!!!", resp.into_string().unwrap());
+    }
+
+    #[test]
+    #[cfg(feature = "json")]
+    fn parse_simple_json() {
+        let s = format!("HTTP/1.1 200 OK\r\n\r\n{{\"hello\":\"world\"}}");
+        let resp = s.parse::<Response>().unwrap();
+        let v = resp.into_json().unwrap();
+        assert_eq!(
+            v,
+            "{\"hello\":\"world\"}"
+                .parse::<serde_json::Value>()
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn parse_borked_header() {
+        let s = format!("HTTP/1.1 BORKED\r\n");
+        let resp: Response = s.parse::<Response>().unwrap_err().into();
+        assert_eq!(resp.http_version(), "HTTP/1.1");
+        assert_eq!(*resp.status(), 500);
+        assert_eq!(resp.status_text(), "Bad Status");
+        assert_eq!(resp.content_type(), "text/plain");
+        let v = resp.into_string().unwrap();
+        assert_eq!(v, "Bad Status\n");
+    }
 }

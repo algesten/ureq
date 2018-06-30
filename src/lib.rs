@@ -110,6 +110,7 @@ mod agent;
 mod error;
 mod header;
 mod macros;
+mod response;
 
 #[cfg(feature = "json")]
 mod serde_macros;
@@ -117,9 +118,10 @@ mod serde_macros;
 #[cfg(test)]
 mod test;
 
-pub use agent::{Agent, Request, Response};
+pub use agent::{Agent, Request};
 pub use error::Error;
 pub use header::Header;
+pub use response::Response;
 
 // re-export
 pub use cookie::Cookie;

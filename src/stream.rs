@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 use std::net::TcpStream;
 use std::net::ToSocketAddrs;
 use std::time::Duration;
+use std::io::Result as IoResult;
 
 #[cfg(feature = "tls")]
 use native_tls::TlsConnector;

@@ -153,7 +153,7 @@ impl Unit {
                     .map_err(|_| Error::BadUrl(format!("Bad redirection: {}", location)))?;
 
                 // perform the redirect differently depending on 3xx code.
-                return match resp.status {
+                return match resp.status() {
                     301 | 302 | 303 => {
                         send_body(body, self.is_chunked, &mut stream)?;
                         let empty = Payload::Empty.into_read();
@@ -168,7 +168,7 @@ impl Unit {
         send_body(body, self.is_chunked, &mut stream)?;
 
         // since it is not a redirect, give away the incoming stream to the response object
-        resp.set_stream(stream, self.is_head);
+        response::set_stream(&mut resp, stream, self.is_head);
 
         // release the response
         Ok(resp)

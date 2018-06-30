@@ -1,12 +1,21 @@
 use qstring::QString;
 use std::io::empty;
 use std::io::Cursor;
+use std::io::Read;
 use std::sync::Arc;
+
 
 #[cfg(feature = "json")]
 use super::SerdeValue;
 #[cfg(feature = "json")]
 use serde_json;
+
+#[cfg(feature = "charset")]
+use encoding::label::encoding_from_whatwg_label;
+#[cfg(feature = "charset")]
+use encoding::EncoderTrap;
+#[cfg(feature = "charset")]
+use response::DEFAULT_CHARACTER_SET;
 
 lazy_static! {
     static ref URL_BASE: Url = { Url::parse("http://localhost/").expect("Failed to parse URL_BASE") };
@@ -202,7 +211,7 @@ impl Request {
         S: Into<String>,
     {
         let text = data.into();
-        let charset = charset_from_content_type(self.header("content-type")).to_string();
+        let charset = response::charset_from_content_type(self.header("content-type")).to_string();
         self.do_call(Payload::Text(text, charset))
     }
 

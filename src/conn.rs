@@ -1,5 +1,6 @@
 use std::io::Write;
 use url::Url;
+use chunked_transfer;
 
 const CHUNK_SIZE: usize = 1024 * 1024;
 
