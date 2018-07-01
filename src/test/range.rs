@@ -20,7 +20,7 @@ fn read_range() {
 
 #[test]
 fn agent_pool() {
-    let agent = agent().build();
+    let agent = agent();
 
     // req 1
     let resp = agent.get("https://s3.amazonaws.com/foosrvr/bbb.mp4")

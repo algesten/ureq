@@ -27,7 +27,7 @@ fn agent_reuse_headers() {
 
 #[test]
 fn agent_cookies() {
-    let agent = agent().build();
+    let agent = agent();
 
     test::set_handler("/agent_cookies", |_unit| {
         test::make_response(

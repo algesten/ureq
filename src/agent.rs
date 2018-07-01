@@ -17,7 +17,7 @@ include!("unit.rs");
 /// can keep a state.
 ///
 /// ```
-/// let agent = ureq::agent().build();
+/// let agent = ureq::agent();
 ///
 /// let auth = agent
 ///     .post("/login")
@@ -222,7 +222,7 @@ impl Agent {
     /// that `Set-Cookie` in the agent.
     ///
     /// ```
-    /// let agent = ureq::agent().build();
+    /// let agent = ureq::agent();
     ///
     /// agent.get("http://www.google.com").call();
     ///
@@ -239,7 +239,7 @@ impl Agent {
     /// Set a cookie in this agent.
     ///
     /// ```
-    /// let agent = ureq::agent().build();
+    /// let agent = ureq::agent();
     ///
     /// let cookie = ureq::Cookie::new("name", "value");
     /// agent.set_cookie(cookie);

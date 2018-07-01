@@ -133,7 +133,7 @@ pub use serde_json::{to_value as serde_to_value, Map as SerdeMap, Value as Serde
 
 /// Agents are used to keep state between requests.
 pub fn agent() -> Agent {
-    Agent::new()
+    Agent::new().build()
 }
 
 /// Make a request setting the HTTP method via a string.
