@@ -16,6 +16,13 @@ impl ::std::fmt::Debug for Header {
 }
 
 impl Header {
+    pub fn new(name: &str, value: &str) -> Result<Self, Error> {
+        let line =
+            AsciiString::from_str(&format!("{}: {}", name, value)).map_err(|_| Error::BadHeader)?;
+        let index = name.len();
+        Ok(Header { line, index })
+    }
+
     /// The header name.
     ///
     /// ```

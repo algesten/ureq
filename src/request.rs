@@ -192,9 +192,10 @@ impl Request {
         K: Into<String>,
         V: Into<String>,
     {
-        let s = format!("{}: {}", header.into(), value.into());
-        let header = s.parse::<Header>().expect("Failed to parse header");
-        add_header(&mut self.headers, header);
+        add_header(
+            &mut self.headers,
+            Header::new(&header.into(), &value.into()).expect("Failed to parse header"),
+        );
         self
     }
 
@@ -264,9 +265,7 @@ impl Request {
         I: IntoIterator<Item = (K, V)>,
     {
         for (k, v) in headers.into_iter() {
-            let s = format!("{}: {}", k.into(), v.into());
-            let header = s.parse::<Header>().expect("Failed to parse header");
-            add_header(&mut self.headers, header);
+            self.set(k, v);
         }
         self
     }
@@ -424,9 +423,8 @@ impl Request {
         S: Into<String>,
         T: Into<String>,
     {
-        let s = format!("Authorization: {} {}", kind.into(), pass.into());
-        let header = s.parse::<Header>().expect("Failed to parse header");
-        add_header(&mut self.headers, header);
+        let value = format!("{} {}", kind.into(), pass.into());
+        self.set("Authorization", value);
         self
     }
 

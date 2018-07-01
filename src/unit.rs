@@ -204,8 +204,7 @@ fn match_cookies<'a>(jar: &'a CookieJar, domain: &str, path: &str, is_secure: bo
             let name = c.name().to_string();
             let value = c.value().to_string();
             let nameval = Cookie::new(name, value).encoded().to_string();
-            let head = format!("Cookie: {}", nameval);
-            head.parse::<Header>().ok()
+            Header::new("Cookie", &nameval).ok()
         })
         .filter(|o| o.is_some())
         .map(|o| o.unwrap())
