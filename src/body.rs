@@ -14,6 +14,9 @@ use super::SerdeValue;
 #[cfg(feature = "json")]
 use serde_json;
 
+/// The different kinds of bodies to send.
+///
+/// *Internal API*
 pub enum Payload {
     Empty,
     Text(String, String),
@@ -40,6 +43,9 @@ impl Default for Payload {
     }
 }
 
+/// Payloads are turned into this type where we can hold both a size and the reader.
+///
+/// *Internal API*
 pub struct SizedReader {
     pub size: Option<usize>,
     pub reader: Box<dyn Read + 'static>,
@@ -81,6 +87,7 @@ impl Payload {
     }
 }
 
+/// Helper to send a body, either as chunked or not.
 pub fn send_body(mut body: SizedReader, do_chunk: bool, stream: &mut Stream) -> IoResult<()> {
     if do_chunk {
         let mut chunker = chunked_transfer::Encoder::new(stream);
