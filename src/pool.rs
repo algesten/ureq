@@ -4,6 +4,11 @@ use std::io::{Read, Result as IoResult};
 use stream::Stream;
 use url::Url;
 
+pub const DEFAULT_HOST: &'static str = "localhost";
+
+/// Holder of recycled connections.
+///
+/// *Internal API*
 #[derive(Default, Debug)]
 pub struct ConnectionPool {
     // the actual pooled connection. however only one per hostname:port.
@@ -17,6 +22,7 @@ impl ConnectionPool {
         }
     }
 
+    /// How the unit::connect tries to get a pooled connection.
     pub fn try_get_connection(&mut self, url: &Url) -> Option<Stream> {
         self.recycle.remove(&PoolKey::new(url))
     }
@@ -45,13 +51,18 @@ struct PoolKey {
 impl PoolKey {
     fn new(url: &Url) -> Self {
         PoolKey {
-            hostname: url.host_str().unwrap_or("localhost").into(),
+            hostname: url.host_str().unwrap_or(DEFAULT_HOST).into(),
             port: url.port_or_known_default().unwrap_or(0),
         }
     }
 }
 
+/// Read wrapper that returns the stream to the pool once the
+/// read is exhausted (reached a 0).
+///
+/// *Internal API*
 pub struct PoolReturnRead<R: Read + Sized> {
+    // unit that contains the agent where we want to return the reader.
     unit: Option<Unit>,
     // pointer to underlying stream
     stream: *mut Stream,
@@ -69,6 +80,7 @@ impl<R: Read + Sized> PoolReturnRead<R> {
     }
 
     fn return_connection(&mut self) {
+        // guard we only do this once.
         if let Some(unit) = self.unit.take() {
             // this frees up the wrapper type around the Stream so
             // we can safely bring the stream pointer back.

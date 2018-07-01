@@ -23,7 +23,8 @@ fn agent_pool() {
     let agent = agent();
 
     // req 1
-    let resp = agent.get("https://s3.amazonaws.com/foosrvr/bbb.mp4")
+    let resp = agent
+        .get("https://s3.amazonaws.com/foosrvr/bbb.mp4")
         .set("Range", "bytes=1000-1999")
         .call();
     assert_eq!(resp.status(), 206);
@@ -43,7 +44,8 @@ fn agent_pool() {
     }
 
     // req 2 should be done with a reused connection
-    let resp = agent.get("https://s3.amazonaws.com/foosrvr/bbb.mp4")
+    let resp = agent
+        .get("https://s3.amazonaws.com/foosrvr/bbb.mp4")
         .set("Range", "bytes=5000-6999")
         .call();
     assert_eq!(resp.status(), 206);

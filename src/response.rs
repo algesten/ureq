@@ -251,8 +251,7 @@ impl Response {
         //
 
         let is_http10 = self.http_version().eq_ignore_ascii_case("HTTP/1.0");
-        let is_close = self
-            .header("connection")
+        let is_close = self.header("connection")
             .map(|c| c.eq_ignore_ascii_case("close"))
             .unwrap_or(false);
 
@@ -420,8 +419,10 @@ impl Response {
     }
 }
 
+/// parse a line like: HTTP/1.1 200 OK\r\n
 fn parse_status_line(line: &str) -> Result<((usize, usize), u16), Error> {
-    // HTTP/1.1 200 OK\r\n
+    //
+
     let mut split = line.splitn(3, ' ');
 
     let http_version = split.next().ok_or_else(|| Error::BadStatus)?;
@@ -448,6 +449,20 @@ fn parse_status_line(line: &str) -> Result<((usize, usize), u16), Error> {
 
 impl FromStr for Response {
     type Err = Error;
+    /// Parse a response from a string.
+    ///
+    /// Example:
+    /// ```
+    /// let s = "HTTP/1.1 200 OK\r\n\
+    ///     X-Forwarded-For: 1.2.3.4\r\n\
+    ///     Content-Type: text/plain\r\n\
+    ///     \r\n\
+    ///     Hello World!!!";
+    /// let resp = s.parse::<ureq::Response>().unwrap();
+    /// assert!(resp.has("X-Forwarded-For"));
+    /// let body = resp.into_string().unwrap();
+    /// assert_eq!(body, "Hello World!!!");
+    /// ```
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let bytes = s.as_bytes().to_owned();
         let mut cursor = Cursor::new(bytes);
@@ -468,12 +483,14 @@ impl Into<Response> for Error {
     }
 }
 
+/// "Give away" Unit and Stream to the response.
+///
+/// *Internal API*
 pub fn set_stream(resp: &mut Response, unit: Option<Unit>, stream: Stream) {
     resp.unit = unit;
     resp.stream = Some(stream);
 }
 
-// application/x-www-form-urlencoded, application/json, and multipart/form-data
 
 fn read_next_line<R: Read>(reader: &mut R) -> IoResult<AsciiString> {
     let mut buf = Vec::new();
@@ -500,6 +517,8 @@ fn read_next_line<R: Read>(reader: &mut R) -> IoResult<AsciiString> {
 }
 
 /// Read Wrapper around an (unsafe) pointer to a Stream.
+///
+/// *Internal API*
 struct YoloRead {
     stream: *mut Stream,
 }
@@ -519,6 +538,9 @@ impl Read for YoloRead {
     }
 }
 
+/// Limits a YoloRead to a content size (as set by a "Content-Length" header).
+///
+/// *Internal API*
 struct LimitedRead {
     reader: YoloRead,
     limit: usize,
@@ -556,6 +578,11 @@ impl Read for LimitedRead {
     }
 }
 
+/// Extract the charset from a "Content-Type" header.
+///
+/// "Content-Type: text/plain; charset=iso8859-1" -> "iso8859-1"
+///
+/// *Internal API*
 pub fn charset_from_content_type(header: Option<&str>) -> &str {
     header
         .and_then(|header| {
@@ -574,14 +601,20 @@ mod tests {
 
     #[test]
     fn content_type_without_charset() {
-        let s = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\nOK";
+        let s = "HTTP/1.1 200 OK\r\n\
+                 Content-Type: application/json\r\n\
+                 \r\n\
+                 OK";
         let resp = s.parse::<Response>().unwrap();
         assert_eq!("application/json", resp.content_type());
     }
 
     #[test]
     fn content_type_with_charset() {
-        let s = "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=iso-8859-4\r\n\r\nOK";
+        let s = "HTTP/1.1 200 OK\r\n\
+                 Content-Type: application/json; charset=iso-8859-4\r\n\
+                 \r\n\
+                 OK";
         let resp = s.parse::<Response>().unwrap();
         assert_eq!("application/json", resp.content_type());
     }
@@ -595,21 +628,35 @@ mod tests {
 
     #[test]
     fn charset() {
-        let s = "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=iso-8859-4\r\n\r\nOK";
+        let s = "HTTP/1.1 200 OK\r\n\
+                 Content-Type: application/json; charset=iso-8859-4\r\n\
+                 \r\n\
+                 OK";
         let resp = s.parse::<Response>().unwrap();
         assert_eq!("iso-8859-4", resp.charset());
     }
 
     #[test]
     fn charset_default() {
-        let s = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\nOK";
+        let s = "HTTP/1.1 200 OK\r\n\
+                 Content-Type: application/json\r\n\
+                 \r\n\
+                 OK";
         let resp = s.parse::<Response>().unwrap();
         assert_eq!("utf-8", resp.charset());
     }
 
     #[test]
     fn chunked_transfer() {
-        let s = "HTTP/1.1 200 OK\r\nTransfer-Encoding: Chunked\r\n\r\n3\r\nhel\r\nb\r\nlo world!!!\r\n0\r\n\r\n";
+        let s = "HTTP/1.1 200 OK\r\n\
+                 Transfer-Encoding: Chunked\r\n\
+                 \r\n\
+                 3\r\n\
+                 hel\r\n\
+                 b\r\n\
+                 lo world!!!\r\n\
+                 0\r\n\
+                 \r\n";
         let resp = s.parse::<Response>().unwrap();
         assert_eq!("hello world!!!", resp.into_string().unwrap());
     }
@@ -617,15 +664,17 @@ mod tests {
     #[test]
     #[cfg(feature = "json")]
     fn parse_simple_json() {
-        let s = format!("HTTP/1.1 200 OK\r\n\r\n{{\"hello\":\"world\"}}");
+        let s = format!(
+            "HTTP/1.1 200 OK\r\n\
+             \r\n\
+             {{\"hello\":\"world\"}}"
+        );
         let resp = s.parse::<Response>().unwrap();
         let v = resp.into_json().unwrap();
-        assert_eq!(
-            v,
-            "{\"hello\":\"world\"}"
-                .parse::<serde_json::Value>()
-                .unwrap()
-        );
+        let compare = "{\"hello\":\"world\"}"
+            .parse::<serde_json::Value>()
+            .unwrap();
+        assert_eq!(v, compare);
     }
 
     #[test]

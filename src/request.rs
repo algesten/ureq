@@ -445,11 +445,6 @@ impl Request {
         self
     }
 
-    /// Returns the method.
-    pub fn method(&self) -> &str {
-        &self.method
-    }
-
     // pub fn retry(&self, times: u16) -> Request {
     //     unimplemented!()
     // }

@@ -4,7 +4,11 @@ use stream::{connect_http, connect_https, connect_test, Stream};
 use url::Url;
 //
 
+use pool::DEFAULT_HOST;
+
 /// It's a "unit of work". Maybe a bad name for it?
+///
+/// *Internal API*
 #[derive(Debug)]
 pub struct Unit {
     pub agent: Arc<Mutex<Option<AgentState>>>,
@@ -35,7 +39,7 @@ impl Unit {
 
         let is_head = req.method.eq_ignore_ascii_case("head");
 
-        let hostname = url.host_str().unwrap_or("localhost").to_string();
+        let hostname = url.host_str().unwrap_or(DEFAULT_HOST).to_string();
 
         let query_string = combine_query(&url, &req.query);
 
@@ -98,6 +102,7 @@ impl Unit {
     }
 }
 
+/// Perform a connection. Used recursively for redirects.
 pub fn connect(
     mut unit: Unit,
     method: &str,
@@ -202,6 +207,7 @@ fn match_cookies<'a>(jar: &'a CookieJar, domain: &str, path: &str, is_secure: bo
         .collect()
 }
 
+/// Combine the query of the url and the query options set on the request object.
 fn combine_query(url: &Url, query: &QString) -> String {
     match (url.query(), query.len() > 0) {
         (Some(urlq), true) => format!("?{}&{}", urlq, query),
@@ -211,6 +217,7 @@ fn combine_query(url: &Url, query: &QString) -> String {
     }
 }
 
+/// Connect the socket, either by using the pool or grab a new one.
 fn connect_socket(unit: &Unit, use_pooled: bool) -> Result<(Stream, bool), Error> {
     if use_pooled {
         let state = &mut unit.agent.lock().unwrap();
@@ -229,9 +236,14 @@ fn connect_socket(unit: &Unit, use_pooled: bool) -> Result<(Stream, bool), Error
     Ok((stream?, false))
 }
 
+/// Send request line + headers (all up until the body).
 fn send_prelude(unit: &Unit, method: &str, stream: &mut Stream) -> IoResult<()> {
-    // send the request start + headers
+    //
+
+    // build into a buffer and send in one go.
     let mut prelude: Vec<u8> = vec![];
+
+    // request line
     write!(
         prelude,
         "{} {}{} HTTP/1.1\r\n",
@@ -239,19 +251,27 @@ fn send_prelude(unit: &Unit, method: &str, stream: &mut Stream) -> IoResult<()> 
         unit.url.path(),
         &unit.query_string
     )?;
+
+    // host header if not set by user.
     if !has_header(&unit.headers, "host") {
         write!(prelude, "Host: {}\r\n", unit.url.host().unwrap())?;
     }
+
+    // other headers
     for header in &unit.headers {
         write!(prelude, "{}: {}\r\n", header.name(), header.value())?;
     }
+
+    // finish
     write!(prelude, "\r\n")?;
 
+    // write all to the wire
     stream.write_all(&mut prelude[..])?;
 
     Ok(())
 }
 
+/// Investigate a response for "Set-Cookie" headers.
 fn save_cookies(unit: &Unit, resp: &Response) {
     //
 
@@ -260,6 +280,7 @@ fn save_cookies(unit: &Unit, resp: &Response) {
         return;
     }
 
+    // only lock if we know there is something to process
     let state = &mut unit.agent.lock().unwrap();
     if let Some(add_jar) = state.as_mut().map(|state| &mut state.jar) {
         for raw_cookie in cookies.iter() {

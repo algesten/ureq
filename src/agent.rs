@@ -40,13 +40,20 @@ include!("unit.rs");
 /// ```
 #[derive(Debug, Default, Clone)]
 pub struct Agent {
+    /// Copied into each request of this agent.
     headers: Vec<Header>,
+    /// Reused agent state for repeated requests from this agent.
     state: Arc<Mutex<Option<AgentState>>>,
 }
 
+/// Container of the state
+///
+/// *Internal API*.
 #[derive(Debug)]
 pub struct AgentState {
+    /// Reused connections between requests.
     pool: ConnectionPool,
+    /// Cookies saved between requests.
     jar: CookieJar,
 }
 
