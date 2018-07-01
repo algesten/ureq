@@ -1,3 +1,4 @@
+use base64;
 use body::{send_body, Payload, SizedReader};
 use std::io::{Result as IoResult, Write};
 use stream::{connect_http, connect_https, connect_test, Stream};
@@ -57,13 +58,17 @@ impl Unit {
             // also don't write this if the user has set it themselves
             if !is_chunked && !req.has("content-length") {
                 if let Some(size) = body.size {
-                    extra.push(
-                        format!("Content-Length: {}\r\n", size)
-                            .parse::<Header>()
-                            .unwrap(),
-                    );
+                    extra.push(Header::new("Content-Length", &format!("{}", size)).unwrap());
                 }
             }
+
+            let username = url.username();
+            let password = url.password().unwrap_or("");
+            if (username != "" || password != "") && !req.has("authorization") {
+                let encoded = base64::encode(&format!("{}:{}", username, password));
+                extra.push(Header::new("Authorization", &format!("Basic {}", encoded)).unwrap());
+            }
+
             extra
         };
         let headers: Vec<_> = req
