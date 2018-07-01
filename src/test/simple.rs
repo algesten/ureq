@@ -11,7 +11,7 @@ fn header_passing() {
         test::make_response(200, "OK", vec!["X-Bar: foo"], vec![])
     });
     let resp = get("test://host/header_passing").set("X-Foo", "bar").call();
-    assert_eq!(*resp.status(), 200);
+    assert_eq!(resp.status(), 200);
     assert!(resp.has("X-Bar"));
     assert_eq!(resp.header("X-Bar").unwrap(), "foo");
 }
@@ -27,7 +27,7 @@ fn repeat_non_x_header() {
         .set("Accept", "bar")
         .set("Accept", "baz")
         .call();
-    assert_eq!(*resp.status(), 200);
+    assert_eq!(resp.status(), 200);
 }
 
 #[test]
@@ -45,7 +45,7 @@ fn repeat_x_header() {
         .set("X-Forwarded-For", "130.240.19.2")
         .set("X-Forwarded-For", "130.240.19.3")
         .call();
-    assert_eq!(*resp.status(), 200);
+    assert_eq!(resp.status(), 200);
 }
 
 #[test]

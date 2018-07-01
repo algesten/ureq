@@ -7,7 +7,7 @@ fn read_range() {
     let resp = get("https://s3.amazonaws.com/foosrvr/bbb.mp4")
         .set("Range", "bytes=1000-1999")
         .call();
-    assert_eq!(*resp.status(), 206);
+    assert_eq!(resp.status(), 206);
     let mut reader = resp.into_reader();
     let mut buf = vec![];
     let len = reader.read_to_end(&mut buf).unwrap();
@@ -26,7 +26,7 @@ fn agent_pool() {
     let resp = agent.get("https://s3.amazonaws.com/foosrvr/bbb.mp4")
         .set("Range", "bytes=1000-1999")
         .call();
-    assert_eq!(*resp.status(), 206);
+    assert_eq!(resp.status(), 206);
     let mut reader = resp.into_reader();
     let mut buf = vec![];
     // reading the entire content will return the connection to the pool
@@ -46,7 +46,7 @@ fn agent_pool() {
     let resp = agent.get("https://s3.amazonaws.com/foosrvr/bbb.mp4")
         .set("Range", "bytes=5000-6999")
         .call();
-    assert_eq!(*resp.status(), 206);
+    assert_eq!(resp.status(), 206);
     let mut reader = resp.into_reader();
     let mut buf = vec![];
     let len = reader.read_to_end(&mut buf).unwrap();

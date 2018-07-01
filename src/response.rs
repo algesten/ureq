@@ -67,7 +67,7 @@ impl Response {
     /// ```
     /// let resp = ureq::Response::new(401, "Authorization Required", "Please log in");
     ///
-    /// assert_eq!(*resp.status(), 401);
+    /// assert_eq!(resp.status(), 401);
     /// ```
     pub fn new(status: u16, status_text: &str, body: &str) -> Self {
         let r = format!("HTTP/1.1 {} {}\r\n\r\n{}\n", status, status_text, body);
@@ -87,8 +87,8 @@ impl Response {
     }
 
     /// The status as a u16: `200`
-    pub fn status(&self) -> &u16 {
-        &self.status
+    pub fn status(&self) -> u16 {
+        self.status
     }
 
     /// The status text: `OK`
@@ -171,7 +171,7 @@ impl Response {
     /// assert!(resp.error());
     ///
     /// // synthetic error code 400
-    /// assert_eq!(*resp.status(), 400);
+    /// assert_eq!(resp.status(), 400);
     ///
     /// // tell that it's synthetic.
     /// assert!(resp.synthetic());
@@ -379,7 +379,7 @@ impl Response {
     /// let read = Cursor::new(text.to_string().into_bytes());
     /// let resp = ureq::Response::from_read(read);
     ///
-    /// assert_eq!(*resp.status(), 401);
+    /// assert_eq!(resp.status(), 401);
     /// ```
     pub fn from_read(reader: impl Read) -> Self {
         Self::do_from_read(reader).unwrap_or_else(|e| e.into())
@@ -632,7 +632,7 @@ mod tests {
         let s = format!("HTTP/1.1 BORKED\r\n");
         let resp: Response = s.parse::<Response>().unwrap_err().into();
         assert_eq!(resp.http_version(), "HTTP/1.1");
-        assert_eq!(*resp.status(), 500);
+        assert_eq!(resp.status(), 500);
         assert_eq!(resp.status_text(), "Bad Status");
         assert_eq!(resp.content_type(), "text/plain");
         let v = resp.into_string().unwrap();

@@ -14,7 +14,7 @@ fn basic_auth() {
     let resp = get("test://host/basic_auth")
         .auth("martin", "rubbermashgum")
         .call();
-    assert_eq!(*resp.status(), 200);
+    assert_eq!(resp.status(), 200);
 }
 
 #[test]
@@ -26,5 +26,5 @@ fn kind_auth() {
     let resp = get("test://host/kind_auth")
         .auth_kind("Digest", "abcdefgh123")
         .call();
-    assert_eq!(*resp.status(), 200);
+    assert_eq!(resp.status(), 200);
 }
