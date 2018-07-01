@@ -51,7 +51,7 @@
 //!
 //! To maintain a state, cookies, between requests, you use an [agent](struct.Agent.html).
 //! Agents also follow the build pattern. Agents are created with
-//! [`ureq::agent().build()`](struct.Agent.html).
+//! [`ureq::agent()`](struct.Agent.html).
 //!
 //! # Content-Length
 //!
