@@ -19,7 +19,7 @@ pub enum Payload {
     Text(String, String),
     #[cfg(feature = "json")]
     JSON(SerdeValue),
-    Reader(Box<Read + 'static>),
+    Reader(Box<dyn Read + 'static>),
 }
 
 impl ::std::fmt::Debug for Payload {
@@ -42,11 +42,11 @@ impl Default for Payload {
 
 pub struct SizedReader {
     pub size: Option<usize>,
-    pub reader: Box<Read + 'static>,
+    pub reader: Box<dyn Read + 'static>,
 }
 
 impl SizedReader {
-    fn new(size: Option<usize>, reader: Box<Read + 'static>) -> Self {
+    fn new(size: Option<usize>, reader: Box<dyn Read + 'static>) -> Self {
         SizedReader { size, reader }
     }
 }

@@ -15,7 +15,7 @@ pub enum Stream {
     Https(TlsStream<TcpStream>),
     Cursor(Cursor<Vec<u8>>),
     #[cfg(test)]
-    Test(Box<Read + Send>, Vec<u8>),
+    Test(Box<dyn Read + Send>, Vec<u8>),
 }
 
 impl ::std::fmt::Debug for Stream {

@@ -264,7 +264,7 @@ impl Response {
 
         let use_chunked = !is_http10 && !is_head && is_chunked;
 
-        let expected_bytes = if is_http10 || is_close {
+        let limit_bytes = if is_http10 || is_close {
             None
         } else if is_head {
             // head requests never have a body
@@ -279,12 +279,12 @@ impl Response {
         let yolo = YoloRead { stream: stream_ptr };
         let unit = self.unit;
 
-        match (use_chunked, expected_bytes) {
+        match (use_chunked, limit_bytes) {
             (true, _) => Box::new(PoolReturnRead::new(
                 unit,
                 stream_ptr,
                 ChunkDecoder::new(yolo),
-            )) as Box<Read>,
+            )) as Box<dyn Read>,
             (false, Some(len)) => Box::new(PoolReturnRead::new(
                 unit,
                 stream_ptr,
@@ -499,6 +499,7 @@ fn read_next_line<R: Read>(reader: &mut R) -> IoResult<AsciiString> {
     }
 }
 
+/// Read Wrapper around an (unsafe) pointer to a Stream.
 struct YoloRead {
     stream: *mut Stream,
 }
