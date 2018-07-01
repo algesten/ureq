@@ -166,9 +166,7 @@ impl Request {
     ///     .set("Content-Type", "text/plain")
     ///     .send(read);
     /// ```
-    pub fn send<R>(&mut self, reader: R) -> Response
-    where
-        R: Read + Send + 'static,
+    pub fn send(&mut self, reader: impl Read + 'static) -> Response
     {
         self.do_call(Payload::Reader(Box::new(reader)))
     }
