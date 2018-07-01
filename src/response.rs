@@ -491,7 +491,6 @@ pub fn set_stream(resp: &mut Response, unit: Option<Unit>, stream: Stream) {
     resp.stream = Some(stream);
 }
 
-
 fn read_next_line<R: Read>(reader: &mut R) -> IoResult<AsciiString> {
     let mut buf = Vec::new();
     let mut prev_byte_was_cr = false;

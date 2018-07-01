@@ -28,3 +28,32 @@ fn kind_auth() {
         .call();
     assert_eq!(resp.status(), 200);
 }
+
+#[test]
+fn url_auth() {
+    test::set_handler("/url_auth", |unit| {
+        assert_eq!(
+            unit.header("Authorization").unwrap(),
+            "Basic QWxhZGRpbjpPcGVuU2VzYW1l"
+        );
+        test::make_response(200, "OK", vec![], vec![])
+    });
+    let resp = get("test://Aladdin:OpenSesame@host/url_auth").call();
+    assert_eq!(resp.status(), 200);
+}
+
+#[test]
+fn url_auth_overridden() {
+    test::set_handler("/url_auth_overridden", |unit| {
+        assert_eq!(
+            unit.header("Authorization").unwrap(),
+            "Basic bWFydGluOnJ1YmJlcm1hc2hndW0="
+        );
+        test::make_response(200, "OK", vec![], vec![])
+    });
+    let agent = agent().auth("martin", "rubbermashgum").build();
+    let resp = agent
+        .get("test://Aladdin:OpenSesame@host/url_auth_overridden")
+        .call();
+    assert_eq!(resp.status(), 200);
+}
