@@ -464,6 +464,18 @@ impl Request {
     //     unimplemented!()
     // }
 
+    /// Get the method this request is using.
+    ///
+    /// Example:
+    /// ```
+    /// let req = ureq::post("/somewhere")
+    ///     .build();
+    /// assert_eq!(req.get_method(), "POST");
+    /// ```
+    pub fn get_method(&self) -> &str {
+        &self.method
+    }
+
     fn to_url(&self) -> Result<Url, Error> {
         URL_BASE
             .join(&self.path)
