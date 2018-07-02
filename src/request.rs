@@ -476,6 +476,20 @@ impl Request {
         &self.method
     }
 
+    /// Get the url this request was created with.
+    ///
+    /// This value is not normalized, it is exactly as set.
+    ///
+    /// Example:
+    /// ```
+    /// let req = ureq::post("https://cool.server/innit")
+    ///     .build();
+    /// assert_eq!(req.get_url(), "https://cool.server/innit");
+    /// ```
+    pub fn get_url(&self) -> &str {
+        &self.path
+    }
+
     fn to_url(&self) -> Result<Url, Error> {
         URL_BASE
             .join(&self.path)
