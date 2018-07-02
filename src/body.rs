@@ -27,13 +27,15 @@ pub enum Payload {
 
 impl ::std::fmt::Debug for Payload {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::result::Result<(), ::std::fmt::Error> {
-        write!(f, "{}", match self {
+        let s = match self {
             Payload::Empty => "Empty",
             Payload::Text(t, _) => &t,
             #[cfg(feature = "json")]
             Payload::JSON(_) => "JSON",
             Payload::Reader(_) => "Reader",
-        })
+        };
+
+        write!(f, "{}", s)
     }
 }
 
