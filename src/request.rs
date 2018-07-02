@@ -190,10 +190,7 @@ impl Request {
         K: Into<String>,
         V: Into<String>,
     {
-        add_header(
-            &mut self.headers,
-            Header::new(&header.into(), &value.into()).expect("Failed to parse header"),
-        );
+        add_header(&mut self.headers, Header::new(&header.into(), &value.into()));
         self
     }
 

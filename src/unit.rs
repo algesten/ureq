@@ -58,7 +58,7 @@ impl Unit {
             // also don't write this if the user has set it themselves
             if !is_chunked && !req.has("content-length") {
                 if let Some(size) = body.size {
-                    extra.push(Header::new("Content-Length", &format!("{}", size)).unwrap());
+                    extra.push(Header::new("Content-Length", &format!("{}", size)));
                 }
             }
 
@@ -66,7 +66,7 @@ impl Unit {
             let password = url.password().unwrap_or("");
             if (username != "" || password != "") && !req.has("authorization") {
                 let encoded = base64::encode(&format!("{}:{}", username, password));
-                extra.push(Header::new("Authorization", &format!("Basic {}", encoded)).unwrap());
+                extra.push(Header::new("Authorization", &format!("Basic {}", encoded)));
             }
 
             extra
@@ -204,10 +204,8 @@ fn match_cookies<'a>(jar: &'a CookieJar, domain: &str, path: &str, is_secure: bo
             let name = c.name().to_string();
             let value = c.value().to_string();
             let nameval = Cookie::new(name, value).encoded().to_string();
-            Header::new("Cookie", &nameval).ok()
+            Header::new("Cookie", &nameval)
         })
-        .filter(|o| o.is_some())
-        .map(|o| o.unwrap())
         .collect()
 }
 

@@ -1,4 +1,4 @@
-use ascii::AsciiString;
+use ascii::{AsAsciiStr, AsciiString};
 use error::Error;
 use std::str::FromStr;
 
@@ -16,11 +16,11 @@ impl ::std::fmt::Debug for Header {
 }
 
 impl Header {
-    pub fn new(name: &str, value: &str) -> Result<Self, Error> {
-        let line =
-            AsciiString::from_str(&format!("{}: {}", name, value)).map_err(|_| Error::BadHeader)?;
+    pub fn new(name: &str, value: &str) -> Self {
+        let s = format!("{}: {}", name, value);
+        let line = unsafe { s.as_ascii_str_unchecked().to_owned() };
         let index = name.len();
-        Ok(Header { line, index })
+        Header { line, index }
     }
 
     /// The header name.

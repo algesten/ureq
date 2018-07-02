@@ -119,7 +119,7 @@ impl Agent {
     {
         add_header(
             &mut self.headers,
-            Header::new(&header.into(), &value.into()).expect("Failed to parse header"),
+            Header::new(&header.into(), &value.into()),
         );
         self
     }
