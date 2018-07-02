@@ -1,6 +1,5 @@
 use agent::Unit;
 use error::Error;
-use header::Header;
 use std::collections::HashMap;
 use std::io::{Cursor, Write};
 use std::sync::{Arc, Mutex};
@@ -38,8 +37,7 @@ pub fn make_response(
     let mut buf: Vec<u8> = vec![];
     write!(&mut buf, "HTTP/1.1 {} {}\r\n", status, status_text).ok();
     for hstr in headers.iter() {
-        let header = hstr.parse::<Header>().unwrap();
-        write!(&mut buf, "{}: {}\r\n", header.name(), header.value()).ok();
+        write!(&mut buf, "{}\r\n", hstr).ok();
     }
     write!(&mut buf, "\r\n").ok();
     buf.append(&mut body);

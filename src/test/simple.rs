@@ -125,3 +125,16 @@ fn request_debug() {
         "Request(GET /my/page?q=z&foo=bar%20baz, [Authorization: abcdef])"
     );
 }
+
+#[test]
+fn non_ascii_header() {
+    test::set_handler("/non_ascii_header", |_unit| {
+        test::make_response(200, "OK", vec!["Wörse: Hädör"], vec![])
+    });
+    let resp = get("test://host/non_ascii_header")
+        .set("Bäd", "Headör")
+        .call();
+    assert!(!resp.ok());
+    assert_eq!(resp.status(), 500);
+    assert_eq!(resp.status_text(), "Bad Header");
+}
