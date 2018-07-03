@@ -133,6 +133,9 @@ pub fn connect(
         }
     }
 
+    // send the body (which can be empty now depending on redirects)
+    send_body(body, unit.is_chunked, &mut stream)?;
+
     // start reading the response to process cookies and redirects.
     let mut resp = Response::from_read(&mut stream);
 
@@ -158,19 +161,17 @@ pub fn connect(
             unit.url = new_url;
 
             // perform the redirect differently depending on 3xx code.
-            return match resp.status() {
+            match resp.status() {
                 301 | 302 | 303 => {
-                    send_body(body, unit.is_chunked, &mut stream)?;
                     let empty = Payload::Empty.into_read();
-                    connect(unit, "GET", use_pooled, redirects - 1, empty)
+                    return connect(unit, "GET", use_pooled, redirects - 1, empty);
                 }
-                307 | 308 | _ => connect(unit, method, use_pooled, redirects - 1, body),
+                , _ => (),
+                // reinstate this with expect-100
+                // 307 | 308 | _ => connect(unit, method, use_pooled, redirects - 1, body),
             };
         }
     }
-
-    // send the body (which can be empty now depending on redirects)
-    send_body(body, unit.is_chunked, &mut stream)?;
 
     // since it is not a redirect, give away the incoming stream to the response object
     response::set_stream(&mut resp, Some(unit), stream);

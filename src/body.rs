@@ -53,6 +53,12 @@ pub struct SizedReader {
     pub reader: Box<dyn Read + 'static>,
 }
 
+impl ::std::fmt::Debug for SizedReader {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::result::Result<(), ::std::fmt::Error> {
+        write!(f, "SizedReader[size={:?},reader]", self.size)
+    }
+}
+
 impl SizedReader {
     fn new(size: Option<usize>, reader: Box<dyn Read + 'static>) -> Self {
         SizedReader { size, reader }
