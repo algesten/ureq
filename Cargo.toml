@@ -19,7 +19,7 @@ tls = ["native-tls"]
 ascii = "0.9"
 base64 = "0.9"
 chunked_transfer = "0.3"
-cookie = { version = "0.10", features = ["percent-encode"] }
+cookie = { version = "0.11", features = ["percent-encode"] }
 lazy_static = "1"
 qstring = "0.6"
 url = "1.6"

@@ -197,7 +197,7 @@ fn match_cookies<'a>(jar: &'a CookieJar, domain: &str, path: &str, is_secure: bo
                 .map(|cpath| path.find(cpath).map(|pos| pos == 0).unwrap_or(false))
                 .unwrap_or(true);
             // either the cookie isnt secure, or we're not doing a secure request.
-            let secure_ok = !c.secure() || is_secure;
+            let secure_ok = !c.secure().unwrap_or(false) || is_secure;
 
             domain_ok && path_ok && secure_ok
         })
