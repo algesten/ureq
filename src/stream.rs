@@ -25,6 +25,7 @@ impl ::std::fmt::Debug for Stream {
             "Stream[{}]",
             match self {
                 Stream::Http(_) => "http",
+                #[cfg(feature = "tls")]
                 Stream::Https(_) => "https",
                 Stream::Cursor(_) => "cursor",
                 #[cfg(test)]
@@ -38,6 +39,7 @@ impl Stream {
     pub fn is_poolable(&self) -> bool {
         match self {
             Stream::Http(_) => true,
+            #[cfg(feature = "tls")]
             Stream::Https(_) => true,
             _ => false,
         }
@@ -56,6 +58,7 @@ impl Read for Stream {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         match self {
             Stream::Http(sock) => sock.read(buf),
+            #[cfg(feature = "tls")]
             Stream::Https(stream) => stream.read(buf),
             Stream::Cursor(read) => read.read(buf),
             #[cfg(test)]
@@ -68,6 +71,7 @@ impl Write for Stream {
     fn write(&mut self, buf: &[u8]) -> IoResult<usize> {
         match self {
             Stream::Http(sock) => sock.write(buf),
+            #[cfg(feature = "tls")]
             Stream::Https(stream) => stream.write(buf),
             Stream::Cursor(_) => panic!("Write to read only stream"),
             #[cfg(test)]
@@ -77,6 +81,7 @@ impl Write for Stream {
     fn flush(&mut self) -> IoResult<()> {
         match self {
             Stream::Http(sock) => sock.flush(),
+            #[cfg(feature = "tls")]
             Stream::Https(stream) => stream.flush(),
             Stream::Cursor(_) => panic!("Flush read only stream"),
             #[cfg(test)]
