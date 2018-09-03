@@ -1,11 +1,11 @@
 use std::io::Error as IoError;
 
 #[cfg(feature = "tls")]
-use std::net::TcpStream;
-#[cfg(feature = "tls")]
 use native_tls::Error as TlsError;
 #[cfg(feature = "tls")]
 use native_tls::HandshakeError;
+#[cfg(feature = "tls")]
+use std::net::TcpStream;
 
 /// Errors that are translated to ["synthetic" responses](struct.Response.html#method.synthetic).
 #[derive(Debug)]

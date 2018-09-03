@@ -251,7 +251,8 @@ impl Response {
         //
 
         let is_http10 = self.http_version().eq_ignore_ascii_case("HTTP/1.0");
-        let is_close = self.header("connection")
+        let is_close = self
+            .header("connection")
             .map(|c| c.eq_ignore_ascii_case("close"))
             .unwrap_or(false);
 
