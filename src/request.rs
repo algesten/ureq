@@ -38,13 +38,17 @@ pub struct Request {
 
 impl ::std::fmt::Debug for Request {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::result::Result<(), ::std::fmt::Error> {
-        let url = self.to_url().unwrap();
-        let query = combine_query(&url, &self.query);
+        let (path, query) = self.to_url()
+            .map(|u| {
+            let query = combine_query(&u, &self.query);
+            (u.path().to_string(), query)
+        })
+            .unwrap_or_else(|_| ("BAD_URL".to_string(), "BAD_URL".to_string()));
         write!(
             f,
             "Request({} {}{}, {:?})",
             self.method,
-            url.path(),
+            path,
             query,
             self.headers
         )
@@ -488,6 +492,63 @@ impl Request {
     /// ```
     pub fn get_url(&self) -> &str {
         &self.path
+    }
+
+    /// Normalizes and returns the host that will be used for this request.
+    ///
+    /// Example:
+    /// ```
+    /// let req1 = ureq::post("https://cool.server/innit")
+    ///     .build();
+    /// assert_eq!(req1.to_host().unwrap(), "cool.server");
+    ///
+    /// let req2 = ureq::post("/some/path")
+    ///     .build();
+    /// assert_eq!(req2.to_host().unwrap(), "localhost");
+    /// ```
+    pub fn to_host(&self) -> Result<String, Error> {
+        self.to_url()
+            .map(|u| u.host_str().unwrap_or(DEFAULT_HOST).to_string())
+    }
+
+    /// Returns the scheme for this request.
+    ///
+    /// Example:
+    /// ```
+    /// let req = ureq::post("https://cool.server/innit")
+    ///     .build();
+    /// assert_eq!(req.to_scheme().unwrap(), "https");
+    /// ```
+    pub fn to_scheme(&self) -> Result<String, Error> {
+        self.to_url()
+            .map(|u| u.scheme().to_string())
+    }
+
+    /// The complete query for this request.
+    ///
+    /// Example:
+    /// ```
+    /// let req = ureq::post("https://cool.server/innit?foo=bar")
+    ///     .query("format", "json")
+    ///     .build();
+    /// assert_eq!(req.to_query().unwrap(), "?foo=bar&format=json");
+    /// ```
+    pub fn to_query(&self) -> Result<String, Error> {
+        self.to_url()
+            .map(|u| combine_query(&u, &self.query))
+    }
+
+    /// The normalized path of this request.
+    ///
+    /// Example:
+    /// ```
+    /// let req = ureq::post("https://cool.server/innit")
+    ///     .build();
+    /// assert_eq!(req.to_path().unwrap(), "/innit");
+    /// ```
+    pub fn to_path(&self) -> Result<String, Error> {
+        self.to_url()
+            .map(|u| u.path().to_string())
     }
 
     fn to_url(&self) -> Result<Url, Error> {
