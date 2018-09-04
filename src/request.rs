@@ -147,9 +147,7 @@ impl Request {
     ///     .send_string("Hällo Wörld!");
     /// println!("{:?}", r);
     /// ```
-    pub fn send_string<S>(&mut self, data: S) -> Response
-    where
-        S: Into<String>,
+    pub fn send_string(&mut self, data: &str) -> Response
     {
         let text = data.into();
         let charset = response::charset_from_content_type(self.header("content-type")).to_string();
@@ -189,12 +187,9 @@ impl Request {
     ///      println!("Oh no error!");
     ///  }
     /// ```
-    pub fn set<K, V>(&mut self, header: K, value: V) -> &mut Request
-    where
-        K: Into<String>,
-        V: Into<String>,
+    pub fn set(&mut self, header: &str, value: &str) -> &mut Request
     {
-        add_header(&mut self.headers, Header::new(&header.into(), &value.into()));
+        add_header(&mut self.headers, Header::new(header, value));
         self
     }
 
@@ -238,37 +233,6 @@ impl Request {
         get_all_headers(&self.headers, name)
     }
 
-    /// Set many headers.
-    ///
-    /// ```
-    /// #[macro_use]
-    /// extern crate ureq;
-    ///
-    /// fn main() {
-    /// let r = ureq::get("/my_page")
-    ///     .set_map(map! {
-    ///         "X-API-Key" => "foobar",
-    ///         "Accept" => "text/plain"
-    ///     })
-    ///     .call();
-    ///
-    /// if r.ok() {
-    ///     println!("yay got {}", r.into_string().unwrap());
-    /// }
-    /// }
-    /// ```
-    pub fn set_map<K, V, I>(&mut self, headers: I) -> &mut Request
-    where
-        K: Into<String>,
-        V: Into<String>,
-        I: IntoIterator<Item = (K, V)>,
-    {
-        for (k, v) in headers.into_iter() {
-            self.set(k, v);
-        }
-        self
-    }
-
     /// Set a query parameter.
     ///
     /// For example, to set `?format=json&dest=/login`
@@ -281,43 +245,9 @@ impl Request {
     ///
     /// println!("{:?}", r);
     /// ```
-    pub fn query<K, V>(&mut self, param: K, value: V) -> &mut Request
-    where
-        K: Into<String>,
-        V: Into<String>,
+    pub fn query(&mut self, param: &str, value: &str) -> &mut Request
     {
-        self.query.add_pair((param.into(), value.into()));
-        self
-    }
-
-    /// Set many query parameters.
-    ///
-    /// For example, to set `?format=json&dest=/login`
-    ///
-    /// ```
-    /// #[macro_use]
-    /// extern crate ureq;
-    ///
-    /// fn main() {
-    /// let r = ureq::get("/my_page")
-    ///     .query_map(map! {
-    ///         "format" => "json",
-    ///         "dest" => "/login"
-    ///     })
-    ///     .call();
-    ///
-    /// println!("{:?}", r);
-    /// }
-    /// ```
-    pub fn query_map<K, V, I>(&mut self, params: I) -> &mut Request
-    where
-        K: Into<String>,
-        V: Into<String>,
-        I: IntoIterator<Item = (K, V)>,
-    {
-        for (k, v) in params.into_iter() {
-            self.query.add_pair((k.into(), v.into()));
-        }
+        self.query.add_pair((param, value));
         self
     }
 
@@ -331,12 +261,9 @@ impl Request {
     ///     .call();
     /// println!("{:?}", r);
     /// ```
-    pub fn query_str<S>(&mut self, query: S) -> &mut Request
-    where
-        S: Into<String>,
+    pub fn query_str(&mut self, query: &str) -> &mut Request
     {
-        let s = query.into();
-        self.query.add_str(&s);
+        self.query.add_str(query);
         self
     }
 
@@ -398,15 +325,10 @@ impl Request {
     /// let r2 = ureq::get("http://martin:rubbermashgum@localhost/my_page").call();
     /// println!("{:?}", r2);
     /// ```
-    pub fn auth<S, T>(&mut self, user: S, pass: T) -> &mut Request
-    where
-        S: Into<String>,
-        T: Into<String>,
+    pub fn auth(&mut self, user: &str, pass: &str) -> &mut Request
     {
-        let u = user.into();
-        let p = pass.into();
-        let pass = basic_auth(&u, &p);
-        self.auth_kind("Basic", pass)
+        let pass = basic_auth(user, pass);
+        self.auth_kind("Basic", &pass)
     }
 
     /// Auth of other kinds such as `Digest`, `Token` etc.
@@ -417,13 +339,10 @@ impl Request {
     ///     .call();
     /// println!("{:?}", r);
     /// ```
-    pub fn auth_kind<S, T>(&mut self, kind: S, pass: T) -> &mut Request
-    where
-        S: Into<String>,
-        T: Into<String>,
+    pub fn auth_kind(&mut self, kind: &str, pass: &str) -> &mut Request
     {
-        let value = format!("{} {}", kind.into(), pass.into());
-        self.set("Authorization", value);
+        let value = format!("{} {}", kind, pass);
+        self.set("Authorization", &value);
         self
     }
 
@@ -483,6 +402,7 @@ impl Request {
     /// Get the url this request was created with.
     ///
     /// This value is not normalized, it is exactly as set.
+    /// It does not contain any added query parameters.
     ///
     /// Example:
     /// ```
@@ -500,13 +420,13 @@ impl Request {
     /// ```
     /// let req1 = ureq::post("https://cool.server/innit")
     ///     .build();
-    /// assert_eq!(req1.to_host().unwrap(), "cool.server");
+    /// assert_eq!(req1.get_host().unwrap(), "cool.server");
     ///
     /// let req2 = ureq::post("/some/path")
     ///     .build();
-    /// assert_eq!(req2.to_host().unwrap(), "localhost");
+    /// assert_eq!(req2.get_host().unwrap(), "localhost");
     /// ```
-    pub fn to_host(&self) -> Result<String, Error> {
+    pub fn get_host(&self) -> Result<String, Error> {
         self.to_url()
             .map(|u| u.host_str().unwrap_or(DEFAULT_HOST).to_string())
     }
@@ -517,9 +437,9 @@ impl Request {
     /// ```
     /// let req = ureq::post("https://cool.server/innit")
     ///     .build();
-    /// assert_eq!(req.to_scheme().unwrap(), "https");
+    /// assert_eq!(req.get_scheme().unwrap(), "https");
     /// ```
-    pub fn to_scheme(&self) -> Result<String, Error> {
+    pub fn get_scheme(&self) -> Result<String, Error> {
         self.to_url()
             .map(|u| u.scheme().to_string())
     }
@@ -531,9 +451,9 @@ impl Request {
     /// let req = ureq::post("https://cool.server/innit?foo=bar")
     ///     .query("format", "json")
     ///     .build();
-    /// assert_eq!(req.to_query().unwrap(), "?foo=bar&format=json");
+    /// assert_eq!(req.get_query().unwrap(), "?foo=bar&format=json");
     /// ```
-    pub fn to_query(&self) -> Result<String, Error> {
+    pub fn get_query(&self) -> Result<String, Error> {
         self.to_url()
             .map(|u| combine_query(&u, &self.query))
     }
@@ -544,9 +464,9 @@ impl Request {
     /// ```
     /// let req = ureq::post("https://cool.server/innit")
     ///     .build();
-    /// assert_eq!(req.to_path().unwrap(), "/innit");
+    /// assert_eq!(req.get_path().unwrap(), "/innit");
     /// ```
-    pub fn to_path(&self) -> Result<String, Error> {
+    pub fn get_path(&self) -> Result<String, Error> {
         self.to_url()
             .map(|u| u.path().to_string())
     }

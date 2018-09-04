@@ -110,7 +110,6 @@ mod agent;
 mod body;
 mod error;
 mod header;
-mod macros;
 mod pool;
 mod response;
 mod stream;
@@ -141,82 +140,61 @@ pub fn agent() -> Agent {
 /// ```
 /// ureq::request("GET", "https://www.google.com").call();
 /// ```
-pub fn request<M, S>(method: M, path: S) -> Request
-where
-    M: Into<String>,
-    S: Into<String>,
+pub fn request(method: &str, path: &str) -> Request
 {
     Agent::new().request(method, path)
 }
 
 /// Make a GET request.
-pub fn get<S>(path: S) -> Request
-where
-    S: Into<String>,
+pub fn get(path: &str) -> Request
 {
     request("GET", path)
 }
 
 /// Make a HEAD request.
-pub fn head<S>(path: S) -> Request
-where
-    S: Into<String>,
+pub fn head(path: &str) -> Request
 {
     request("HEAD", path)
 }
 
 /// Make a POST request.
-pub fn post<S>(path: S) -> Request
-where
-    S: Into<String>,
+pub fn post(path: &str) -> Request
 {
     request("POST", path)
 }
 
 /// Make a PUT request.
-pub fn put<S>(path: S) -> Request
-where
-    S: Into<String>,
+pub fn put(path: &str) -> Request
 {
     request("PUT", path)
 }
 
 /// Make a DELETE request.
-pub fn delete<S>(path: S) -> Request
-where
-    S: Into<String>,
+pub fn delete(path: &str) -> Request
 {
     request("DELETE", path)
 }
 
 /// Make a TRACE request.
-pub fn trace<S>(path: S) -> Request
-where
-    S: Into<String>,
+pub fn trace(path: &str) -> Request
 {
     request("TRACE", path)
 }
 
 /// Make an OPTIONS request.
-pub fn options<S>(path: S) -> Request
-where
-    S: Into<String>,
+pub fn options(path: &str) -> Request
 {
     request("OPTIONS", path)
 }
 
 /// Make an CONNECT request.
-pub fn connect<S>(path: S) -> Request
-where
-    S: Into<String>,
+pub fn connect(path: &str) -> Request
 {
     request("CONNECT", path)
 }
 
 /// Make an PATCH request.
-pub fn patch<S>(path: S) -> Request
-where
-    S: Into<String>,
+pub fn patch(path: &str) -> Request
 {
     request("PATCH", path)
 }

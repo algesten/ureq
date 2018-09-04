@@ -112,50 +112,12 @@ impl Agent {
     ///      println!("Oh no error!");
     ///  }
     /// ```
-    pub fn set<K, V>(&mut self, header: K, value: V) -> &mut Agent
-    where
-        K: Into<String>,
-        V: Into<String>,
+    pub fn set(&mut self, header: &str, value: &str) -> &mut Agent
     {
         add_header(
             &mut self.headers,
-            Header::new(&header.into(), &value.into()),
+            Header::new(header, value),
         );
-        self
-    }
-
-    /// Set many headers that will be present in all requests using the agent.
-    ///
-    /// ```
-    /// #[macro_use]
-    /// extern crate ureq;
-    ///
-    /// fn main() {
-    /// let agent = ureq::agent()
-    ///     .set_map(map! {
-    ///         "X-API-Key" => "foobar",
-    ///         "Accept" => "text/plain"
-    ///     })
-    ///     .build();
-    ///
-    /// let r = agent
-    ///     .get("/my_page")
-    ///     .call();
-    ///
-    /// if r.ok() {
-    ///     println!("yay got {}", r.into_string().unwrap());
-    /// }
-    /// }
-    /// ```
-    pub fn set_map<K, V, I>(&mut self, headers: I) -> &mut Agent
-    where
-        K: Into<String>,
-        V: Into<String>,
-        I: IntoIterator<Item = (K, V)>,
-    {
-        for (k, v) in headers.into_iter() {
-            self.set(k, v);
-        }
         self
     }
 
@@ -171,15 +133,10 @@ impl Agent {
     ///     .call();
     /// println!("{:?}", r);
     /// ```
-    pub fn auth<S, T>(&mut self, user: S, pass: T) -> &mut Agent
-    where
-        S: Into<String>,
-        T: Into<String>,
+    pub fn auth(&mut self, user: &str, pass: &str) -> &mut Agent
     {
-        let u = user.into();
-        let p = pass.into();
-        let pass = basic_auth(&u, &p);
-        self.auth_kind("Basic", pass)
+        let pass = basic_auth(user, pass);
+        self.auth_kind("Basic", &pass)
     }
 
     /// Auth of other kinds such as `Digest`, `Token` etc, that will be present
@@ -195,13 +152,10 @@ impl Agent {
     ///     .get("/my_page")
     ///     .call();
     /// ```
-    pub fn auth_kind<S, T>(&mut self, kind: S, pass: T) -> &mut Agent
-    where
-        S: Into<String>,
-        T: Into<String>,
+    pub fn auth_kind(&mut self, kind: &str, pass: &str) -> &mut Agent
     {
-        let value = format!("{} {}", kind.into(), pass.into());
-        self.set("Authorization", value);
+        let value = format!("{} {}", kind, pass);
+        self.set("Authorization", &value);
         self
     }
 
@@ -215,10 +169,7 @@ impl Agent {
     ///     .call();
     /// println!("{:?}", r);
     /// ```
-    pub fn request<M, S>(&self, method: M, path: S) -> Request
-    where
-        M: Into<String>,
-        S: Into<String>,
+    pub fn request(&self, method: &str, path: &str) -> Request
     {
         Request::new(&self, method.into(), path.into())
     }
@@ -261,73 +212,55 @@ impl Agent {
     }
 
     /// Make a GET request from this agent.
-    pub fn get<S>(&self, path: S) -> Request
-    where
-        S: Into<String>,
+    pub fn get(&self, path: &str) -> Request
     {
         self.request("GET", path)
     }
 
     /// Make a HEAD request from this agent.
-    pub fn head<S>(&self, path: S) -> Request
-    where
-        S: Into<String>,
+    pub fn head(&self, path: &str) -> Request
     {
         self.request("HEAD", path)
     }
 
     /// Make a POST request from this agent.
-    pub fn post<S>(&self, path: S) -> Request
-    where
-        S: Into<String>,
+    pub fn post(&self, path: &str) -> Request
     {
         self.request("POST", path)
     }
 
     /// Make a PUT request from this agent.
-    pub fn put<S>(&self, path: S) -> Request
-    where
-        S: Into<String>,
+    pub fn put(&self, path: &str) -> Request
     {
         self.request("PUT", path)
     }
 
     /// Make a DELETE request from this agent.
-    pub fn delete<S>(&self, path: S) -> Request
-    where
-        S: Into<String>,
+    pub fn delete(&self, path: &str) -> Request
     {
         self.request("DELETE", path)
     }
 
     /// Make a TRACE request from this agent.
-    pub fn trace<S>(&self, path: S) -> Request
-    where
-        S: Into<String>,
+    pub fn trace(&self, path: &str) -> Request
     {
         self.request("TRACE", path)
     }
 
     /// Make a OPTIONS request from this agent.
-    pub fn options<S>(&self, path: S) -> Request
-    where
-        S: Into<String>,
+    pub fn options(&self, path: &str) -> Request
     {
         self.request("OPTIONS", path)
     }
 
     /// Make a CONNECT request from this agent.
-    pub fn connect<S>(&self, path: S) -> Request
-    where
-        S: Into<String>,
+    pub fn connect(&self, path: &str) -> Request
     {
         self.request("CONNECT", path)
     }
 
     /// Make a PATCH request from this agent.
-    pub fn patch<S>(&self, path: S) -> Request
-    where
-        S: Into<String>,
+    pub fn patch(&self, path: &str) -> Request
     {
         self.request("PATCH", path)
     }
