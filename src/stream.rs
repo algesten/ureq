@@ -18,6 +18,16 @@ pub enum Stream {
     Test(Box<dyn Read + Send>, Vec<u8>),
 }
 
+impl Drop for Stream {
+    fn drop(&mut self) {
+        match self {
+            #[cfg(feature = "tls")]
+            Stream::Https(s) => { s.shutdown().ok(); },
+            _ => (),
+        }
+    }
+}
+
 impl ::std::fmt::Debug for Stream {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::result::Result<(), ::std::fmt::Error> {
         write!(
