@@ -89,19 +89,18 @@ impl<R: Read + Sized> PoolReturnRead<R> {
                 return;
             }
             let state = &mut unit.agent.lock().unwrap();
+            // bring back stream here to either go into pool or dealloc
+            let stream = unsafe { *Box::from_raw(self.stream) };
+            self.stream = ::std::ptr::null_mut();
             if let Some(agent) = state.as_mut() {
-                unsafe {
-                    let stream = *Box::from_raw(self.stream);
-                    self.stream = ::std::ptr::null_mut();
-                    if !stream.is_poolable() {
-                        // just let it deallocate
-                        return;
-                    }
-                    // insert back into pool
-                    let key = PoolKey::new(&unit.url);
-                    agent.pool().recycle.insert(key, stream);
+                if !stream.is_poolable() {
+                    // just let it deallocate
+                    return;
                 }
-            };
+                // insert back into pool
+                let key = PoolKey::new(&unit.url);
+                agent.pool().recycle.insert(key, stream);
+            }
         }
     }
 
@@ -122,5 +121,11 @@ impl<R: Read + Sized> Read for PoolReturnRead<R> {
             self.return_connection();
         }
         Ok(amount)
+    }
+}
+
+impl<R: Read + Sized> Drop for PoolReturnRead<R> {
+    fn drop(&mut self) {
+        self.return_connection();
     }
 }

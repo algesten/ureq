@@ -276,7 +276,7 @@ impl Response {
 
         let stream = Box::new(self.stream.expect("No reader in response?!"));
         let stream_ptr = Box::into_raw(stream);
-        let yolo = YoloRead { stream: stream_ptr };
+        let mut yolo = YoloRead { stream: stream_ptr, dealloc: false };
         let unit = self.unit;
 
         match (use_chunked, limit_bytes) {
@@ -290,7 +290,10 @@ impl Response {
                 stream_ptr,
                 LimitedRead::new(yolo, len),
             )),
-            (false, None) => Box::new(yolo),
+            (false, None) => {
+                yolo.dealloc = true; // dealloc when read drops.
+                Box::new(yolo)
+            },
         }
     }
 
@@ -521,6 +524,7 @@ fn read_next_line<R: Read>(reader: &mut R) -> IoResult<AsciiString> {
 /// *Internal API*
 struct YoloRead {
     stream: *mut Stream,
+    dealloc: bool, // whether we are to dealloc stream on drop
 }
 
 impl Read for YoloRead {
@@ -531,9 +535,22 @@ impl Read for YoloRead {
             }
             let amount = (*self.stream).read(buf)?;
             if amount == 0 {
+                if self.dealloc {
+                    let _stream = Box::from_raw(self.stream);
+                }
                 self.stream = ::std::ptr::null_mut();
             }
             Ok(amount)
+        }
+    }
+}
+
+impl Drop for YoloRead {
+    fn drop(&mut self) {
+        if self.dealloc && !self.stream.is_null() {
+            unsafe {
+                let _stream = Box::from_raw(self.stream);
+            }
         }
     }
 }
