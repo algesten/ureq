@@ -17,12 +17,12 @@ tls = ["native-tls"]
 
 [dependencies]
 ascii = "0.9"
-base64 = "0.9"
+base64 = "0.10"
 chunked_transfer = "0.3"
 cookie = { version = "0.11", features = ["percent-encode"] }
 lazy_static = "1"
 qstring = "0.6"
-url = "1.6"
+url = "1"
 native-tls = { version = "0.2", optional = true }
 serde_json = { version = "1", optional = true }
 encoding = { version = "0.2", optional = true }
