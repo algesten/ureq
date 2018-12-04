@@ -16,7 +16,6 @@ pub struct Unit {
     pub url: Url,
     pub is_chunked: bool,
     pub is_head: bool,
-    pub hostname: String,
     pub query_string: String,
     pub headers: Vec<Header>,
     pub timeout_connect: u64,
@@ -84,7 +83,6 @@ impl Unit {
             url: url.clone(),
             is_chunked,
             is_head,
-            hostname,
             query_string,
             headers,
             timeout_connect: req.timeout_connect,
@@ -290,7 +288,8 @@ fn save_cookies(unit: &Unit, resp: &Response) {
             let to_parse = if raw_cookie.to_lowercase().contains("domain=") {
                 raw_cookie.to_string()
             } else {
-                format!("{}; Domain={}", raw_cookie, &unit.hostname)
+                let host = &unit.url.host_str().unwrap_or(DEFAULT_HOST).to_string();
+                format!("{}; Domain={}", raw_cookie, host)
             };
             match Cookie::parse_encoded(&to_parse[..]) {
                 Err(_) => (), // ignore unparseable cookies
