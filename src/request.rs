@@ -40,7 +40,7 @@ impl ::std::fmt::Debug for Request {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::result::Result<(), ::std::fmt::Error> {
         let (path, query) = self.to_url()
             .map(|u| {
-            let query = combine_query(&u, &self.query);
+            let query = combine_query(&u, &self.query, true);
             (u.path().to_string(), query)
         })
             .unwrap_or_else(|_| ("BAD_URL".to_string(), "BAD_URL".to_string()));
@@ -99,8 +99,8 @@ impl Request {
         self.to_url()
             .and_then(|url| {
                 let reader = payload.into_read();
-                let unit = Unit::new(&self, &url, &reader);
-                connect(unit, &self.method, true, self.redirects, reader)
+                let unit = Unit::new(&self, &url, true, &reader);
+                connect(&self, unit, &self.method, true, self.redirects, reader)
             })
             .unwrap_or_else(|e| e.into())
     }
@@ -455,7 +455,7 @@ impl Request {
     /// ```
     pub fn get_query(&self) -> Result<String, Error> {
         self.to_url()
-            .map(|u| combine_query(&u, &self.query))
+            .map(|u| combine_query(&u, &self.query, true))
     }
 
     /// The normalized path of this request.

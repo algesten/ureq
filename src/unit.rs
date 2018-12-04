@@ -27,7 +27,7 @@ pub struct Unit {
 impl Unit {
     //
 
-    fn new(req: &Request, url: &Url, body: &SizedReader) -> Self {
+    fn new(req: &Request, url: &Url, mix_queries: bool, body: &SizedReader) -> Self {
         //
 
         let is_chunked = req.header("transfer-encoding")
@@ -42,7 +42,7 @@ impl Unit {
 
         let hostname = url.host_str().unwrap_or(DEFAULT_HOST).to_string();
 
-        let query_string = combine_query(&url, &req.query);
+        let query_string = combine_query(&url, &req.query, mix_queries);
 
         let cookie_headers: Vec<_> = {
             let mut state = req.agent.lock().unwrap();
@@ -109,7 +109,8 @@ impl Unit {
 
 /// Perform a connection. Used recursively for redirects.
 pub fn connect(
-    mut unit: Unit,
+    req: &Request,
+    unit: Unit,
     method: &str,
     use_pooled: bool,
     redirects: u32,
@@ -126,7 +127,7 @@ pub fn connect(
         if is_recycled {
             // we try open a new connection, this time there will be
             // no connection in the pool. don't use it.
-            return connect(unit, method, false, redirects, body);
+            return connect(req, unit, method, false, redirects, body);
         } else {
             // not a pooled connection, propagate the error.
             return Err(send_result.unwrap_err().into());
@@ -157,14 +158,13 @@ pub fn connect(
                 .join(location)
                 .map_err(|_| Error::BadUrl(format!("Bad redirection: {}", location)))?;
 
-            // change this for every redirect since it is used when connection pooling.
-            unit.url = new_url;
-
             // perform the redirect differently depending on 3xx code.
             match resp.status() {
                 301 | 302 | 303 => {
                     let empty = Payload::Empty.into_read();
-                    return connect(unit, "GET", use_pooled, redirects - 1, empty);
+                    // recreate the unit to get a new hostname and cookies for the new host.
+                    let new_unit = Unit::new(req, &new_url, false, &empty);
+                    return connect(req, new_unit, "GET", use_pooled, redirects - 1, empty);
                 }
                 , _ => (),
                 // reinstate this with expect-100
@@ -211,8 +211,8 @@ fn match_cookies<'a>(jar: &'a CookieJar, domain: &str, path: &str, is_secure: bo
 }
 
 /// Combine the query of the url and the query options set on the request object.
-fn combine_query(url: &Url, query: &QString) -> String {
-    match (url.query(), query.len() > 0) {
+fn combine_query(url: &Url, query: &QString, mix_queries: bool) -> String {
+    match (url.query(), query.len() > 0 && mix_queries) {
         (Some(urlq), true) => format!("?{}&{}", urlq, query),
         (Some(urlq), false) => format!("?{}", urlq),
         (None, true) => format!("?{}", query),
