@@ -257,6 +257,12 @@ fn send_prelude(unit: &Unit, method: &str, stream: &mut Stream) -> IoResult<()> 
     if !has_header(&unit.headers, "host") {
         write!(prelude, "Host: {}\r\n", unit.url.host().unwrap())?;
     }
+    if !has_header(&unit.headers, "user-agent") {
+        write!(prelude, "User-Agent: ureq\r\n")?;
+    }
+    if !has_header(&unit.headers, "accept") {
+        write!(prelude, "Accept: */*\r\n")?;
+    }
 
     // other headers
     for header in &unit.headers {
