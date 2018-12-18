@@ -1,5 +1,5 @@
+use crate::error::Error;
 use ascii::{AsAsciiStr, AsciiString};
-use error::Error;
 use std::str::FromStr;
 
 #[derive(Clone)]
@@ -60,11 +60,11 @@ impl Header {
     }
 }
 
-pub fn get_header<'a, 'b>(headers: &'b Vec<Header>, name: &'a str) -> Option<&'b str> {
+pub fn get_header<'a, 'b>(headers: &'b [Header], name: &'a str) -> Option<&'b str> {
     headers.iter().find(|h| h.is_name(name)).map(|h| h.value())
 }
 
-pub fn get_all_headers<'a, 'b>(headers: &'b Vec<Header>, name: &'a str) -> Vec<&'b str> {
+pub fn get_all_headers<'a, 'b>(headers: &'b [Header], name: &'a str) -> Vec<&'b str> {
     headers
         .iter()
         .filter(|h| h.is_name(name))
@@ -72,7 +72,7 @@ pub fn get_all_headers<'a, 'b>(headers: &'b Vec<Header>, name: &'a str) -> Vec<&
         .collect()
 }
 
-pub fn has_header(headers: &Vec<Header>, name: &str) -> bool {
+pub fn has_header(headers: &[Header], name: &str) -> bool {
     get_header(headers, name).is_some()
 }
 
@@ -89,7 +89,7 @@ impl FromStr for Header {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         //
         let line = AsciiString::from_str(s).map_err(|_| Error::BadHeader)?;
-        let index = s.find(":").ok_or_else(|| Error::BadHeader)?;
+        let index = s.find(':').ok_or_else(|| Error::BadHeader)?;
 
         // no value?
         if index >= s.len() {

@@ -39,8 +39,8 @@ fn agent_pool() {
         let state = lock.as_mut().unwrap();
         let pool = state.pool();
         assert_eq!(pool.len(), 1);
-        let foo = format!("{:?}", pool.get("s3.amazonaws.com", 443));
-        assert_eq!(foo, "Some(Stream[https])"); // not a great way of testing.
+        let f = format!("{:?}", pool.get("s3.amazonaws.com", 443));
+        assert_eq!(f, "Some(Stream[https])"); // not a great way of testing.
     }
 
     // req 2 should be done with a reused connection

@@ -1,10 +1,10 @@
-use agent::Unit;
+use crate::agent::Unit;
+use crate::stream::Stream;
 use std::collections::HashMap;
 use std::io::{Read, Result as IoResult};
-use stream::Stream;
 use url::Url;
 
-pub const DEFAULT_HOST: &'static str = "localhost";
+pub const DEFAULT_HOST: &str = "localhost";
 
 /// Holder of recycled connections.
 ///
@@ -106,7 +106,7 @@ impl<R: Read + Sized> PoolReturnRead<R> {
 
     fn do_read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         match self.reader.as_mut() {
-            None => return Ok(0),
+            None => Ok(0),
             Some(reader) => reader.read(buf),
         }
     }

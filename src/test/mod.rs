@@ -1,9 +1,9 @@
-use agent::Unit;
-use error::Error;
+use crate::agent::Unit;
+use crate::error::Error;
+use crate::stream::Stream;
 use std::collections::HashMap;
 use std::io::{Cursor, Write};
 use std::sync::{Arc, Mutex};
-use stream::Stream;
 
 mod agent_test;
 mod auth;

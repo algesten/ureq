@@ -1,5 +1,5 @@
-use agent::Unit;
-use error::Error;
+use crate::agent::Unit;
+use crate::error::Error;
 use std::io::{Cursor, Read, Result as IoResult, Write};
 use std::net::SocketAddr;
 use std::net::TcpStream;
@@ -95,7 +95,7 @@ pub fn connect_http(unit: &Unit) -> Result<Stream, Error> {
     let hostname = unit.url.host_str().unwrap();
     let port = unit.url.port().unwrap_or(80);
 
-    connect_host(unit, hostname, port).map(|tcp| Stream::Http(tcp))
+    connect_host(unit, hostname, port).map(Stream::Http)
 }
 
 #[cfg(feature = "tls")]
@@ -119,7 +119,7 @@ pub fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<TcpStream,
         .map_err(|e| Error::DnsFailed(format!("{}", e)))?
         .collect();
 
-    if ips.len() == 0 {
+    if ips.is_empty() {
         return Err(Error::DnsFailed(format!("No ip address for {}", hostname)));
     }
 
@@ -133,7 +133,8 @@ pub fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<TcpStream,
             &sock_addr,
             Duration::from_millis(unit.timeout_connect as u64),
         ),
-    }.map_err(|err| Error::ConnectionFailed(format!("{}", err)))?;
+    }
+    .map_err(|err| Error::ConnectionFailed(format!("{}", err)))?;
 
     // rust's absurd api returns Err if we set 0.
     if unit.timeout_read > 0 {
@@ -152,7 +153,7 @@ pub fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<TcpStream,
 
 #[cfg(test)]
 pub fn connect_test(unit: &Unit) -> Result<Stream, Error> {
-    use test;
+    use crate::test;
     test::resolve_handler(unit)
 }
 

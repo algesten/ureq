@@ -1,3 +1,4 @@
+#![warn(clippy::all)]
 //! ureq is a minimal request library.
 //!
 //! The goals of this library are:
@@ -120,10 +121,10 @@ mod serde_macros;
 #[cfg(test)]
 mod test;
 
-pub use agent::{Agent, Request};
-pub use error::Error;
-pub use header::Header;
-pub use response::Response;
+pub use crate::agent::{Agent, Request};
+pub use crate::error::Error;
+pub use crate::header::Header;
+pub use crate::response::Response;
 
 // re-export
 pub use cookie::Cookie;
@@ -140,62 +141,52 @@ pub fn agent() -> Agent {
 /// ```
 /// ureq::request("GET", "https://www.google.com").call();
 /// ```
-pub fn request(method: &str, path: &str) -> Request
-{
+pub fn request(method: &str, path: &str) -> Request {
     Agent::new().request(method, path)
 }
 
 /// Make a GET request.
-pub fn get(path: &str) -> Request
-{
+pub fn get(path: &str) -> Request {
     request("GET", path)
 }
 
 /// Make a HEAD request.
-pub fn head(path: &str) -> Request
-{
+pub fn head(path: &str) -> Request {
     request("HEAD", path)
 }
 
 /// Make a POST request.
-pub fn post(path: &str) -> Request
-{
+pub fn post(path: &str) -> Request {
     request("POST", path)
 }
 
 /// Make a PUT request.
-pub fn put(path: &str) -> Request
-{
+pub fn put(path: &str) -> Request {
     request("PUT", path)
 }
 
 /// Make a DELETE request.
-pub fn delete(path: &str) -> Request
-{
+pub fn delete(path: &str) -> Request {
     request("DELETE", path)
 }
 
 /// Make a TRACE request.
-pub fn trace(path: &str) -> Request
-{
+pub fn trace(path: &str) -> Request {
     request("TRACE", path)
 }
 
 /// Make an OPTIONS request.
-pub fn options(path: &str) -> Request
-{
+pub fn options(path: &str) -> Request {
     request("OPTIONS", path)
 }
 
 /// Make an CONNECT request.
-pub fn connect(path: &str) -> Request
-{
+pub fn connect(path: &str) -> Request {
     request("CONNECT", path)
 }
 
 /// Make an PATCH request.
-pub fn patch(path: &str) -> Request
-{
+pub fn patch(path: &str) -> Request {
     request("PATCH", path)
 }
 

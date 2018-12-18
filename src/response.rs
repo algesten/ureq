@@ -1,11 +1,11 @@
-use agent::Unit;
+use crate::agent::Unit;
+use crate::header::Header;
+use crate::pool::PoolReturnRead;
+use crate::stream::Stream;
 use ascii::AsciiString;
 use chunked_transfer::Decoder as ChunkDecoder;
-use header::Header;
-use pool::PoolReturnRead;
 use std::io::{Cursor, Error as IoError, ErrorKind, Read, Result as IoResult};
 use std::str::FromStr;
-use stream::Stream;
 
 #[cfg(feature = "json")]
 use serde_json;
@@ -15,10 +15,10 @@ use encoding::label::encoding_from_whatwg_label;
 #[cfg(feature = "charset")]
 use encoding::DecoderTrap;
 
-use error::Error;
+use crate::error::Error;
 
-pub const DEFAULT_CONTENT_TYPE: &'static str = "text/plain";
-pub const DEFAULT_CHARACTER_SET: &'static str = "utf-8";
+pub const DEFAULT_CONTENT_TYPE: &str = "text/plain";
+pub const DEFAULT_CHARACTER_SET: &str = "utf-8";
 
 /// Response instances are created as results of firing off requests.
 ///
@@ -200,7 +200,7 @@ impl Response {
         self.header("content-type")
             .map(|header| {
                 header
-                    .find(";")
+                    .find(';')
                     .map(|index| &header[0..index])
                     .unwrap_or(header)
             })
@@ -258,8 +258,9 @@ impl Response {
 
         let is_head = (&self.unit).as_ref().map(|u| u.is_head).unwrap_or(false);
 
-        let is_chunked = self.header("transfer-encoding")
-            .map(|enc| enc.len() > 0) // whatever it says, do chunked
+        let is_chunked = self
+            .header("transfer-encoding")
+            .map(|enc| !enc.is_empty()) // whatever it says, do chunked
             .unwrap_or(false);
 
         let use_chunked = !is_http10 && !is_head && is_chunked;
@@ -276,7 +277,10 @@ impl Response {
 
         let stream = Box::new(self.stream.expect("No reader in response?!"));
         let stream_ptr = Box::into_raw(stream);
-        let mut yolo = YoloRead { stream: stream_ptr, dealloc: false };
+        let mut yolo = YoloRead {
+            stream: stream_ptr,
+            dealloc: false,
+        };
         let unit = self.unit;
 
         match (use_chunked, limit_bytes) {
@@ -293,7 +297,7 @@ impl Response {
             (false, None) => {
                 yolo.dealloc = true; // dealloc when read drops.
                 Box::new(yolo)
-            },
+            }
         }
     }
 
@@ -398,7 +402,7 @@ impl Response {
         let mut headers: Vec<Header> = Vec::new();
         loop {
             let line = read_next_line(&mut reader).map_err(|_| Error::BadHeader)?;
-            if line.len() == 0 {
+            if line.is_empty() {
                 break;
             }
             if let Ok(header) = line.as_str().parse::<Header>() {
@@ -444,7 +448,7 @@ fn parse_status_line(line: &str) -> Result<((usize, usize), u16), Error> {
     let status = status.parse::<u16>().map_err(|_| Error::BadStatus)?;
 
     let status_text = split.next().ok_or_else(|| Error::BadStatus)?;
-    if status_text.len() == 0 {
+    if status_text.is_empty() {
         return Err(Error::BadStatus);
     }
 
@@ -503,7 +507,7 @@ fn read_next_line<R: Read>(reader: &mut R) -> IoResult<AsciiString> {
         let byte = reader.bytes().next();
 
         let byte = match byte {
-            Some(b) => try!(b),
+            Some(b) => r#try!(b),
             None => return Err(IoError::new(ErrorKind::ConnectionAborted, "Unexpected EOF")),
         };
 
@@ -577,7 +581,7 @@ impl LimitedRead {
 impl Read for LimitedRead {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         let left = self.limit - self.position;
-        if left <= 0 {
+        if left == 0 {
             return Ok(0);
         }
         let from = if left < buf.len() {
@@ -603,9 +607,9 @@ impl Read for LimitedRead {
 pub fn charset_from_content_type(header: Option<&str>) -> &str {
     header
         .and_then(|header| {
-            header.find(";").and_then(|semi| {
+            header.find(';').and_then(|semi| {
                 (&header[semi + 1..])
-                    .find("=")
+                    .find('=')
                     .map(|equal| (&header[semi + equal + 2..]).trim())
             })
         })
@@ -696,7 +700,7 @@ mod tests {
 
     #[test]
     fn parse_borked_header() {
-        let s = format!("HTTP/1.1 BORKED\r\n");
+        let s = "HTTP/1.1 BORKED\r\n".to_string();
         let resp: Response = s.parse::<Response>().unwrap_err().into();
         assert_eq!(resp.http_version(), "HTTP/1.1");
         assert_eq!(resp.status(), 500);

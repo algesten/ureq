@@ -8,6 +8,7 @@ repository = "https://github.com/algesten/ureq"
 readme = "README.md"
 keywords = ["web", "request", "http", "rest", "client"]
 categories = ["web-programming::http-client"]
+edition = "2018"
 
 [features]
 default = ["tls"]

@@ -1,11 +1,11 @@
 use base64;
-use body::{send_body, Payload, SizedReader};
+use crate::body::{send_body, Payload, SizedReader};
 use std::io::{Result as IoResult, Write};
-use stream::{connect_http, connect_https, connect_test, Stream};
+use crate::stream::{connect_http, connect_https, connect_test, Stream};
 use url::Url;
 //
 
-use pool::DEFAULT_HOST;
+use crate::pool::DEFAULT_HOST;
 
 /// It's a "unit of work". Maybe a bad name for it?
 ///
@@ -31,7 +31,7 @@ impl Unit {
 
         let is_chunked = req.header("transfer-encoding")
             // if the user has set an encoding header, obey that.
-            .map(|enc| enc.len() > 0)
+            .map(|enc| !enc.is_empty())
             // otherwise, no chunking.
             .unwrap_or(false);
 
@@ -44,7 +44,7 @@ impl Unit {
         let query_string = combine_query(&url, &req.query, mix_queries);
 
         let cookie_headers: Vec<_> = {
-            let mut state = req.agent.lock().unwrap();
+            let state = req.agent.lock().unwrap();
             match state.as_ref().map(|state| &state.jar) {
                 None => vec![],
                 Some(jar) => match_cookies(jar, &hostname, url.path(), is_secure),
@@ -210,7 +210,7 @@ fn match_cookies<'a>(jar: &'a CookieJar, domain: &str, path: &str, is_secure: bo
 
 /// Combine the query of the url and the query options set on the request object.
 fn combine_query(url: &Url, query: &QString, mix_queries: bool) -> String {
-    match (url.query(), query.len() > 0 && mix_queries) {
+    match (url.query(), !query.is_empty() && mix_queries) {
         (Some(urlq), true) => format!("?{}&{}", urlq, query),
         (Some(urlq), false) => format!("?{}", urlq),
         (None, true) => format!("?{}", query),
@@ -273,7 +273,7 @@ fn send_prelude(unit: &Unit, method: &str, stream: &mut Stream) -> IoResult<()> 
     write!(prelude, "\r\n")?;
 
     // write all to the wire
-    stream.write_all(&mut prelude[..])?;
+    stream.write_all(&prelude[..])?;
 
     Ok(())
 }
@@ -299,7 +299,7 @@ fn save_cookies(unit: &Unit, resp: &Response) {
             };
             match Cookie::parse_encoded(&to_parse[..]) {
                 Err(_) => (), // ignore unparseable cookies
-                Ok(mut cookie) => {
+                Ok(cookie) => {
                     let cookie = cookie.into_owned();
                     add_jar.add(cookie)
                 }

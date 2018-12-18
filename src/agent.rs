@@ -1,10 +1,10 @@
+use crate::error::Error;
+use crate::pool::ConnectionPool;
+use crate::response::{self, Response};
 use cookie::{Cookie, CookieJar};
-use error::Error;
-use pool::ConnectionPool;
-use response::{self, Response};
 use std::sync::Mutex;
 
-use header::{add_header, get_all_headers, get_header, has_header, Header};
+use crate::header::{add_header, get_all_headers, get_header, has_header, Header};
 
 // to get to share private fields
 include!("request.rs");
@@ -112,12 +112,8 @@ impl Agent {
     ///      println!("Oh no error!");
     ///  }
     /// ```
-    pub fn set(&mut self, header: &str, value: &str) -> &mut Agent
-    {
-        add_header(
-            &mut self.headers,
-            Header::new(header, value),
-        );
+    pub fn set(&mut self, header: &str, value: &str) -> &mut Agent {
+        add_header(&mut self.headers, Header::new(header, value));
         self
     }
 
@@ -133,8 +129,7 @@ impl Agent {
     ///     .call();
     /// println!("{:?}", r);
     /// ```
-    pub fn auth(&mut self, user: &str, pass: &str) -> &mut Agent
-    {
+    pub fn auth(&mut self, user: &str, pass: &str) -> &mut Agent {
         let pass = basic_auth(user, pass);
         self.auth_kind("Basic", &pass)
     }
@@ -152,8 +147,7 @@ impl Agent {
     ///     .get("/my_page")
     ///     .call();
     /// ```
-    pub fn auth_kind(&mut self, kind: &str, pass: &str) -> &mut Agent
-    {
+    pub fn auth_kind(&mut self, kind: &str, pass: &str) -> &mut Agent {
         let value = format!("{} {}", kind, pass);
         self.set("Authorization", &value);
         self
@@ -169,8 +163,7 @@ impl Agent {
     ///     .call();
     /// println!("{:?}", r);
     /// ```
-    pub fn request(&self, method: &str, path: &str) -> Request
-    {
+    pub fn request(&self, method: &str, path: &str) -> Request {
         Request::new(&self, method.into(), path.into())
     }
 
@@ -190,7 +183,7 @@ impl Agent {
         state
             .as_ref()
             .and_then(|state| state.jar.get(name))
-            .map(|c| c.clone())
+            .cloned()
     }
 
     /// Set a cookie in this agent.
@@ -212,56 +205,47 @@ impl Agent {
     }
 
     /// Make a GET request from this agent.
-    pub fn get(&self, path: &str) -> Request
-    {
+    pub fn get(&self, path: &str) -> Request {
         self.request("GET", path)
     }
 
     /// Make a HEAD request from this agent.
-    pub fn head(&self, path: &str) -> Request
-    {
+    pub fn head(&self, path: &str) -> Request {
         self.request("HEAD", path)
     }
 
     /// Make a POST request from this agent.
-    pub fn post(&self, path: &str) -> Request
-    {
+    pub fn post(&self, path: &str) -> Request {
         self.request("POST", path)
     }
 
     /// Make a PUT request from this agent.
-    pub fn put(&self, path: &str) -> Request
-    {
+    pub fn put(&self, path: &str) -> Request {
         self.request("PUT", path)
     }
 
     /// Make a DELETE request from this agent.
-    pub fn delete(&self, path: &str) -> Request
-    {
+    pub fn delete(&self, path: &str) -> Request {
         self.request("DELETE", path)
     }
 
     /// Make a TRACE request from this agent.
-    pub fn trace(&self, path: &str) -> Request
-    {
+    pub fn trace(&self, path: &str) -> Request {
         self.request("TRACE", path)
     }
 
     /// Make a OPTIONS request from this agent.
-    pub fn options(&self, path: &str) -> Request
-    {
+    pub fn options(&self, path: &str) -> Request {
         self.request("OPTIONS", path)
     }
 
     /// Make a CONNECT request from this agent.
-    pub fn connect(&self, path: &str) -> Request
-    {
+    pub fn connect(&self, path: &str) -> Request {
         self.request("CONNECT", path)
     }
 
     /// Make a PATCH request from this agent.
-    pub fn patch(&self, path: &str) -> Request
-    {
+    pub fn patch(&self, path: &str) -> Request {
         self.request("PATCH", path)
     }
 
@@ -272,7 +256,7 @@ impl Agent {
 }
 
 fn basic_auth(user: &str, pass: &str) -> String {
-    let safe = match user.find(":") {
+    let safe = match user.find(':') {
         Some(idx) => &user[..idx],
         None => user,
     };
