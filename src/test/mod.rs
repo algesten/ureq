@@ -1,6 +1,7 @@
 use crate::agent::Unit;
 use crate::error::Error;
 use crate::stream::Stream;
+use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::io::{Cursor, Write};
 use std::sync::{Arc, Mutex};

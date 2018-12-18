@@ -91,21 +91,6 @@
 //! we first check if the user has set a `; charset=<whatwg charset>` and attempt
 //! to encode the request body using that.
 //!
-extern crate ascii;
-extern crate base64;
-extern crate chunked_transfer;
-extern crate cookie;
-#[macro_use]
-extern crate lazy_static;
-extern crate qstring;
-extern crate url;
-
-#[cfg(feature = "charset")]
-extern crate encoding;
-#[cfg(feature = "tls")]
-extern crate native_tls;
-#[cfg(feature = "json")]
-extern crate serde_json;
 
 mod agent;
 mod body;

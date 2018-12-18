@@ -1,6 +1,7 @@
 use qstring::QString;
 use std::io::Read;
 use std::sync::Arc;
+use lazy_static::lazy_static;
 
 #[cfg(feature = "json")]
 use super::SerdeValue;
