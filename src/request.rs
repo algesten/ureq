@@ -100,7 +100,7 @@ impl Request {
             .and_then(|url| {
                 let reader = payload.into_read();
                 let unit = Unit::new(&self, &url, true, &reader);
-                connect(&self, unit, &self.method, true, self.redirects, reader)
+                connect(&self, unit, &self.method, true, 0, reader)
             })
             .unwrap_or_else(|e| e.into())
     }
@@ -348,7 +348,11 @@ impl Request {
 
     /// How many redirects to follow.
     ///
-    /// Defaults to `5`.
+    /// Defaults to `5`. Set to `0` to avoid redirects and instead
+    /// get a response object with the 3xx status code.
+    ///
+    /// If the redirect count hits this limit (and it's > 0), a synthetic 500 error
+    /// response is produced.
     ///
     /// ```
     /// let r = ureq::get("/my_page")

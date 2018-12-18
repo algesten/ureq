@@ -3,11 +3,11 @@ use chunked_transfer;
 use std::io::{copy, empty, Cursor, Read, Result as IoResult};
 
 #[cfg(feature = "charset")]
+use crate::response::DEFAULT_CHARACTER_SET;
+#[cfg(feature = "charset")]
 use encoding::label::encoding_from_whatwg_label;
 #[cfg(feature = "charset")]
 use encoding::EncoderTrap;
-#[cfg(feature = "charset")]
-use crate::response::DEFAULT_CHARACTER_SET;
 
 #[cfg(feature = "json")]
 use super::SerdeValue;

@@ -111,7 +111,7 @@ pub fn connect(
     unit: Unit,
     method: &str,
     use_pooled: bool,
-    redirects: u32,
+    redirect_count: u32,
     body: SizedReader,
 ) -> Result<Response, Error> {
     //
@@ -125,7 +125,7 @@ pub fn connect(
         if is_recycled {
             // we try open a new connection, this time there will be
             // no connection in the pool. don't use it.
-            return connect(req, unit, method, false, redirects, body);
+            return connect(req, unit, method, false, redirect_count, body);
         } else {
             // not a pooled connection, propagate the error.
             return Err(send_result.unwrap_err().into());
@@ -142,8 +142,8 @@ pub fn connect(
     save_cookies(&unit, &resp);
 
     // handle redirects
-    if resp.redirect() {
-        if redirects == 0 {
+    if resp.redirect() && req.redirects > 0 {
+        if redirect_count == req.redirects {
             return Err(Error::TooManyRedirects);
         }
 
@@ -162,7 +162,7 @@ pub fn connect(
                     let empty = Payload::Empty.into_read();
                     // recreate the unit to get a new hostname and cookies for the new host.
                     let new_unit = Unit::new(req, &new_url, false, &empty);
-                    return connect(req, new_unit, "GET", use_pooled, redirects - 1, empty);
+                    return connect(req, new_unit, "GET", use_pooled, redirect_count + 1, empty);
                 }
                 , _ => (),
                 // reinstate this with expect-100
@@ -171,7 +171,8 @@ pub fn connect(
         }
     }
 
-    // since it is not a redirect, give away the incoming stream to the response object
+    // since it is not a redirect, or we're not following redirects,
+    // give away the incoming stream to the response object
     response::set_stream(&mut resp, Some(unit), stream);
 
     // release the response
