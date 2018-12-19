@@ -1,18 +1,17 @@
 use crate::agent::Unit;
 use crate::error::Error;
+use lazy_static::lazy_static;
 use std::io::{Cursor, Read, Result as IoResult, Write};
 use std::net::SocketAddr;
 use std::net::TcpStream;
 use std::net::ToSocketAddrs;
 use std::time::Duration;
 
-#[cfg(feature = "tls")]
-use native_tls::TlsStream;
-
+#[allow(clippy::large_enum_variant)]
 pub enum Stream {
     Http(TcpStream),
     #[cfg(feature = "tls")]
-    Https(TlsStream<TcpStream>),
+    Https(rustls::StreamOwned<rustls::ClientSession, TcpStream>),
     Cursor(Cursor<Vec<u8>>),
     #[cfg(test)]
     Test(Box<dyn Read + Send>, Vec<u8>),
@@ -100,14 +99,27 @@ pub fn connect_http(unit: &Unit) -> Result<Stream, Error> {
 
 #[cfg(feature = "tls")]
 pub fn connect_https(unit: &Unit) -> Result<Stream, Error> {
-    use native_tls::TlsConnector;
+    use std::sync::Arc;
+
+    lazy_static! {
+        static ref TLS_CONF: Arc<rustls::ClientConfig> = {
+            let mut config = rustls::ClientConfig::new();
+            config
+                .root_store
+                .add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
+            Arc::new(config)
+        };
+    }
 
     let hostname = unit.url.host_str().unwrap();
     let port = unit.url.port().unwrap_or(443);
 
-    let socket = connect_host(unit, hostname, port)?;
-    let connector = TlsConnector::builder().build()?;
-    let stream = connector.connect(hostname, socket)?;
+    let sni = webpki::DNSNameRef::try_from_ascii_str(hostname).unwrap();
+    let sess = rustls::ClientSession::new(&*TLS_CONF, sni);
+
+    let sock = connect_host(unit, hostname, port)?;
+
+    let stream = rustls::StreamOwned::new(sess, sock);
 
     Ok(Stream::Https(stream))
 }

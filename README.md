@@ -65,7 +65,7 @@ dependencies, this library might change.
 - [ ] Forms with application/x-www-form-urlencoded
 - [ ] multipart/form-data
 - [ ] Expect 100-continue
-- [ ] Use `rustls` when [ring with versioned asm symbols](https://github.com/briansmith/ring/pull/619) is released.
+- [x] Use `rustls` when [ring with versioned asm symbols](https://github.com/briansmith/ring/pull/619) is released. (PR is not resolved, but most implementations have settled on 0.13)
 
 ## License (MIT)
 

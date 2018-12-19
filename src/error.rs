@@ -1,12 +1,5 @@
 use std::io::Error as IoError;
 
-#[cfg(feature = "tls")]
-use native_tls::Error as TlsError;
-#[cfg(feature = "tls")]
-use native_tls::HandshakeError;
-#[cfg(feature = "tls")]
-use std::net::TcpStream;
-
 /// Errors that are translated to ["synthetic" responses](struct.Response.html#method.synthetic).
 #[derive(Debug)]
 pub enum Error {
@@ -26,12 +19,6 @@ pub enum Error {
     BadHeader,
     /// Some unspecified `std::io::Error`. Synthetic error `500`.
     Io(IoError),
-    /// Some unspecified TLS error. Synthetic error `400`.
-    #[cfg(feature = "tls")]
-    Tls(TlsError),
-    /// Some unspecified TLS handshake error. Synthetic error `500`.
-    #[cfg(feature = "tls")]
-    TlsHandshake(HandshakeError<TcpStream>),
 }
 
 impl Error {
@@ -46,10 +33,6 @@ impl Error {
             Error::BadStatus => 500,
             Error::BadHeader => 500,
             Error::Io(_) => 500,
-            #[cfg(feature = "tls")]
-            Error::Tls(_) => 400,
-            #[cfg(feature = "tls")]
-            Error::TlsHandshake(_) => 500,
         }
     }
 
@@ -64,10 +47,6 @@ impl Error {
             Error::BadStatus => "Bad Status",
             Error::BadHeader => "Bad Header",
             Error::Io(_) => "Network Error",
-            #[cfg(feature = "tls")]
-            Error::Tls(_) => "TLS Error",
-            #[cfg(feature = "tls")]
-            Error::TlsHandshake(_) => "TLS Handshake Error",
         }
     }
 
@@ -82,10 +61,6 @@ impl Error {
             Error::BadStatus => "Bad Status".to_string(),
             Error::BadHeader => "Bad Header".to_string(),
             Error::Io(ioe) => format!("Network Error: {}", ioe),
-            #[cfg(feature = "tls")]
-            Error::Tls(tls) => format!("TLS Error: {}", tls),
-            #[cfg(feature = "tls")]
-            Error::TlsHandshake(he) => format!("TLS Handshake Error: {}", he),
         }
     }
 }
@@ -93,19 +68,5 @@ impl Error {
 impl From<IoError> for Error {
     fn from(err: IoError) -> Error {
         Error::Io(err)
-    }
-}
-
-#[cfg(feature = "tls")]
-impl From<TlsError> for Error {
-    fn from(err: TlsError) -> Error {
-        Error::Tls(err)
-    }
-}
-
-#[cfg(feature = "tls")]
-impl From<HandshakeError<TcpStream>> for Error {
-    fn from(err: HandshakeError<TcpStream>) -> Error {
-        Error::TlsHandshake(err)
     }
 }

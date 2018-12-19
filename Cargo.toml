@@ -14,7 +14,7 @@ edition = "2018"
 default = ["tls"]
 json = ["serde_json"]
 charset = ["encoding"]
-tls = ["native-tls"]
+tls = ["rustls", "webpki", "webpki-roots"]
 
 [dependencies]
 ascii = "0.9"
@@ -24,6 +24,8 @@ cookie = { version = "0.11", features = ["percent-encode"] }
 lazy_static = "1"
 qstring = "0.6"
 url = "1"
-native-tls = { version = "0.2", optional = true }
+rustls = { version = "0.13", optional = true }
+webpki = { version = "0.18", optional = true }
+webpki-roots = { version = "0.15", optional = true }
 serde_json = { version = "1", optional = true }
 encoding = { version = "0.2", optional = true }
