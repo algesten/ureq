@@ -89,7 +89,7 @@ impl Write for Stream {
     }
 }
 
-pub fn connect_http(unit: &Unit) -> Result<Stream, Error> {
+pub(crate) fn connect_http(unit: &Unit) -> Result<Stream, Error> {
     //
     let hostname = unit.url.host_str().unwrap();
     let port = unit.url.port().unwrap_or(80);
@@ -98,7 +98,7 @@ pub fn connect_http(unit: &Unit) -> Result<Stream, Error> {
 }
 
 #[cfg(feature = "tls")]
-pub fn connect_https(unit: &Unit) -> Result<Stream, Error> {
+pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
     use std::sync::Arc;
 
     lazy_static! {
@@ -124,7 +124,7 @@ pub fn connect_https(unit: &Unit) -> Result<Stream, Error> {
     Ok(Stream::Https(stream))
 }
 
-pub fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<TcpStream, Error> {
+pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<TcpStream, Error> {
     //
     let ips: Vec<SocketAddr> = format!("{}:{}", hostname, port)
         .to_socket_addrs()
@@ -164,13 +164,13 @@ pub fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<TcpStream,
 }
 
 #[cfg(test)]
-pub fn connect_test(unit: &Unit) -> Result<Stream, Error> {
+pub(crate) fn connect_test(unit: &Unit) -> Result<Stream, Error> {
     use crate::test;
     test::resolve_handler(unit)
 }
 
 #[cfg(not(test))]
-pub fn connect_test(unit: &Unit) -> Result<Stream, Error> {
+pub(crate) fn connect_test(unit: &Unit) -> Result<Stream, Error> {
     Err(Error::UnknownScheme(unit.url.scheme().to_string()))
 }
 

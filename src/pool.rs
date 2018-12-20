@@ -10,7 +10,7 @@ pub const DEFAULT_HOST: &str = "localhost";
 ///
 /// *Internal API*
 #[derive(Default, Debug)]
-pub struct ConnectionPool {
+pub(crate) struct ConnectionPool {
     // the actual pooled connection. however only one per hostname:port.
     recycle: HashMap<PoolKey, Stream>,
 }
@@ -61,7 +61,7 @@ impl PoolKey {
 /// read is exhausted (reached a 0).
 ///
 /// *Internal API*
-pub struct PoolReturnRead<R: Read + Sized> {
+pub(crate) struct PoolReturnRead<R: Read + Sized> {
     // unit that contains the agent where we want to return the reader.
     unit: Option<Unit>,
     // pointer to underlying stream

@@ -18,11 +18,11 @@ mod simple;
 type RequestHandler = Fn(&Unit) -> Result<Stream, Error> + Send + 'static;
 
 lazy_static! {
-    pub static ref TEST_HANDLERS: Arc<Mutex<HashMap<String, Box<RequestHandler>>>> =
+    pub(crate) static ref TEST_HANDLERS: Arc<Mutex<HashMap<String, Box<RequestHandler>>>> =
         { Arc::new(Mutex::new(HashMap::new())) };
 }
 
-pub fn set_handler<H>(path: &str, handler: H)
+pub(crate) fn set_handler<H>(path: &str, handler: H)
 where
     H: Fn(&Unit) -> Result<Stream, Error> + Send + 'static,
 {
@@ -48,7 +48,7 @@ pub fn make_response(
     Ok(Stream::Test(Box::new(cursor), write))
 }
 
-pub fn resolve_handler(unit: &Unit) -> Result<Stream, Error> {
+pub(crate) fn resolve_handler(unit: &Unit) -> Result<Stream, Error> {
     let mut handlers = TEST_HANDLERS.lock().unwrap();
     let path = unit.url.path();
     let handler = handlers.remove(path).unwrap();

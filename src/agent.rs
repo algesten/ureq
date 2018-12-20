@@ -50,7 +50,7 @@ pub struct Agent {
 ///
 /// *Internal API*.
 #[derive(Debug)]
-pub struct AgentState {
+pub(crate) struct AgentState {
     /// Reused connections between requests.
     pool: ConnectionPool,
     /// Cookies saved between requests.
@@ -250,7 +250,7 @@ impl Agent {
     }
 
     #[cfg(test)]
-    pub fn state(&self) -> &Arc<Mutex<Option<AgentState>>> {
+    pub(crate) fn state(&self) -> &Arc<Mutex<Option<AgentState>>> {
         &self.state
     }
 }

@@ -11,7 +11,7 @@ use crate::pool::DEFAULT_HOST;
 ///
 /// *Internal API*
 #[derive(Debug)]
-pub struct Unit {
+pub(crate) struct Unit {
     pub agent: Arc<Mutex<Option<AgentState>>>,
     pub url: Url,
     pub is_chunked: bool,
@@ -109,7 +109,7 @@ impl Unit {
 }
 
 /// Perform a connection. Used recursively for redirects.
-pub fn connect(
+pub(crate) fn connect(
     req: &Request,
     unit: Unit,
     use_pooled: bool,

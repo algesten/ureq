@@ -526,7 +526,7 @@ fn read_next_line<R: Read>(reader: &mut R) -> IoResult<AsciiString> {
 /// Read Wrapper around an (unsafe) pointer to a Stream.
 ///
 /// *Internal API*
-struct YoloRead {
+pub(crate) struct YoloRead {
     stream: *mut Stream,
     dealloc: bool, // whether we are to dealloc stream on drop
 }
@@ -560,8 +560,6 @@ impl Drop for YoloRead {
 }
 
 /// Limits a YoloRead to a content size (as set by a "Content-Length" header).
-///
-/// *Internal API*
 struct LimitedRead {
     reader: YoloRead,
     limit: usize,
@@ -604,7 +602,7 @@ impl Read for LimitedRead {
 /// "Content-Type: text/plain; charset=iso8859-1" -> "iso8859-1"
 ///
 /// *Internal API*
-pub fn charset_from_content_type(header: Option<&str>) -> &str {
+pub(crate) fn charset_from_content_type(header: Option<&str>) -> &str {
     header
         .and_then(|header| {
             header.find(';').and_then(|semi| {
