@@ -37,6 +37,7 @@ pub const DEFAULT_CHARACTER_SET: &str = "utf-8";
 /// // response is consumed, and body has been read.
 /// ```
 pub struct Response {
+    url: Option<String>,
     error: Option<Error>,
     status_line: AsciiString,
     index: (usize, usize), // index into status_line where we split: HTTP/1.1 200 OK
@@ -74,6 +75,12 @@ impl Response {
         (r.as_ref() as &str)
             .parse::<Response>()
             .unwrap_or_else(|e| e.into())
+    }
+
+    /// The URL we ended up at. This can differ from the request url when
+    /// we have followed redirects.
+    pub fn get_url(&self) -> &str {
+        self.url.as_ref().map(|s| &s[..]).unwrap_or("")
     }
 
     /// The entire status line like: `HTTP/1.1 200 OK`
@@ -411,6 +418,7 @@ impl Response {
         }
 
         Ok(Response {
+            url: None,
             error: None,
             status_line,
             index,
@@ -475,7 +483,7 @@ impl FromStr for Response {
         let bytes = s.as_bytes().to_owned();
         let mut cursor = Cursor::new(bytes);
         let mut resp = Self::do_from_read(&mut cursor)?;
-        set_stream(&mut resp, None, Stream::Cursor(cursor));
+        set_stream(&mut resp, "".into(), None, Stream::Cursor(cursor));
         Ok(resp)
     }
 }
@@ -494,7 +502,8 @@ impl Into<Response> for Error {
 /// "Give away" Unit and Stream to the response.
 ///
 /// *Internal API*
-pub fn set_stream(resp: &mut Response, unit: Option<Unit>, stream: Stream) {
+pub(crate) fn set_stream(resp: &mut Response, url: String, unit: Option<Unit>, stream: Stream) {
+    resp.url = Some(url);
     resp.unit = unit;
     resp.stream = Some(stream);
 }

@@ -51,6 +51,7 @@ fn redirect_head() {
     });
     let resp = head("test://host/redirect_head1").call();
     assert_eq!(resp.status(), 200);
+    assert_eq!(resp.get_url(), "test://host/redirect_head2");
     assert!(resp.has("x-foo"));
     assert_eq!(resp.header("x-foo").unwrap(), "bar");
 }
@@ -70,6 +71,7 @@ fn redirect_get() {
         .set("Range", "bytes=10-50")
         .call();
     assert_eq!(resp.status(), 200);
+    assert_eq!(resp.get_url(), "test://host/redirect_get2");
     assert!(resp.has("x-foo"));
     assert_eq!(resp.header("x-foo").unwrap(), "bar");
 }
@@ -85,6 +87,7 @@ fn redirect_post() {
     });
     let resp = post("test://host/redirect_post1").call();
     assert_eq!(resp.status(), 200);
+    assert_eq!(resp.get_url(), "test://host/redirect_post2");
     assert!(resp.has("x-foo"));
     assert_eq!(resp.header("x-foo").unwrap(), "bar");
 }

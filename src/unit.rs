@@ -182,7 +182,7 @@ pub(crate) fn connect(
 
     // since it is not a redirect, or we're not following redirects,
     // give away the incoming stream to the response object
-    response::set_stream(&mut resp, Some(unit), stream);
+    response::set_stream(&mut resp, unit.url.to_string(), Some(unit), stream);
 
     // release the response
     Ok(resp)
