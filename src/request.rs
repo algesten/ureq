@@ -1,7 +1,7 @@
+use lazy_static::lazy_static;
 use qstring::QString;
 use std::io::Read;
 use std::sync::Arc;
-use lazy_static::lazy_static;
 
 #[cfg(feature = "json")]
 use super::SerdeValue;
@@ -39,19 +39,17 @@ pub struct Request {
 
 impl ::std::fmt::Debug for Request {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::result::Result<(), ::std::fmt::Error> {
-        let (path, query) = self.to_url()
+        let (path, query) = self
+            .to_url()
             .map(|u| {
-            let query = combine_query(&u, &self.query, true);
-            (u.path().to_string(), query)
-        })
+                let query = combine_query(&u, &self.query, true);
+                (u.path().to_string(), query)
+            })
             .unwrap_or_else(|_| ("BAD_URL".to_string(), "BAD_URL".to_string()));
         write!(
             f,
             "Request({} {}{}, {:?})",
-            self.method,
-            path,
-            query,
-            self.headers
+            self.method, path, query, self.headers
         )
     }
 }
@@ -101,7 +99,7 @@ impl Request {
             .and_then(|url| {
                 let reader = payload.into_read();
                 let unit = Unit::new(&self, &url, true, &reader);
-                connect(&self, unit, &self.method, true, 0, reader)
+                connect(&self, unit, true, 0, reader, false)
             })
             .unwrap_or_else(|e| e.into())
     }
@@ -148,8 +146,7 @@ impl Request {
     ///     .send_string("Hällo Wörld!");
     /// println!("{:?}", r);
     /// ```
-    pub fn send_string(&mut self, data: &str) -> Response
-    {
+    pub fn send_string(&mut self, data: &str) -> Response {
         let text = data.into();
         let charset = response::charset_from_content_type(self.header("content-type")).to_string();
         self.do_call(Payload::Text(text, charset))
@@ -169,8 +166,7 @@ impl Request {
     ///     .set("Content-Type", "text/plain")
     ///     .send(read);
     /// ```
-    pub fn send(&mut self, reader: impl Read + 'static) -> Response
-    {
+    pub fn send(&mut self, reader: impl Read + 'static) -> Response {
         self.do_call(Payload::Reader(Box::new(reader)))
     }
 
@@ -188,8 +184,7 @@ impl Request {
     ///      println!("Oh no error!");
     ///  }
     /// ```
-    pub fn set(&mut self, header: &str, value: &str) -> &mut Request
-    {
+    pub fn set(&mut self, header: &str, value: &str) -> &mut Request {
         add_header(&mut self.headers, Header::new(header, value));
         self
     }
@@ -246,8 +241,7 @@ impl Request {
     ///
     /// println!("{:?}", r);
     /// ```
-    pub fn query(&mut self, param: &str, value: &str) -> &mut Request
-    {
+    pub fn query(&mut self, param: &str, value: &str) -> &mut Request {
         self.query.add_pair((param, value));
         self
     }
@@ -262,8 +256,7 @@ impl Request {
     ///     .call();
     /// println!("{:?}", r);
     /// ```
-    pub fn query_str(&mut self, query: &str) -> &mut Request
-    {
+    pub fn query_str(&mut self, query: &str) -> &mut Request {
         self.query.add_str(query);
         self
     }
@@ -326,8 +319,7 @@ impl Request {
     /// let r2 = ureq::get("http://martin:rubbermashgum@localhost/my_page").call();
     /// println!("{:?}", r2);
     /// ```
-    pub fn auth(&mut self, user: &str, pass: &str) -> &mut Request
-    {
+    pub fn auth(&mut self, user: &str, pass: &str) -> &mut Request {
         let pass = basic_auth(user, pass);
         self.auth_kind("Basic", &pass)
     }
@@ -340,8 +332,7 @@ impl Request {
     ///     .call();
     /// println!("{:?}", r);
     /// ```
-    pub fn auth_kind(&mut self, kind: &str, pass: &str) -> &mut Request
-    {
+    pub fn auth_kind(&mut self, kind: &str, pass: &str) -> &mut Request {
         let value = format!("{} {}", kind, pass);
         self.set("Authorization", &value);
         self
@@ -445,8 +436,7 @@ impl Request {
     /// assert_eq!(req.get_scheme().unwrap(), "https");
     /// ```
     pub fn get_scheme(&self) -> Result<String, Error> {
-        self.to_url()
-            .map(|u| u.scheme().to_string())
+        self.to_url().map(|u| u.scheme().to_string())
     }
 
     /// The complete query for this request.
@@ -459,8 +449,7 @@ impl Request {
     /// assert_eq!(req.get_query().unwrap(), "?foo=bar&format=json");
     /// ```
     pub fn get_query(&self) -> Result<String, Error> {
-        self.to_url()
-            .map(|u| combine_query(&u, &self.query, true))
+        self.to_url().map(|u| combine_query(&u, &self.query, true))
     }
 
     /// The normalized path of this request.
@@ -472,8 +461,7 @@ impl Request {
     /// assert_eq!(req.get_path().unwrap(), "/innit");
     /// ```
     pub fn get_path(&self) -> Result<String, Error> {
-        self.to_url()
-            .map(|u| u.path().to_string())
+        self.to_url().map(|u| u.path().to_string())
     }
 
     fn to_url(&self) -> Result<Url, Error> {

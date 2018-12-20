@@ -1,7 +1,7 @@
-use base64;
 use crate::body::{send_body, Payload, SizedReader};
-use std::io::{Result as IoResult, Write};
 use crate::stream::{connect_http, connect_https, connect_test, Stream};
+use base64;
+use std::io::{Result as IoResult, Write};
 use url::Url;
 //
 
@@ -15,12 +15,12 @@ pub struct Unit {
     pub agent: Arc<Mutex<Option<AgentState>>>,
     pub url: Url,
     pub is_chunked: bool,
-    pub is_head: bool,
     pub query_string: String,
     pub headers: Vec<Header>,
     pub timeout_connect: u64,
     pub timeout_read: u64,
     pub timeout_write: u64,
+    pub method: String,
 }
 
 impl Unit {
@@ -29,15 +29,14 @@ impl Unit {
     fn new(req: &Request, url: &Url, mix_queries: bool, body: &SizedReader) -> Self {
         //
 
-        let is_chunked = req.header("transfer-encoding")
+        let is_chunked = req
+            .header("transfer-encoding")
             // if the user has set an encoding header, obey that.
             .map(|enc| !enc.is_empty())
             // otherwise, no chunking.
             .unwrap_or(false);
 
         let is_secure = url.scheme().eq_ignore_ascii_case("https");
-
-        let is_head = req.method.eq_ignore_ascii_case("head");
 
         let hostname = url.host_str().unwrap_or(DEFAULT_HOST).to_string();
 
@@ -82,13 +81,17 @@ impl Unit {
             agent: Arc::clone(&req.agent),
             url: url.clone(),
             is_chunked,
-            is_head,
             query_string,
             headers,
             timeout_connect: req.timeout_connect,
             timeout_read: req.timeout_read,
             timeout_write: req.timeout_write,
+            method: req.method.clone(),
         }
+    }
+
+    pub fn is_head(&self) -> bool {
+        self.method.eq_ignore_ascii_case("head")
     }
 
     #[cfg(test)]
@@ -109,23 +112,23 @@ impl Unit {
 pub fn connect(
     req: &Request,
     unit: Unit,
-    method: &str,
     use_pooled: bool,
     redirect_count: u32,
     body: SizedReader,
+    redir: bool,
 ) -> Result<Response, Error> {
     //
 
     // open socket
     let (mut stream, is_recycled) = connect_socket(&unit, use_pooled)?;
 
-    let send_result = send_prelude(&unit, method, &mut stream);
+    let send_result = send_prelude(&unit, &mut stream, redir);
 
     if send_result.is_err() {
         if is_recycled {
             // we try open a new connection, this time there will be
             // no connection in the pool. don't use it.
-            return connect(req, unit, method, false, redirect_count, body);
+            return connect(req, unit, false, redirect_count, body, redir);
         } else {
             // not a pooled connection, propagate the error.
             return Err(send_result.unwrap_err().into());
@@ -161,10 +164,16 @@ pub fn connect(
                 301 | 302 | 303 => {
                     let empty = Payload::Empty.into_read();
                     // recreate the unit to get a new hostname and cookies for the new host.
-                    let new_unit = Unit::new(req, &new_url, false, &empty);
-                    return connect(req, new_unit, "GET", use_pooled, redirect_count + 1, empty);
+                    let mut new_unit = Unit::new(req, &new_url, false, &empty);
+                    // this is to follow how curl does it. POST, PUT etc change
+                    // to GET on a redirect.
+                    new_unit.method = match &unit.method[..] {
+                        "GET" | "HEAD" => unit.method,
+                        _ => "GET".into(),
+                    };
+                    return connect(req, new_unit, use_pooled, redirect_count + 1, empty, true);
                 }
-                , _ => (),
+                _ => (),
                 // reinstate this with expect-100
                 // 307 | 308 | _ => connect(unit, method, use_pooled, redirects - 1, body),
             };
@@ -239,7 +248,7 @@ fn connect_socket(unit: &Unit, use_pooled: bool) -> Result<(Stream, bool), Error
 }
 
 /// Send request line + headers (all up until the body).
-fn send_prelude(unit: &Unit, method: &str, stream: &mut Stream) -> IoResult<()> {
+fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> IoResult<()> {
     //
 
     // build into a buffer and send in one go.
@@ -249,7 +258,7 @@ fn send_prelude(unit: &Unit, method: &str, stream: &mut Stream) -> IoResult<()> 
     write!(
         prelude,
         "{} {}{} HTTP/1.1\r\n",
-        method,
+        unit.method,
         unit.url.path(),
         &unit.query_string
     )?;
@@ -267,7 +276,9 @@ fn send_prelude(unit: &Unit, method: &str, stream: &mut Stream) -> IoResult<()> 
 
     // other headers
     for header in &unit.headers {
-        write!(prelude, "{}: {}\r\n", header.name(), header.value())?;
+        if !redir || !header.is_name("Authorization") {
+            write!(prelude, "{}: {}\r\n", header.name(), header.value())?;
+        }
     }
 
     // finish

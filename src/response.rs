@@ -256,7 +256,7 @@ impl Response {
             .map(|c| c.eq_ignore_ascii_case("close"))
             .unwrap_or(false);
 
-        let is_head = (&self.unit).as_ref().map(|u| u.is_head).unwrap_or(false);
+        let is_head = (&self.unit).as_ref().map(|u| u.is_head()).unwrap_or(false);
 
         let is_chunked = self
             .header("transfer-encoding")

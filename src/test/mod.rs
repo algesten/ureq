@@ -12,6 +12,7 @@ mod body_read;
 mod body_send;
 mod query_string;
 mod range;
+mod redirect;
 mod simple;
 
 type RequestHandler = Fn(&Unit) -> Result<Stream, Error> + Send + 'static;
