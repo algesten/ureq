@@ -201,6 +201,22 @@ impl Request {
         get_header(&self.headers, name)
     }
 
+    /// A list of the set header names in this request. Lowercased to be uniform.
+    ///
+    /// ```
+    /// let req = ureq::get("/my_page")
+    ///     .set("X-API-Key", "foobar")
+    ///     .set("Content-Type", "application/json")
+    ///     .build();
+    /// assert_eq!(req.header_names(), vec!["x-api-key", "content-type"]);
+    /// ```
+    pub fn header_names(&self) -> Vec<String> {
+        self.headers
+            .iter()
+            .map(|h| h.name().to_ascii_lowercase())
+            .collect()
+    }
+
     /// Tells if the header has been set.
     ///
     /// ```

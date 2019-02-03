@@ -111,6 +111,15 @@ impl Response {
             .map(|h| h.value())
     }
 
+    /// A list of the header names in this response.
+    /// Lowercased to be uniform.
+    pub fn headers_names(&self) -> Vec<String> {
+        self.headers
+            .iter()
+            .map(|h| h.name().to_ascii_lowercase())
+            .collect()
+    }
+
     /// Tells if the response has the named header.
     pub fn has<'a>(&self, name: &'a str) -> bool {
         self.header(name).is_some()
