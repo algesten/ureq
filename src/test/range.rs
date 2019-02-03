@@ -3,6 +3,7 @@ use std::io::Read;
 use super::super::*;
 
 #[test]
+#[cfg(feature = "tls")]
 fn read_range() {
     let resp = get("https://s3.amazonaws.com/foosrvr/bbb.mp4")
         .set("Range", "bytes=1000-1999")
@@ -19,6 +20,7 @@ fn read_range() {
 }
 
 #[test]
+#[cfg(feature = "tls")]
 fn agent_pool() {
     let agent = agent();
 
