@@ -19,7 +19,7 @@ tls = ["rustls", "webpki", "webpki-roots"]
 [dependencies]
 ascii = "0.9"
 base64 = "0.10"
-chunked_transfer = "0.3"
+chunked_transfer = "1"
 cookie = { version = "0.11", features = ["percent-encode"] }
 lazy_static = "1"
 qstring = "0.6"
