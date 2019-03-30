@@ -1,6 +1,5 @@
 use crate::agent::Unit;
 use crate::error::Error;
-use lazy_static::lazy_static;
 use std::io::{Cursor, Read, Result as IoResult, Write};
 use std::net::SocketAddr;
 use std::net::TcpStream;
@@ -100,6 +99,7 @@ pub(crate) fn connect_http(unit: &Unit) -> Result<Stream, Error> {
 #[cfg(feature = "tls")]
 pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
     use std::sync::Arc;
+    use lazy_static::lazy_static;
 
     lazy_static! {
         static ref TLS_CONF: Arc<rustls::ClientConfig> = {
