@@ -457,17 +457,12 @@ fn parse_status_line(line: &str) -> Result<((usize, usize), u16), Error> {
     let index1 = http_version.len();
 
     let status = split.next().ok_or_else(|| Error::BadStatus)?;
-    if status.len() < 3 {
+    if status.len() < 2 {
         return Err(Error::BadStatus);
     }
     let index2 = index1 + status.len();
 
     let status = status.parse::<u16>().map_err(|_| Error::BadStatus)?;
-
-    let status_text = split.next().ok_or_else(|| Error::BadStatus)?;
-    if status_text.is_empty() {
-        return Err(Error::BadStatus);
-    }
 
     Ok(((index1, index2), status))
 }

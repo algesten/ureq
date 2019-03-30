@@ -138,3 +138,15 @@ fn non_ascii_header() {
     assert_eq!(resp.status(), 500);
     assert_eq!(resp.status_text(), "Bad Header");
 }
+
+#[test]
+pub fn no_status_text() {
+    // this one doesn't return the status text
+    // let resp = get("https://www.okex.com/api/spot/v3/products")
+    test::set_handler("/no_status_text", |_unit| {
+        test::make_response(200, "", vec![], vec![])
+    });
+    let resp = get("test://host/no_status_text").call();
+    assert!(resp.ok());
+    assert_eq!(resp.status(), 200);
+}
