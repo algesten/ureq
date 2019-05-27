@@ -98,8 +98,8 @@ pub(crate) fn connect_http(unit: &Unit) -> Result<Stream, Error> {
 
 #[cfg(feature = "tls")]
 pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
-    use std::sync::Arc;
     use lazy_static::lazy_static;
+    use std::sync::Arc;
 
     lazy_static! {
         static ref TLS_CONF: Arc<rustls::ClientConfig> = {
