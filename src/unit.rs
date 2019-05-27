@@ -1,9 +1,16 @@
-use crate::body::{send_body, Payload, SizedReader};
-use crate::stream::{connect_http, connect_https, connect_test, Stream};
-use base64;
 use std::io::{Result as IoResult, Write};
+use std::sync::{Arc, Mutex};
+
+use base64;
+use cookie::{Cookie, CookieJar};
+use qstring::QString;
 use url::Url;
-//
+
+use crate::agent::AgentState;
+use crate::body::{self, Payload, SizedReader};
+use crate::header;
+use crate::stream::{self, connect_https, connect_test, Stream};
+use crate::{Error, Header, Request, Response};
 
 use crate::pool::DEFAULT_HOST;
 
@@ -26,7 +33,7 @@ pub(crate) struct Unit {
 impl Unit {
     //
 
-    fn new(req: &Request, url: &Url, mix_queries: bool, body: &SizedReader) -> Self {
+    pub(crate) fn new(req: &Request, url: &Url, mix_queries: bool, body: &SizedReader) -> Self {
         //
 
         let is_chunked = req
@@ -96,15 +103,15 @@ impl Unit {
 
     #[cfg(test)]
     pub fn header<'a>(&self, name: &'a str) -> Option<&str> {
-        get_header(&self.headers, name)
+        header::get_header(&self.headers, name)
     }
     #[cfg(test)]
     pub fn has<'a>(&self, name: &'a str) -> bool {
-        has_header(&self.headers, name)
+        header::has_header(&self.headers, name)
     }
     #[cfg(test)]
     pub fn all<'a>(&self, name: &'a str) -> Vec<&str> {
-        get_all_headers(&self.headers, name)
+        header::get_all_headers(&self.headers, name)
     }
 }
 
@@ -136,7 +143,7 @@ pub(crate) fn connect(
     }
 
     // send the body (which can be empty now depending on redirects)
-    send_body(body, unit.is_chunked, &mut stream)?;
+    body::send_body(body, unit.is_chunked, &mut stream)?;
 
     // start reading the response to process cookies and redirects.
     let mut resp = Response::from_read(&mut stream);
@@ -182,7 +189,7 @@ pub(crate) fn connect(
 
     // since it is not a redirect, or we're not following redirects,
     // give away the incoming stream to the response object
-    response::set_stream(&mut resp, unit.url.to_string(), Some(unit), stream);
+    crate::response::set_stream(&mut resp, unit.url.to_string(), Some(unit), stream);
 
     // release the response
     Ok(resp)
@@ -219,7 +226,7 @@ fn match_cookies<'a>(jar: &'a CookieJar, domain: &str, path: &str, is_secure: bo
 }
 
 /// Combine the query of the url and the query options set on the request object.
-fn combine_query(url: &Url, query: &QString, mix_queries: bool) -> String {
+pub(crate) fn combine_query(url: &Url, query: &QString, mix_queries: bool) -> String {
     match (url.query(), !query.is_empty() && mix_queries) {
         (Some(urlq), true) => format!("?{}&{}", urlq, query),
         (Some(urlq), false) => format!("?{}", urlq),
@@ -239,7 +246,7 @@ fn connect_socket(unit: &Unit, use_pooled: bool) -> Result<(Stream, bool), Error
         }
     }
     let stream = match unit.url.scheme() {
-        "http" => connect_http(&unit),
+        "http" => stream::connect_http(&unit),
         "https" => connect_https(&unit),
         "test" => connect_test(&unit),
         _ => Err(Error::UnknownScheme(unit.url.scheme().to_string())),
@@ -264,13 +271,13 @@ fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> IoResult<()> {
     )?;
 
     // host header if not set by user.
-    if !has_header(&unit.headers, "host") {
+    if !header::has_header(&unit.headers, "host") {
         write!(prelude, "Host: {}\r\n", unit.url.host().unwrap())?;
     }
-    if !has_header(&unit.headers, "user-agent") {
+    if !header::has_header(&unit.headers, "user-agent") {
         write!(prelude, "User-Agent: ureq\r\n")?;
     }
-    if !has_header(&unit.headers, "accept") {
+    if !header::has_header(&unit.headers, "accept") {
         write!(prelude, "Accept: */*\r\n")?;
     }
 

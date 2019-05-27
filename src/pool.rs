@@ -1,7 +1,9 @@
-use crate::agent::Unit;
-use crate::stream::Stream;
 use std::collections::HashMap;
 use std::io::{Read, Result as IoResult};
+
+use crate::stream::Stream;
+use crate::unit::Unit;
+
 use url::Url;
 
 pub const DEFAULT_HOST: &str = "localhost";

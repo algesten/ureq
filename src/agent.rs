@@ -1,14 +1,11 @@
-use crate::error::Error;
-use crate::pool::ConnectionPool;
-use crate::response::{self, Response};
-use cookie::{Cookie, CookieJar};
+use std::sync::Arc;
 use std::sync::Mutex;
 
-use crate::header::{add_header, get_all_headers, get_header, has_header, Header};
+use cookie::{Cookie, CookieJar};
 
-// to get to share private fields
-include!("request.rs");
-include!("unit.rs");
+use crate::header::{self, Header};
+use crate::pool::ConnectionPool;
+use crate::request::Request;
 
 /// Agents keep state between requests.
 ///
@@ -41,9 +38,9 @@ include!("unit.rs");
 #[derive(Debug, Default, Clone)]
 pub struct Agent {
     /// Copied into each request of this agent.
-    headers: Vec<Header>,
+    pub(crate) headers: Vec<Header>,
     /// Reused agent state for repeated requests from this agent.
-    state: Arc<Mutex<Option<AgentState>>>,
+    pub(crate) state: Arc<Mutex<Option<AgentState>>>,
 }
 
 /// Container of the state
@@ -52,9 +49,9 @@ pub struct Agent {
 #[derive(Debug)]
 pub(crate) struct AgentState {
     /// Reused connections between requests.
-    pool: ConnectionPool,
+    pub(crate) pool: ConnectionPool,
     /// Cookies saved between requests.
-    jar: CookieJar,
+    pub(crate) jar: CookieJar,
 }
 
 impl AgentState {
@@ -113,7 +110,7 @@ impl Agent {
     ///  }
     /// ```
     pub fn set(&mut self, header: &str, value: &str) -> &mut Agent {
-        add_header(&mut self.headers, Header::new(header, value));
+        header::add_header(&mut self.headers, Header::new(header, value));
         self
     }
 
@@ -255,7 +252,7 @@ impl Agent {
     }
 }
 
-fn basic_auth(user: &str, pass: &str) -> String {
+pub(crate) fn basic_auth(user: &str, pass: &str) -> String {
     let safe = match user.find(':') {
         Some(idx) => &user[..idx],
         None => user,
