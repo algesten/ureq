@@ -97,8 +97,10 @@ mod body;
 mod error;
 mod header;
 mod pool;
+mod request;
 mod response;
 mod stream;
+mod unit;
 
 #[cfg(feature = "json")]
 mod serde_macros;
@@ -106,9 +108,10 @@ mod serde_macros;
 #[cfg(test)]
 mod test;
 
-pub use crate::agent::{Agent, Request};
+pub use crate::agent::Agent;
 pub use crate::error::Error;
 pub use crate::header::Header;
+pub use crate::request::Request;
 pub use crate::response::Response;
 
 // re-export

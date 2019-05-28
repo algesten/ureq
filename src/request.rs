@@ -1,7 +1,17 @@
+use std::io::Read;
+use std::sync::{Arc, Mutex};
+
 use lazy_static::lazy_static;
 use qstring::QString;
-use std::io::Read;
-use std::sync::Arc;
+use url::Url;
+
+use crate::agent::{self, Agent, AgentState};
+use crate::body::Payload;
+use crate::error::Error;
+use crate::header::{self, Header};
+use crate::pool;
+use crate::unit::{self, Unit};
+use crate::Response;
 
 #[cfg(feature = "json")]
 use super::SerdeValue;
@@ -22,19 +32,19 @@ lazy_static! {
 /// ```
 #[derive(Clone, Default)]
 pub struct Request {
-    agent: Arc<Mutex<Option<AgentState>>>,
+    pub(crate) agent: Arc<Mutex<Option<AgentState>>>,
 
     // via agent
-    method: String,
+    pub(crate) method: String,
     path: String,
 
     // from request itself
-    headers: Vec<Header>,
-    query: QString,
-    timeout_connect: u64,
-    timeout_read: u64,
-    timeout_write: u64,
-    redirects: u32,
+    pub(crate) headers: Vec<Header>,
+    pub(crate) query: QString,
+    pub(crate) timeout_connect: u64,
+    pub(crate) timeout_read: u64,
+    pub(crate) timeout_write: u64,
+    pub(crate) redirects: u32,
 }
 
 impl ::std::fmt::Debug for Request {
@@ -42,7 +52,7 @@ impl ::std::fmt::Debug for Request {
         let (path, query) = self
             .to_url()
             .map(|u| {
-                let query = combine_query(&u, &self.query, true);
+                let query = unit::combine_query(&u, &self.query, true);
                 (u.path().to_string(), query)
             })
             .unwrap_or_else(|_| ("BAD_URL".to_string(), "BAD_URL".to_string()));
@@ -55,7 +65,7 @@ impl ::std::fmt::Debug for Request {
 }
 
 impl Request {
-    fn new(agent: &Agent, method: String, path: String) -> Request {
+    pub(crate) fn new(agent: &Agent, method: String, path: String) -> Request {
         Request {
             agent: Arc::clone(&agent.state),
             method,
@@ -99,7 +109,7 @@ impl Request {
             .and_then(|url| {
                 let reader = payload.into_read();
                 let unit = Unit::new(&self, &url, true, &reader);
-                connect(&self, unit, true, 0, reader, false)
+                unit::connect(&self, unit, true, 0, reader, false)
             })
             .unwrap_or_else(|e| e.into())
     }
@@ -148,7 +158,8 @@ impl Request {
     /// ```
     pub fn send_string(&mut self, data: &str) -> Response {
         let text = data.into();
-        let charset = response::charset_from_content_type(self.header("content-type")).to_string();
+        let charset =
+            crate::response::charset_from_content_type(self.header("content-type")).to_string();
         self.do_call(Payload::Text(text, charset))
     }
 
@@ -185,7 +196,7 @@ impl Request {
     ///  }
     /// ```
     pub fn set(&mut self, header: &str, value: &str) -> &mut Request {
-        add_header(&mut self.headers, Header::new(header, value));
+        header::add_header(&mut self.headers, Header::new(header, value));
         self
     }
 
@@ -198,7 +209,7 @@ impl Request {
     /// assert_eq!("foobar", req.header("x-api-Key").unwrap());
     /// ```
     pub fn header<'a>(&self, name: &'a str) -> Option<&str> {
-        get_header(&self.headers, name)
+        header::get_header(&self.headers, name)
     }
 
     /// A list of the set header names in this request. Lowercased to be uniform.
@@ -226,7 +237,7 @@ impl Request {
     /// assert_eq!(true, req.has("x-api-Key"));
     /// ```
     pub fn has<'a>(&self, name: &'a str) -> bool {
-        has_header(&self.headers, name)
+        header::has_header(&self.headers, name)
     }
 
     /// All headers corresponding values for the give name, or empty vector.
@@ -242,7 +253,7 @@ impl Request {
     /// ]);
     /// ```
     pub fn all<'a>(&self, name: &'a str) -> Vec<&str> {
-        get_all_headers(&self.headers, name)
+        header::get_all_headers(&self.headers, name)
     }
 
     /// Set a query parameter.
@@ -336,7 +347,7 @@ impl Request {
     /// println!("{:?}", r2);
     /// ```
     pub fn auth(&mut self, user: &str, pass: &str) -> &mut Request {
-        let pass = basic_auth(user, pass);
+        let pass = agent::basic_auth(user, pass);
         self.auth_kind("Basic", &pass)
     }
 
@@ -440,7 +451,7 @@ impl Request {
     /// ```
     pub fn get_host(&self) -> Result<String, Error> {
         self.to_url()
-            .map(|u| u.host_str().unwrap_or(DEFAULT_HOST).to_string())
+            .map(|u| u.host_str().unwrap_or(pool::DEFAULT_HOST).to_string())
     }
 
     /// Returns the scheme for this request.
@@ -465,7 +476,8 @@ impl Request {
     /// assert_eq!(req.get_query().unwrap(), "?foo=bar&format=json");
     /// ```
     pub fn get_query(&self) -> Result<String, Error> {
-        self.to_url().map(|u| combine_query(&u, &self.query, true))
+        self.to_url()
+            .map(|u| unit::combine_query(&u, &self.query, true))
     }
 
     /// The normalized path of this request.

@@ -1,11 +1,14 @@
-use crate::agent::Unit;
+use std::io::{Cursor, Error as IoError, ErrorKind, Read, Result as IoResult};
+use std::str::FromStr;
+
+use ascii::AsciiString;
+use chunked_transfer::Decoder as ChunkDecoder;
+
+use crate::error::Error;
 use crate::header::Header;
 use crate::pool::PoolReturnRead;
 use crate::stream::Stream;
-use ascii::AsciiString;
-use chunked_transfer::Decoder as ChunkDecoder;
-use std::io::{Cursor, Error as IoError, ErrorKind, Read, Result as IoResult};
-use std::str::FromStr;
+use crate::unit::Unit;
 
 #[cfg(feature = "json")]
 use serde_json;
@@ -14,8 +17,6 @@ use serde_json;
 use encoding::label::encoding_from_whatwg_label;
 #[cfg(feature = "charset")]
 use encoding::DecoderTrap;
-
-use crate::error::Error;
 
 pub const DEFAULT_CONTENT_TYPE: &str = "text/plain";
 pub const DEFAULT_CHARACTER_SET: &str = "utf-8";

@@ -1,10 +1,11 @@
-use crate::agent::Unit;
-use crate::error::Error;
 use std::io::{Cursor, Read, Result as IoResult, Write};
 use std::net::SocketAddr;
 use std::net::TcpStream;
 use std::net::ToSocketAddrs;
 use std::time::Duration;
+
+use crate::error::Error;
+use crate::unit::Unit;
 
 #[allow(clippy::large_enum_variant)]
 pub enum Stream {
@@ -98,8 +99,8 @@ pub(crate) fn connect_http(unit: &Unit) -> Result<Stream, Error> {
 
 #[cfg(feature = "tls")]
 pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
-    use std::sync::Arc;
     use lazy_static::lazy_static;
+    use std::sync::Arc;
 
     lazy_static! {
         static ref TLS_CONF: Arc<rustls::ClientConfig> = {
