@@ -1,4 +1,5 @@
 use std::io::Error as IoError;
+use std::fmt;
 
 /// Errors that are translated to ["synthetic" responses](struct.Response.html#method.synthetic).
 #[derive(Debug)]
@@ -70,3 +71,11 @@ impl From<IoError> for Error {
         Error::Io(err)
     }
 }
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.body_text())
+    }
+}
+
+impl std::error::Error for Error {}
