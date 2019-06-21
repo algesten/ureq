@@ -23,19 +23,19 @@ pub(crate) enum Payload {
     #[cfg(feature = "json")]
     JSON(SerdeValue),
     Reader(Box<dyn Read + 'static>),
+    Bytes(Vec<u8>),
 }
 
 impl ::std::fmt::Debug for Payload {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::result::Result<(), ::std::fmt::Error> {
-        let s = match self {
-            Payload::Empty => "Empty",
-            Payload::Text(t, _) => &t,
+        match self {
+            Payload::Empty => write!(f, "Empty"),
+            Payload::Text(t, _) => write!(f, "{}", t),
             #[cfg(feature = "json")]
-            Payload::JSON(_) => "JSON",
-            Payload::Reader(_) => "Reader",
-        };
-
-        write!(f, "{}", s)
+            Payload::JSON(_) => write!(f, "JSON"),
+            Payload::Reader(_) => write!(f, "Reader"),
+            Payload::Bytes(v) => write!(f, "{:?}", v),
+        }
     }
 }
 
@@ -91,6 +91,11 @@ impl Payload {
                 SizedReader::new(Some(len), Box::new(cursor))
             }
             Payload::Reader(read) => SizedReader::new(None, read),
+            Payload::Bytes(bytes) => {
+                let len = bytes.len();
+                let cursor = Cursor::new(bytes);
+                SizedReader::new(Some(len), Box::new(cursor))
+            },
         }
     }
 }
