@@ -30,6 +30,7 @@ where
     handlers.insert(path.to_string(), Box::new(handler));
 }
 
+#[allow(clippy::write_with_newline)]
 pub fn make_response(
     status: u16,
     status_text: &str,
