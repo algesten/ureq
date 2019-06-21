@@ -5,7 +5,7 @@ use super::super::*;
 #[test]
 #[cfg(feature = "tls")]
 fn read_range() {
-    let resp = get("https://s3.amazonaws.com/foosrvr/bbb.mp4")
+    let resp = get("https://ureq.s3.eu-central-1.amazonaws.com/sherlock.txt")
         .set("Range", "bytes=1000-1999")
         .call();
     assert_eq!(resp.status(), 206);
@@ -15,7 +15,7 @@ fn read_range() {
     assert_eq!(len, 1000);
     assert_eq!(
         &buf[0..20],
-        [0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 3, 232, 0, 0, 0, 1]
+        [83, 99, 111, 116, 116, 34, 10, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32]
     )
 }
 
@@ -26,7 +26,7 @@ fn agent_pool() {
 
     // req 1
     let resp = agent
-        .get("https://s3.amazonaws.com/foosrvr/bbb.mp4")
+        .get("https://ureq.s3.eu-central-1.amazonaws.com/sherlock.txt")
         .set("Range", "bytes=1000-1999")
         .call();
     assert_eq!(resp.status(), 206);
@@ -41,13 +41,13 @@ fn agent_pool() {
         let state = lock.as_mut().unwrap();
         let pool = state.pool();
         assert_eq!(pool.len(), 1);
-        let f = format!("{:?}", pool.get("s3.amazonaws.com", 443));
+        let f = format!("{:?}", pool.get("ureq.s3.eu-central-1.amazonaws.com", 443));
         assert_eq!(f, "Some(Stream[https])"); // not a great way of testing.
     }
 
     // req 2 should be done with a reused connection
     let resp = agent
-        .get("https://s3.amazonaws.com/foosrvr/bbb.mp4")
+        .get("https://ureq.s3.eu-central-1.amazonaws.com/sherlock.txt")
         .set("Range", "bytes=5000-6999")
         .call();
     assert_eq!(resp.status(), 206);

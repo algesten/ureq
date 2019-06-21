@@ -251,7 +251,7 @@ impl Response {
     /// use std::io::Read;
     ///
     /// let resp =
-    ///     ureq::get("https://s3.amazonaws.com/foosrvr/hello_world.json")
+    ///     ureq::get("https://ureq.s3.eu-central-1.amazonaws.com/hello_world.json")
     ///         .call();
     ///
     /// assert!(resp.has("Content-Length"));
@@ -329,7 +329,7 @@ impl Response {
     ///
     /// ```
     /// let resp =
-    ///     ureq::get("https://s3.amazonaws.com/foosrvr/hello_world.json")
+    ///     ureq::get("https://ureq.s3.eu-central-1.amazonaws.com/hello_world.json")
     ///         .call();
     ///
     /// let text = resp.into_string().unwrap();
@@ -372,7 +372,7 @@ impl Response {
     ///
     /// ```
     /// let resp =
-    ///     ureq::get("https://s3.amazonaws.com/foosrvr/hello_world.json")
+    ///     ureq::get("https://ureq.s3.eu-central-1.amazonaws.com/hello_world.json")
     ///         .call();
     ///
     /// let json = resp.into_json().unwrap();
