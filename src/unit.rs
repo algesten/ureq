@@ -292,8 +292,9 @@ fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> IoResult<()> {
     // finish
     write!(prelude, "\r\n")?;
 
-    // write all to the wire
     stream.write_all(&prelude[..])?;
+    // write all to the wire
+    stream.flush()?;
 
     Ok(())
 }
