@@ -4,6 +4,9 @@ use std::net::TcpStream;
 use std::net::ToSocketAddrs;
 use std::time::Duration;
 
+use rustls::StreamOwned;
+use rustls::ClientSession;
+
 use crate::error::Error;
 use crate::unit::Unit;
 
@@ -58,12 +61,34 @@ impl Read for Stream {
         match self {
             Stream::Http(sock) => sock.read(buf),
             #[cfg(feature = "tls")]
-            Stream::Https(stream) => stream.read(buf),
+            Stream::Https(stream) => read_https(stream, buf),
             Stream::Cursor(read) => read.read(buf),
             #[cfg(test)]
             Stream::Test(reader, _) => reader.read(buf),
         }
     }
+}
+
+fn read_https(stream: &mut StreamOwned<ClientSession, TcpStream>, buf: &mut [u8]) -> IoResult<usize> {
+    match stream.read(buf) {
+        Ok(size) => Ok(size),
+        Err(ref e) if is_close_notify(e) => Ok(0),
+        Err(e) => Err(e),
+    }
+}
+
+fn is_close_notify(e: &std::io::Error) -> bool {
+    if e.kind() != std::io::ErrorKind::ConnectionAborted {
+        return false;
+    }
+
+    if let Some(msg) = e.get_ref() {
+        // :(
+
+        return msg.description().contains("CloseNotify");
+    }
+
+    false
 }
 
 impl Write for Stream {
