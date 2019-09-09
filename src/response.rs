@@ -521,7 +521,7 @@ fn read_next_line<R: Read>(reader: &mut R) -> IoResult<AsciiString> {
         let byte = reader.bytes().next();
 
         let byte = match byte {
-            Some(b) => r#try!(b),
+            Some(b) => b?,
             None => return Err(IoError::new(ErrorKind::ConnectionAborted, "Unexpected EOF")),
         };
 
