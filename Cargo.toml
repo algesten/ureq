@@ -17,13 +17,13 @@ charset = ["encoding"]
 tls = ["rustls", "webpki", "webpki-roots"]
 
 [dependencies]
-ascii = "0.9"
+ascii = "1"
 base64 = "0.10"
 chunked_transfer = "1"
 cookie = { version = "0.12", features = ["percent-encode"] }
 lazy_static = "1"
 qstring = "0.6"
-url = "1"
+url = "2"
 rustls = { version = "0.16", optional = true, features = [] }
 webpki = { version = "0.21", optional = true }
 webpki-roots = { version = "0.17", optional = true }
