@@ -15,7 +15,7 @@ mod range;
 mod redirect;
 mod simple;
 
-type RequestHandler = Fn(&Unit) -> Result<Stream, Error> + Send + 'static;
+type RequestHandler = dyn Fn(&Unit) -> Result<Stream, Error> + Send + 'static;
 
 lazy_static! {
     pub(crate) static ref TEST_HANDLERS: Arc<Mutex<HashMap<String, Box<RequestHandler>>>> =
