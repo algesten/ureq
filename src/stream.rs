@@ -4,7 +4,9 @@ use std::net::TcpStream;
 use std::net::ToSocketAddrs;
 use std::time::Duration;
 
+#[cfg(feature = "tls")]
 use rustls::StreamOwned;
+#[cfg(feature = "tls")]
 use rustls::ClientSession;
 
 use crate::error::Error;
@@ -69,6 +71,7 @@ impl Read for Stream {
     }
 }
 
+#[cfg(feature = "tls")]
 fn read_https(stream: &mut StreamOwned<ClientSession, TcpStream>, buf: &mut [u8]) -> IoResult<usize> {
     match stream.read(buf) {
         Ok(size) => Ok(size),

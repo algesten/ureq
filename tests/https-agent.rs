@@ -1,7 +1,8 @@
 use std::io::Read;
 
+#[cfg(feature = "tls")]
 #[test]
-fn connection_close() {
+fn tls_connection_close() {
     let agent = ureq::Agent::default().build();
     let resp = agent.get("https://example.com/404")
         .set("Connection", "close")
