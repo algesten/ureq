@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use std::sync::Mutex;
-
+#[cfg(feature = "cookie")]
 use cookie::{Cookie, CookieJar};
 
 use crate::header::{self, Header};
@@ -51,6 +51,7 @@ pub(crate) struct AgentState {
     /// Reused connections between requests.
     pub(crate) pool: ConnectionPool,
     /// Cookies saved between requests.
+    #[cfg(feature = "cookie")]
     pub(crate) jar: CookieJar,
 }
 
@@ -58,6 +59,7 @@ impl AgentState {
     fn new() -> Self {
         AgentState {
             pool: ConnectionPool::new(),
+            #[cfg(feature = "cookie")]
             jar: CookieJar::new(),
         }
     }
@@ -175,6 +177,7 @@ impl Agent {
     ///
     /// assert!(agent.cookie("NID").is_some());
     /// ```
+    #[cfg(feature = "cookie")]
     pub fn cookie(&self, name: &str) -> Option<Cookie<'static>> {
         let state = self.state.lock().unwrap();
         state
@@ -191,6 +194,7 @@ impl Agent {
     /// let cookie = ureq::Cookie::new("name", "value");
     /// agent.set_cookie(cookie);
     /// ```
+    #[cfg(feature = "cookie")]
     pub fn set_cookie(&self, cookie: Cookie<'static>) {
         let mut state = self.state.lock().unwrap();
         match state.as_mut() {

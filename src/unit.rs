@@ -2,6 +2,7 @@ use std::io::{Result as IoResult, Write};
 use std::sync::{Arc, Mutex};
 
 use base64;
+#[cfg(feature = "cookie")]
 use cookie::{Cookie, CookieJar};
 use qstring::QString;
 use url::Url;
@@ -149,7 +150,9 @@ pub(crate) fn connect(
     let mut resp = Response::from_read(&mut stream);
 
     // squirrel away cookies
-    save_cookies(&unit, &resp);
+    if cfg!(feature = "cookies") {
+        save_cookies(&unit, &resp);
+    }
 
     // handle redirects
     if resp.redirect() && req.redirects > 0 {
@@ -196,6 +199,7 @@ pub(crate) fn connect(
 }
 
 // TODO check so cookies can't be set for tld:s
+#[cfg(feature = "cookie")]
 fn match_cookies<'a>(jar: &'a CookieJar, domain: &str, path: &str, is_secure: bool) -> Vec<Header> {
     jar.iter()
         .filter(|c| {
@@ -299,6 +303,7 @@ fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> IoResult<()> {
 }
 
 /// Investigate a response for "Set-Cookie" headers.
+#[cfg(feature = "cookie")]
 fn save_cookies(unit: &Unit, resp: &Response) {
     //
 

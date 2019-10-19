@@ -11,15 +11,16 @@ categories = ["web-programming::http-client"]
 edition = "2018"
 
 [features]
-default = ["tls"]
+default = ["tls", "cookies"]
 json = ["serde_json"]
 charset = ["encoding"]
 tls = ["rustls", "webpki", "webpki-roots"]
+cookies = ["cookie"]
 
 [dependencies]
 base64 = "0.10"
 chunked_transfer = "1"
-cookie = { version = "0.12", features = ["percent-encode"] }
+cookie = { version = "0.12", features = ["percent-encode"], optional = true}
 lazy_static = "1"
 qstring = "0.7"
 url = "2"

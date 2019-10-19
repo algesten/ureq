@@ -115,6 +115,7 @@ pub use crate::request::Request;
 pub use crate::response::Response;
 
 // re-export
+#[cfg(feature = "cookie")]
 pub use cookie::Cookie;
 #[cfg(feature = "json")]
 pub use serde_json::{to_value as serde_to_value, Map as SerdeMap, Value as SerdeValue};
