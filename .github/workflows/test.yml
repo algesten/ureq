@@ -1,0 +1,21 @@
+on: [push]
+
+name: CI
+
+jobs:
+  build_and_test:
+    name: Rust project
+    runs-on: ubuntu-latest
+    env:
+      RUST_BACKTRACE: "1"
+    steps:
+      - uses: actions/checkout@master
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - name: Test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
