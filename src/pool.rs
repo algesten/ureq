@@ -52,9 +52,20 @@ struct PoolKey {
 
 impl PoolKey {
     fn new(url: &Url) -> Self {
+        let port = if cfg!(test) {
+            if let Some(p) = url.port_or_known_default() {
+                Some(p)
+            } else if url.scheme() == "test" {
+                Some(42)
+            } else {
+                None
+            }
+        } else {
+            url.port_or_known_default()
+        };
         PoolKey {
             hostname: url.host_str().unwrap_or(DEFAULT_HOST).into(),
-            port: url.port_or_known_default().unwrap_or(0),
+            port: port.expect("Failed to get port for pool key"),
         }
     }
 }
