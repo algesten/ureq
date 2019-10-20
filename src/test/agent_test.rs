@@ -51,3 +51,29 @@ fn agent_cookies() {
 
     agent.get("test://host/agent_cookies").call();
 }
+
+#[test]
+fn connection_reuse() {
+    use std::io::Read;
+    use std::time::Duration;
+
+    let agent = Agent::default().build();
+    let resp = agent.get("https://fau.xxx/").call();
+
+    // use up the connection so it gets returned to the pool
+    assert_eq!(resp.status(), 200);
+    resp.into_reader().read_to_end(&mut vec![]).unwrap();
+
+    // wait for the server to close the connection. fau.xxx has a
+    // 2 second connection keep-alive. then it closes.
+    std::thread::sleep(Duration::from_secs(3));
+
+    // try and make a new request on the pool. this fails
+    // when we discover that the TLS connection is dead
+    // first when attempting to read from it.
+    let resp = agent.get("https://fau.xxx/").call();
+    if let Some(err) = resp.synthetic_error() {
+        panic!("Pooled connection failed! {:?}", err);
+    }
+    assert_eq!(resp.status(), 200);
+}

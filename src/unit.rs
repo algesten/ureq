@@ -144,10 +144,22 @@ pub(crate) fn connect(
     }
 
     // send the body (which can be empty now depending on redirects)
-    body::send_body(body, unit.is_chunked, &mut stream)?;
+    let body_bytes_sent = body::send_body(body, unit.is_chunked, &mut stream)?;
 
     // start reading the response to process cookies and redirects.
     let mut resp = Response::from_read(&mut stream);
+
+    if let Some(err) = resp.synthetic_error() {
+        if err.is_bad_status_read() && body_bytes_sent == 0 && is_recycled {
+            // We try open a new connection, this happens if the remote server
+            // hangs a pooled connection and we only discover when trying to
+            // read from it. It's however only possible if we didn't send any
+            // body bytes. This is because we currently don't want to buffer
+            // any body to be able to replay it.
+            let empty = Payload::Empty.into_read();
+            return connect(req, unit, false, redirect_count, empty, redir);
+        }
+    }
 
     // squirrel away cookies
     if cfg!(feature = "cookies") {

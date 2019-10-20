@@ -418,7 +418,10 @@ impl Response {
     fn do_from_read(mut reader: impl Read) -> Result<Response, Error> {
         //
         // HTTP/1.1 200 OK\r\n
-        let status_line = read_next_line(&mut reader).map_err(|_| Error::BadStatus)?;
+        let status_line = read_next_line(&mut reader).map_err(|e| match e.kind() {
+            ErrorKind::ConnectionAborted => Error::BadStatusRead,
+            _ => Error::BadStatus,
+        })?;
 
         let (index, status) = parse_status_line(status_line.as_str())?;
 

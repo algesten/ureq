@@ -105,13 +105,13 @@ pub(crate) fn send_body(
     mut body: SizedReader,
     do_chunk: bool,
     stream: &mut Stream,
-) -> IoResult<()> {
-    if do_chunk {
+) -> IoResult<u64> {
+    let n = if do_chunk {
         let mut chunker = chunked_transfer::Encoder::new(stream);
-        copy(&mut body.reader, &mut chunker)?;
+        copy(&mut body.reader, &mut chunker)?
     } else {
-        copy(&mut body.reader, stream)?;
-    }
+        copy(&mut body.reader, stream)?
+    };
 
-    Ok(())
+    Ok(n)
 }
