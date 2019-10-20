@@ -75,8 +75,8 @@ pub fn has_header(headers: &[Header], name: &str) -> bool {
 }
 
 pub fn add_header(headers: &mut Vec<Header>, header: Header) {
-    if !header.name().to_lowercase().starts_with("x-") {
-        let name = header.name();
+    let name = header.name();
+    if !name.starts_with("x-") && !name.starts_with("X-") {
         headers.retain(|h| h.name() != name);
     }
     headers.push(header);
