@@ -1,5 +1,5 @@
 use std::io::{Result as IoResult, Write};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use base64;
 #[cfg(feature = "cookie")]
@@ -44,19 +44,11 @@ impl Unit {
             // otherwise, no chunking.
             .unwrap_or(false);
 
-        let is_secure = url.scheme().eq_ignore_ascii_case("https");
-
-        let hostname = url.host_str().unwrap_or(DEFAULT_HOST).to_string();
-
         let query_string = combine_query(&url, &req.query, mix_queries);
 
-        let cookie_headers: Vec<_> = {
-            let state = req.agent.lock().unwrap();
-            match state.as_ref().map(|state| &state.jar) {
-                None => vec![],
-                Some(jar) => match_cookies(jar, &hostname, url.path(), is_secure),
-            }
-        };
+        let state = req.agent.lock().unwrap();
+        let cookie_headers: Vec<_> = extract_cookies(state, &url);
+
         let extra_headers = {
             let mut extra = vec![];
 
@@ -162,9 +154,7 @@ pub(crate) fn connect(
     }
 
     // squirrel away cookies
-    if cfg!(feature = "cookies") {
-        save_cookies(&unit, &resp);
-    }
+    save_cookies(&unit, &resp);
 
     // handle redirects
     if resp.redirect() && req.redirects > 0 {
@@ -208,6 +198,22 @@ pub(crate) fn connect(
 
     // release the response
     Ok(resp)
+}
+
+#[cfg(feature = "cookie")]
+fn extract_cookies(state: MutexGuard<Option<AgentState>>, url: &Url) -> Vec<Header> {
+    let is_secure = url.scheme().eq_ignore_ascii_case("https");
+    let hostname = url.host_str().unwrap_or(DEFAULT_HOST).to_string();
+
+    match state.as_ref().map(|state| &state.jar) {
+        None => vec![],
+        Some(jar) => match_cookies(jar, &hostname, url.path(), is_secure),
+    }
+}
+
+#[cfg(not(feature = "cookie"))]
+fn extract_cookies(_state: MutexGuard<Option<AgentState>>, url: &Url) -> Vec<Header> {
+    vec![]
 }
 
 // TODO check so cookies can't be set for tld:s
@@ -313,6 +319,9 @@ fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> IoResult<()> {
 
     Ok(())
 }
+
+#[cfg(not(feature = "cookie"))]
+fn save_cookies(_unit: &Unit, _resp: &Response) {}
 
 /// Investigate a response for "Set-Cookie" headers.
 #[cfg(feature = "cookie")]
