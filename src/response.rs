@@ -40,11 +40,18 @@ pub struct Response {
     url: Option<String>,
     error: Option<Error>,
     status_line: String,
-    index: (usize, usize), // index into status_line where we split: HTTP/1.1 200 OK
+    index: ResponseStatusIndex,
     status: u16,
     headers: Vec<Header>,
     unit: Option<Unit>,
     stream: Option<Stream>,
+}
+
+/// index into status_line where we split: HTTP/1.1 200 OK
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+struct ResponseStatusIndex {
+    http_version: usize,
+    response_code: usize,
 }
 
 impl ::std::fmt::Debug for Response {
@@ -90,7 +97,7 @@ impl Response {
 
     /// The http version: `HTTP/1.1`
     pub fn http_version(&self) -> &str {
-        &self.status_line.as_str()[0..self.index.0]
+        &self.status_line.as_str()[0..self.index.http_version]
     }
 
     /// The status as a u16: `200`
@@ -100,7 +107,7 @@ impl Response {
 
     /// The status text: `OK`
     pub fn status_text(&self) -> &str {
-        &self.status_line.as_str()[self.index.1 + 1..].trim()
+        &self.status_line.as_str()[self.index.response_code + 1..].trim()
     }
 
     /// The header corresponding header value for the give name, if any.
@@ -445,7 +452,7 @@ impl Response {
 }
 
 /// parse a line like: HTTP/1.1 200 OK\r\n
-fn parse_status_line(line: &str) -> Result<((usize, usize), u16), Error> {
+fn parse_status_line(line: &str) -> Result<(ResponseStatusIndex, u16), Error> {
     //
 
     let mut split = line.splitn(3, ' ');
@@ -464,7 +471,13 @@ fn parse_status_line(line: &str) -> Result<((usize, usize), u16), Error> {
 
     let status = status.parse::<u16>().map_err(|_| Error::BadStatus)?;
 
-    Ok(((index1, index2), status))
+    Ok((
+        ResponseStatusIndex {
+            http_version: index1,
+            response_code: index2,
+        },
+        status,
+    ))
 }
 
 impl FromStr for Response {
