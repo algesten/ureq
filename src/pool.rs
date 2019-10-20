@@ -77,7 +77,10 @@ impl PoolKey {
 pub(crate) struct PoolReturnRead<R: Read + Sized> {
     // unit that contains the agent where we want to return the reader.
     unit: Option<Unit>,
-    // pointer to underlying stream
+    // pointer to underlying stream.
+    // this pointer forces the entire PoolReturnRead to be !Sync and !Send
+    // that's a good thing, because the pool return logic is certainly not
+    // thread safe.
     stream: *mut Stream,
     // wrapped reader around the same stream
     reader: Option<R>,

@@ -557,6 +557,8 @@ fn read_next_line<R: Read>(reader: &mut R) -> IoResult<String> {
 /// that api provides no way for us to get the underlying stream back. We need
 /// to get the stream both for sending responses and for pooling.
 pub(crate) struct ReclaimingRead {
+    // this pointer forces ReclaimingRead to be !Send and !Sync. That's a good
+    // thing, cause passing this reader around threads would not be safe.
     stream: *mut Stream,
     dealloc: bool, // whether we are to dealloc stream on drop
 }
