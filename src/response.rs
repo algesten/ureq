@@ -300,7 +300,7 @@ impl Response {
 
         let stream = Box::new(self.stream.expect("No reader in response?!"));
         let stream_ptr = Box::into_raw(stream);
-        let mut yolo = YoloRead {
+        let mut reclaiming_read = ReclaimingRead {
             stream: stream_ptr,
             dealloc: false,
         };
@@ -310,16 +310,16 @@ impl Response {
             (true, _) => Box::new(PoolReturnRead::new(
                 unit,
                 stream_ptr,
-                ChunkDecoder::new(yolo),
+                ChunkDecoder::new(reclaiming_read),
             )) as Box<dyn Read>,
             (false, Some(len)) => Box::new(PoolReturnRead::new(
                 unit,
                 stream_ptr,
-                LimitedRead::new(yolo, len),
+                LimitedRead::new(reclaiming_read, len),
             )),
             (false, None) => {
-                yolo.dealloc = true; // dealloc when read drops.
-                Box::new(yolo)
+                reclaiming_read.dealloc = true; // dealloc when read drops.
+                Box::new(reclaiming_read)
             }
         }
     }
@@ -552,12 +552,16 @@ fn read_next_line<R: Read>(reader: &mut R) -> IoResult<String> {
 /// Read Wrapper around an (unsafe) pointer to a Stream.
 ///
 /// *Internal API*
-pub(crate) struct YoloRead {
+///
+/// The reason for this is that we wrap our reader in `ChunkDecoder::new` and
+/// that api provides no way for us to get the underlying stream back. We need
+/// to get the stream both for sending responses and for pooling.
+pub(crate) struct ReclaimingRead {
     stream: *mut Stream,
     dealloc: bool, // whether we are to dealloc stream on drop
 }
 
-impl Read for YoloRead {
+impl Read for ReclaimingRead {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         unsafe {
             if self.stream.is_null() {
@@ -575,7 +579,7 @@ impl Read for YoloRead {
     }
 }
 
-impl Drop for YoloRead {
+impl Drop for ReclaimingRead {
     fn drop(&mut self) {
         if self.dealloc && !self.stream.is_null() {
             unsafe {
@@ -585,15 +589,15 @@ impl Drop for YoloRead {
     }
 }
 
-/// Limits a YoloRead to a content size (as set by a "Content-Length" header).
+/// Limits a ReclaimingRead to a content size (as set by a "Content-Length" header).
 struct LimitedRead {
-    reader: YoloRead,
+    reader: ReclaimingRead,
     limit: usize,
     position: usize,
 }
 
 impl LimitedRead {
-    fn new(reader: YoloRead, limit: usize) -> Self {
+    fn new(reader: ReclaimingRead, limit: usize) -> Self {
         LimitedRead {
             reader,
             limit,
