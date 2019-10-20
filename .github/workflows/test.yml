@@ -6,6 +6,12 @@ jobs:
   build_and_test:
     name: Rust project
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        feature:
+          - charset
+          - tls
+          - cookies
     env:
       RUST_BACKTRACE: "1"
     steps:
@@ -19,4 +25,4 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --all-features
+          args: --features json  ${{ matrix.feature }}
