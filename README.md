@@ -1,5 +1,7 @@
 # ureq
 
+![](https://github.com/algesten/ureq/workflows/CI/badge.svg)
+
 > Minimal request library in rust.
 
 ## Usage
