@@ -131,14 +131,14 @@ pub(crate) fn connect(
 
     let send_result = send_prelude(&unit, &mut stream, redir);
 
-    if send_result.is_err() {
+    if let Err(err) = send_result {
         if is_recycled {
             // we try open a new connection, this time there will be
             // no connection in the pool. don't use it.
             return connect(req, unit, false, redirect_count, body, redir);
         } else {
             // not a pooled connection, propagate the error.
-            return Err(send_result.unwrap_err().into());
+            return Err(err.into());
         }
     }
 
