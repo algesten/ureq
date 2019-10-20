@@ -151,3 +151,16 @@ pub fn no_status_text() {
     assert!(resp.ok());
     assert_eq!(resp.status(), 200);
 }
+
+#[test]
+pub fn header_with_spaces_before_value() {
+    test::set_handler("/space_before_value", |unit| {
+        assert!(unit.has("X-Test"));
+        assert_eq!(unit.header("X-Test").unwrap(), "value");
+        test::make_response(200, "OK", vec![], vec![])
+    });
+    let resp = get("test://host/space_before_value")
+        .set("X-Test", "     value")
+        .call();
+    assert_eq!(resp.status(), 200);
+}

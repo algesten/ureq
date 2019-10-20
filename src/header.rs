@@ -94,6 +94,16 @@ impl FromStr for Header {
             return Err(Error::BadHeader);
         }
 
+        // https://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.2
+        // The field value MAY be preceded by any amount of LWS, though a single SP is preferred.
+        let value_from = &s[index..];
+        let voff = match value_from.find(|c: char| !c.is_whitespace()) {
+            Some(n) => n,
+            None => 0,
+        };
+
+        let index = index + voff;
+
         Ok(Header { line, index })
     }
 }
