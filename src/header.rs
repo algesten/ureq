@@ -1,11 +1,10 @@
 use crate::error::Error;
-use ascii::{AsAsciiStr, AsciiString};
 use std::str::FromStr;
 
 #[derive(Clone)]
 /// Wrapper type for a header line.
 pub struct Header {
-    line: AsciiString,
+    line: String,
     index: usize,
 }
 
@@ -17,8 +16,7 @@ impl ::std::fmt::Debug for Header {
 
 impl Header {
     pub fn new(name: &str, value: &str) -> Self {
-        let s = format!("{}: {}", name, value);
-        let line = unsafe { s.as_ascii_str_unchecked().to_owned() };
+        let line = format!("{}: {}", name, value);
         let index = name.len();
         Header { line, index }
     }
@@ -88,7 +86,7 @@ impl FromStr for Header {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         //
-        let line = AsciiString::from_str(s).map_err(|_| Error::BadHeader)?;
+        let line = s.to_string();
         let index = s.find(':').ok_or_else(|| Error::BadHeader)?;
 
         // no value?

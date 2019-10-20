@@ -1,7 +1,6 @@
 use std::io::{Cursor, Error as IoError, ErrorKind, Read, Result as IoResult};
 use std::str::FromStr;
 
-use ascii::AsciiString;
 use chunked_transfer::Decoder as ChunkDecoder;
 
 use crate::error::Error;
@@ -40,7 +39,7 @@ pub const DEFAULT_CHARACTER_SET: &str = "utf-8";
 pub struct Response {
     url: Option<String>,
     error: Option<Error>,
-    status_line: AsciiString,
+    status_line: String,
     index: (usize, usize), // index into status_line where we split: HTTP/1.1 200 OK
     status: u16,
     headers: Vec<Header>,
@@ -117,7 +116,7 @@ impl Response {
     pub fn headers_names(&self) -> Vec<String> {
         self.headers
             .iter()
-            .map(|h| h.name().to_ascii_lowercase())
+            .map(|h| h.name().to_lowercase())
             .collect()
     }
 
@@ -513,7 +512,7 @@ pub(crate) fn set_stream(resp: &mut Response, url: String, unit: Option<Unit>, s
     resp.stream = Some(stream);
 }
 
-fn read_next_line<R: Read>(reader: &mut R) -> IoResult<AsciiString> {
+fn read_next_line<R: Read>(reader: &mut R) -> IoResult<String> {
     let mut buf = Vec::new();
     let mut prev_byte_was_cr = false;
 
@@ -527,7 +526,7 @@ fn read_next_line<R: Read>(reader: &mut R) -> IoResult<AsciiString> {
 
         if byte == b'\n' && prev_byte_was_cr {
             buf.pop(); // removing the '\r'
-            return AsciiString::from_ascii(buf)
+            return String::from_utf8(buf)
                 .map_err(|_| IoError::new(ErrorKind::InvalidInput, "Header is not in ASCII"));
         }
 
