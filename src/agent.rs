@@ -284,5 +284,4 @@ mod tests {
             request.set("Foo", "Bar");
         });
     }
-
 }

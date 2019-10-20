@@ -5,9 +5,9 @@ use std::net::ToSocketAddrs;
 use std::time::Duration;
 
 #[cfg(feature = "tls")]
-use rustls::StreamOwned;
-#[cfg(feature = "tls")]
 use rustls::ClientSession;
+#[cfg(feature = "tls")]
+use rustls::StreamOwned;
 
 use crate::error::Error;
 use crate::unit::Unit;
@@ -72,7 +72,10 @@ impl Read for Stream {
 }
 
 #[cfg(feature = "tls")]
-fn read_https(stream: &mut StreamOwned<ClientSession, TcpStream>, buf: &mut [u8]) -> IoResult<usize> {
+fn read_https(
+    stream: &mut StreamOwned<ClientSession, TcpStream>,
+    buf: &mut [u8],
+) -> IoResult<usize> {
     match stream.read(buf) {
         Ok(size) => Ok(size),
         Err(ref e) if is_close_notify(e) => Ok(0),

@@ -95,7 +95,7 @@ impl Payload {
                 let len = bytes.len();
                 let cursor = Cursor::new(bytes);
                 SizedReader::new(Some(len), Box::new(cursor))
-            },
+            }
         }
     }
 }

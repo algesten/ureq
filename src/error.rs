@@ -1,5 +1,5 @@
-use std::io::Error as IoError;
 use std::fmt;
+use std::io::Error as IoError;
 
 /// Errors that are translated to ["synthetic" responses](struct.Response.html#method.synthetic).
 #[derive(Debug)]

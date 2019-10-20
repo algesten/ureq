@@ -4,7 +4,8 @@ use std::io::Read;
 #[test]
 fn tls_connection_close() {
     let agent = ureq::Agent::default().build();
-    let resp = agent.get("https://example.com/404")
+    let resp = agent
+        .get("https://example.com/404")
         .set("Connection", "close")
         .call();
     assert_eq!(resp.status(), 404);
