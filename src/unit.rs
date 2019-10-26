@@ -1,5 +1,5 @@
 use std::io::{Result as IoResult, Write};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex};
 
 use base64;
 #[cfg(feature = "cookie")]
@@ -46,8 +46,7 @@ impl Unit {
 
         let query_string = combine_query(&url, &req.query, mix_queries);
 
-        let state = req.agent.lock().unwrap();
-        let cookie_headers: Vec<_> = extract_cookies(state, &url);
+        let cookie_headers: Vec<_> = extract_cookies(&req.agent, &url);
 
         let extra_headers = {
             let mut extra = vec![];
@@ -201,7 +200,8 @@ pub(crate) fn connect(
 }
 
 #[cfg(feature = "cookie")]
-fn extract_cookies(state: MutexGuard<Option<AgentState>>, url: &Url) -> Vec<Header> {
+fn extract_cookies(state: &std::sync::Mutex<Option<AgentState>>, url: &Url) -> Vec<Header> {
+    let state = state.lock().unwrap();
     let is_secure = url.scheme().eq_ignore_ascii_case("https");
     let hostname = url.host_str().unwrap_or(DEFAULT_HOST).to_string();
 
@@ -212,7 +212,7 @@ fn extract_cookies(state: MutexGuard<Option<AgentState>>, url: &Url) -> Vec<Head
 }
 
 #[cfg(not(feature = "cookie"))]
-fn extract_cookies(_state: MutexGuard<Option<AgentState>>, url: &Url) -> Vec<Header> {
+fn extract_cookies(_state: &std::sync::Mutex<Option<AgentState>>, url: &Url) -> Vec<Header> {
     vec![]
 }
 
