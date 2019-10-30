@@ -25,6 +25,7 @@ fn agent_reuse_headers() {
     assert_eq!(resp.header("X-Call").unwrap(), "2");
 }
 
+#[cfg(feature = "cookie")]
 #[test]
 fn agent_cookies() {
     let agent = agent();
@@ -53,6 +54,7 @@ fn agent_cookies() {
 }
 
 #[test]
+#[cfg(feature = "tls")]
 fn connection_reuse() {
     use std::io::Read;
     use std::time::Duration;

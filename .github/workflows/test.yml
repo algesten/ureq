@@ -10,7 +10,6 @@ jobs:
       matrix:
         feature:
           - charset
-          - tls
           - cookies
     env:
       RUST_BACKTRACE: "1"
@@ -25,4 +24,4 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --features json  ${{ matrix.feature }}
+          args: --no-default-features --features json tls ${{ matrix.feature }}
