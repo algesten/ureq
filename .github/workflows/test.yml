@@ -24,4 +24,4 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --no-default-features --features json tls ${{ matrix.feature }}
+          args: --no-default-features --features "json tls ${{ matrix.feature }}"
