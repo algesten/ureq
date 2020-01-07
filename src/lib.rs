@@ -9,6 +9,7 @@
 //! ```
 //! // requires feature: `ureq = { version = "*", features = ["json"] }`
 //! use ureq::json;
+//!
 //! // sync post request of some json.
 //! let resp = ureq::post("https://myapi.acme.com/ingest")
 //!     .set("X-My-Header", "Secret")
