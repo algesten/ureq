@@ -11,11 +11,9 @@
 
 /// Construct a `serde_json::Value` from a JSON literal.
 ///
-/// ```rust
-/// # #[macro_use]
-/// # extern crate serde_json;
+/// ```edition2018
+/// # use serde_json::json;
 /// #
-/// # fn main() {
 /// let value = json!({
 ///     "code": 200,
 ///     "success": true,
@@ -26,7 +24,6 @@
 ///         ]
 ///     }
 /// });
-/// # }
 /// ```
 ///
 /// Variables or expressions can be interpolated into the JSON literal. Any type
@@ -36,40 +33,34 @@
 /// interpolated type decides to fail, or if the interpolated type contains a
 /// map with non-string keys, the `json!` macro will panic.
 ///
-/// ```rust
-/// # #[macro_use]
-/// # extern crate serde_json;
+/// ```edition2018
+/// # use serde_json::json;
 /// #
-/// # fn main() {
 /// let code = 200;
 /// let features = vec!["serde", "json"];
 ///
 /// let value = json!({
-///    "code": code,
-///    "success": code == 200,
-///    "payload": {
-///        features[0]: features[1]
-///    }
+///     "code": code,
+///     "success": code == 200,
+///     "payload": {
+///         features[0]: features[1]
+///     }
 /// });
-/// # }
 /// ```
 ///
 /// Trailing commas are allowed inside both arrays and objects.
 ///
-/// ```rust
-/// # #[macro_use]
-/// # extern crate serde_json;
+/// ```edition2018
+/// # use serde_json::json;
 /// #
-/// # fn main() {
 /// let value = json!([
 ///     "notice",
 ///     "the",
 ///     "trailing",
 ///     "comma -->",
 /// ]);
-/// # }
 /// ```
-#[macro_export]
+#[macro_export(local_inner_macros)]
 macro_rules! json {
     // Hide distracting implementation details from the generated rustdoc.
     ($($json:tt)+) => {
@@ -84,7 +75,7 @@ macro_rules! json {
 //
 // Changes are fine as long as `json_internal!` does not call any new helper
 // macros and can still be invoked as `json_internal!($($json)+)`.
-#[macro_export]
+#[macro_export(local_inner_macros)]
 #[doc(hidden)]
 macro_rules! json_internal {
     //////////////////////////////////////////////////////////////////////////
@@ -96,12 +87,12 @@ macro_rules! json_internal {
 
     // Done with trailing comma.
     (@array [$($elems:expr,)*]) => {
-        vec![$($elems,)*]
+        json_internal_vec![$($elems,)*]
     };
 
     // Done without trailing comma.
     (@array [$($elems:expr),*]) => {
-        vec![$($elems),*]
+        json_internal_vec![$($elems),*]
     };
 
     // Next element is `null`.
@@ -144,6 +135,11 @@ macro_rules! json_internal {
         json_internal!(@array [$($elems,)*] $($rest)*)
     };
 
+    // Unexpected token after most recent element.
+    (@array [$($elems:expr),*] $unexpected:tt $($rest:tt)*) => {
+        json_unexpected!($unexpected)
+    };
+
     //////////////////////////////////////////////////////////////////////////
     // TT muncher for parsing the inside of an object {...}. Each entry is
     // inserted into the given map variable.
@@ -159,13 +155,18 @@ macro_rules! json_internal {
 
     // Insert the current entry followed by trailing comma.
     (@object $object:ident [$($key:tt)+] ($value:expr) , $($rest:tt)*) => {
-        $object.insert(($($key)+).into(), $value);
+        let _ = $object.insert(($($key)+).into(), $value);
         json_internal!(@object $object () ($($rest)*) ($($rest)*));
+    };
+
+    // Current entry followed by unexpected token.
+    (@object $object:ident [$($key:tt)+] ($value:expr) $unexpected:tt $($rest:tt)*) => {
+        json_unexpected!($unexpected);
     };
 
     // Insert the last entry without trailing comma.
     (@object $object:ident [$($key:tt)+] ($value:expr)) => {
-        $object.insert(($($key)+).into(), $value);
+        let _ = $object.insert(($($key)+).into(), $value);
     };
 
     // Next value is `null`.
@@ -219,13 +220,13 @@ macro_rules! json_internal {
     // Misplaced colon. Trigger a reasonable error message.
     (@object $object:ident () (: $($rest:tt)*) ($colon:tt $($copy:tt)*)) => {
         // Takes no arguments so "no rules expected the token `:`".
-        unimplemented!($colon);
+        json_unexpected!($colon);
     };
 
     // Found a comma inside a key. Trigger a reasonable error message.
     (@object $object:ident ($($key:tt)*) (, $($rest:tt)*) ($comma:tt $($copy:tt)*)) => {
         // Takes no arguments so "no rules expected the token `,`".
-        unimplemented!($comma);
+        json_unexpected!($comma);
     };
 
     // Key is fully parenthesized. This avoids clippy double_parens false
@@ -258,7 +259,7 @@ macro_rules! json_internal {
     };
 
     ([]) => {
-        $crate::SerdeValue::Array(vec![])
+        $crate::SerdeValue::Array(json_internal_vec![])
     };
 
     ([ $($tt:tt)+ ]) => {
@@ -282,4 +283,21 @@ macro_rules! json_internal {
     ($other:expr) => {
         $crate::serde_to_value(&$other).unwrap()
     };
+}
+
+// The json_internal macro above cannot invoke vec directly because it uses
+// local_inner_macros. A vec invocation there would resolve to $crate::vec.
+// Instead invoke vec here outside of local_inner_macros.
+#[macro_export]
+#[doc(hidden)]
+macro_rules! json_internal_vec {
+    ($($content:tt)*) => {
+        vec![$($content)*]
+    };
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! json_unexpected {
+    () => {};
 }
