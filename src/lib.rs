@@ -8,22 +8,18 @@
 //!
 //! ```
 //! // requires feature: `ureq = { version = "*", features = ["json"] }`
-//! #[macro_use]
-//! extern crate ureq;
+//! use ureq::json;
+//! // sync post request of some json.
+//! let resp = ureq::post("https://myapi.acme.com/ingest")
+//!     .set("X-My-Header", "Secret")
+//!     .send_json(json!({
+//!         "name": "martin",
+//!         "rust": true
+//!     }));
 //!
-//! fn main() {
-//!     // sync post request of some json.
-//!     let resp = ureq::post("https://myapi.acme.com/ingest")
-//!         .set("X-My-Header", "Secret")
-//!         .send_json(json!({
-//!             "name": "martin",
-//!             "rust": true
-//!         }));
-//!
-//!     // .ok() tells if response is 200-299.
-//!     if resp.ok() {
-//!       // ....
-//!     }
+//! // .ok() tells if response is 200-299.
+//! if resp.ok() {
+//!   // ....
 //! }
 //! ```
 //!

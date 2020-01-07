@@ -140,15 +140,10 @@ impl Request {
     /// The `Content-Length` header is implicitly set to the length of the serialized value.
     ///
     /// ```
-    /// #[macro_use]
-    /// extern crate ureq;
-    ///
-    /// fn main() {
     /// let body = b"Hello world!";
     /// let r = ureq::post("/my_page")
     ///     .send_bytes(body);
     /// println!("{:?}", r);
-    /// }
     /// ```
     pub fn send_bytes(&mut self, data: &[u8]) -> Response {
         self.do_call(Payload::Bytes(data.to_owned()))
