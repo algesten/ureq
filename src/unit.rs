@@ -338,7 +338,7 @@ fn save_cookies(unit: &Unit, resp: &Response) {
     if let Some(add_jar) = state.as_mut().map(|state| &mut state.jar) {
         for raw_cookie in cookies.iter() {
             let to_parse = if raw_cookie.to_lowercase().contains("domain=") {
-                raw_cookie.to_string()
+                (*raw_cookie).to_string()
             } else {
                 let host = &unit.url.host_str().unwrap_or(DEFAULT_HOST).to_string();
                 format!("{}; Domain={}", raw_cookie, host)
