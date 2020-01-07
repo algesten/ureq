@@ -1,7 +1,7 @@
-use std::sync::Arc;
-use std::sync::Mutex;
 #[cfg(feature = "cookie")]
 use cookie::{Cookie, CookieJar};
+use std::sync::Arc;
+use std::sync::Mutex;
 
 use crate::header::{self, Header};
 use crate::pool::ConnectionPool;
