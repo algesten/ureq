@@ -120,23 +120,13 @@ impl Read for Stream {
     }
 }
 
-#[cfg(all(feature = "tls", not(feature = "native-tls")))]
-pub(crate) trait ReclaimStream {
-    fn reclaim_stream(self) -> Stream;
-}
-
-impl ReclaimStream for Stream {
-    fn reclaim_stream(self) -> Stream {
-        self
-    }
-}
-
-impl<R: ReclaimStream> ReclaimStream for ChunkDecoder<R>
+impl<R> From<ChunkDecoder<R>> for Stream
 where
     R: Read,
+    Stream: From<R>,
 {
-    fn reclaim_stream(self) -> Stream {
-        self.into_inner().reclaim_stream()
+    fn from(chunk_decoder: ChunkDecoder<R>) -> Stream {
+        chunk_decoder.into_inner().into()
     }
 }
 

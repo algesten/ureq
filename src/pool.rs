@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::io::{Read, Result as IoResult};
 
-use crate::stream::{ReclaimStream, Stream};
+use crate::stream::Stream;
 use crate::unit::Unit;
 
 use url::Url;
@@ -74,14 +74,14 @@ impl PoolKey {
 /// read is exhausted (reached a 0).
 ///
 /// *Internal API*
-pub(crate) struct PoolReturnRead<R: Read + Sized + ReclaimStream> {
+pub(crate) struct PoolReturnRead<R: Read + Sized + Into<Stream>> {
     // unit that contains the agent where we want to return the reader.
     unit: Option<Unit>,
     // wrapped reader around the same stream
     reader: Option<R>,
 }
 
-impl<R: Read + Sized + ReclaimStream> PoolReturnRead<R> {
+impl<R: Read + Sized + Into<Stream>> PoolReturnRead<R> {
     pub fn new(unit: Option<Unit>, reader: R) -> Self {
         PoolReturnRead {
             unit,
@@ -94,7 +94,7 @@ impl<R: Read + Sized + ReclaimStream> PoolReturnRead<R> {
         if let (Some(unit), Some(reader)) = (self.unit.take(), self.reader.take()) {
             let state = &mut unit.agent.lock().unwrap();
             // bring back stream here to either go into pool or dealloc
-            let stream = reader.reclaim_stream();
+            let stream = reader.into();
             if let Some(agent) = state.as_mut() {
                 if !stream.is_poolable() {
                     // just let it deallocate
@@ -115,7 +115,7 @@ impl<R: Read + Sized + ReclaimStream> PoolReturnRead<R> {
     }
 }
 
-impl<R: Read + Sized + ReclaimStream> Read for PoolReturnRead<R> {
+impl<R: Read + Sized + Into<Stream>> Read for PoolReturnRead<R> {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         let amount = self.do_read(buf)?;
         // only if the underlying reader is exhausted can we send a new
@@ -127,7 +127,7 @@ impl<R: Read + Sized + ReclaimStream> Read for PoolReturnRead<R> {
     }
 }
 
-impl<R: Read + Sized + ReclaimStream> Drop for PoolReturnRead<R> {
+impl<R: Read + Sized + Into<Stream>> Drop for PoolReturnRead<R> {
     fn drop(&mut self) {
         self.return_connection();
     }

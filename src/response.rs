@@ -6,7 +6,7 @@ use chunked_transfer::Decoder as ChunkDecoder;
 use crate::error::Error;
 use crate::header::Header;
 use crate::pool::PoolReturnRead;
-use crate::stream::{ReclaimStream, Stream};
+use crate::stream::Stream;
 use crate::unit::Unit;
 
 #[cfg(feature = "json")]
@@ -617,9 +617,12 @@ impl<R: Read> Read for LimitedRead<R> {
     }
 }
 
-impl<R: ReclaimStream> ReclaimStream for LimitedRead<R> {
-    fn reclaim_stream(self) -> Stream {
-        self.reader.reclaim_stream()
+impl<R> From<LimitedRead<R>> for Stream
+where
+    Stream: From<R>,
+{
+    fn from(limited_read: LimitedRead<R>) -> Stream {
+        limited_read.reader.into()
     }
 }
 
