@@ -5,6 +5,8 @@ use std::net::ToSocketAddrs;
 use std::time::Duration;
 use std::time::Instant;
 
+use chunked_transfer::Decoder as ChunkDecoder;
+
 #[cfg(feature = "tls")]
 use rustls::ClientSession;
 #[cfg(feature = "tls")]
@@ -119,6 +121,25 @@ impl Read for Stream {
 }
 
 #[cfg(all(feature = "tls", not(feature = "native-tls")))]
+pub(crate) trait ReclaimStream {
+    fn reclaim_stream(self) -> Stream;
+}
+
+impl ReclaimStream for Stream {
+    fn reclaim_stream(self) -> Stream {
+        self
+    }
+}
+
+impl<R: ReclaimStream> ReclaimStream for ChunkDecoder<R>
+where
+    R: Read,
+{
+    fn reclaim_stream(self) -> Stream {
+        self.into_inner().reclaim_stream()
+    }
+}
+
 fn read_https(
     stream: &mut StreamOwned<ClientSession, TcpStream>,
     buf: &mut [u8],

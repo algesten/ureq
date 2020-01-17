@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::io::{Read, Result as IoResult};
 
-use crate::stream::Stream;
+use crate::stream::{ReclaimStream, Stream};
 use crate::unit::Unit;
 
 use url::Url;
@@ -74,40 +74,27 @@ impl PoolKey {
 /// read is exhausted (reached a 0).
 ///
 /// *Internal API*
-pub(crate) struct PoolReturnRead<R: Read + Sized> {
+pub(crate) struct PoolReturnRead<R: Read + Sized + ReclaimStream> {
     // unit that contains the agent where we want to return the reader.
     unit: Option<Unit>,
-    // pointer to underlying stream.
-    // this pointer forces the entire PoolReturnRead to be !Sync and !Send
-    // that's a good thing, because the pool return logic is certainly not
-    // thread safe.
-    stream: *mut Stream,
     // wrapped reader around the same stream
     reader: Option<R>,
 }
 
-impl<R: Read + Sized> PoolReturnRead<R> {
-    pub fn new(unit: Option<Unit>, stream: *mut Stream, reader: R) -> Self {
+impl<R: Read + Sized + ReclaimStream> PoolReturnRead<R> {
+    pub fn new(unit: Option<Unit>, reader: R) -> Self {
         PoolReturnRead {
             unit,
-            stream,
             reader: Some(reader),
         }
     }
 
     fn return_connection(&mut self) {
         // guard we only do this once.
-        if let Some(unit) = self.unit.take() {
-            // this frees up the wrapper type around the Stream so
-            // we can safely bring the stream pointer back.
-            self.reader.take();
-            if self.stream.is_null() {
-                return;
-            }
+        if let (Some(unit), Some(reader)) = (self.unit.take(), self.reader.take()) {
             let state = &mut unit.agent.lock().unwrap();
             // bring back stream here to either go into pool or dealloc
-            let stream = unsafe { *Box::from_raw(self.stream) };
-            self.stream = ::std::ptr::null_mut();
+            let stream = reader.reclaim_stream();
             if let Some(agent) = state.as_mut() {
                 if !stream.is_poolable() {
                     // just let it deallocate
@@ -128,7 +115,7 @@ impl<R: Read + Sized> PoolReturnRead<R> {
     }
 }
 
-impl<R: Read + Sized> Read for PoolReturnRead<R> {
+impl<R: Read + Sized + ReclaimStream> Read for PoolReturnRead<R> {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         let amount = self.do_read(buf)?;
         // only if the underlying reader is exhausted can we send a new
@@ -140,7 +127,7 @@ impl<R: Read + Sized> Read for PoolReturnRead<R> {
     }
 }
 
-impl<R: Read + Sized> Drop for PoolReturnRead<R> {
+impl<R: Read + Sized + ReclaimStream> Drop for PoolReturnRead<R> {
     fn drop(&mut self) {
         self.return_connection();
     }
