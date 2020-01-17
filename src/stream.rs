@@ -73,19 +73,11 @@ impl Read for Stream {
     }
 }
 
-pub(crate) trait ReclaimStream {
-    fn reclaim_stream(self) -> Stream;
-}
-
-impl ReclaimStream for Stream {
-    fn reclaim_stream(self) -> Stream {
-        self
-    }
-}
-
-impl<R: ReclaimStream> ReclaimStream for ChunkDecoder<R> {
-    fn reclaim_stream(self) -> Stream {
-        self.unwrap().reclaim_stream()
+impl<R> From<ChunkDecoder<R>> for Stream
+where
+    Stream : From<R> {
+    fn from(chunk_decoder: ChunkDecoder<R>) -> Stream {
+        chunk_decoder.unwrap().into()
     }
 }
 
