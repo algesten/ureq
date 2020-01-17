@@ -181,14 +181,24 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
     .map_err(|err| Error::ConnectionFailed(format!("{}", err)))?;
 
     // rust's absurd api returns Err if we set 0.
+    // Setting it to None will disable the native system timeout
     if unit.timeout_read > 0 {
         stream
             .set_read_timeout(Some(Duration::from_millis(unit.timeout_read as u64)))
             .ok();
+    } else {
+        stream
+            .set_read_timeout(None)
+            .ok();
     }
+
     if unit.timeout_write > 0 {
         stream
             .set_write_timeout(Some(Duration::from_millis(unit.timeout_write as u64)))
+            .ok();
+    } else {
+        stream
+            .set_write_timeout(None)
             .ok();
     }
 
