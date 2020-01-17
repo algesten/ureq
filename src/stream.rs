@@ -77,7 +77,7 @@ impl<R> From<ChunkDecoder<R>> for Stream
 where
     Stream : From<R> {
     fn from(chunk_decoder: ChunkDecoder<R>) -> Stream {
-        chunk_decoder.unwrap().into()
+        chunk_decoder.into_inner().into()
     }
 }
 
