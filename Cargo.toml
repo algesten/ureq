@@ -22,7 +22,7 @@ cookies = ["cookie"]
 
 [dependencies]
 base64 = "0.11"
-chunked_transfer = "1"
+chunked_transfer = { version = "1", path = "rust-chunked-transfer" }
 cookie = { version = "0.12", features = ["percent-encode"], optional = true}
 lazy_static = "1"
 qstring = "0.7"

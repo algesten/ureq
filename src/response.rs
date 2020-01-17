@@ -6,7 +6,7 @@ use chunked_transfer::Decoder as ChunkDecoder;
 use crate::error::Error;
 use crate::header::Header;
 use crate::pool::PoolReturnRead;
-use crate::stream::Stream;
+use crate::stream::{ReclaimStream, Stream};
 use crate::unit::Unit;
 
 #[cfg(feature = "json")]
@@ -298,28 +298,20 @@ impl Response {
                 .and_then(|l| l.parse::<usize>().ok())
         };
 
-        let stream = Box::new(self.stream.expect("No reader in response?!"));
-        let stream_ptr = Box::into_raw(stream);
-        let mut reclaiming_read = ReclaimingRead {
-            stream: stream_ptr,
-            dealloc: false,
-        };
+        let stream = self.stream.expect("No reader in response?!");
         let unit = self.unit;
 
         match (use_chunked, limit_bytes) {
             (true, _) => Box::new(PoolReturnRead::new(
                 unit,
-                stream_ptr,
-                ChunkDecoder::new(reclaiming_read),
+                ChunkDecoder::new(stream),
             )) as Box<dyn Read>,
             (false, Some(len)) => Box::new(PoolReturnRead::new(
                 unit,
-                stream_ptr,
-                LimitedRead::new(reclaiming_read, len),
+                LimitedRead::new(stream, len),
             )),
             (false, None) => {
-                reclaiming_read.dealloc = true; // dealloc when read drops.
-                Box::new(reclaiming_read)
+                Box::new(stream)
             }
         }
     }
@@ -552,57 +544,15 @@ fn read_next_line<R: Read>(reader: &mut R) -> IoResult<String> {
     }
 }
 
-/// Read Wrapper around an (unsafe) pointer to a Stream.
-///
-/// *Internal API*
-///
-/// The reason for this is that we wrap our reader in `ChunkDecoder::new` and
-/// that api provides no way for us to get the underlying stream back. We need
-/// to get the stream both for sending responses and for pooling.
-pub(crate) struct ReclaimingRead {
-    // this pointer forces ReclaimingRead to be !Send and !Sync. That's a good
-    // thing, cause passing this reader around threads would not be safe.
-    stream: *mut Stream,
-    dealloc: bool, // whether we are to dealloc stream on drop
-}
-
-impl Read for ReclaimingRead {
-    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
-        unsafe {
-            if self.stream.is_null() {
-                return Ok(0);
-            }
-            let amount = (*self.stream).read(buf)?;
-            if amount == 0 {
-                if self.dealloc {
-                    let _stream = Box::from_raw(self.stream);
-                }
-                self.stream = ::std::ptr::null_mut();
-            }
-            Ok(amount)
-        }
-    }
-}
-
-impl Drop for ReclaimingRead {
-    fn drop(&mut self) {
-        if self.dealloc && !self.stream.is_null() {
-            unsafe {
-                let _stream = Box::from_raw(self.stream);
-            }
-        }
-    }
-}
-
-/// Limits a ReclaimingRead to a content size (as set by a "Content-Length" header).
-struct LimitedRead {
-    reader: ReclaimingRead,
+/// Limits a `Read` to a content size (as set by a "Content-Length" header).
+struct LimitedRead<R> {
+    reader: R,
     limit: usize,
     position: usize,
 }
 
-impl LimitedRead {
-    fn new(reader: ReclaimingRead, limit: usize) -> Self {
+impl<R> LimitedRead<R> {
+    fn new(reader: R, limit: usize) -> Self {
         LimitedRead {
             reader,
             limit,
@@ -611,7 +561,7 @@ impl LimitedRead {
     }
 }
 
-impl Read for LimitedRead {
+impl<R: Read> Read for LimitedRead<R> {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         let left = self.limit - self.position;
         if left == 0 {
@@ -629,6 +579,12 @@ impl Read for LimitedRead {
             }
             Err(e) => Err(e),
         }
+    }
+}
+
+impl<R: ReclaimStream> ReclaimStream for LimitedRead<R> {
+    fn reclaim_stream(self) -> Stream {
+        self.reader.reclaim_stream()
     }
 }
 
