@@ -16,6 +16,8 @@ use serde_json;
 use encoding::label::encoding_from_whatwg_label;
 #[cfg(feature = "charset")]
 use encoding::DecoderTrap;
+#[cfg(feature = "deflate")]
+use flate2::read::DeflateDecoder;
 
 pub const DEFAULT_CONTENT_TYPE: &str = "text/plain";
 pub const DEFAULT_CHARACTER_SET: &str = "utf-8";
@@ -52,6 +54,12 @@ pub struct Response {
 struct ResponseStatusIndex {
     http_version: usize,
     response_code: usize,
+}
+
+enum SupportedCompression {
+    #[cfg(feature = "deflate")]
+    DEFLATE,
+    NONE
 }
 
 impl ::std::fmt::Debug for Response {
@@ -298,6 +306,15 @@ impl Response {
                 .and_then(|l| l.parse::<usize>().ok())
         };
 
+        let compression = self.
+            header("content-encoding")
+            .map(|enc| match enc {
+                #[cfg(feature = "deflate")]
+                "deflate" => SupportedCompression::DEFLATE,
+                _ => SupportedCompression::NONE
+            })
+            .unwrap_or(SupportedCompression::NONE);
+
         let stream = Box::new(self.stream.expect("No reader in response?!"));
         let stream_ptr = Box::into_raw(stream);
         let mut reclaiming_read = ReclaimingRead {
@@ -306,7 +323,7 @@ impl Response {
         };
         let unit = self.unit;
 
-        match (use_chunked, limit_bytes) {
+        let body_read = match (use_chunked, limit_bytes) {
             (true, _) => Box::new(PoolReturnRead::new(
                 unit,
                 stream_ptr,
@@ -321,6 +338,13 @@ impl Response {
                 reclaiming_read.dealloc = true; // dealloc when read drops.
                 Box::new(reclaiming_read)
             }
+        };
+
+        match compression {
+            SupportedCompression::NONE => body_read,
+            #[cfg(feature = "deflate")]
+            SupportedCompression::DEFLATE => 
+                Box::new(DeflateDecoder::new(body_read))
         }
     }
 
