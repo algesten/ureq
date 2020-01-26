@@ -1,6 +1,9 @@
 # ureq
 
 ![](https://github.com/algesten/ureq/workflows/CI/badge.svg)
+[![CratesIO](https://img.shields.io/crates/v/ureq.svg)](https://crates.io/crates/ureq)
+[![Documentation](https://docs.rs/ureq/badge.svg)](https://docs.rs/ureq)
+
 
 > Minimal request library in rust.
 
