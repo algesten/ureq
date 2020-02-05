@@ -132,6 +132,9 @@ impl Request {
     /// ```
     #[cfg(feature = "json")]
     pub fn send_json(&mut self, data: SerdeValue) -> Response {
+        if let None = self.header("Content-Type") {
+            self.set("Content-Type", "application/json");
+        }
         self.do_call(Payload::JSON(data))
     }
 
