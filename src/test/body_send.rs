@@ -73,3 +73,39 @@ fn str_with_encoding() {
         [72, 228, 108, 108, 111, 32, 87, 246, 114, 108, 100, 33, 33, 33]
     );
 }
+
+#[test]
+#[cfg(feature = "json")]
+fn content_type_on_json() {
+    test::set_handler("/content_type_on_json", |_unit| {
+        test::make_response(200, "OK", vec![], vec![])
+    });
+    let mut json = SerdeMap::new();
+    json.insert(
+        "Hello".to_string(),
+        SerdeValue::String("World!!!".to_string()),
+    );
+    let resp = post("test://host/content_type_on_json").send_json(SerdeValue::Object(json));
+    let vec = resp.to_write_vec();
+    let s = String::from_utf8_lossy(&vec);
+    assert!(s.contains("\r\nContent-Type: application/json\r\n"));
+}
+
+#[test]
+#[cfg(feature = "json")]
+fn content_type_not_overriden_on_json() {
+    test::set_handler("/content_type_not_overriden_on_json", |_unit| {
+        test::make_response(200, "OK", vec![], vec![])
+    });
+    let mut json = SerdeMap::new();
+    json.insert(
+        "Hello".to_string(),
+        SerdeValue::String("World!!!".to_string()),
+    );
+    let resp = post("test://host/content_type_not_overriden_on_json")
+        .set("content-type", "text/plain")
+        .send_json(SerdeValue::Object(json));
+    let vec = resp.to_write_vec();
+    let s = String::from_utf8_lossy(&vec);
+    assert!(s.contains("\r\ncontent-type: text/plain\r\n"));
+}
