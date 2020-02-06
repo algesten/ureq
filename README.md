@@ -4,8 +4,24 @@
 [![CratesIO](https://img.shields.io/crates/v/ureq.svg)](https://crates.io/crates/ureq)
 [![Documentation](https://docs.rs/ureq/badge.svg)](https://docs.rs/ureq)
 
-
 > Minimal request library in rust.
+
+## ureq's future
+
+I asked for feedback on [ureq's future
+direction](https://www.reddit.com/r/rust/comments/eu6qg8/future_of_ureq_http_client_library/)
+and came to the conclusion that there's enough interest in a simple
+blocking http client to keep it going. Another motivation is that I
+use it extensively for my own work, to talk to S3.
+
+I'll keep maintaining ureq. I will try to keep dependencies somewhat
+fresh and try to address bad bugs. I will however not personally
+implement new features in ureq, but I do welcome PR with open arms.
+
+The code base is extremely simple, one might even call naive. It's a
+good project to hack on as first learning experience in Rust. I will
+uphold some base line of code hygiene, but won't block a PR due to
+something being a bit inelegant.
 
 ## Usage
 
@@ -72,14 +88,13 @@ correct according to spec cause an HTTP header name should be ascii. The absolut
 correct way would be to have `.set(header, value)` return a `Result`. This library opts
 for convenience over correctness, so the decision is left to the user.
 
-### Sync (for now)
+### Sync forever
 
-This library uses blocking socket reads and writes, for now.
-The async story in rust is in heavy development and when used
-currently pulls in a heavy dependency tree (tokio etc). Once
-more async support is in rust core and won't drag those
-dependencies, this library might change.
-
+This library uses blocking socket reads and writes. When it was
+created, there wasn't any async/await support in rust, and for my own
+purposes, blocking IO was fine. At this point, one good reason to keep
+this library going is that it is blocking (the other is that it relies
+on very little use of unsafe).
 
 ## TODO
 
