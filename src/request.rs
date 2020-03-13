@@ -45,6 +45,7 @@ pub struct Request {
     pub(crate) timeout_read: u64,
     pub(crate) timeout_write: u64,
     pub(crate) redirects: u32,
+    pub(crate) proxy: Option<crate::proxy::Proxy>,
 }
 
 impl ::std::fmt::Debug for Request {
@@ -513,5 +514,19 @@ impl Request {
         URL_BASE
             .join(&self.path)
             .map_err(|e| Error::BadUrl(format!("{}", e)))
+    }
+
+    /// Set the proxy server to use for the connection.
+    ///
+    /// Example:
+    /// ```
+    /// let proxy = ureq::Proxy::new("user:password@cool.proxy:9090").unwrap();
+    /// let req = ureq::post("https://cool.server")
+    ///     .set_proxy(proxy)
+    ///     .build();
+    /// ```
+    pub fn set_proxy(&mut self, proxy: crate::proxy::Proxy) -> &mut Request {
+        self.proxy = Some(proxy);
+        self
     }
 }

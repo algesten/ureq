@@ -11,6 +11,7 @@ use crate::agent::AgentState;
 use crate::body::{self, Payload, SizedReader};
 use crate::header;
 use crate::stream::{self, connect_https, connect_test, Stream};
+use crate::Proxy;
 use crate::{Error, Header, Request, Response};
 
 use crate::pool::DEFAULT_HOST;
@@ -29,6 +30,7 @@ pub(crate) struct Unit {
     pub timeout_read: u64,
     pub timeout_write: u64,
     pub method: String,
+    pub proxy: Option<Proxy>,
 }
 
 impl Unit {
@@ -86,6 +88,7 @@ impl Unit {
             timeout_read: req.timeout_read,
             timeout_write: req.timeout_write,
             method: req.method.clone(),
+            proxy: req.proxy.clone(),
         }
     }
 

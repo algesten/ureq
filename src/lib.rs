@@ -94,6 +94,7 @@ mod body;
 mod error;
 mod header;
 mod pool;
+mod proxy;
 mod request;
 mod response;
 mod stream;
@@ -108,6 +109,7 @@ mod test;
 pub use crate::agent::Agent;
 pub use crate::error::Error;
 pub use crate::header::Header;
+pub use crate::proxy::Proxy;
 pub use crate::request::Request;
 pub use crate::response::Response;
 
