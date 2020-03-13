@@ -158,10 +158,13 @@ pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
 
 pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<TcpStream, Error> {
     //
-    let ips: Vec<SocketAddr> = format!("{}:{}", hostname, port)
-        .to_socket_addrs()
-        .map_err(|e| Error::DnsFailed(format!("{}", e)))?
-        .collect();
+    let ips: Vec<SocketAddr> = match unit.proxy {
+        Some(ref proxy) => format!("{}:{}", proxy.server, proxy.port),
+        None => format!("{}:{}", hostname, port),
+    }
+    .to_socket_addrs()
+    .map_err(|e| Error::DnsFailed(format!("{}", e)))?
+    .collect();
 
     if ips.is_empty() {
         return Err(Error::DnsFailed(format!("No ip address for {}", hostname)));
@@ -171,7 +174,7 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
     let sock_addr = ips[0];
 
     // connect with a configured timeout.
-    let stream = match unit.timeout_connect {
+    let mut stream = match unit.timeout_connect {
         0 => TcpStream::connect(&sock_addr),
         _ => TcpStream::connect_timeout(
             &sock_addr,
@@ -187,9 +190,7 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
             .set_read_timeout(Some(Duration::from_millis(unit.timeout_read as u64)))
             .ok();
     } else {
-        stream
-            .set_read_timeout(None)
-            .ok();
+        stream.set_read_timeout(None).ok();
     }
 
     if unit.timeout_write > 0 {
@@ -197,9 +198,25 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
             .set_write_timeout(Some(Duration::from_millis(unit.timeout_write as u64)))
             .ok();
     } else {
-        stream
-            .set_write_timeout(None)
-            .ok();
+        stream.set_write_timeout(None).ok();
+    }
+
+    if let Some(ref proxy) = unit.proxy {
+        write!(stream, "{}", proxy.connect(hostname, port)).unwrap();
+        stream.flush()?;
+
+        let mut proxy_response = Vec::new();
+
+        loop {
+            let mut buf = vec![0; 256];
+            let total = stream.read(&mut buf)?;
+            proxy_response.append(&mut buf);
+            if total < 256 {
+                break;
+            }
+        }
+
+        crate::Proxy::verify_response(&proxy_response)?;
     }
 
     Ok(stream)
