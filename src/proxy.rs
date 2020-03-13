@@ -1,5 +1,4 @@
 use crate::error::Error;
-use std::fmt;
 
 /// Kind of proxy connection (Basic, Digest, etc)
 #[derive(Clone, Debug)]
@@ -86,29 +85,47 @@ impl Proxy {
         })
     }
 
-    pub(crate) fn kind(mut self, kind: ProxyKind) -> Self {
-        self.kind = kind;
-        self
-    }
-
     pub fn connect<S: AsRef<str>>(&self, host: S, port: u16) -> String {
+        let authorization = if self.use_authorization() {
+            match self.kind {
+                ProxyKind::Basic => {
+                    let creds = base64::encode(&format!(
+                        "{}:{}",
+                        self.user.clone().unwrap_or_default(),
+                        self.password.clone().unwrap_or_default()
+                    ));
+                    format!("Proxy-Authorization: basic {}\r\n", creds)
+                }
+            }
+        } else {
+            String::new()
+        };
+
         format!(
             "CONNECT {}:{} HTTP/1.1\r\n\
 Host: {}:{}\r\n\
 User-Agent: something/1.0.0\r\n\
-Proxy-Connection: Keep-Alive\r\n\r\n",
+Proxy-Connection: Keep-Alive\r\n\
+{}\
+\r\n",
             host.as_ref(),
             port,
             host.as_ref(),
-            port
+            port,
+            authorization
         )
     }
 
     pub(crate) fn verify_response(response: &[u8]) -> Result<(), Error> {
         let response_string = String::from_utf8_lossy(response);
         let top_line = response_string.lines().next().ok_or(Error::ProxyConnect)?;
+        let status_code = top_line.split_whitespace().nth(1).ok_or(Error::BadProxy)?;
 
-        Ok(())
+        match status_code {
+            "200" => Ok(()),
+            "401" | "407" => Err(Error::InvalidProxyCreds),
+            _ => Err(Error::BadProxy),
+        }
     }
 }
 

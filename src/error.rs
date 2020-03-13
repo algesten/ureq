@@ -29,6 +29,8 @@ pub enum Error {
     BadProxyCreds,
     /// Proxy could not connect
     ProxyConnect,
+    /// Incorrect credentials for proxy
+    InvalidProxyCreds,
 }
 
 impl Error {
@@ -56,6 +58,7 @@ impl Error {
             Error::BadProxy => 500,
             Error::BadProxyCreds => 500,
             Error::ProxyConnect => 500,
+            Error::InvalidProxyCreds => 500,
         }
     }
 
@@ -74,6 +77,7 @@ impl Error {
             Error::BadProxy => "Malformed proxy",
             Error::BadProxyCreds => "Failed to parse proxy credentials",
             Error::ProxyConnect => "Proxy failed to connect",
+            Error::InvalidProxyCreds => "Provided proxy credentials are incorrect",
         }
     }
 
@@ -92,6 +96,7 @@ impl Error {
             Error::BadProxy => "Malformed proxy".to_string(),
             Error::BadProxyCreds => "Failed to parse proxy credentials".to_string(),
             Error::ProxyConnect => "Proxy failed to connect".to_string(),
+            Error::InvalidProxyCreds => "Provided proxy credentials are incorrect".to_string(),
         }
     }
 }
