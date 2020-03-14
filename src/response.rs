@@ -718,11 +718,9 @@ mod tests {
     #[test]
     #[cfg(feature = "json")]
     fn parse_simple_json() {
-        let s = format!(
-            "HTTP/1.1 200 OK\r\n\
+        let s = "HTTP/1.1 200 OK\r\n\
              \r\n\
-             {{\"hello\":\"world\"}}"
-        );
+             {\"hello\":\"world\"}";
         let resp = s.parse::<Response>().unwrap();
         let v = resp.into_json().unwrap();
         let compare = "{\"hello\":\"world\"}"

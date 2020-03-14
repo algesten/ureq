@@ -21,9 +21,9 @@ tls = ["rustls", "webpki", "webpki-roots"]
 cookies = ["cookie"]
 
 [dependencies]
-base64 = "0.11"
+base64 = "0.12"
 chunked_transfer = "1"
-cookie = { version = "0.12", features = ["percent-encode"], optional = true}
+cookie = { version = "0.13", features = ["percent-encode"], optional = true}
 lazy_static = "1"
 qstring = "0.7"
 url = "2"

@@ -83,6 +83,7 @@ fn read_https(
     }
 }
 
+#[allow(deprecated)]
 fn is_close_notify(e: &std::io::Error) -> bool {
     if e.kind() != std::io::ErrorKind::ConnectionAborted {
         return false;
