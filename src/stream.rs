@@ -129,6 +129,17 @@ pub(crate) fn connect_http(unit: &Unit) -> Result<Stream, Error> {
     connect_host(unit, hostname, port).map(Stream::Http)
 }
 
+#[cfg(all(feature = "tls", feature = "native-certs"))]
+fn configure_certs(config: &mut rustls::ClientConfig) {
+    config.root_store = rustls_native_certs::load_native_certs()
+        .expect("Could not load patform certs");
+}
+
+#[cfg(all(feature = "tls", not(feature = "native-certs")))]
+fn configure_certs(config: &mut rustls::ClientConfig) {
+    config.root_store.add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
+}
+
 #[cfg(feature = "tls")]
 pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
     use lazy_static::lazy_static;
@@ -137,9 +148,7 @@ pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
     lazy_static! {
         static ref TLS_CONF: Arc<rustls::ClientConfig> = {
             let mut config = rustls::ClientConfig::new();
-            config
-                .root_store
-                .add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
+            configure_certs(&mut config);
             Arc::new(config)
         };
     }
