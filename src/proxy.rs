@@ -1,9 +1,10 @@
 use crate::error::Error;
 
-/// Kind of proxy connection (Basic, Digest, etc)
-#[derive(Clone, Debug)]
-pub(crate) enum ProxyKind {
-    Basic,
+/// Proxy protocol
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Proto {
+    HTTPConnect,
+    SOCKS5,
 }
 
 /// Proxy server definition
@@ -13,7 +14,7 @@ pub struct Proxy {
     pub(crate) port: u32,
     pub(crate) user: Option<String>,
     pub(crate) password: Option<String>,
-    pub(crate) kind: ProxyKind,
+    pub(crate) proto: Proto,
 }
 
 impl Proxy {
@@ -56,46 +57,68 @@ impl Proxy {
         }
     }
 
-    fn use_authorization(&self) -> bool {
+    pub(crate) fn use_authorization(&self) -> bool {
         self.user.is_some() && self.password.is_some()
     }
 
     pub fn new<S: AsRef<str>>(proxy: S) -> Result<Self, Error> {
-        let mut parts = proxy
+        let mut proxy_parts = proxy
             .as_ref()
+            .splitn(2, "://")
+            .collect::<Vec<&str>>()
+            .into_iter();
+
+        let proto = if proxy_parts.len() == 2 {
+            match proxy_parts.next() {
+                Some("http") => Proto::HTTPConnect,
+                Some("socks") => Proto::SOCKS5,
+                Some("socks5") => Proto::SOCKS5,
+                _ => return Err(Error::BadProxy),
+            }
+        } else {
+            Proto::HTTPConnect
+        };
+
+        let remaining_parts = proxy_parts.next();
+        if remaining_parts == None {
+            return Err(Error::BadProxy);
+        }
+
+        let mut creds_server_port_parts = remaining_parts
+            .unwrap()
             .rsplitn(2, '@')
             .collect::<Vec<&str>>()
             .into_iter()
             .rev();
 
-        let (user, password) = if parts.len() == 2 {
-            Proxy::parse_creds(&parts.next())?
+        let (user, password) = if creds_server_port_parts.len() == 2 {
+            Proxy::parse_creds(&creds_server_port_parts.next())?
         } else {
             (None, None)
         };
 
-        let (server, port) = Proxy::parse_address(&parts.next())?;
+        let (server, port) = Proxy::parse_address(&creds_server_port_parts.next())?;
 
         Ok(Self {
             server,
             user,
             password,
             port: port.unwrap_or(8080),
-            kind: ProxyKind::Basic,
+            proto,
         })
     }
 
-    pub fn connect<S: AsRef<str>>(&self, host: S, port: u16) -> String {
+    pub(crate) fn connect<S: AsRef<str>>(&self, host: S, port: u16) -> String {
         let authorization = if self.use_authorization() {
-            match self.kind {
-                ProxyKind::Basic => {
-                    let creds = base64::encode(&format!(
-                        "{}:{}",
-                        self.user.clone().unwrap_or_default(),
-                        self.password.clone().unwrap_or_default()
-                    ));
-                    format!("Proxy-Authorization: basic {}\r\n", creds)
-                }
+            let creds = base64::encode(&format!(
+                "{}:{}",
+                self.user.clone().unwrap_or_default(),
+                self.password.clone().unwrap_or_default()
+            ));
+
+            match self.proto {
+                Proto::HTTPConnect => format!("Proxy-Authorization: basic {}\r\n", creds),
+                Proto::SOCKS5 => String::new(),
             }
         } else {
             String::new()
@@ -131,14 +154,69 @@ Proxy-Connection: Keep-Alive\r\n\
 
 #[cfg(test)]
 mod tests {
+    use super::Proto;
     use super::Proxy;
 
     #[test]
-    fn parse_proxy() {
+    fn parse_proxy_fakeproto() {
+        assert!(Proxy::new("fakeproto://localhost").is_err());
+    }
+
+    #[test]
+    fn parse_proxy_http_user_pass_server_port() {
+        let proxy = Proxy::new("http://user:p@ssw0rd@localhost:9999").unwrap();
+        assert_eq!(proxy.user, Some(String::from("user")));
+        assert_eq!(proxy.password, Some(String::from("p@ssw0rd")));
+        assert_eq!(proxy.server, String::from("localhost"));
+        assert_eq!(proxy.port, 9999);
+        assert_eq!(proxy.proto, Proto::HTTPConnect);
+    }
+
+    #[cfg(feature = "socks-proxy")]
+    #[test]
+    fn parse_proxy_socks_user_pass_server_port() {
+        let proxy = Proxy::new("socks://user:p@ssw0rd@localhost:9999").unwrap();
+        assert_eq!(proxy.user, Some(String::from("user")));
+        assert_eq!(proxy.password, Some(String::from("p@ssw0rd")));
+        assert_eq!(proxy.server, String::from("localhost"));
+        assert_eq!(proxy.port, 9999);
+        assert_eq!(proxy.proto, Proto::SOCKS5);
+    }
+
+    #[cfg(feature = "socks-proxy")]
+    #[test]
+    fn parse_proxy_socks5_user_pass_server_port() {
+        let proxy = Proxy::new("socks5://user:p@ssw0rd@localhost:9999").unwrap();
+        assert_eq!(proxy.user, Some(String::from("user")));
+        assert_eq!(proxy.password, Some(String::from("p@ssw0rd")));
+        assert_eq!(proxy.server, String::from("localhost"));
+        assert_eq!(proxy.port, 9999);
+        assert_eq!(proxy.proto, Proto::SOCKS5);
+    }
+
+    #[test]
+    fn parse_proxy_user_pass_server_port() {
         let proxy = Proxy::new("user:p@ssw0rd@localhost:9999").unwrap();
         assert_eq!(proxy.user, Some(String::from("user")));
         assert_eq!(proxy.password, Some(String::from("p@ssw0rd")));
         assert_eq!(proxy.server, String::from("localhost"));
         assert_eq!(proxy.port, 9999);
+    }
+
+    #[test]
+    fn parse_proxy_server_port() {
+        let proxy = Proxy::new("localhost:9999").unwrap();
+        assert_eq!(proxy.user, None);
+        assert_eq!(proxy.password, None);
+        assert_eq!(proxy.server, String::from("localhost"));
+        assert_eq!(proxy.port, 9999);
+    }
+
+    #[test]
+    fn parse_proxy_server() {
+        let proxy = Proxy::new("localhost").unwrap();
+        assert_eq!(proxy.user, None);
+        assert_eq!(proxy.password, None);
+        assert_eq!(proxy.server, String::from("localhost"));
     }
 }
