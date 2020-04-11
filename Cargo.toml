@@ -19,6 +19,7 @@ json = ["serde_json"]
 charset = ["encoding"]
 tls = ["rustls", "webpki", "webpki-roots"]
 cookies = ["cookie"]
+socks-proxy = ["socks"]
 
 [dependencies]
 base64 = "0.12"
@@ -27,6 +28,7 @@ cookie = { version = "0.13", features = ["percent-encode"], optional = true}
 lazy_static = "1"
 qstring = "0.7"
 url = "2"
+socks = { version = "0.3.2", optional = true }
 rustls = { version = "0.17", optional = true, features = [] }
 webpki = { version = "0.21", optional = true }
 webpki-roots = { version = "0.19", optional = true }

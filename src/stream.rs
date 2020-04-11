@@ -1,4 +1,4 @@
-use std::io::{Cursor, Read, Result as IoResult, Write};
+use std::io::{Cursor, ErrorKind, Read, Result as IoResult, Write};
 use std::net::SocketAddr;
 use std::net::TcpStream;
 use std::net::ToSocketAddrs;
@@ -8,6 +8,11 @@ use std::time::Duration;
 use rustls::ClientSession;
 #[cfg(feature = "tls")]
 use rustls::StreamOwned;
+
+use crate::proxy::Proto;
+use crate::proxy::Proxy;
+#[cfg(feature = "socks-proxy")]
+use socks::{Socks5Stream, ToTargetAddr};
 
 use crate::error::Error;
 use crate::unit::Unit;
@@ -85,7 +90,7 @@ fn read_https(
 
 #[allow(deprecated)]
 fn is_close_notify(e: &std::io::Error) -> bool {
-    if e.kind() != std::io::ErrorKind::ConnectionAborted {
+    if e.kind() != ErrorKind::ConnectionAborted {
         return false;
     }
 
@@ -171,16 +176,26 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         return Err(Error::DnsFailed(format!("No ip address for {}", hostname)));
     }
 
+    let proto = if let Some(ref proxy) = unit.proxy {
+        Some(proxy.proto)
+    } else {
+        None
+    };
+
     // pick first ip, or should we randomize?
     let sock_addr = ips[0];
 
     // connect with a configured timeout.
-    let mut stream = match unit.timeout_connect {
-        0 => TcpStream::connect(&sock_addr),
-        _ => TcpStream::connect_timeout(
-            &sock_addr,
-            Duration::from_millis(unit.timeout_connect as u64),
-        ),
+    let mut stream = if Some(Proto::SOCKS5) == proto {
+        connect_socks5(unit.proxy.as_ref().unwrap(), &sock_addr, hostname, port)
+    } else {
+        match unit.timeout_connect {
+            0 => TcpStream::connect(&sock_addr),
+            _ => TcpStream::connect_timeout(
+                &sock_addr,
+                Duration::from_millis(unit.timeout_connect as u64),
+            ),
+        }
     }
     .map_err(|err| Error::ConnectionFailed(format!("{}", err)))?;
 
@@ -202,25 +217,76 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         stream.set_write_timeout(None).ok();
     }
 
-    if let Some(ref proxy) = unit.proxy {
-        write!(stream, "{}", proxy.connect(hostname, port)).unwrap();
-        stream.flush()?;
+    if proto == Some(Proto::HTTPConnect) {
+        if let Some(ref proxy) = unit.proxy {
+            write!(stream, "{}", proxy.connect(hostname, port)).unwrap();
+            stream.flush()?;
 
-        let mut proxy_response = Vec::new();
+            let mut proxy_response = Vec::new();
 
-        loop {
-            let mut buf = vec![0; 256];
-            let total = stream.read(&mut buf)?;
-            proxy_response.append(&mut buf);
-            if total < 256 {
-                break;
+            loop {
+                let mut buf = vec![0; 256];
+                let total = stream.read(&mut buf)?;
+                proxy_response.append(&mut buf);
+                if total < 256 {
+                    break;
+                }
             }
-        }
 
-        crate::Proxy::verify_response(&proxy_response)?;
+            Proxy::verify_response(&proxy_response)?;
+        }
     }
 
     Ok(stream)
+}
+
+#[cfg(feature = "socks-proxy")]
+fn connect_socks5(
+    proxy: &Proxy,
+    proxy_addr: &SocketAddr,
+    hostname: &str,
+    port: u16,
+) -> Result<TcpStream, std::io::Error> {
+    let host_addrs: Vec<SocketAddr> = format!("{}:{}", hostname, port)
+        .to_socket_addrs()
+        .map_err(|e| std::io::Error::new(ErrorKind::NotFound, format!("DNS failure: {}.", e)))?
+        .collect();
+
+    if host_addrs.is_empty() {
+        return Err(std::io::Error::new(
+            ErrorKind::NotFound,
+            format!("No ip address for {}.", proxy.server),
+        ));
+    }
+
+    let host_addr = host_addrs[0].to_target_addr()?;
+
+    let stream = if proxy.use_authorization() {
+        Socks5Stream::connect_with_password(
+            proxy_addr,
+            host_addr,
+            &proxy.user.as_ref().unwrap(),
+            &proxy.password.as_ref().unwrap(),
+        )?
+        .into_inner()
+    } else {
+        Socks5Stream::connect(proxy_addr, host_addr)?.into_inner()
+    };
+
+    Ok(stream)
+}
+
+#[cfg(not(feature = "socks-proxy"))]
+fn connect_socks5(
+    _proxy: &Proxy,
+    _proxy_addr: &SocketAddr,
+    _hostname: &str,
+    _port: u16,
+) -> Result<TcpStream, std::io::Error> {
+    Err(std::io::Error::new(
+        ErrorKind::Other,
+        "SOCKS5 feature disabled.",
+    ))
 }
 
 #[cfg(test)]
