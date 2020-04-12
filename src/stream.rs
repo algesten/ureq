@@ -2,20 +2,12 @@ use std::io::{Cursor, ErrorKind, Read, Result as IoResult, Write};
 use std::net::SocketAddr;
 use std::net::TcpStream;
 use std::net::ToSocketAddrs;
-use std::thread;
 use std::time::Duration;
 
 #[cfg(feature = "tls")]
 use rustls::ClientSession;
 #[cfg(feature = "tls")]
 use rustls::StreamOwned;
-
-#[cfg(feature = "socks-proxy")]
-use socks::{Socks5Stream, ToTargetAddr};
-#[cfg(feature = "socks-proxy")]
-use std::sync::mpsc::channel;
-#[cfg(feature = "socks-proxy")]
-use std::sync::{Arc, Condvar, Mutex};
 
 use crate::proxy::Proto;
 use crate::proxy::Proxy;
@@ -294,7 +286,11 @@ fn connect_socks5(
     // # Defects
     // 1) In the event of a timeout, a thread may be left running in the background.
     // TODO: explore supporting timeouts upstream in Socks5Proxy.
+    #[allow(clippy::mutex_atomic)]
     let stream = if timeout_connect > 0 {
+        use std::sync::{Arc, Condvar, Mutex};
+        use std::thread;
+        use std::sync::mpsc::channel;
         let master_signal = Arc::new((Mutex::new(false), Condvar::new()));
         let slave_signal = master_signal.clone();
         let (tx, rx) = channel();
@@ -345,6 +341,7 @@ fn get_socks5_stream(
     proxy_addr: &SocketAddr,
     host_addr: &SocketAddr,
 ) -> Result<TcpStream, std::io::Error> {
+    use socks::{Socks5Stream, ToTargetAddr};
     if proxy.use_authorization() {
         let stream = Socks5Stream::connect_with_password(
             proxy_addr,
