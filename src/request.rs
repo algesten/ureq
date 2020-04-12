@@ -197,18 +197,12 @@ impl Request {
     /// println!("{:?}", r);
     /// }
     /// ```
-    pub fn send_form<I, K, V>(&mut self, pairs: I) -> Response
-    where
-        I: IntoIterator,
-        I::Item: Borrow<(K, V)>,
-        K: AsRef<str>,
-        V: AsRef<str>,
-    {
+    pub fn send_form(&mut self, data: &[(&str, &str)]) -> Response {
         if self.header("Content-Type").is_none() {
             self.set("Content-Type", "application/x-www-form-urlencoded");
         }
         let encoded = form_urlencoded::Serializer::new(String::new())
-            .extend_pairs(pairs)
+            .extend_pairs(data)
             .finish();
         self.do_call(Payload::Bytes(encoded.into_bytes()))
     }
