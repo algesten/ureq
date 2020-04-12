@@ -293,6 +293,7 @@ fn connect_socks5(
     // 3) an exception is thrown.
     // # Defects
     // 1) In the event of a timeout, a thread may be left running in the background.
+    // TODO: explore supporting timeouts upstream in Socks5Proxy.
     let stream = if timeout_connect > 0 {
         let master_signal = Arc::new((Mutex::new(false), Condvar::new()));
         let slave_signal = master_signal.clone();
