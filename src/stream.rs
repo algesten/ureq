@@ -272,6 +272,17 @@ fn connect_socks5(
         ));
     }
 
+    // Since Socks5Stream doesn't support set_read_timeout, a suboptimal one is implemented via
+    // thread::spawn.
+    // # Happy Path
+    // 1) thread spawns 2) get_socks5_stream returns ok 3) tx sends result ok
+    // 4) slave_signal signals done and cvar notifies master_signal 5) cvar.wait_timeout receives the done signal
+    // 6) rx receives the socks5 stream and the function exists
+    // # Sad path
+    // 1) get_socks5_stream hangs 2)slave_signal does not send done notification 3) cvar.wait_timeout times out
+    // 3) an exception is thrown.
+    // # Defects
+    // 1) In the event of a timeout, a thread may be left running in the background.
     let stream = if timeout_connect > 0 {
         let master_signal = Arc::new((Mutex::new(false), Condvar::new()));
         let slave_signal = master_signal.clone();
@@ -279,12 +290,15 @@ fn connect_socks5(
         let host_addr = host_addrs[0];
         thread::spawn(move || {
             let (lock, cvar) = &*slave_signal;
-            if tx
+            if tx // try to get a socks5 stream and send it to the parent thread's rx
                 .send(get_socks5_stream(&proxy, &proxy_addr, &host_addr))
                 .is_ok()
             {
+                // if sending the stream has succeeded we need to notify the parent thread
                 let mut done = lock.lock().unwrap();
+                // set the done signal to true
                 *done = true;
+                // notify the parent thread
                 cvar.notify_one();
             }
         });
