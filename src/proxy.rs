@@ -61,6 +61,17 @@ impl Proxy {
         self.user.is_some() && self.password.is_some()
     }
 
+    /// Create a proxy from a format string.
+    /// # Arguments:
+    /// * `proxy` - a str of format `<protocol>://<user>:<password>@<host>:port` . All parts except host are optional.
+    /// # Protocols
+    /// * `http`: HTTP Connect
+    /// * `socks`, `socks5`: SOCKS5 (requires socks feature)
+    /// # Examples
+    /// * `http://127.0.0.1:8080`
+    /// * `socks5://john:smith@socks.google.com`
+    /// * `john:smith@socks.google.com:8000`
+    /// * `localhost`
     pub fn new<S: AsRef<str>>(proxy: S) -> Result<Self, Error> {
         let mut proxy_parts = proxy
             .as_ref()
