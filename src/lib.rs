@@ -202,4 +202,12 @@ mod tests {
         );
         assert_eq!("text/html", resp.content_type());
     }
+
+    #[test]
+    #[cfg(feature = "tls")]
+    fn connect_https_invalid_name() {
+        let resp = get("https://example.com{REQUEST_URI}/").call();
+        assert_eq!(400, resp.status());
+        assert!(resp.synthetic());
+    }
 }
