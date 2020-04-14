@@ -12,6 +12,9 @@ use rustls::StreamOwned;
 #[cfg(feature = "socks-proxy")]
 use socks::{TargetAddr, ToTargetAddr};
 
+#[cfg(feature = "native-tls")]
+use native_tls::{TlsConnector, TlsStream, HandshakeError};
+
 use crate::proxy::Proto;
 use crate::proxy::Proxy;
 
@@ -23,6 +26,8 @@ pub enum Stream {
     Http(TcpStream),
     #[cfg(feature = "tls")]
     Https(rustls::StreamOwned<rustls::ClientSession, TcpStream>),
+    #[cfg(feature = "native-tls")]
+    Https(TlsStream<TcpStream>),
     Cursor(Cursor<Vec<u8>>),
     #[cfg(test)]
     Test(Box<dyn Read + Send>, Vec<u8>),
@@ -35,7 +40,7 @@ impl ::std::fmt::Debug for Stream {
             "Stream[{}]",
             match self {
                 Stream::Http(_) => "http",
-                #[cfg(feature = "tls")]
+                #[cfg(any(feature = "tls", feature = "native-tls"))]
                 Stream::Https(_) => "https",
                 Stream::Cursor(_) => "cursor",
                 #[cfg(test)]
@@ -76,7 +81,7 @@ impl Stream {
     pub fn is_poolable(&self) -> bool {
         match self {
             Stream::Http(_) => true,
-            #[cfg(feature = "tls")]
+            #[cfg(any(feature = "tls", feature = "native-tls"))]
             Stream::Https(_) => true,
             _ => false,
         }
@@ -95,7 +100,7 @@ impl Read for Stream {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         match self {
             Stream::Http(sock) => sock.read(buf),
-            #[cfg(feature = "tls")]
+            #[cfg(any(feature = "tls", feature = "native-tls"))]
             Stream::Https(stream) => read_https(stream, buf),
             Stream::Cursor(read) => read.read(buf),
             #[cfg(test)]
@@ -116,7 +121,20 @@ fn read_https(
     }
 }
 
+#[cfg(feature = "native-tls")]
+fn read_https(
+    stream: &mut TlsStream<TcpStream>,
+    buf: &mut [u8],
+) -> IoResult<usize> {
+    match stream.read(buf) {
+        Ok(size) => Ok(size),
+        Err(ref e) if is_close_notify(e) => Ok(0),
+        Err(e) => Err(e),
+    }
+}
+
 #[allow(deprecated)]
+#[cfg(any(feature = "tls", feature = "native-tls"))]
 fn is_close_notify(e: &std::io::Error) -> bool {
     if e.kind() != ErrorKind::ConnectionAborted {
         return false;
@@ -135,7 +153,7 @@ impl Write for Stream {
     fn write(&mut self, buf: &[u8]) -> IoResult<usize> {
         match self {
             Stream::Http(sock) => sock.write(buf),
-            #[cfg(feature = "tls")]
+            #[cfg(any(feature = "tls", feature = "native-tls"))]
             Stream::Https(stream) => stream.write(buf),
             Stream::Cursor(_) => panic!("Write to read only stream"),
             #[cfg(test)]
@@ -145,7 +163,7 @@ impl Write for Stream {
     fn flush(&mut self) -> IoResult<()> {
         match self {
             Stream::Http(sock) => sock.flush(),
-            #[cfg(feature = "tls")]
+            #[cfg(any(feature = "tls", feature = "native-tls"))]
             Stream::Https(stream) => stream.flush(),
             Stream::Cursor(_) => panic!("Flush read only stream"),
             #[cfg(test)]
@@ -161,6 +179,7 @@ pub(crate) fn connect_http(unit: &Unit) -> Result<Stream, Error> {
 
     connect_host(unit, hostname, port).map(Stream::Http)
 }
+
 
 #[cfg(all(feature = "tls", feature = "native-certs"))]
 fn configure_certs(config: &mut rustls::ClientConfig) {
@@ -200,6 +219,23 @@ pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
     let sock = connect_host(unit, hostname, port)?;
 
     let stream = rustls::StreamOwned::new(sess, sock);
+
+    Ok(Stream::Https(stream))
+}
+
+#[cfg(feature = "native-tls")]
+pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
+    let hostname = unit.url.host_str().unwrap();
+    let port = unit.url.port().unwrap_or(443);
+    let sock = connect_host(unit, hostname, port)?;
+
+    let tls_connector = TlsConnector::new().map_err(|e| Error::TlsError(e))?;
+    let stream = tls_connector.connect(hostname, sock).map_err(|e| {
+        match e {
+            HandshakeError::Failure(err) => Error::TlsError(err),
+            _ => Error::BadStatusRead,
+        }
+    })?;
 
     Ok(Stream::Https(stream))
 }
@@ -470,7 +506,8 @@ pub(crate) fn connect_test(unit: &Unit) -> Result<Stream, Error> {
     Err(Error::UnknownScheme(unit.url.scheme().to_string()))
 }
 
-#[cfg(not(feature = "tls"))]
+#[cfg(not(any(feature = "tls", feature = "native-tls")))]
 pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
     Err(Error::UnknownScheme(unit.url.scheme().to_string()))
 }
+
