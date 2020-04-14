@@ -1,7 +1,8 @@
 #[cfg(all(test, any(feature = "tls", feature = "native-tls")))]
 use std::io::Read;
 
-#[cfg(all(test, any(feature = "tls", feature = "native-tls")))]
+#[cfg(any(feature = "tls", feature = "native-tls"))]
+#[test]
 fn tls_connection_close() {
     let agent = ureq::Agent::default().build();
     let resp = agent

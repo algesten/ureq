@@ -24,9 +24,9 @@ use crate::unit::Unit;
 #[allow(clippy::large_enum_variant)]
 pub enum Stream {
     Http(TcpStream),
-    #[cfg(feature = "tls")]
+    #[cfg(all(feature = "tls", not(feature = "native-tls")))]
     Https(rustls::StreamOwned<rustls::ClientSession, TcpStream>),
-    #[cfg(feature = "native-tls")]
+    #[cfg(all(feature = "native-tls", not(feature = "tls")))]
     Https(TlsStream<TcpStream>),
     Cursor(Cursor<Vec<u8>>),
     #[cfg(test)]
@@ -40,7 +40,10 @@ impl ::std::fmt::Debug for Stream {
             "Stream[{}]",
             match self {
                 Stream::Http(_) => "http",
-                #[cfg(any(feature = "tls", feature = "native-tls"))]
+                #[cfg(any(
+                    all(feature = "tls", not(feature = "native-tls")),
+                    all(feature = "native-tls", not(feature = "tls")),
+                ))]
                 Stream::Https(_) => "https",
                 Stream::Cursor(_) => "cursor",
                 #[cfg(test)]
@@ -54,7 +57,10 @@ impl Stream {
     pub fn is_poolable(&self) -> bool {
         match self {
             Stream::Http(_) => true,
-            #[cfg(any(feature = "tls", feature = "native-tls"))]
+            #[cfg(any(
+                all(feature = "tls", not(feature = "native-tls")),
+                all(feature = "native-tls", not(feature = "tls")),
+            ))]
             Stream::Https(_) => true,
             _ => false,
         }
@@ -73,7 +79,10 @@ impl Read for Stream {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         match self {
             Stream::Http(sock) => sock.read(buf),
-            #[cfg(any(feature = "tls", feature = "native-tls"))]
+            #[cfg(any(
+                all(feature = "tls", not(feature = "native-tls")),
+                all(feature = "native-tls", not(feature = "tls")),
+            ))]
             Stream::Https(stream) => read_https(stream, buf),
             Stream::Cursor(read) => read.read(buf),
             #[cfg(test)]
@@ -82,7 +91,7 @@ impl Read for Stream {
     }
 }
 
-#[cfg(feature = "tls")]
+#[cfg(all(feature = "tls", not(feature = "native-tls")))]
 fn read_https(
     stream: &mut StreamOwned<ClientSession, TcpStream>,
     buf: &mut [u8],
@@ -94,11 +103,8 @@ fn read_https(
     }
 }
 
-#[cfg(feature = "native-tls")]
-fn read_https(
-    stream: &mut TlsStream<TcpStream>,
-    buf: &mut [u8],
-) -> IoResult<usize> {
+#[cfg(all(feature = "native-tls", not(feature = "tls")))]
+fn read_https(stream: &mut TlsStream<TcpStream>, buf: &mut [u8]) -> IoResult<usize> {
     match stream.read(buf) {
         Ok(size) => Ok(size),
         Err(ref e) if is_close_notify(e) => Ok(0),
@@ -126,7 +132,10 @@ impl Write for Stream {
     fn write(&mut self, buf: &[u8]) -> IoResult<usize> {
         match self {
             Stream::Http(sock) => sock.write(buf),
-            #[cfg(any(feature = "tls", feature = "native-tls"))]
+            #[cfg(any(
+                all(feature = "tls", not(feature = "native-tls")),
+                all(feature = "native-tls", not(feature = "tls")),
+            ))]
             Stream::Https(stream) => stream.write(buf),
             Stream::Cursor(_) => panic!("Write to read only stream"),
             #[cfg(test)]
@@ -136,7 +145,10 @@ impl Write for Stream {
     fn flush(&mut self) -> IoResult<()> {
         match self {
             Stream::Http(sock) => sock.flush(),
-            #[cfg(any(feature = "tls", feature = "native-tls"))]
+            #[cfg(any(
+                all(feature = "tls", not(feature = "native-tls")),
+                all(feature = "native-tls", not(feature = "tls")),
+            ))]
             Stream::Https(stream) => stream.flush(),
             Stream::Cursor(_) => panic!("Flush read only stream"),
             #[cfg(test)]
@@ -167,7 +179,7 @@ fn configure_certs(config: &mut rustls::ClientConfig) {
         .add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
 }
 
-#[cfg(feature = "tls")]
+#[cfg(all(feature = "tls", not(feature = "native-tls")))]
 pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
     use lazy_static::lazy_static;
     use std::sync::Arc;
@@ -196,7 +208,7 @@ pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
     Ok(Stream::Https(stream))
 }
 
-#[cfg(feature = "native-tls")]
+#[cfg(all(feature = "native-tls", not(feature = "tls")))]
 pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
     let hostname = unit.url.host_str().unwrap();
     let port = unit.url.port().unwrap_or(443);
