@@ -54,7 +54,7 @@ fn agent_cookies() {
 }
 
 #[test]
-#[cfg(feature = "tls")]
+#[cfg(any(feature = "tls", feature = "native-tls"))]
 fn connection_reuse() {
     use std::io::Read;
     use std::time::Duration;

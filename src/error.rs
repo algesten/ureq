@@ -31,6 +31,9 @@ pub enum Error {
     ProxyConnect,
     /// Incorrect credentials for proxy
     InvalidProxyCreds,
+    /// TLS Error
+    #[cfg(feature = "native-tls")]
+    TlsError(native_tls::Error),
 }
 
 impl Error {
@@ -59,6 +62,8 @@ impl Error {
             Error::BadProxyCreds => 500,
             Error::ProxyConnect => 500,
             Error::InvalidProxyCreds => 500,
+            #[cfg(feature = "native-tls")]
+            Error::TlsError(_) => 599,
         }
     }
 
@@ -78,6 +83,8 @@ impl Error {
             Error::BadProxyCreds => "Failed to parse proxy credentials",
             Error::ProxyConnect => "Proxy failed to connect",
             Error::InvalidProxyCreds => "Provided proxy credentials are incorrect",
+            #[cfg(feature = "native-tls")]
+            Error::TlsError(_) => "TLS Error",
         }
     }
 
@@ -97,6 +104,8 @@ impl Error {
             Error::BadProxyCreds => "Failed to parse proxy credentials".to_string(),
             Error::ProxyConnect => "Proxy failed to connect".to_string(),
             Error::InvalidProxyCreds => "Provided proxy credentials are incorrect".to_string(),
+            #[cfg(feature = "native-tls")]
+            Error::TlsError(err) => format!("TLS Error: {}", err),
         }
     }
 }
