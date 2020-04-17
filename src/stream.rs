@@ -8,6 +8,8 @@ use std::time::Duration;
 use rustls::ClientSession;
 #[cfg(feature = "tls")]
 use rustls::StreamOwned;
+#[cfg(feature = "socks-proxy")]
+use socks::{TargetAddr, ToTargetAddr};
 
 use crate::proxy::Proto;
 use crate::proxy::Proxy;
@@ -199,7 +201,7 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
             unit.proxy.to_owned().unwrap(),
             unit.timeout_connect,
             sock_addr,
-            hostname.to_string(),
+            hostname,
             port,
         )
     } else {
@@ -255,24 +257,50 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
 }
 
 #[cfg(feature = "socks-proxy")]
-fn connect_socks5(
-    proxy: Proxy,
-    timeout_connect: u64,
-    proxy_addr: SocketAddr,
-    hostname: String,
-    port: u16,
-) -> Result<TcpStream, std::io::Error> {
-    let host_addrs: Vec<SocketAddr> = format!("{}:{}", hostname, port)
+fn socks5_local_nslookup(hostname: &str, port: u16) -> Result<TargetAddr, std::io::Error> {
+    let addrs: Vec<SocketAddr> = format!("{}:{}", hostname, port)
         .to_socket_addrs()
         .map_err(|e| std::io::Error::new(ErrorKind::NotFound, format!("DNS failure: {}.", e)))?
         .collect();
 
-    if host_addrs.is_empty() {
+    if addrs.is_empty() {
         return Err(std::io::Error::new(
             ErrorKind::NotFound,
-            format!("DNS lookup failed for {}:{}.", hostname, port),
+            "DNS failure: no socket addrs found.",
         ));
     }
+
+    match addrs[0].to_target_addr() {
+        Ok(addr) => Ok(addr),
+        Err(err) => {
+            return Err(std::io::Error::new(
+                ErrorKind::NotFound,
+                format!("DNS failure: {}.", err),
+            ))
+        }
+    }
+}
+
+#[cfg(feature = "socks-proxy")]
+fn connect_socks5(
+    proxy: Proxy,
+    timeout_connect: u64,
+    proxy_addr: SocketAddr,
+    host: &str,
+    port: u16,
+) -> Result<TcpStream, std::io::Error> {
+    use socks::TargetAddr::Domain;
+    use std::net::{Ipv4Addr, Ipv6Addr};
+    use std::str::FromStr;
+
+    let host_addr = if Ipv4Addr::from_str(host).is_ok() || Ipv6Addr::from_str(host).is_ok() {
+        match socks5_local_nslookup(host, port) {
+            Ok(addr) => addr,
+            Err(err) => return Err(err),
+        }
+    } else {
+        Domain(String::from(host), port)
+    };
 
     // Since Socks5Stream doesn't support set_read_timeout, a suboptimal one is implemented via
     // thread::spawn.
@@ -294,11 +322,10 @@ fn connect_socks5(
         let master_signal = Arc::new((Mutex::new(false), Condvar::new()));
         let slave_signal = master_signal.clone();
         let (tx, rx) = channel();
-        let host_addr = host_addrs[0];
         thread::spawn(move || {
             let (lock, cvar) = &*slave_signal;
             if tx // try to get a socks5 stream and send it to the parent thread's rx
-                .send(get_socks5_stream(&proxy, &proxy_addr, &host_addr))
+                .send(get_socks5_stream(&proxy, &proxy_addr, host_addr))
                 .is_ok()
             {
                 // if sending the stream has succeeded we need to notify the parent thread
@@ -324,12 +351,12 @@ fn connect_socks5(
                 ErrorKind::TimedOut,
                 format!(
                     "SOCKS5 proxy: {}:{} timed out connecting after {}ms.",
-                    hostname, port, timeout_connect
+                    host, port, timeout_connect
                 ),
             ));
         }
     } else {
-        get_socks5_stream(&proxy, &proxy_addr, &host_addrs[0])?
+        get_socks5_stream(&proxy, &proxy_addr, host_addr)?
     };
 
     Ok(stream)
@@ -339,20 +366,20 @@ fn connect_socks5(
 fn get_socks5_stream(
     proxy: &Proxy,
     proxy_addr: &SocketAddr,
-    host_addr: &SocketAddr,
+    host_addr: TargetAddr,
 ) -> Result<TcpStream, std::io::Error> {
-    use socks::{Socks5Stream, ToTargetAddr};
+    use socks::Socks5Stream;
     if proxy.use_authorization() {
         let stream = Socks5Stream::connect_with_password(
             proxy_addr,
-            host_addr.to_target_addr()?,
+            host_addr,
             &proxy.user.as_ref().unwrap(),
             &proxy.password.as_ref().unwrap(),
         )?
         .into_inner();
         Ok(stream)
     } else {
-        match Socks5Stream::connect(proxy_addr, host_addr.to_target_addr()?) {
+        match Socks5Stream::connect(proxy_addr, host_addr) {
             Ok(socks_stream) => Ok(socks_stream.into_inner()),
             Err(err) => Err(err),
         }
@@ -364,7 +391,7 @@ fn connect_socks5(
     _proxy: Proxy,
     _timeout_connect: u64,
     _proxy_addr: SocketAddr,
-    _hostname: String,
+    _hostname: &str,
     _port: u16,
 ) -> Result<TcpStream, std::io::Error> {
     Err(std::io::Error::new(
