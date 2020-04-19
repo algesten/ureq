@@ -1,6 +1,6 @@
 [package]
 name = "ureq"
-version = "0.11.3"
+version = "0.12.1"
 authors = ["Martin Algesten <martin@algesten.se>"]
 description = "Minimal HTTP request library"
 license = "MIT/Apache-2.0"
@@ -18,17 +18,21 @@ default = ["tls", "cookies"]
 json = ["serde_json"]
 charset = ["encoding"]
 tls = ["rustls", "webpki", "webpki-roots"]
+native-certs = ["rustls-native-certs"]
 cookies = ["cookie"]
+socks-proxy = ["socks"]
 
 [dependencies]
-base64 = "0.11"
+base64 = "0.12"
 chunked_transfer = "1"
-cookie = { version = "0.12", features = ["percent-encode"], optional = true}
+cookie = { version = "0.13", features = ["percent-encode"], optional = true}
 lazy_static = "1"
 qstring = "0.7"
 url = "2"
-rustls = { version = "0.16", optional = true, features = [] }
+socks = { version = "0.3.2", optional = true }
+rustls = { version = "0.17", optional = true, features = [] }
 webpki = { version = "0.21", optional = true }
-webpki-roots = { version = "0.18", optional = true }
+webpki-roots = { version = "0.19", optional = true }
+rustls-native-certs = { version = "0.3", optional = true }
 serde_json = { version = "1", optional = true }
 encoding = { version = "0.2", optional = true }

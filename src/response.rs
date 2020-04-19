@@ -280,17 +280,22 @@ impl Response {
             .unwrap_or(false);
 
         let is_head = (&self.unit).as_ref().map(|u| u.is_head()).unwrap_or(false);
+        let has_no_body = is_head
+            || match self.status {
+                204 | 304 => true,
+                _ => false,
+            };
 
         let is_chunked = self
             .header("transfer-encoding")
             .map(|enc| !enc.is_empty()) // whatever it says, do chunked
             .unwrap_or(false);
 
-        let use_chunked = !is_http10 && !is_head && is_chunked;
+        let use_chunked = !is_http10 && !has_no_body && is_chunked;
 
         let limit_bytes = if is_http10 || is_close {
             None
-        } else if is_head {
+        } else if has_no_body {
             // head requests never have a body
             Some(0)
         } else {
@@ -677,11 +682,9 @@ mod tests {
     #[test]
     #[cfg(feature = "json")]
     fn parse_simple_json() {
-        let s = format!(
-            "HTTP/1.1 200 OK\r\n\
+        let s = "HTTP/1.1 200 OK\r\n\
              \r\n\
-             {{\"hello\":\"world\"}}"
-        );
+             {\"hello\":\"world\"}";
         let resp = s.parse::<Response>().unwrap();
         let v = resp.into_json().unwrap();
         let compare = "{\"hello\":\"world\"}"

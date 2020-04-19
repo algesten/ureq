@@ -23,6 +23,14 @@ pub enum Error {
     BadHeader,
     /// Some unspecified `std::io::Error`. Synthetic error `500`.
     Io(IoError),
+    /// Proxy information was not properly formatted
+    BadProxy,
+    /// Proxy credentials were not properly formatted
+    BadProxyCreds,
+    /// Proxy could not connect
+    ProxyConnect,
+    /// Incorrect credentials for proxy
+    InvalidProxyCreds,
 }
 
 impl Error {
@@ -47,6 +55,10 @@ impl Error {
             Error::BadStatus => 500,
             Error::BadHeader => 500,
             Error::Io(_) => 500,
+            Error::BadProxy => 500,
+            Error::BadProxyCreds => 500,
+            Error::ProxyConnect => 500,
+            Error::InvalidProxyCreds => 500,
         }
     }
 
@@ -62,6 +74,10 @@ impl Error {
             Error::BadStatus => "Bad Status",
             Error::BadHeader => "Bad Header",
             Error::Io(_) => "Network Error",
+            Error::BadProxy => "Malformed proxy",
+            Error::BadProxyCreds => "Failed to parse proxy credentials",
+            Error::ProxyConnect => "Proxy failed to connect",
+            Error::InvalidProxyCreds => "Provided proxy credentials are incorrect",
         }
     }
 
@@ -77,6 +93,10 @@ impl Error {
             Error::BadStatus => "Bad Status".to_string(),
             Error::BadHeader => "Bad Header".to_string(),
             Error::Io(ioe) => format!("Network Error: {}", ioe),
+            Error::BadProxy => "Malformed proxy".to_string(),
+            Error::BadProxyCreds => "Failed to parse proxy credentials".to_string(),
+            Error::ProxyConnect => "Proxy failed to connect".to_string(),
+            Error::InvalidProxyCreds => "Provided proxy credentials are incorrect".to_string(),
         }
     }
 }

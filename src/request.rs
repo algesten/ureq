@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use lazy_static::lazy_static;
 use qstring::QString;
-use url::Url;
+use url::{form_urlencoded, Url};
 
 use crate::agent::{self, Agent, AgentState};
 use crate::body::Payload;
@@ -45,6 +45,7 @@ pub struct Request {
     pub(crate) timeout_read: u64,
     pub(crate) timeout_write: u64,
     pub(crate) redirects: u32,
+    pub(crate) proxy: Option<crate::proxy::Proxy>,
 }
 
 impl ::std::fmt::Debug for Request {
@@ -132,6 +133,9 @@ impl Request {
     /// ```
     #[cfg(feature = "json")]
     pub fn send_json(&mut self, data: SerdeValue) -> Response {
+        if self.header("Content-Type").is_none() {
+            self.set("Content-Type", "application/json");
+        }
         self.do_call(Payload::JSON(data))
     }
 
@@ -175,6 +179,31 @@ impl Request {
         let charset =
             crate::response::charset_from_content_type(self.header("content-type")).to_string();
         self.do_call(Payload::Text(text, charset))
+    }
+
+    /// Send a sequence of (key, value) pairs as form-urlencoded data.
+    ///
+    /// The `Content-Type` header is implicitly set to application/x-www-form-urlencoded.
+    /// The `Content-Length` header is implicitly set to the length of the serialized value.
+    ///
+    /// ```
+    /// #[macro_use]
+    /// extern crate ureq;
+    ///
+    /// fn main() {
+    /// let r = ureq::post("/my_page")
+    ///     .send_form(&[("foo", "bar"),("foo2", "bar2")]);
+    /// println!("{:?}", r);
+    /// }
+    /// ```
+    pub fn send_form(&mut self, data: &[(&str, &str)]) -> Response {
+        if self.header("Content-Type").is_none() {
+            self.set("Content-Type", "application/x-www-form-urlencoded");
+        }
+        let encoded = form_urlencoded::Serializer::new(String::new())
+            .extend_pairs(data)
+            .finish();
+        self.do_call(Payload::Bytes(encoded.into_bytes()))
     }
 
     /// Send data from a reader.
@@ -510,5 +539,19 @@ impl Request {
         URL_BASE
             .join(&self.path)
             .map_err(|e| Error::BadUrl(format!("{}", e)))
+    }
+
+    /// Set the proxy server to use for the connection.
+    ///
+    /// Example:
+    /// ```
+    /// let proxy = ureq::Proxy::new("user:password@cool.proxy:9090").unwrap();
+    /// let req = ureq::post("https://cool.server")
+    ///     .set_proxy(proxy)
+    ///     .build();
+    /// ```
+    pub fn set_proxy(&mut self, proxy: crate::proxy::Proxy) -> &mut Request {
+        self.proxy = Some(proxy);
+        self
     }
 }

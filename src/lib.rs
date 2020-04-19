@@ -95,6 +95,7 @@ mod body;
 mod error;
 mod header;
 mod pool;
+mod proxy;
 mod request;
 mod response;
 mod stream;
@@ -109,6 +110,7 @@ mod test;
 pub use crate::agent::Agent;
 pub use crate::error::Error;
 pub use crate::header::Header;
+pub use crate::proxy::Proxy;
 pub use crate::request::Request;
 pub use crate::response::Response;
 
@@ -200,5 +202,13 @@ mod tests {
             resp.header("content-type").unwrap()
         );
         assert_eq!("text/html", resp.content_type());
+    }
+
+    #[test]
+    #[cfg(feature = "tls")]
+    fn connect_https_invalid_name() {
+        let resp = get("https://example.com{REQUEST_URI}/").call();
+        assert_eq!(400, resp.status());
+        assert!(resp.synthetic());
     }
 }
