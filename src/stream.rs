@@ -120,7 +120,7 @@ impl Read for Stream {
     }
 }
 
-impl<R> From<ChunkDecoder<R>> for Stream
+impl<R: Read> From<ChunkDecoder<R>> for Stream
 where
     R: Read,
     Stream: From<R>,
