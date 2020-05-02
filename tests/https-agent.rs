@@ -17,6 +17,14 @@ fn tls_connection_close() {
 #[cfg(feature = "json")]
 #[test]
 fn agent_set_cookie() {
+    use serde::Deserialize;
+    use std::collections::HashMap;
+
+    #[derive(Deserialize)]
+    struct HttpBin {
+        headers: HashMap<String, String>,
+    }
+
     let agent = ureq::Agent::default().build();
     let cookie = ureq::Cookie::build("name", "value")
         .domain("httpbin.org")
@@ -30,10 +38,9 @@ fn agent_set_cookie() {
     assert_eq!(resp.status(), 200);
     assert_eq!(
         "name=value",
-        resp.into_json()
+        resp.into_json::<HttpBin>()
             .unwrap()
-            .get("headers")
-            .unwrap()
+            .headers
             .get("Cookie")
             .unwrap()
     );

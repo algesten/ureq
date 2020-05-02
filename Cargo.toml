@@ -15,7 +15,7 @@ all-features = true
 
 [features]
 default = ["tls", "cookies"]
-json = ["serde_json"]
+json = ["serde", "serde_json"]
 charset = ["encoding"]
 tls = ["rustls", "webpki", "webpki-roots"]
 native-certs = ["rustls-native-certs"]
@@ -34,5 +34,9 @@ rustls = { version = "0.17", optional = true, features = [] }
 webpki = { version = "0.21", optional = true }
 webpki-roots = { version = "0.19", optional = true }
 rustls-native-certs = { version = "0.3", optional = true }
+serde = { version = "1", optional = true }
 serde_json = { version = "1", optional = true }
 encoding = { version = "0.2", optional = true }
+
+[dev-dependencies]
+serde = { version = "1", features = ["derive"] }

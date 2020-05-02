@@ -10,7 +10,7 @@ use crate::stream::Stream;
 use crate::unit::Unit;
 
 #[cfg(feature = "json")]
-use serde_json;
+use serde::de::DeserializeOwned;
 
 #[cfg(feature = "charset")]
 use encoding::label::encoding_from_whatwg_label;
@@ -382,16 +382,23 @@ impl Response {
     /// Example:
     ///
     /// ```
+    /// # use serde::Deserialize;
+    ///
+    /// #[derive(Deserialize)]
+    /// struct Hello {
+    ///     hello: String,
+    /// }
+    ///
     /// let resp =
     ///     ureq::get("https://ureq.s3.eu-central-1.amazonaws.com/hello_world.json")
     ///         .call();
     ///
-    /// let json = resp.into_json().unwrap();
+    /// let json = resp.into_json::<Hello>().unwrap();
     ///
-    /// assert_eq!(json["hello"], "world");
+    /// assert_eq!(json.hello, "world");
     /// ```
     #[cfg(feature = "json")]
-    pub fn into_json(self) -> IoResult<serde_json::Value> {
+    pub fn into_json<T: DeserializeOwned>(self) -> IoResult<T> {
         let reader = self.into_reader();
         serde_json::from_reader(reader).map_err(|e| {
             IoError::new(
@@ -723,15 +730,19 @@ mod tests {
     #[test]
     #[cfg(feature = "json")]
     fn parse_simple_json() {
+        use serde::Deserialize;
+
+        #[derive(Deserialize)]
+        struct Hello {
+            hello: String,
+        }
+
         let s = "HTTP/1.1 200 OK\r\n\
              \r\n\
              {\"hello\":\"world\"}";
         let resp = s.parse::<Response>().unwrap();
-        let v = resp.into_json().unwrap();
-        let compare = "{\"hello\":\"world\"}"
-            .parse::<serde_json::Value>()
-            .unwrap();
-        assert_eq!(v, compare);
+        let v = resp.into_json::<Hello>().unwrap();
+        assert_eq!(v.hello, "world");
     }
 
     #[test]
