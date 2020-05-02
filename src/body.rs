@@ -10,8 +10,6 @@ use encoding::EncoderTrap;
 
 #[cfg(feature = "json")]
 use super::SerdeValue;
-#[cfg(feature = "json")]
-use serde_json;
 
 /// The different kinds of bodies to send.
 ///
