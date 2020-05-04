@@ -24,7 +24,8 @@ pub const DEFAULT_CHARACTER_SET: &str = "utf-8";
 ///
 /// The `Response` is used to read response headers and decide what to do with the body.
 /// Note that the socket connection is open and the body not read until one of
-/// [`into_reader()`](#method.into_reader), [`into_json()`](#method.into_json) or
+/// [`into_reader()`](#method.into_reader), [`into_json()`](#method.into_json),
+/// [`into_json_deserialize()`](#method.into_json_deserialize) or
 /// [`into_string()`](#method.into_string) consumes the response.
 ///
 /// ```
@@ -382,6 +383,32 @@ impl Response {
     /// Example:
     ///
     /// ```
+    /// let resp =
+    ///     ureq::get("https://ureq.s3.eu-central-1.amazonaws.com/hello_world.json")
+    ///         .call();
+    ///
+    /// let json = resp.into_json().unwrap();
+    ///
+    /// assert_eq!(json["hello"], "world");
+    /// ```
+    #[cfg(feature = "json")]
+    pub fn into_json(self) -> IoResult<serde_json::Value> {
+        let reader = self.into_reader();
+        serde_json::from_reader(reader).map_err(|e| {
+            IoError::new(
+                ErrorKind::InvalidData,
+                format!("Failed to read JSON: {}", e),
+            )
+        })
+    }
+
+    /// Turn the body of this response into a type implementing the (serde) Deserialize trait.
+    ///
+    /// Requires feature `ureq = { version = "*", features = ["json"] }`
+    ///
+    /// Example:
+    ///
+    /// ```
     /// # use serde::Deserialize;
     ///
     /// #[derive(Deserialize)]
@@ -393,12 +420,12 @@ impl Response {
     ///     ureq::get("https://ureq.s3.eu-central-1.amazonaws.com/hello_world.json")
     ///         .call();
     ///
-    /// let json = resp.into_json::<Hello>().unwrap();
+    /// let json = resp.into_json_deserialize::<Hello>().unwrap();
     ///
     /// assert_eq!(json.hello, "world");
     /// ```
     #[cfg(feature = "json")]
-    pub fn into_json<T: DeserializeOwned>(self) -> IoResult<T> {
+    pub fn into_json_deserialize<T: DeserializeOwned>(self) -> IoResult<T> {
         let reader = self.into_reader();
         serde_json::from_reader(reader).map_err(|e| {
             IoError::new(
@@ -730,6 +757,20 @@ mod tests {
     #[test]
     #[cfg(feature = "json")]
     fn parse_simple_json() {
+        let s = "HTTP/1.1 200 OK\r\n\
+             \r\n\
+             {\"hello\":\"world\"}";
+        let resp = s.parse::<Response>().unwrap();
+        let v = resp.into_json().unwrap();
+        let compare = "{\"hello\":\"world\"}"
+            .parse::<serde_json::Value>()
+            .unwrap();
+        assert_eq!(v, compare);
+    }
+
+    #[test]
+    #[cfg(feature = "json")]
+    fn parse_deserialize_json() {
         use serde::Deserialize;
 
         #[derive(Deserialize)]
@@ -741,7 +782,7 @@ mod tests {
              \r\n\
              {\"hello\":\"world\"}";
         let resp = s.parse::<Response>().unwrap();
-        let v = resp.into_json::<Hello>().unwrap();
+        let v = resp.into_json_deserialize::<Hello>().unwrap();
         assert_eq!(v.hello, "world");
     }
 
