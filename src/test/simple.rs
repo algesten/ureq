@@ -61,6 +61,22 @@ fn body_as_text() {
 #[test]
 #[cfg(feature = "json")]
 fn body_as_json() {
+    test::set_handler("/body_as_json", |_unit| {
+        test::make_response(
+            200,
+            "OK",
+            vec![],
+            "{\"hello\":\"world\"}".to_string().into_bytes(),
+        )
+    });
+    let resp = get("test://host/body_as_json").call();
+    let json = resp.into_json().unwrap();
+    assert_eq!(json["hello"], "world");
+}
+
+#[test]
+#[cfg(feature = "json")]
+fn body_as_json_deserialize() {
     use serde::Deserialize;
 
     #[derive(Deserialize)]
@@ -77,7 +93,7 @@ fn body_as_json() {
         )
     });
     let resp = get("test://host/body_as_json").call();
-    let json = resp.into_json::<Hello>().unwrap();
+    let json = resp.into_json_deserialize::<Hello>().unwrap();
     assert_eq!(json.hello, "world");
 }
 

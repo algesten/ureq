@@ -38,7 +38,7 @@ fn agent_set_cookie() {
     assert_eq!(resp.status(), 200);
     assert_eq!(
         "name=value",
-        resp.into_json::<HttpBin>()
+        resp.into_json_deserialize::<HttpBin>()
             .unwrap()
             .headers
             .get("Cookie")
