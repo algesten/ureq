@@ -10,7 +10,7 @@ keywords = ["web", "request", "http", "rest", "client"]
 categories = ["web-programming::http-client"]
 edition = "2018"
 
-[package.metadata."docs.rs"]
+[package.metadata.docs.rs]
 all-features = true
 
 [features]
