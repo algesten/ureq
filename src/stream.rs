@@ -136,13 +136,15 @@ pub(crate) fn connect_http(unit: &Unit) -> Result<Stream, Error> {
 
 #[cfg(all(feature = "tls", feature = "native-certs"))]
 fn configure_certs(config: &mut rustls::ClientConfig) {
-    config.root_store = rustls_native_certs::load_native_certs()
-        .expect("Could not load patform certs");
+    config.root_store =
+        rustls_native_certs::load_native_certs().expect("Could not load patform certs");
 }
 
 #[cfg(all(feature = "tls", not(feature = "native-certs")))]
 fn configure_certs(config: &mut rustls::ClientConfig) {
-    config.root_store.add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
+    config
+        .root_store
+        .add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
 }
 
 #[cfg(feature = "tls")]
@@ -316,9 +318,9 @@ fn connect_socks5(
     // TODO: explore supporting timeouts upstream in Socks5Proxy.
     #[allow(clippy::mutex_atomic)]
     let stream = if timeout_connect > 0 {
+        use std::sync::mpsc::channel;
         use std::sync::{Arc, Condvar, Mutex};
         use std::thread;
-        use std::sync::mpsc::channel;
         let master_signal = Arc::new((Mutex::new(false), Condvar::new()));
         let slave_signal = master_signal.clone();
         let (tx, rx) = channel();
