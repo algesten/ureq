@@ -6,23 +6,6 @@
 
 > Minimal request library in rust.
 
-## ureq's future
-
-I asked for feedback on [ureq's future
-direction](https://www.reddit.com/r/rust/comments/eu6qg8/future_of_ureq_http_client_library/)
-and came to the conclusion that there's enough interest in a simple
-blocking http client to keep it going. Another motivation is that I
-use it extensively for my own work, to talk to S3.
-
-I'll keep maintaining ureq. I will try to keep dependencies somewhat
-fresh and try to address bad bugs. I will however not personally
-implement new features in ureq, but I do welcome PR with open arms.
-
-The code base is extremely simple, one might even call naive. It's a
-good project to hack on as first learning experience in Rust. I will
-uphold some base line of code hygiene, but won't block a PR due to
-something being a bit inelegant.
-
 ## Usage
 
 ```rust
@@ -46,6 +29,31 @@ fn main() {
     }
 }
 ```
+
+## About 1.0.0
+
+This crate is now 1.x.x. I signifies there will be no more breaking
+API changes (for better or worse). I personally use this code in
+production system reading data from AWS. Whether the quality is good
+enough for other use cases is a "YMMV". I know the Agent related code
+is rather  undertested and probably has issues.
+
+## ureq's future
+
+I asked for feedback on [ureq's future
+direction](https://www.reddit.com/r/rust/comments/eu6qg8/future_of_ureq_http_client_library/)
+and came to the conclusion that there's enough interest in a simple
+blocking http client to keep it going. Another motivation is that I
+use it extensively for my own work, to talk to S3.
+
+I'll keep maintaining ureq. I will try to keep dependencies somewhat
+fresh and try to address bad bugs. I will however not personally
+implement new features in ureq, but I do welcome PR with open arms.
+
+The code base is extremely simple, one might even call naive. It's a
+good project to hack on as first learning experience in Rust. I will
+uphold some base line of code hygiene, but won't block a PR due to
+something being a bit inelegant.
 
 ## Features
 
