@@ -13,6 +13,8 @@ use crate::header;
 use crate::stream::{self, connect_https, connect_test, Stream};
 use crate::Proxy;
 use crate::{Error, Header, Request, Response};
+#[cfg(feature = "tls")]
+use crate::request::TLSClientConfig;
 
 use crate::pool::DEFAULT_HOST;
 
@@ -31,6 +33,8 @@ pub(crate) struct Unit {
     pub timeout_write: u64,
     pub method: String,
     pub proxy: Option<Proxy>,
+    #[cfg(feature = "tls")]
+    pub tls_config: Option<TLSClientConfig>,
 }
 
 impl Unit {
@@ -89,6 +93,8 @@ impl Unit {
             timeout_write: req.timeout_write,
             method: req.method.clone(),
             proxy: req.proxy.clone(),
+            #[cfg(feature = "tls")]
+            tls_config: req.tls_config.clone(),
         }
     }
 
