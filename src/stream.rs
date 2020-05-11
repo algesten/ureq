@@ -165,7 +165,9 @@ pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
 
     let sni = webpki::DNSNameRef::try_from_ascii_str(hostname)
         .map_err(|err| Error::DnsFailed(err.to_string()))?;
-    let sess = rustls::ClientSession::new(&*TLS_CONF, sni);
+    let tls_conf: &Arc<rustls::ClientConfig> =
+        unit.tls_config.as_ref().map(|c| &c.0).unwrap_or(&*TLS_CONF);
+    let sess = rustls::ClientSession::new(&tls_conf, sni);
 
     let sock = connect_host(unit, hostname, port)?;
 
