@@ -8,6 +8,7 @@
 //!
 //! ```
 //! // requires feature: `ureq = { version = "*", features = ["json"] }`
+//! # #[cfg(feature = "json")] {
 //! use ureq::json;
 //!
 //! // sync post request of some json.
@@ -22,6 +23,7 @@
 //! if resp.ok() {
 //!   // ....
 //! }
+//! # }
 //! ```
 //!
 //! # Plain requests

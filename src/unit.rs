@@ -14,6 +14,7 @@ use crate::stream::{self, connect_https, connect_test, Stream};
 use crate::Proxy;
 use crate::{Error, Header, Request, Response};
 
+#[cfg(feature = "cookie")]
 use crate::pool::DEFAULT_HOST;
 
 /// It's a "unit of work". Maybe a bad name for it?
