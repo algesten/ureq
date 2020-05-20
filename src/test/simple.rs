@@ -84,7 +84,7 @@ fn body_as_json_deserialize() {
         hello: String,
     }
 
-    test::set_handler("/body_as_json", |_unit| {
+    test::set_handler("/body_as_json_deserialize", |_unit| {
         test::make_response(
             200,
             "OK",
@@ -92,7 +92,7 @@ fn body_as_json_deserialize() {
             "{\"hello\":\"world\"}".to_string().into_bytes(),
         )
     });
-    let resp = get("test://host/body_as_json").call();
+    let resp = get("test://host/body_as_json_deserialize").call();
     let json = resp.into_json_deserialize::<Hello>().unwrap();
     assert_eq!(json.hello, "world");
 }
