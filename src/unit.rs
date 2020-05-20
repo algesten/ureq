@@ -222,7 +222,7 @@ fn extract_cookies(state: &std::sync::Mutex<Option<AgentState>>, url: &Url) -> V
 }
 
 #[cfg(not(feature = "cookie"))]
-fn extract_cookies(_state: &std::sync::Mutex<Option<AgentState>>, url: &Url) -> Vec<Header> {
+fn extract_cookies(_state: &std::sync::Mutex<Option<AgentState>>, _url: &Url) -> Vec<Header> {
     vec![]
 }
 
