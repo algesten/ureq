@@ -178,7 +178,7 @@ pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
 
 pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<TcpStream, Error> {
     //
-    let ips: Vec<SocketAddr> = match unit.proxy {
+    let sock_addrs: Vec<SocketAddr> = match unit.proxy {
         Some(ref proxy) => format!("{}:{}", proxy.server, proxy.port),
         None => format!("{}:{}", hostname, port),
     }
@@ -186,38 +186,54 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
     .map_err(|e| Error::DnsFailed(format!("{}", e)))?
     .collect();
 
-    if ips.is_empty() {
-        return Err(Error::DnsFailed(format!("No ip address for {}", hostname)));
-    }
-
     let proto = if let Some(ref proxy) = unit.proxy {
         Some(proxy.proto)
     } else {
         None
     };
 
-    // pick first ip, or should we randomize?
-    let sock_addr = ips[0];
+    let mut any_err = None;
+    let mut any_stream = None;
 
-    // connect with a configured timeout.
-    let mut stream = if Some(Proto::SOCKS5) == proto {
-        connect_socks5(
-            unit.proxy.to_owned().unwrap(),
-            unit.timeout_connect,
-            sock_addr,
-            hostname,
-            port,
-        )
-    } else {
-        match unit.timeout_connect {
-            0 => TcpStream::connect(&sock_addr),
-            _ => TcpStream::connect_timeout(
-                &sock_addr,
-                Duration::from_millis(unit.timeout_connect as u64),
-            ),
+    // Find the first sock_addr that accepts a connection
+    for sock_addr in sock_addrs {
+        // connect with a configured timeout.
+        let stream = if Some(Proto::SOCKS5) == proto {
+            connect_socks5(
+                unit.proxy.to_owned().unwrap(),
+                unit.timeout_connect,
+                sock_addr,
+                hostname,
+                port,
+            )
+        } else {
+            match unit.timeout_connect {
+                0 => TcpStream::connect(&sock_addr),
+                _ => TcpStream::connect_timeout(
+                    &sock_addr,
+                    Duration::from_millis(unit.timeout_connect as u64),
+                ),
+            }
+        };
+
+        if let Ok(stream) = stream {
+            any_stream = Some(stream);
+            break;
+        } else if let Err(err) = stream {
+            any_err = Some(err);
         }
     }
-    .map_err(|err| Error::ConnectionFailed(format!("{}", err)))?;
+
+    let mut stream = if let Some(stream) = any_stream {
+        stream
+    } else {
+        let err = if let Some(err) = any_err {
+            Error::ConnectionFailed(format!("{}", err))
+        } else {
+            Error::DnsFailed(format!("No ip address for {}", hostname))
+        };
+        return Err(err);
+    };
 
     // rust's absurd api returns Err if we set 0.
     // Setting it to None will disable the native system timeout
