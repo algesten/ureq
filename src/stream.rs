@@ -1,8 +1,9 @@
-use std::io::{Cursor, ErrorKind, Read, Result as IoResult, Write};
+use std::io::{Cursor, Error as IoError, ErrorKind, Read, Result as IoResult, Write};
 use std::net::SocketAddr;
 use std::net::TcpStream;
 use std::net::ToSocketAddrs;
 use std::time::Duration;
+use std::time::Instant;
 
 #[cfg(feature = "tls")]
 use rustls::ClientSession;
@@ -186,6 +187,10 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
     .map_err(|e| Error::DnsFailed(format!("{}", e)))?
     .collect();
 
+    if sock_addrs.is_empty() {
+        return Err(Error::DnsFailed(format!("No ip address for {}", hostname)));
+    }
+
     let proto = if let Some(ref proxy) = unit.proxy {
         Some(proxy.proto)
     } else {
@@ -194,25 +199,38 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
 
     let mut any_err = None;
     let mut any_stream = None;
+    let mut timeout_connect = unit.timeout_connect;
+    let start_time = Instant::now();
+    let has_timeout = unit.timeout_connect > 0;
 
     // Find the first sock_addr that accepts a connection
     for sock_addr in sock_addrs {
+        // ensure connect timeout isn't hit overall.
+        if has_timeout {
+            let lapsed = (Instant::now() - start_time).as_millis() as u64;
+            if lapsed >= unit.timeout_connect {
+                any_err = Some(IoError::new(ErrorKind::TimedOut, "Didn't connect in time"));
+                break;
+            } else {
+                timeout_connect = unit.timeout_connect - lapsed;
+            }
+        }
+
         // connect with a configured timeout.
         let stream = if Some(Proto::SOCKS5) == proto {
             connect_socks5(
                 unit.proxy.to_owned().unwrap(),
-                unit.timeout_connect,
+                timeout_connect,
                 sock_addr,
                 hostname,
                 port,
             )
         } else {
-            match unit.timeout_connect {
-                0 => TcpStream::connect(&sock_addr),
-                _ => TcpStream::connect_timeout(
-                    &sock_addr,
-                    Duration::from_millis(unit.timeout_connect as u64),
-                ),
+            if has_timeout {
+                let timeout = Duration::from_millis(timeout_connect);
+                TcpStream::connect_timeout(&sock_addr, timeout)
+            } else {
+                TcpStream::connect(&sock_addr)
             }
         };
 
@@ -227,11 +245,7 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
     let mut stream = if let Some(stream) = any_stream {
         stream
     } else {
-        let err = if let Some(err) = any_err {
-            Error::ConnectionFailed(format!("{}", err))
-        } else {
-            Error::DnsFailed(format!("No ip address for {}", hostname))
-        };
+        let err = Error::ConnectionFailed(format!("{}", any_err.expect("Connect error")));
         return Err(err);
     };
 
