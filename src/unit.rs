@@ -2,10 +2,11 @@ use std::io::{Result as IoResult, Write};
 use std::sync::{Arc, Mutex};
 
 use base64;
-#[cfg(feature = "cookie")]
-use cookie::{Cookie, CookieJar};
 use qstring::QString;
 use url::Url;
+
+#[cfg(feature = "cookie")]
+use cookie::{Cookie, CookieJar};
 
 use crate::agent::AgentState;
 use crate::body::{self, Payload, SizedReader};
@@ -13,6 +14,7 @@ use crate::header;
 use crate::stream::{self, connect_https, connect_test, Stream};
 use crate::Proxy;
 use crate::{Error, Header, Request, Response};
+
 #[cfg(feature = "tls")]
 use crate::request::TLSClientConfig;
 

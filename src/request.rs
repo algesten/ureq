@@ -1,11 +1,12 @@
 use std::io::Read;
 use std::sync::{Arc, Mutex};
-#[cfg(feature = "tls")]
-use std::fmt;
 
 use lazy_static::lazy_static;
 use qstring::QString;
 use url::{form_urlencoded, Url};
+
+#[cfg(feature = "tls")]
+use std::fmt;
 
 use crate::agent::{self, Agent, AgentState};
 use crate::body::Payload;
