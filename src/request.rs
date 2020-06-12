@@ -21,7 +21,7 @@ use super::SerdeValue;
 
 lazy_static! {
     static ref URL_BASE: Url =
-        { Url::parse("http://localhost/").expect("Failed to parse URL_BASE") };
+        Url::parse("http://localhost/").expect("Failed to parse URL_BASE");
 }
 
 /// Request instances are builders that creates a request.
