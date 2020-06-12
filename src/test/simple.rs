@@ -187,3 +187,25 @@ pub fn header_with_spaces_before_value() {
         .call();
     assert_eq!(resp.status(), 200);
 }
+
+#[test]
+pub fn host_no_port() {
+    test::set_handler("/host_no_port", |_| {
+        test::make_response(200, "OK", vec![], vec![])
+    });
+    let resp = get("test://myhost/host_no_port").call();
+    let vec = resp.to_write_vec();
+    let s = String::from_utf8_lossy(&vec);
+    assert!(s.contains("\r\nHost: myhost\r\n"));
+}
+
+#[test]
+pub fn host_with_port() {
+    test::set_handler("/host_with_port", |_| {
+        test::make_response(200, "OK", vec![], vec![])
+    });
+    let resp = get("test://myhost:234/host_with_port").call();
+    let vec = resp.to_write_vec();
+    let s = String::from_utf8_lossy(&vec);
+    assert!(s.contains("\r\nHost: myhost:234\r\n"));
+}

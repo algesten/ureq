@@ -307,7 +307,24 @@ fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> IoResult<()> {
 
     // host header if not set by user.
     if !header::has_header(&unit.headers, "host") {
-        write!(prelude, "Host: {}\r\n", unit.url.host().unwrap())?;
+        let host = unit.url.host().unwrap();
+        match unit.url.port() {
+            Some(port) => {
+                let scheme_default: u16 = match unit.url.scheme() {
+                    "http" => 80,
+                    "https" => 443,
+                    _ => 0,
+                };
+                if scheme_default != 0 && scheme_default == port {
+                    write!(prelude, "Host: {}\r\n", host)?;
+                } else {
+                    write!(prelude, "Host: {}:{}\r\n", host, port)?;
+                }
+            }
+            None => {
+                write!(prelude, "Host: {}\r\n", host)?;
+            }
+        }
     }
     if !header::has_header(&unit.headers, "user-agent") {
         write!(prelude, "User-Agent: ureq\r\n")?;
