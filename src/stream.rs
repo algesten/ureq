@@ -225,13 +225,11 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
                 hostname,
                 port,
             )
+        } else if has_timeout {
+            let timeout = Duration::from_millis(timeout_connect);
+            TcpStream::connect_timeout(&sock_addr, timeout)
         } else {
-            if has_timeout {
-                let timeout = Duration::from_millis(timeout_connect);
-                TcpStream::connect_timeout(&sock_addr, timeout)
-            } else {
-                TcpStream::connect(&sock_addr)
-            }
+            TcpStream::connect(&sock_addr)
         };
 
         if let Ok(stream) = stream {
