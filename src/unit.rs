@@ -1,7 +1,6 @@
 use std::io::{Result as IoResult, Write};
 use std::sync::{Arc, Mutex};
 
-use base64;
 use qstring::QString;
 use url::Url;
 
