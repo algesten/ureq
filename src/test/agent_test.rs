@@ -54,21 +54,19 @@ fn agent_cookies() {
     agent.get("test://host/agent_cookies").call();
 }
 
-#[test]
-fn connection_reuse() {
-    use std::io::{BufRead, BufReader, Read, Write};
+// Start a test server on an available port, that times out idle connections at 2 seconds.
+// Return the port this server is listening on.
+fn start_idle_timeout_server() -> u16 {
+    use std::io::{BufRead, BufReader, Write};
     use std::time::Duration;
-
-    // Start a test server on an available port, that times out idle connections at 2 seconds.
     let listener = std::net::TcpListener::bind("localhost:0").unwrap();
     let port = listener.local_addr().unwrap().port();
-    let url = format!("http://localhost:{}", port);
     thread::spawn(move || {
         for stream in listener.incoming() {
             thread::spawn(move || {
                 let stream = stream.unwrap();
                 stream
-                    .set_read_timeout(Some(Duration::from_millis(2000)))
+                    .set_read_timeout(Some(Duration::from_secs(2)))
                     .unwrap();
                 let mut write_stream = stream.try_clone().unwrap();
                 for line in BufReader::new(stream).lines() {
@@ -85,7 +83,16 @@ fn connection_reuse() {
             });
         }
     });
+    port
+}
 
+#[test]
+fn connection_reuse() {
+    use std::io::Read;
+    use std::time::Duration;
+
+    let port = start_idle_timeout_server();
+    let url = format!("http://localhost:{}", port);
     let agent = Agent::default().build();
     let resp = agent.get(&url).call();
 
