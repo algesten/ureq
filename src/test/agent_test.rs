@@ -55,7 +55,6 @@ fn agent_cookies() {
 }
 
 #[test]
-#[cfg(feature = "tls")]
 fn connection_reuse() {
     use std::io::{BufRead, BufReader, Read, Write};
     use std::time::Duration;
