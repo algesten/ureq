@@ -54,6 +54,33 @@ impl ::std::fmt::Debug for Stream {
 }
 
 impl Stream {
+    // Check if the server has closed a stream by performing a one-byte
+    // non-blocking read. If this returns EOF, the server has closed the
+    // connection: return true. If this returns WouldBlock (aka EAGAIN),
+    // that means the connection is still open: return false. Otherwise
+    // return an error.
+    fn serverclosed_stream(stream: &std::net::TcpStream) -> IoResult<bool> {
+        let mut buf = [0; 1];
+        stream.set_nonblocking(true)?;
+
+        let result = match stream.peek(&mut buf) {
+            Ok(0) => Ok(true),
+            Ok(_) => Ok(false), // TODO: Maybe this should produce an "unexpected response" error
+            Err(e) if e.kind() == ErrorKind::WouldBlock => Ok(false),
+            Err(e) => Err(e),
+        };
+        stream.set_nonblocking(false)?;
+
+        result
+    }
+    // Return true if the server has closed this connection.
+    pub(crate) fn server_closed(&self) -> IoResult<bool> {
+        match self {
+            Stream::Http(tcpstream) => Stream::serverclosed_stream(tcpstream),
+            Stream::Https(rustls_stream) => Stream::serverclosed_stream(&rustls_stream.sock),
+            _ => Ok(false),
+        }
+    }
     pub fn is_poolable(&self) -> bool {
         match self {
             Stream::Http(_) => true,
@@ -273,13 +300,11 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
                 hostname,
                 port,
             )
+        } else if has_timeout {
+            let timeout = Duration::from_millis(timeout_connect);
+            TcpStream::connect_timeout(&sock_addr, timeout)
         } else {
-            if has_timeout {
-                let timeout = Duration::from_millis(timeout_connect);
-                TcpStream::connect_timeout(&sock_addr, timeout)
-            } else {
-                TcpStream::connect(&sock_addr)
-            }
+            TcpStream::connect(&sock_addr)
         };
 
         if let Ok(stream) = stream {
