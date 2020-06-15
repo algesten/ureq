@@ -63,7 +63,7 @@ impl Error {
             Error::ProxyConnect => 500,
             Error::InvalidProxyCreds => 500,
             #[cfg(feature = "native-tls")]
-            Error::TlsError(_) => 599,
+            Error::TlsError(_) => 500,
         }
     }
 
