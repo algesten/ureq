@@ -1,5 +1,6 @@
 use std::io::{Result as IoResult, Write};
 use std::sync::{Arc, Mutex};
+use std::time;
 
 use base64;
 use qstring::QString;
@@ -34,6 +35,7 @@ pub(crate) struct Unit {
     pub timeout_connect: u64,
     pub timeout_read: u64,
     pub timeout_write: u64,
+    pub deadline: Option<time::Instant>,
     pub method: String,
     pub proxy: Option<Proxy>,
     #[cfg(feature = "tls")]
@@ -85,6 +87,14 @@ impl Unit {
             .cloned()
             .collect();
 
+        let deadline = if req.timeout == 0 {
+            None
+        } else {
+            let now = time::Instant::now();
+            let delta = time::Duration::from_millis(req.timeout);
+            Some(now.checked_add(delta).unwrap())
+        };
+
         Unit {
             agent: Arc::clone(&req.agent),
             url: url.clone(),
@@ -94,6 +104,7 @@ impl Unit {
             timeout_connect: req.timeout_connect,
             timeout_read: req.timeout_read,
             timeout_write: req.timeout_write,
+            deadline: deadline,
             method: req.method.clone(),
             proxy: req.proxy.clone(),
             #[cfg(feature = "tls")]
@@ -150,7 +161,14 @@ pub(crate) fn connect(
     let body_bytes_sent = body::send_body(body, unit.is_chunked, &mut stream)?;
 
     // start reading the response to process cookies and redirects.
-    let mut resp = Response::from_read(&mut stream);
+    let mut resp = if let Some(deadline) = unit.deadline {
+        Response::from_read(&mut stream::DeadlineStream {
+            stream: &mut stream,
+            deadline: Some(deadline),
+        })
+    } else {
+        Response::from_read(&mut stream)
+    };
 
     if let Some(err) = resp.synthetic_error() {
         if err.is_bad_status_read() && body_bytes_sent == 0 && is_recycled {

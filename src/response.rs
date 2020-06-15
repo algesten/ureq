@@ -1,5 +1,6 @@
 use std::io::{Cursor, Error as IoError, ErrorKind, Read, Result as IoResult};
 use std::str::FromStr;
+use std::time::Instant;
 
 use chunked_transfer::Decoder as ChunkDecoder;
 
@@ -46,6 +47,7 @@ pub struct Response {
     headers: Vec<Header>,
     unit: Option<Unit>,
     stream: Option<Stream>,
+    deadline: Option<Instant>,
 }
 
 /// index into status_line where we split: HTTP/1.1 200 OK
@@ -273,7 +275,6 @@ impl Response {
     /// ```
     pub fn into_reader(self) -> impl Read {
         //
-
         let is_http10 = self.http_version().eq_ignore_ascii_case("HTTP/1.0");
         let is_close = self
             .header("connection")
@@ -309,6 +310,7 @@ impl Response {
         let mut reclaiming_read = ReclaimingRead {
             stream: stream_ptr,
             dealloc: false,
+            deadline: self.deadline,
         };
         let unit = self.unit;
 
@@ -484,6 +486,7 @@ impl Response {
             headers,
             unit: None,
             stream: None,
+            deadline: None,
         })
     }
 
@@ -563,6 +566,9 @@ impl Into<Response> for Error {
 /// *Internal API*
 pub(crate) fn set_stream(resp: &mut Response, url: String, unit: Option<Unit>, stream: Stream) {
     resp.url = Some(url);
+    if let Some(unit) = &unit {
+        resp.deadline = unit.deadline;
+    }
     resp.unit = unit;
     resp.stream = Some(stream);
 }
@@ -603,6 +609,7 @@ pub(crate) struct ReclaimingRead {
     // thing, cause passing this reader around threads would not be safe.
     stream: *mut Stream,
     dealloc: bool, // whether we are to dealloc stream on drop
+    deadline: Option<Instant>,
 }
 
 impl Read for ReclaimingRead {
@@ -611,7 +618,12 @@ impl Read for ReclaimingRead {
             if self.stream.is_null() {
                 return Ok(0);
             }
-            let amount = (*self.stream).read(buf)?;
+            use crate::stream;
+            let amount = stream::DeadlineStream {
+                stream: &mut (*self.stream),
+                deadline: self.deadline,
+            }
+            .read(buf)?;
             if amount == 0 {
                 if self.dealloc {
                     let _stream = Box::from_raw(self.stream);

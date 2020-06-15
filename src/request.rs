@@ -47,6 +47,7 @@ pub struct Request {
     pub(crate) timeout_connect: u64,
     pub(crate) timeout_read: u64,
     pub(crate) timeout_write: u64,
+    pub(crate) timeout: u64,
     pub(crate) redirects: u32,
     pub(crate) proxy: Option<crate::proxy::Proxy>,
     #[cfg(feature = "tls")]
@@ -378,6 +379,19 @@ impl Request {
     /// ```
     pub fn timeout_write(&mut self, millis: u64) -> &mut Request {
         self.timeout_write = millis;
+        self
+    }
+
+    /// Timeout for the overall request.
+    ///
+    /// ```
+    /// let r = ureq::get("/my_page")
+    ///     .timeout_write(1_000)   // wait max 1 second for whole request to complete.
+    ///     .call();
+    /// println!("{:?}", r);
+    /// ```
+    pub fn timeout(&mut self, millis: u64) -> &mut Request {
+        self.timeout = millis;
         self
     }
 

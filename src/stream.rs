@@ -28,6 +28,31 @@ pub enum Stream {
     Test(Box<dyn Read + Send>, Vec<u8>),
 }
 
+pub struct DeadlineStream<'a> {
+    pub(crate) stream: &'a mut Stream,
+    pub(crate) deadline: Option<Instant>,
+}
+
+impl Read for DeadlineStream<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
+        if let Some(socket) = self.stream.socket() {
+            if let Some(deadline) = self.deadline {
+                let now = Instant::now();
+                if now.checked_duration_since(deadline).is_some() {
+                    return Err(IoError::new(
+                        ErrorKind::TimedOut,
+                        "timed out reading response",
+                    ));
+                }
+                let timeout = Some(deadline - now);
+                socket.set_read_timeout(timeout)?;
+                socket.set_write_timeout(timeout)?;
+            }
+        }
+        self.stream.read(buf)
+    }
+}
+
 impl ::std::fmt::Debug for Stream {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::result::Result<(), ::std::fmt::Error> {
         write!(
@@ -52,6 +77,15 @@ impl Stream {
             #[cfg(feature = "tls")]
             Stream::Https(_) => true,
             _ => false,
+        }
+    }
+
+    pub fn socket(&self) -> Option<&TcpStream> {
+        match self {
+            Stream::Http(tcpstream) => Some(tcpstream),
+            #[cfg(feature = "tls")]
+            Stream::Https(rustls_stream) => Some(&rustls_stream.sock),
+            _ => None,
         }
     }
 
@@ -178,7 +212,13 @@ pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
 }
 
 pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<TcpStream, Error> {
-    //
+    let deadline = if unit.timeout_connect > 0 {
+        Instant::now().checked_add(Duration::from_millis(unit.timeout_connect))
+    } else {
+        unit.deadline
+    };
+
+    // TODO: Find a way to apply deadline to DNS lookup.
     let sock_addrs: Vec<SocketAddr> = match unit.proxy {
         Some(ref proxy) => format!("{}:{}", proxy.server, proxy.port),
         None => format!("{}:{}", hostname, port),
@@ -199,39 +239,32 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
 
     let mut any_err = None;
     let mut any_stream = None;
-    let mut timeout_connect = unit.timeout_connect;
-    let start_time = Instant::now();
-    let has_timeout = unit.timeout_connect > 0;
-
     // Find the first sock_addr that accepts a connection
     for sock_addr in sock_addrs {
-        // ensure connect timeout isn't hit overall.
-        if has_timeout {
-            let lapsed = (Instant::now() - start_time).as_millis() as u64;
-            if lapsed >= unit.timeout_connect {
+        // ensure connect timeout or overall timeout arent yet hit.
+        let mut timeout: Option<Duration> = None;
+        if let Some(deadline) = deadline {
+            let now = Instant::now();
+            if let Some(_) = now.checked_duration_since(deadline) {
                 any_err = Some(IoError::new(ErrorKind::TimedOut, "Didn't connect in time"));
                 break;
-            } else {
-                timeout_connect = unit.timeout_connect - lapsed;
             }
+            timeout = Some(deadline - now);
         }
 
         // connect with a configured timeout.
         let stream = if Some(Proto::SOCKS5) == proto {
             connect_socks5(
                 unit.proxy.to_owned().unwrap(),
-                timeout_connect,
+                deadline,
                 sock_addr,
                 hostname,
                 port,
             )
+        } else if let Some(timeout) = timeout {
+            TcpStream::connect_timeout(&sock_addr, timeout)
         } else {
-            if has_timeout {
-                let timeout = Duration::from_millis(timeout_connect);
-                TcpStream::connect_timeout(&sock_addr, timeout)
-            } else {
-                TcpStream::connect(&sock_addr)
-            }
+            TcpStream::connect(&sock_addr)
         };
 
         if let Ok(stream) = stream {
@@ -251,7 +284,11 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
 
     // rust's absurd api returns Err if we set 0.
     // Setting it to None will disable the native system timeout
-    if unit.timeout_read > 0 {
+    if let Some(deadline) = deadline {
+        stream
+            .set_read_timeout(Some(deadline - Instant::now()))
+            .ok();
+    } else if unit.timeout_read > 0 {
         stream
             .set_read_timeout(Some(Duration::from_millis(unit.timeout_read as u64)))
             .ok();
@@ -259,7 +296,11 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         stream.set_read_timeout(None).ok();
     }
 
-    if unit.timeout_write > 0 {
+    if let Some(deadline) = deadline {
+        stream
+            .set_write_timeout(Some(deadline - Instant::now()))
+            .ok();
+    } else if unit.timeout_write > 0 {
         stream
             .set_write_timeout(Some(Duration::from_millis(unit.timeout_write as u64)))
             .ok();
@@ -318,7 +359,7 @@ fn socks5_local_nslookup(hostname: &str, port: u16) -> Result<TargetAddr, std::i
 #[cfg(feature = "socks-proxy")]
 fn connect_socks5(
     proxy: Proxy,
-    timeout_connect: u64,
+    deadline: Option<time::Instant>,
     proxy_addr: SocketAddr,
     host: &str,
     port: u16,
@@ -349,7 +390,7 @@ fn connect_socks5(
     // 1) In the event of a timeout, a thread may be left running in the background.
     // TODO: explore supporting timeouts upstream in Socks5Proxy.
     #[allow(clippy::mutex_atomic)]
-    let stream = if timeout_connect > 0 {
+    let stream = if let Some(deadline) = deadline {
         use std::sync::mpsc::channel;
         use std::sync::{Arc, Condvar, Mutex};
         use std::thread;
@@ -374,9 +415,7 @@ fn connect_socks5(
         let (lock, cvar) = &*master_signal;
         let done = lock.lock().unwrap();
 
-        let done_result = cvar
-            .wait_timeout(done, Duration::from_millis(timeout_connect))
-            .unwrap();
+        let done_result = cvar.wait_timeout(done, deadline - Instant::now()).unwrap();
         let done = done_result.0;
         if *done {
             rx.recv().unwrap()?
@@ -423,7 +462,7 @@ fn get_socks5_stream(
 #[cfg(not(feature = "socks-proxy"))]
 fn connect_socks5(
     _proxy: Proxy,
-    _timeout_connect: u64,
+    _deadline: Option<Instant>,
     _proxy_addr: SocketAddr,
     _hostname: &str,
     _port: u16,

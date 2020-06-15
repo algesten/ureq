@@ -1,4 +1,7 @@
 use crate::test;
+use std::io::{self, Read, Write};
+use std::thread;
+use std::time::Duration;
 
 use super::super::*;
 
@@ -78,4 +81,71 @@ fn connection_reuse() {
         panic!("Pooled connection failed! {:?}", err);
     }
     assert_eq!(resp.status(), 200);
+}
+
+// Send an HTTP response on the TcpStream at a rate of two bytes every 10
+// milliseconds, for a total of 600 bytes.
+fn dribble_respond(stream: &mut std::net::TcpStream) -> io::Result<()> {
+    let contents = [b'a'; 300];
+    let headers = format!(
+        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n",
+        contents.len() * 2
+    );
+    stream.write_all(headers.as_bytes())?;
+    for i in 0..contents.len() {
+        stream.write_all(&contents[i..i + 1])?;
+        stream.write_all(&[b'\n'; 1])?;
+        stream.flush()?;
+        thread::sleep(Duration::from_millis(10));
+    }
+    Ok(())
+}
+
+// Start a test server on an available port, that dribbles out a response at 1 write per 10ms.
+// Return the port this server is listening on.
+fn start_dribble_server() -> u16 {
+    use std::io::{BufRead, BufReader};
+    let listener = std::net::TcpListener::bind("localhost:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let dribble_handler = |stream: std::net::TcpStream| {
+        let mut write_stream = stream.try_clone().unwrap();
+        for line in BufReader::new(stream).lines() {
+            let line = match line {
+                Ok(x) => x,
+                Err(_) => return,
+            };
+            if line == "" {
+                if let Err(e) = dribble_respond(&mut write_stream) {
+                    eprintln!("sending dribble repsonse: {}", e);
+                }
+            }
+        }
+    };
+    thread::spawn(move || {
+        for stream in listener.incoming() {
+            thread::spawn(move || dribble_handler(stream.unwrap()));
+        }
+    });
+    port
+}
+
+#[test]
+fn overall_timeout_during_body() {
+    let port = start_dribble_server();
+    let url = format!("http://localhost:{}/", port);
+
+    let agent = Agent::default().build();
+    let resp = agent.get(&url).timeout(2000).call();
+
+    let mut reader = resp.into_reader();
+    let mut bytes = vec![];
+    let result = reader.read_to_end(&mut bytes);
+
+    // assert!(resp.error(), "expected timeout error");
+    // assert!(resp.synthetic(), "expected timeout error to be synthetic");
+    // match resp.synthetic_error() {
+    match result {
+        Err(io_error) if io_error.kind() == io::ErrorKind::WouldBlock => {}
+        e => assert!(false, "wrong type of result. expected timeout, got {:?}", e),
+    }
 }
