@@ -13,7 +13,7 @@ use rustls::StreamOwned;
 use socks::{TargetAddr, ToTargetAddr};
 
 #[cfg(feature = "native-tls")]
-use native_tls::{TlsConnector, TlsStream, HandshakeError};
+use native_tls::{HandshakeError, TlsConnector, TlsStream};
 
 use crate::proxy::Proto;
 use crate::proxy::Proxy;
@@ -192,7 +192,6 @@ pub(crate) fn connect_http(unit: &Unit) -> Result<Stream, Error> {
     connect_host(unit, hostname, port).map(Stream::Http)
 }
 
-
 #[cfg(all(feature = "tls", feature = "native-certs"))]
 fn configure_certs(config: &mut rustls::ClientConfig) {
     config.root_store =
@@ -242,11 +241,9 @@ pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
     let sock = connect_host(unit, hostname, port)?;
 
     let tls_connector = TlsConnector::new().map_err(|e| Error::TlsError(e))?;
-    let stream = tls_connector.connect(hostname, sock).map_err(|e| {
-        match e {
-            HandshakeError::Failure(err) => Error::TlsError(err),
-            _ => Error::BadStatusRead,
-        }
+    let stream = tls_connector.connect(hostname, sock).map_err(|e| match e {
+        HandshakeError::Failure(err) => Error::TlsError(err),
+        _ => Error::BadStatusRead,
     })?;
 
     Ok(Stream::Https(stream))
@@ -522,4 +519,3 @@ pub(crate) fn connect_test(unit: &Unit) -> Result<Stream, Error> {
 pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
     Err(Error::UnknownScheme(unit.url.scheme().to_string()))
 }
-
