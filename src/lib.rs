@@ -7,7 +7,6 @@
 //! * Obvious API
 //!
 //! ```
-//! # #[cfg(feature = "json")] {
 //! // requires feature: `ureq = { version = "*", features = ["json"] }`
 //! # #[cfg(feature = "json")] {
 //! use ureq::json;
