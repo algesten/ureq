@@ -65,6 +65,9 @@ You can control them when including `ureq` as a dependency.
 ```
 
 * `tls` enables https. This is enabled by default.
+* `native-tls` enables https using the [`native-tls`](https://crates.io/crates/native-tls) crate. 
+  NB: To make this work you currently need to use `default-features: false` to disable `tls`.
+  We plan on fixing that.
 * `json` enables `response.into_json()` and `request.send_json()` serde json.
 * `charset` enables interpreting the charset part of
   `Content-Type: text/plain; charset=iso-8859-1`. Without this, the library
