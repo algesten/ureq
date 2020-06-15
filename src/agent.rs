@@ -250,7 +250,7 @@ impl Agent {
         self.request("PATCH", path)
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, any(feature = "tls", feature = "native-tls")))]
     pub(crate) fn state(&self) -> &Arc<Mutex<Option<AgentState>>> {
         &self.state
     }

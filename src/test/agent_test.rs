@@ -4,6 +4,7 @@ use std::thread;
 use std::time::Duration;
 
 use super::super::*;
+use std::thread;
 
 #[test]
 fn agent_reuse_headers() {
@@ -56,27 +57,70 @@ fn agent_cookies() {
     agent.get("test://host/agent_cookies").call();
 }
 
+// Start a test server on an available port, that times out idle connections at 2 seconds.
+// Return the port this server is listening on.
+fn start_idle_timeout_server() -> u16 {
+    use std::io::{BufRead, BufReader, Write};
+    use std::time::Duration;
+    let listener = std::net::TcpListener::bind("localhost:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    thread::spawn(move || {
+        for stream in listener.incoming() {
+            thread::spawn(move || {
+                let stream = stream.unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(2)))
+                    .unwrap();
+                let mut write_stream = stream.try_clone().unwrap();
+                for line in BufReader::new(stream).lines() {
+                    let line = match line {
+                        Ok(x) => x,
+                        Err(_) => return,
+                    };
+                    if line == "" {
+                        write_stream
+                            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 8\r\n\r\nresponse")
+                            .unwrap();
+                    }
+                }
+            });
+        }
+    });
+    port
+}
+
 #[test]
-#[cfg(feature = "tls")]
 fn connection_reuse() {
     use std::io::Read;
     use std::time::Duration;
 
+    let port = start_idle_timeout_server();
+    let url = format!("http://localhost:{}", port);
     let agent = Agent::default().build();
-    let resp = agent.get("https://fau.xxx/").call();
+    let resp = agent.get(&url).call();
 
     // use up the connection so it gets returned to the pool
     assert_eq!(resp.status(), 200);
-    resp.into_reader().read_to_end(&mut vec![]).unwrap();
+    let mut buf = vec![];
+    resp.into_reader().read_to_end(&mut buf).unwrap();
 
-    // wait for the server to close the connection. fau.xxx has a
-    // 2 second connection keep-alive. then it closes.
+    {
+        let mut guard_state = agent.state().lock().unwrap();
+        let mut state = guard_state.take().unwrap();
+        assert!(state.pool().len() > 0);
+    }
+
+    // wait for the server to close the connection.
     std::thread::sleep(Duration::from_secs(3));
 
     // try and make a new request on the pool. this fails
     // when we discover that the TLS connection is dead
     // first when attempting to read from it.
-    let resp = agent.get("https://fau.xxx/").call();
+    // Note: This test assumes the second  .call() actually
+    // pulls from the pool. If for some reason the timed-out
+    // connection wasn't in the pool, we won't be testing what
+    // we thought we were testing.
+    let resp = agent.get(&url).call();
     if let Some(err) = resp.synthetic_error() {
         panic!("Pooled connection failed! {:?}", err);
     }

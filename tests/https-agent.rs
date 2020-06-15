@@ -1,6 +1,7 @@
+#[cfg(all(test, any(feature = "tls", feature = "native-tls")))]
 use std::io::Read;
 
-#[cfg(feature = "tls")]
+#[cfg(any(feature = "tls", feature = "native-tls"))]
 #[test]
 fn tls_connection_close() {
     let agent = ureq::Agent::default().build();
@@ -47,7 +48,7 @@ fn agent_set_cookie() {
 }
 
 #[cfg(feature = "tls")]
-const BADSSL_CLIENT_CERT_PEM: &'static str = r#"Bag Attributes
+const BADSSL_CLIENT_CERT_PEM: &str = r#"Bag Attributes
     localKeyID: 41 C3 6C 33 C7 E3 36 DD EA 4A 1F C0 B7 23 B8 E6 9C DC D8 0F
 subject=C = US, ST = California, L = San Francisco, O = BadSSL, CN = BadSSL Client Certificate
 
@@ -119,12 +120,10 @@ fn tls_client_certificate() {
 
     let mut tls_config = rustls::ClientConfig::new();
 
-    let certs =
-        rustls::internal::pemfile::certs(&mut BADSSL_CLIENT_CERT_PEM.clone().as_bytes()).unwrap();
-    let key =
-        rustls::internal::pemfile::rsa_private_keys(&mut BADSSL_CLIENT_CERT_PEM.clone().as_bytes())
-            .unwrap()[0]
-            .clone();
+    let certs = rustls::internal::pemfile::certs(&mut BADSSL_CLIENT_CERT_PEM.as_bytes()).unwrap();
+    let key = rustls::internal::pemfile::rsa_private_keys(&mut BADSSL_CLIENT_CERT_PEM.as_bytes())
+        .unwrap()[0]
+        .clone();
 
     tls_config.set_single_client_cert(certs, key).unwrap();
     tls_config

@@ -180,6 +180,12 @@ pub fn patch(path: &str) -> Request {
     request("PATCH", path)
 }
 
+// Compilation error when both tls and native-tls features are enabled
+#[cfg(all(feature = "tls", feature = "native-tls"))]
+std::compile_error!(
+    "You have both the \"tls\" and \"native-tls\" features enabled on ureq. Please disable one of these features."
+);
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -195,7 +201,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "tls")]
+    #[cfg(any(feature = "tls", feature = "native-tls"))]
     fn connect_https_google() {
         let resp = get("https://www.google.com/").call();
         assert_eq!(
@@ -206,7 +212,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "tls")]
+    #[cfg(any(feature = "tls", feature = "native-tls"))]
     fn connect_https_invalid_name() {
         let resp = get("https://example.com{REQUEST_URI}/").call();
         assert_eq!(400, resp.status());

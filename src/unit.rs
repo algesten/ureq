@@ -2,7 +2,6 @@ use std::io::{Result as IoResult, Write};
 use std::sync::{Arc, Mutex};
 use std::time;
 
-use base64;
 use qstring::QString;
 use url::Url;
 
@@ -12,7 +11,12 @@ use cookie::{Cookie, CookieJar};
 use crate::agent::AgentState;
 use crate::body::{self, Payload, SizedReader};
 use crate::header;
-use crate::stream::{self, connect_https, connect_test, Stream};
+#[cfg(any(
+    all(feature = "tls", not(feature = "native-tls")),
+    all(feature = "native-tls", not(feature = "tls")),
+))]
+use crate::stream::connect_https;
+use crate::stream::{self, connect_test, Stream};
 use crate::Proxy;
 use crate::{Error, Header, Request, Response};
 
@@ -292,13 +296,23 @@ fn connect_socket(unit: &Unit, use_pooled: bool) -> Result<(Stream, bool), Error
     if use_pooled {
         let state = &mut unit.agent.lock().unwrap();
         if let Some(agent) = state.as_mut() {
-            if let Some(stream) = agent.pool.try_get_connection(&unit.url) {
-                return Ok((stream, true));
+            // The connection may have been closed by the server
+            // due to idle timeout while it was sitting in the pool.
+            // Loop until we find one that is still good or run out of connections.
+            while let Some(stream) = agent.pool.try_get_connection(&unit.url) {
+                let server_closed = stream.server_closed()?;
+                if !server_closed {
+                    return Ok((stream, true));
+                }
             }
         }
     }
     let stream = match unit.url.scheme() {
         "http" => stream::connect_http(&unit),
+        #[cfg(any(
+            all(feature = "tls", not(feature = "native-tls")),
+            all(feature = "native-tls", not(feature = "tls")),
+        ))]
         "https" => connect_https(&unit),
         "test" => connect_test(&unit),
         _ => Err(Error::UnknownScheme(unit.url.scheme().to_string())),

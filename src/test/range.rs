@@ -1,9 +1,11 @@
+#[cfg(any(feature = "tls", feature = "native-tls"))]
 use std::io::Read;
 
+#[cfg(any(feature = "tls", feature = "native-tls"))]
 use super::super::*;
 
 #[test]
-#[cfg(feature = "tls")]
+#[cfg(any(feature = "tls", feature = "native-tls"))]
 fn read_range() {
     let resp = get("https://ureq.s3.eu-central-1.amazonaws.com/sherlock.txt")
         .set("Range", "bytes=1000-1999")
@@ -20,7 +22,7 @@ fn read_range() {
 }
 
 #[test]
-#[cfg(feature = "tls")]
+#[cfg(any(feature = "tls", feature = "native-tls"))]
 fn agent_pool() {
     let agent = agent();
 
