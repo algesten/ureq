@@ -32,7 +32,7 @@ fn main() {
 
 ## About 1.0.0
 
-This crate is now 1.x.x. I signifies there will be no more breaking
+This crate is now 1.x.x. It signifies there will be no more breaking
 API changes (for better or worse). I personally use this code in
 production system reading data from AWS. Whether the quality is good
 enough for other use cases is a "YMMV". I know the Agent related code
