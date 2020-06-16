@@ -1,19 +1,28 @@
 use std::io::{Result as IoResult, Write};
 use std::sync::{Arc, Mutex};
 
-use base64;
-#[cfg(feature = "cookie")]
-use cookie::{Cookie, CookieJar};
 use qstring::QString;
 use url::Url;
+
+#[cfg(feature = "cookie")]
+use cookie::{Cookie, CookieJar};
 
 use crate::agent::AgentState;
 use crate::body::{self, Payload, SizedReader};
 use crate::header;
-use crate::stream::{self, connect_https, connect_test, Stream};
+#[cfg(any(
+    all(feature = "tls", not(feature = "native-tls")),
+    all(feature = "native-tls", not(feature = "tls")),
+))]
+use crate::stream::connect_https;
+use crate::stream::{self, connect_test, Stream};
 use crate::Proxy;
 use crate::{Error, Header, Request, Response};
 
+#[cfg(feature = "tls")]
+use crate::request::TLSClientConfig;
+
+#[cfg(feature = "cookie")]
 use crate::pool::DEFAULT_HOST;
 
 /// It's a "unit of work". Maybe a bad name for it?
@@ -31,6 +40,8 @@ pub(crate) struct Unit {
     pub timeout_write: u64,
     pub method: String,
     pub proxy: Option<Proxy>,
+    #[cfg(feature = "tls")]
+    pub tls_config: Option<TLSClientConfig>,
 }
 
 impl Unit {
@@ -89,6 +100,8 @@ impl Unit {
             timeout_write: req.timeout_write,
             method: req.method.clone(),
             proxy: req.proxy.clone(),
+            #[cfg(feature = "tls")]
+            tls_config: req.tls_config.clone(),
         }
     }
 
@@ -215,7 +228,7 @@ fn extract_cookies(state: &std::sync::Mutex<Option<AgentState>>, url: &Url) -> V
 }
 
 #[cfg(not(feature = "cookie"))]
-fn extract_cookies(_state: &std::sync::Mutex<Option<AgentState>>, url: &Url) -> Vec<Header> {
+fn extract_cookies(_state: &std::sync::Mutex<Option<AgentState>>, _url: &Url) -> Vec<Header> {
     vec![]
 }
 
@@ -265,13 +278,23 @@ fn connect_socket(unit: &Unit, use_pooled: bool) -> Result<(Stream, bool), Error
     if use_pooled {
         let state = &mut unit.agent.lock().unwrap();
         if let Some(agent) = state.as_mut() {
-            if let Some(stream) = agent.pool.try_get_connection(&unit.url) {
-                return Ok((stream, true));
+            // The connection may have been closed by the server
+            // due to idle timeout while it was sitting in the pool.
+            // Loop until we find one that is still good or run out of connections.
+            while let Some(stream) = agent.pool.try_get_connection(&unit.url) {
+                let server_closed = stream.server_closed()?;
+                if !server_closed {
+                    return Ok((stream, true));
+                }
             }
         }
     }
     let stream = match unit.url.scheme() {
         "http" => stream::connect_http(&unit),
+        #[cfg(any(
+            all(feature = "tls", not(feature = "native-tls")),
+            all(feature = "native-tls", not(feature = "tls")),
+        ))]
         "https" => connect_https(&unit),
         "test" => connect_test(&unit),
         _ => Err(Error::UnknownScheme(unit.url.scheme().to_string())),
@@ -298,7 +321,24 @@ fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> IoResult<()> {
 
     // host header if not set by user.
     if !header::has_header(&unit.headers, "host") {
-        write!(prelude, "Host: {}\r\n", unit.url.host().unwrap())?;
+        let host = unit.url.host().unwrap();
+        match unit.url.port() {
+            Some(port) => {
+                let scheme_default: u16 = match unit.url.scheme() {
+                    "http" => 80,
+                    "https" => 443,
+                    _ => 0,
+                };
+                if scheme_default != 0 && scheme_default == port {
+                    write!(prelude, "Host: {}\r\n", host)?;
+                } else {
+                    write!(prelude, "Host: {}:{}\r\n", host, port)?;
+                }
+            }
+            None => {
+                write!(prelude, "Host: {}\r\n", host)?;
+            }
+        }
     }
     if !header::has_header(&unit.headers, "user-agent") {
         write!(prelude, "User-Agent: ureq\r\n")?;

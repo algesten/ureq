@@ -75,6 +75,29 @@ fn body_as_json() {
 }
 
 #[test]
+#[cfg(feature = "json")]
+fn body_as_json_deserialize() {
+    use serde::Deserialize;
+
+    #[derive(Deserialize)]
+    struct Hello {
+        hello: String,
+    }
+
+    test::set_handler("/body_as_json_deserialize", |_unit| {
+        test::make_response(
+            200,
+            "OK",
+            vec![],
+            "{\"hello\":\"world\"}".to_string().into_bytes(),
+        )
+    });
+    let resp = get("test://host/body_as_json_deserialize").call();
+    let json = resp.into_json_deserialize::<Hello>().unwrap();
+    assert_eq!(json.hello, "world");
+}
+
+#[test]
 fn body_as_reader() {
     test::set_handler("/body_as_reader", |_unit| {
         test::make_response(200, "OK", vec![], "abcdefgh".to_string().into_bytes())
@@ -163,4 +186,26 @@ pub fn header_with_spaces_before_value() {
         .set("X-Test", "     value")
         .call();
     assert_eq!(resp.status(), 200);
+}
+
+#[test]
+pub fn host_no_port() {
+    test::set_handler("/host_no_port", |_| {
+        test::make_response(200, "OK", vec![], vec![])
+    });
+    let resp = get("test://myhost/host_no_port").call();
+    let vec = resp.to_write_vec();
+    let s = String::from_utf8_lossy(&vec);
+    assert!(s.contains("\r\nHost: myhost\r\n"));
+}
+
+#[test]
+pub fn host_with_port() {
+    test::set_handler("/host_with_port", |_| {
+        test::make_response(200, "OK", vec![], vec![])
+    });
+    let resp = get("test://myhost:234/host_with_port").call();
+    let vec = resp.to_write_vec();
+    let s = String::from_utf8_lossy(&vec);
+    assert!(s.contains("\r\nHost: myhost:234\r\n"));
 }

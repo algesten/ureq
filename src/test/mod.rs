@@ -19,7 +19,7 @@ type RequestHandler = dyn Fn(&Unit) -> Result<Stream, Error> + Send + 'static;
 
 lazy_static! {
     pub(crate) static ref TEST_HANDLERS: Arc<Mutex<HashMap<String, Box<RequestHandler>>>> =
-        { Arc::new(Mutex::new(HashMap::new())) };
+        Arc::new(Mutex::new(HashMap::new()));
 }
 
 pub(crate) fn set_handler<H>(path: &str, handler: H)

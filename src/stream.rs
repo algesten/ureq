@@ -1,8 +1,9 @@
-use std::io::{Cursor, ErrorKind, Read, Result as IoResult, Write};
+use std::io::{Cursor, Error as IoError, ErrorKind, Read, Result as IoResult, Write};
 use std::net::SocketAddr;
 use std::net::TcpStream;
 use std::net::ToSocketAddrs;
 use std::time::Duration;
+use std::time::Instant;
 
 use chunked_transfer::Decoder as ChunkDecoder;
 
@@ -13,6 +14,9 @@ use rustls::StreamOwned;
 #[cfg(feature = "socks-proxy")]
 use socks::{TargetAddr, ToTargetAddr};
 
+#[cfg(feature = "native-tls")]
+use native_tls::{HandshakeError, TlsConnector, TlsStream};
+
 use crate::proxy::Proto;
 use crate::proxy::Proxy;
 
@@ -22,8 +26,10 @@ use crate::unit::Unit;
 #[allow(clippy::large_enum_variant)]
 pub enum Stream {
     Http(TcpStream),
-    #[cfg(feature = "tls")]
+    #[cfg(all(feature = "tls", not(feature = "native-tls")))]
     Https(rustls::StreamOwned<rustls::ClientSession, TcpStream>),
+    #[cfg(all(feature = "native-tls", not(feature = "tls")))]
+    Https(TlsStream<TcpStream>),
     Cursor(Cursor<Vec<u8>>),
     #[cfg(test)]
     Test(Box<dyn Read + Send>, Vec<u8>),
@@ -36,7 +42,10 @@ impl ::std::fmt::Debug for Stream {
             "Stream[{}]",
             match self {
                 Stream::Http(_) => "http",
-                #[cfg(feature = "tls")]
+                #[cfg(any(
+                    all(feature = "tls", not(feature = "native-tls")),
+                    all(feature = "native-tls", not(feature = "tls")),
+                ))]
                 Stream::Https(_) => "https",
                 Stream::Cursor(_) => "cursor",
                 #[cfg(test)]
@@ -47,10 +56,40 @@ impl ::std::fmt::Debug for Stream {
 }
 
 impl Stream {
+    // Check if the server has closed a stream by performing a one-byte
+    // non-blocking read. If this returns EOF, the server has closed the
+    // connection: return true. If this returns WouldBlock (aka EAGAIN),
+    // that means the connection is still open: return false. Otherwise
+    // return an error.
+    fn serverclosed_stream(stream: &std::net::TcpStream) -> IoResult<bool> {
+        let mut buf = [0; 1];
+        stream.set_nonblocking(true)?;
+
+        let result = match stream.peek(&mut buf) {
+            Ok(0) => Ok(true),
+            Ok(_) => Ok(false), // TODO: Maybe this should produce an "unexpected response" error
+            Err(e) if e.kind() == ErrorKind::WouldBlock => Ok(false),
+            Err(e) => Err(e),
+        };
+        stream.set_nonblocking(false)?;
+
+        result
+    }
+    // Return true if the server has closed this connection.
+    pub(crate) fn server_closed(&self) -> IoResult<bool> {
+        match self {
+            Stream::Http(tcpstream) => Stream::serverclosed_stream(tcpstream),
+            Stream::Https(rustls_stream) => Stream::serverclosed_stream(&rustls_stream.sock),
+            _ => Ok(false),
+        }
+    }
     pub fn is_poolable(&self) -> bool {
         match self {
             Stream::Http(_) => true,
-            #[cfg(feature = "tls")]
+            #[cfg(any(
+                all(feature = "tls", not(feature = "native-tls")),
+                all(feature = "native-tls", not(feature = "tls")),
+            ))]
             Stream::Https(_) => true,
             _ => false,
         }
@@ -69,7 +108,10 @@ impl Read for Stream {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         match self {
             Stream::Http(sock) => sock.read(buf),
-            #[cfg(feature = "tls")]
+            #[cfg(any(
+                all(feature = "tls", not(feature = "native-tls")),
+                all(feature = "native-tls", not(feature = "tls")),
+            ))]
             Stream::Https(stream) => read_https(stream, buf),
             Stream::Cursor(read) => read.read(buf),
             #[cfg(test)]
@@ -86,7 +128,7 @@ where
     }
 }
 
-#[cfg(feature = "tls")]
+#[cfg(all(feature = "tls", not(feature = "native-tls")))]
 fn read_https(
     stream: &mut StreamOwned<ClientSession, TcpStream>,
     buf: &mut [u8],
@@ -98,7 +140,17 @@ fn read_https(
     }
 }
 
+#[cfg(all(feature = "native-tls", not(feature = "tls")))]
+fn read_https(stream: &mut TlsStream<TcpStream>, buf: &mut [u8]) -> IoResult<usize> {
+    match stream.read(buf) {
+        Ok(size) => Ok(size),
+        Err(ref e) if is_close_notify(e) => Ok(0),
+        Err(e) => Err(e),
+    }
+}
+
 #[allow(deprecated)]
+#[cfg(any(feature = "tls", feature = "native-tls"))]
 fn is_close_notify(e: &std::io::Error) -> bool {
     if e.kind() != ErrorKind::ConnectionAborted {
         return false;
@@ -117,7 +169,10 @@ impl Write for Stream {
     fn write(&mut self, buf: &[u8]) -> IoResult<usize> {
         match self {
             Stream::Http(sock) => sock.write(buf),
-            #[cfg(feature = "tls")]
+            #[cfg(any(
+                all(feature = "tls", not(feature = "native-tls")),
+                all(feature = "native-tls", not(feature = "tls")),
+            ))]
             Stream::Https(stream) => stream.write(buf),
             Stream::Cursor(_) => panic!("Write to read only stream"),
             #[cfg(test)]
@@ -127,7 +182,10 @@ impl Write for Stream {
     fn flush(&mut self) -> IoResult<()> {
         match self {
             Stream::Http(sock) => sock.flush(),
-            #[cfg(feature = "tls")]
+            #[cfg(any(
+                all(feature = "tls", not(feature = "native-tls")),
+                all(feature = "native-tls", not(feature = "tls")),
+            ))]
             Stream::Https(stream) => stream.flush(),
             Stream::Cursor(_) => panic!("Flush read only stream"),
             #[cfg(test)]
@@ -146,16 +204,18 @@ pub(crate) fn connect_http(unit: &Unit) -> Result<Stream, Error> {
 
 #[cfg(all(feature = "tls", feature = "native-certs"))]
 fn configure_certs(config: &mut rustls::ClientConfig) {
-    config.root_store = rustls_native_certs::load_native_certs()
-        .expect("Could not load patform certs");
+    config.root_store =
+        rustls_native_certs::load_native_certs().expect("Could not load patform certs");
 }
 
 #[cfg(all(feature = "tls", not(feature = "native-certs")))]
 fn configure_certs(config: &mut rustls::ClientConfig) {
-    config.root_store.add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
+    config
+        .root_store
+        .add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
 }
 
-#[cfg(feature = "tls")]
+#[cfg(all(feature = "tls", not(feature = "native-tls")))]
 pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
     use lazy_static::lazy_static;
     use std::sync::Arc;
@@ -173,7 +233,9 @@ pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
 
     let sni = webpki::DNSNameRef::try_from_ascii_str(hostname)
         .map_err(|err| Error::DnsFailed(err.to_string()))?;
-    let sess = rustls::ClientSession::new(&*TLS_CONF, sni);
+    let tls_conf: &Arc<rustls::ClientConfig> =
+        unit.tls_config.as_ref().map(|c| &c.0).unwrap_or(&*TLS_CONF);
+    let sess = rustls::ClientSession::new(&tls_conf, sni);
 
     let sock = connect_host(unit, hostname, port)?;
 
@@ -182,9 +244,24 @@ pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
     Ok(Stream::Https(stream))
 }
 
+#[cfg(all(feature = "native-tls", not(feature = "tls")))]
+pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
+    let hostname = unit.url.host_str().unwrap();
+    let port = unit.url.port().unwrap_or(443);
+    let sock = connect_host(unit, hostname, port)?;
+
+    let tls_connector = TlsConnector::new().map_err(|e| Error::TlsError(e))?;
+    let stream = tls_connector.connect(hostname, sock).map_err(|e| match e {
+        HandshakeError::Failure(err) => Error::TlsError(err),
+        _ => Error::BadStatusRead,
+    })?;
+
+    Ok(Stream::Https(stream))
+}
+
 pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<TcpStream, Error> {
     //
-    let ips: Vec<SocketAddr> = match unit.proxy {
+    let sock_addrs: Vec<SocketAddr> = match unit.proxy {
         Some(ref proxy) => format!("{}:{}", proxy.server, proxy.port),
         None => format!("{}:{}", hostname, port),
     }
@@ -192,7 +269,7 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
     .map_err(|e| Error::DnsFailed(format!("{}", e)))?
     .collect();
 
-    if ips.is_empty() {
+    if sock_addrs.is_empty() {
         return Err(Error::DnsFailed(format!("No ip address for {}", hostname)));
     }
 
@@ -202,28 +279,55 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         None
     };
 
-    // pick first ip, or should we randomize?
-    let sock_addr = ips[0];
+    let mut any_err = None;
+    let mut any_stream = None;
+    let mut timeout_connect = unit.timeout_connect;
+    let start_time = Instant::now();
+    let has_timeout = unit.timeout_connect > 0;
 
-    // connect with a configured timeout.
-    let mut stream = if Some(Proto::SOCKS5) == proto {
-        connect_socks5(
-            unit.proxy.to_owned().unwrap(),
-            unit.timeout_connect,
-            sock_addr,
-            hostname,
-            port,
-        )
-    } else {
-        match unit.timeout_connect {
-            0 => TcpStream::connect(&sock_addr),
-            _ => TcpStream::connect_timeout(
-                &sock_addr,
-                Duration::from_millis(unit.timeout_connect as u64),
-            ),
+    // Find the first sock_addr that accepts a connection
+    for sock_addr in sock_addrs {
+        // ensure connect timeout isn't hit overall.
+        if has_timeout {
+            let lapsed = (Instant::now() - start_time).as_millis() as u64;
+            if lapsed >= unit.timeout_connect {
+                any_err = Some(IoError::new(ErrorKind::TimedOut, "Didn't connect in time"));
+                break;
+            } else {
+                timeout_connect = unit.timeout_connect - lapsed;
+            }
+        }
+
+        // connect with a configured timeout.
+        let stream = if Some(Proto::SOCKS5) == proto {
+            connect_socks5(
+                unit.proxy.to_owned().unwrap(),
+                timeout_connect,
+                sock_addr,
+                hostname,
+                port,
+            )
+        } else if has_timeout {
+            let timeout = Duration::from_millis(timeout_connect);
+            TcpStream::connect_timeout(&sock_addr, timeout)
+        } else {
+            TcpStream::connect(&sock_addr)
+        };
+
+        if let Ok(stream) = stream {
+            any_stream = Some(stream);
+            break;
+        } else if let Err(err) = stream {
+            any_err = Some(err);
         }
     }
-    .map_err(|err| Error::ConnectionFailed(format!("{}", err)))?;
+
+    let mut stream = if let Some(stream) = any_stream {
+        stream
+    } else {
+        let err = Error::ConnectionFailed(format!("{}", any_err.expect("Connect error")));
+        return Err(err);
+    };
 
     // rust's absurd api returns Err if we set 0.
     // Setting it to None will disable the native system timeout
@@ -326,9 +430,9 @@ fn connect_socks5(
     // TODO: explore supporting timeouts upstream in Socks5Proxy.
     #[allow(clippy::mutex_atomic)]
     let stream = if timeout_connect > 0 {
+        use std::sync::mpsc::channel;
         use std::sync::{Arc, Condvar, Mutex};
         use std::thread;
-        use std::sync::mpsc::channel;
         let master_signal = Arc::new((Mutex::new(false), Condvar::new()));
         let slave_signal = master_signal.clone();
         let (tx, rx) = channel();
@@ -421,7 +525,7 @@ pub(crate) fn connect_test(unit: &Unit) -> Result<Stream, Error> {
     Err(Error::UnknownScheme(unit.url.scheme().to_string()))
 }
 
-#[cfg(not(feature = "tls"))]
+#[cfg(not(any(feature = "tls", feature = "native-tls")))]
 pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
     Err(Error::UnknownScheme(unit.url.scheme().to_string()))
 }

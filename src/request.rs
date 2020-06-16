@@ -5,6 +5,9 @@ use lazy_static::lazy_static;
 use qstring::QString;
 use url::{form_urlencoded, Url};
 
+#[cfg(feature = "tls")]
+use std::fmt;
+
 use crate::agent::{self, Agent, AgentState};
 use crate::body::Payload;
 use crate::error::Error;
@@ -17,8 +20,7 @@ use crate::Response;
 use super::SerdeValue;
 
 lazy_static! {
-    static ref URL_BASE: Url =
-        { Url::parse("http://localhost/").expect("Failed to parse URL_BASE") };
+    static ref URL_BASE: Url = Url::parse("http://localhost/").expect("Failed to parse URL_BASE");
 }
 
 /// Request instances are builders that creates a request.
@@ -46,6 +48,8 @@ pub struct Request {
     pub(crate) timeout_write: u64,
     pub(crate) redirects: u32,
     pub(crate) proxy: Option<crate::proxy::Proxy>,
+    #[cfg(feature = "tls")]
+    pub(crate) tls_config: Option<TLSClientConfig>,
 }
 
 impl ::std::fmt::Debug for Request {
@@ -553,5 +557,32 @@ impl Request {
     pub fn set_proxy(&mut self, proxy: crate::proxy::Proxy) -> &mut Request {
         self.proxy = Some(proxy);
         self
+    }
+
+    /// Set the TLS client config to use for the connection.
+    ///
+    /// See [`ClientConfig`](https://docs.rs/rustls/latest/rustls/struct.ClientConfig.html).
+    ///
+    /// Example:
+    /// ```
+    /// let tls_config = std::sync::Arc::new(rustls::ClientConfig::new());
+    /// let req = ureq::post("https://cool.server")
+    ///     .set_tls_config(tls_config.clone());
+    /// ```
+    #[cfg(feature = "tls")]
+    pub fn set_tls_config(&mut self, tls_config: Arc<rustls::ClientConfig>) -> &mut Request {
+        self.tls_config = Some(TLSClientConfig(tls_config));
+        self
+    }
+}
+
+#[cfg(feature = "tls")]
+#[derive(Clone)]
+pub(crate) struct TLSClientConfig(pub(crate) Arc<rustls::ClientConfig>);
+
+#[cfg(feature = "tls")]
+impl fmt::Debug for TLSClientConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TLSClientConfig").finish()
     }
 }

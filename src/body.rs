@@ -1,5 +1,5 @@
 use crate::stream::Stream;
-use std::io::{copy, empty, Cursor, Read, Write, Result as IoResult};
+use std::io::{copy, empty, Cursor, Read, Result as IoResult, Write};
 
 #[cfg(feature = "charset")]
 use crate::response::DEFAULT_CHARACTER_SET;
@@ -10,8 +10,6 @@ use encoding::EncoderTrap;
 
 #[cfg(feature = "json")]
 use super::SerdeValue;
-#[cfg(feature = "json")]
-use serde_json;
 
 /// The different kinds of bodies to send.
 ///
@@ -99,11 +97,10 @@ impl Payload {
     }
 }
 
-const CHUNK_MAX_SIZE: usize = 0x4000;   // Maximum size of a TLS fragment
+const CHUNK_MAX_SIZE: usize = 0x4000; // Maximum size of a TLS fragment
 const CHUNK_HEADER_MAX_SIZE: usize = 6; // four hex digits plus "\r\n"
-const CHUNK_FOOTER_SIZE: usize = 2;     // "\r\n"
+const CHUNK_FOOTER_SIZE: usize = 2; // "\r\n"
 const CHUNK_MAX_PAYLOAD_SIZE: usize = CHUNK_MAX_SIZE - CHUNK_HEADER_MAX_SIZE - CHUNK_FOOTER_SIZE;
-
 
 // copy_chunks() improves over chunked_transfer's Encoder + io::copy with the
 // following performance optimizations:
@@ -119,14 +116,16 @@ fn copy_chunked<R: Read, W: Write>(reader: &mut R, writer: &mut W) -> IoResult<u
     loop {
         // We first read the payload
         chunk.resize(CHUNK_HEADER_MAX_SIZE, 0);
-        let payload_size = reader.take(CHUNK_MAX_PAYLOAD_SIZE as u64).read_to_end(&mut chunk)?;
+        let payload_size = reader
+            .take(CHUNK_MAX_PAYLOAD_SIZE as u64)
+            .read_to_end(&mut chunk)?;
 
         // Then write the header
         let header_str = format!("{:x}\r\n", payload_size);
         let header = header_str.as_bytes();
         assert!(header.len() <= CHUNK_HEADER_MAX_SIZE);
         let start_index = CHUNK_HEADER_MAX_SIZE - header.len();
-        (&mut chunk[start_index..]).write(&header).unwrap();
+        (&mut chunk[start_index..]).write_all(&header).unwrap();
 
         // And add the footer
         chunk.extend_from_slice(b"\r\n");

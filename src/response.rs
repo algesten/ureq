@@ -10,7 +10,7 @@ use crate::stream::Stream;
 use crate::unit::Unit;
 
 #[cfg(feature = "json")]
-use serde_json;
+use serde::de::DeserializeOwned;
 
 #[cfg(feature = "charset")]
 use encoding::label::encoding_from_whatwg_label;
@@ -24,7 +24,8 @@ pub const DEFAULT_CHARACTER_SET: &str = "utf-8";
 ///
 /// The `Response` is used to read response headers and decide what to do with the body.
 /// Note that the socket connection is open and the body not read until one of
-/// [`into_reader()`](#method.into_reader), [`into_json()`](#method.into_json) or
+/// [`into_reader()`](#method.into_reader), [`into_json()`](#method.into_json),
+/// [`into_json_deserialize()`](#method.into_json_deserialize) or
 /// [`into_string()`](#method.into_string) consumes the response.
 ///
 /// ```
@@ -393,6 +394,39 @@ impl Response {
         })
     }
 
+    /// Turn the body of this response into a type implementing the (serde) Deserialize trait.
+    ///
+    /// Requires feature `ureq = { version = "*", features = ["json"] }`
+    ///
+    /// Example:
+    ///
+    /// ```
+    /// # use serde::Deserialize;
+    ///
+    /// #[derive(Deserialize)]
+    /// struct Hello {
+    ///     hello: String,
+    /// }
+    ///
+    /// let resp =
+    ///     ureq::get("https://ureq.s3.eu-central-1.amazonaws.com/hello_world.json")
+    ///         .call();
+    ///
+    /// let json = resp.into_json_deserialize::<Hello>().unwrap();
+    ///
+    /// assert_eq!(json.hello, "world");
+    /// ```
+    #[cfg(feature = "json")]
+    pub fn into_json_deserialize<T: DeserializeOwned>(self) -> IoResult<T> {
+        let reader = self.into_reader();
+        serde_json::from_reader(reader).map_err(|e| {
+            IoError::new(
+                ErrorKind::InvalidData,
+                format!("Failed to read JSON: {}", e),
+            )
+        })
+    }
+
     /// Create a response from a Read trait impl.
     ///
     /// This is hopefully useful for unit tests.
@@ -691,6 +725,24 @@ mod tests {
             .parse::<serde_json::Value>()
             .unwrap();
         assert_eq!(v, compare);
+    }
+
+    #[test]
+    #[cfg(feature = "json")]
+    fn parse_deserialize_json() {
+        use serde::Deserialize;
+
+        #[derive(Deserialize)]
+        struct Hello {
+            hello: String,
+        }
+
+        let s = "HTTP/1.1 200 OK\r\n\
+             \r\n\
+             {\"hello\":\"world\"}";
+        let resp = s.parse::<Response>().unwrap();
+        let v = resp.into_json_deserialize::<Hello>().unwrap();
+        assert_eq!(v.hello, "world");
     }
 
     #[test]

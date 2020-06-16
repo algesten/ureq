@@ -29,12 +29,12 @@ impl ConnectionPool {
         self.recycle.remove(&PoolKey::new(url))
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, any(feature = "tls", feature = "native-tls")))]
     pub fn len(&self) -> usize {
         self.recycle.len()
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, any(feature = "tls", feature = "native-tls")))]
     pub fn get(&self, hostname: &str, port: u16) -> Option<&Stream> {
         let key = PoolKey {
             hostname: hostname.into(),
