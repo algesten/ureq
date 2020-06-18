@@ -1,5 +1,6 @@
 use crate::test;
 use std::io::{self, BufRead, BufReader, Read, Write};
+use std::net::TcpStream;
 use std::thread;
 use std::time::Duration;
 
@@ -123,7 +124,7 @@ fn connection_reuse() {
 
 // Send an HTTP response on the TcpStream at a rate of two bytes every 10
 // milliseconds, for a total of 600 bytes.
-fn dribble_respond(stream: &mut std::net::TcpStream) -> io::Result<()> {
+fn dribble_body_respond(stream: &mut TcpStream) -> io::Result<()> {
     let contents = [b'a'; 300];
     let headers = format!(
         "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n",
@@ -139,23 +140,88 @@ fn dribble_respond(stream: &mut std::net::TcpStream) -> io::Result<()> {
     Ok(())
 }
 
+// Read a stream until reaching a blank line, in order to consume
+// request headers.
+fn read_headers(stream: &TcpStream) {
+    for line in BufReader::new(stream).lines() {
+        let line = match line {
+            Ok(x) => x,
+            Err(_) => return,
+        };
+        if line == "" {
+            break;
+        }
+    }
+}
+
 // Start a test server on an available port, that dribbles out a response at 1 write per 10ms.
 // Return the port this server is listening on.
-fn start_dribble_server() -> u16 {
+fn start_dribble_body_server() -> u16 {
     let listener = std::net::TcpListener::bind("localhost:0").unwrap();
     let port = listener.local_addr().unwrap().port();
-    let dribble_handler = |stream: std::net::TcpStream| {
-        let mut write_stream = stream.try_clone().unwrap();
-        for line in BufReader::new(stream).lines() {
-            let line = match line {
-                Ok(x) => x,
-                Err(_) => return,
-            };
-            if line == "" {
-                if let Err(e) = dribble_respond(&mut write_stream) {
-                    eprintln!("sending dribble repsonse: {}", e);
-                }
-            }
+    let dribble_handler = |mut stream: TcpStream| {
+        read_headers(&stream);
+        if let Err(e) = dribble_body_respond(&mut stream) {
+            eprintln!("sending dribble repsonse: {}", e);
+        }
+    };
+    thread::spawn(move || {
+        for stream in listener.incoming() {
+            thread::spawn(move || dribble_handler(stream.unwrap()));
+        }
+    });
+    port
+}
+
+fn get_and_expect_timeout(url: String) {
+    let agent = Agent::default().build();
+    let timeout = Duration::from_millis(500);
+    let resp = agent.get(&url).timeout(timeout).call();
+
+    let mut reader = resp.into_reader();
+    let mut bytes = vec![];
+    let result = reader.read_to_end(&mut bytes);
+
+    match result {
+        Err(io_error) => match io_error.kind() {
+            io::ErrorKind::WouldBlock => Ok(()),
+            io::ErrorKind::TimedOut => Ok(()),
+            _ => Err(format!("{:?}", io_error)),
+        },
+        Ok(_) => Err("successful response".to_string()),
+    }
+    .expect("expected timeout but got something else");
+}
+
+#[test]
+fn overall_timeout_during_body() {
+    let port = start_dribble_body_server();
+    let url = format!("http://localhost:{}/", port);
+
+    get_and_expect_timeout(url);
+}
+
+// Send HTTP headers on the TcpStream at a rate of one header every 100
+// milliseconds, for a total of 30 headers.
+fn dribble_headers_respond(stream: &mut TcpStream) -> io::Result<()> {
+    stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n")?;
+    for _ in 0..30 {
+        stream.write_all(b"a: b\n")?;
+        stream.flush()?;
+        thread::sleep(Duration::from_millis(100));
+    }
+    Ok(())
+}
+
+// Start a test server on an available port, that dribbles out response *headers* at 1 write per 10ms.
+// Return the port this server is listening on.
+fn start_dribble_headers_server() -> u16 {
+    let listener = std::net::TcpListener::bind("localhost:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let dribble_handler = |mut stream: TcpStream| {
+        read_headers(&stream);
+        if let Err(e) = dribble_headers_respond(&mut stream) {
+            eprintln!("sending dribble repsonse: {}", e);
         }
     };
     thread::spawn(move || {
@@ -167,22 +233,8 @@ fn start_dribble_server() -> u16 {
 }
 
 #[test]
-fn overall_timeout_during_body() {
-    let port = start_dribble_server();
+fn overall_timeout_during_headers() {
+    let port = start_dribble_headers_server();
     let url = format!("http://localhost:{}/", port);
-
-    let agent = Agent::default().build();
-    let resp = agent.get(&url).timeout(2000).call();
-
-    let mut reader = resp.into_reader();
-    let mut bytes = vec![];
-    let result = reader.read_to_end(&mut bytes);
-
-    // assert!(resp.error(), "expected timeout error");
-    // assert!(resp.synthetic(), "expected timeout error to be synthetic");
-    // match resp.synthetic_error() {
-    match result {
-        Err(io_error) if io_error.kind() == io::ErrorKind::WouldBlock => {}
-        e => assert!(false, "wrong type of result. expected timeout, got {:?}", e),
-    }
+    get_and_expect_timeout(url);
 }

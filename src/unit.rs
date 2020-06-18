@@ -91,12 +91,12 @@ impl Unit {
             .cloned()
             .collect();
 
-        let deadline = if req.timeout == 0 {
-            None
-        } else {
-            let now = time::Instant::now();
-            let delta = time::Duration::from_millis(req.timeout);
-            Some(now.checked_add(delta).unwrap())
+        let deadline = match req.timeout {
+            None => None,
+            Some(timeout) => {
+                let now = time::Instant::now();
+                Some(now.checked_add(timeout).unwrap())
+            }
         };
 
         Unit {
@@ -108,7 +108,7 @@ impl Unit {
             timeout_connect: req.timeout_connect,
             timeout_read: req.timeout_read,
             timeout_write: req.timeout_write,
-            deadline: deadline,
+            deadline,
             method: req.method.clone(),
             proxy: req.proxy.clone(),
             #[cfg(feature = "tls")]
@@ -165,14 +165,8 @@ pub(crate) fn connect(
     let body_bytes_sent = body::send_body(body, unit.is_chunked, &mut stream)?;
 
     // start reading the response to process cookies and redirects.
-    let mut resp = if let Some(deadline) = unit.deadline {
-        Response::from_read(&mut stream::DeadlineStream {
-            stream: &mut stream,
-            deadline: Some(deadline),
-        })
-    } else {
-        Response::from_read(&mut stream)
-    };
+    let mut stream = stream::DeadlineStream::new(stream, unit.deadline);
+    let mut resp = Response::from_read(&mut stream);
 
     if let Some(err) = resp.synthetic_error() {
         if err.is_bad_status_read() && body_bytes_sent == 0 && is_recycled {
@@ -226,8 +220,8 @@ pub(crate) fn connect(
     }
 
     // since it is not a redirect, or we're not following redirects,
-    // give away the incoming stream to the response object
-    crate::response::set_stream(&mut resp, unit.url.to_string(), Some(unit), stream);
+    // give away the incoming stream to the response object. This unsets
+    crate::response::set_stream(&mut resp, unit.url.to_string(), Some(unit), stream.into());
 
     // release the response
     Ok(resp)

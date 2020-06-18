@@ -35,28 +35,56 @@ pub enum Stream {
     Test(Box<dyn Read + Send>, Vec<u8>),
 }
 
-pub struct DeadlineStream<'a> {
-    pub(crate) stream: &'a mut Stream,
-    pub(crate) deadline: Option<Instant>,
+// DeadlineStream wraps a stream such that read() will return an error
+// after the provided deadline, and sets timeouts on the underlying
+// TcpStream to ensure read() doesn't block beyond the deadline.
+// When the From trait is used to turn a DeadlineStream back into a
+// Stream (by PoolReturningRead), the timeouts are removed.
+pub struct DeadlineStream {
+    stream: Stream,
+    deadline: Option<Instant>,
 }
 
-impl Read for DeadlineStream<'_> {
+impl DeadlineStream {
+    pub(crate) fn new(stream: Stream, deadline: Option<Instant>) -> Self {
+        DeadlineStream { stream, deadline }
+    }
+}
+
+impl From<DeadlineStream> for Stream {
+    fn from(deadline_stream: DeadlineStream) -> Stream {
+        // Since we are turning this back into a regular, non-deadline Stream,
+        // remove any timeouts we set.
+        let stream = deadline_stream.stream;
+        if let Some(socket) = stream.socket() {
+            socket.set_read_timeout(None).unwrap();
+            socket.set_write_timeout(None).unwrap();
+        }
+        stream
+    }
+}
+
+impl Read for DeadlineStream {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
-        if let Some(socket) = self.stream.socket() {
-            if let Some(deadline) = self.deadline {
-                let now = Instant::now();
-                if now.checked_duration_since(deadline).is_some() {
-                    return Err(IoError::new(
-                        ErrorKind::TimedOut,
-                        "timed out reading response",
-                    ));
-                }
-                let timeout = Some(deadline - now);
-                socket.set_read_timeout(timeout)?;
-                socket.set_write_timeout(timeout)?;
+        if let Some(deadline) = self.deadline {
+            let timeout = time_until_deadline(deadline)?;
+            if let Some(socket) = self.stream.socket() {
+                socket.set_read_timeout(Some(timeout))?;
+                socket.set_write_timeout(Some(timeout))?;
             }
         }
         self.stream.read(buf)
+    }
+}
+
+fn time_until_deadline(deadline: Instant) -> IoResult<Duration> {
+    let now = Instant::now();
+    match now.checked_duration_since(deadline) {
+        Some(_) => Err(IoError::new(
+            ErrorKind::TimedOut,
+            "timed out reading response",
+        )),
+        None => Ok(deadline - now),
     }
 }
 
@@ -102,10 +130,9 @@ impl Stream {
     }
     // Return true if the server has closed this connection.
     pub(crate) fn server_closed(&self) -> IoResult<bool> {
-        match self {
-            Stream::Http(tcpstream) => Stream::serverclosed_stream(tcpstream),
-            Stream::Https(rustls_stream) => Stream::serverclosed_stream(&rustls_stream.sock),
-            _ => Ok(false),
+        match self.socket() {
+            Some(socket) => Stream::serverclosed_stream(socket),
+            None => Ok(false),
         }
     }
     pub fn is_poolable(&self) -> bool {
@@ -120,7 +147,7 @@ impl Stream {
         }
     }
 
-    pub fn socket(&self) -> Option<&TcpStream> {
+    pub(crate) fn socket(&self) -> Option<&TcpStream> {
         match self {
             Stream::Http(tcpstream) => Some(tcpstream),
             #[cfg(feature = "tls")]
@@ -295,7 +322,7 @@ pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
 }
 
 pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<TcpStream, Error> {
-    let deadline = if unit.timeout_connect > 0 {
+    let deadline: Option<Instant> = if unit.timeout_connect > 0 {
         Instant::now().checked_add(Duration::from_millis(unit.timeout_connect))
     } else {
         unit.deadline
@@ -324,16 +351,11 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
     let mut any_stream = None;
     // Find the first sock_addr that accepts a connection
     for sock_addr in sock_addrs {
-        // ensure connect timeout or overall timeout arent yet hit.
-        let mut timeout: Option<Duration> = None;
-        if let Some(deadline) = deadline {
-            let now = Instant::now();
-            if let Some(_) = now.checked_duration_since(deadline) {
-                any_err = Some(IoError::new(ErrorKind::TimedOut, "Didn't connect in time"));
-                break;
-            }
-            timeout = Some(deadline - now);
-        }
+        // ensure connect timeout or overall timeout aren't yet hit.
+        let timeout = match deadline {
+            Some(deadline) => Some(time_until_deadline(deadline)?),
+            None => None,
+        };
 
         // connect with a configured timeout.
         let stream = if Some(Proto::SOCKS5) == proto {

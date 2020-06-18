@@ -1,5 +1,6 @@
 use std::io::Read;
 use std::sync::{Arc, Mutex};
+use std::time;
 
 use lazy_static::lazy_static;
 use qstring::QString;
@@ -46,7 +47,7 @@ pub struct Request {
     pub(crate) timeout_connect: u64,
     pub(crate) timeout_read: u64,
     pub(crate) timeout_write: u64,
-    pub(crate) timeout: u64,
+    pub(crate) timeout: Option<time::Duration>,
     pub(crate) redirects: u32,
     pub(crate) proxy: Option<crate::proxy::Proxy>,
     #[cfg(feature = "tls")]
@@ -361,6 +362,7 @@ impl Request {
     ///     .call();
     /// println!("{:?}", r);
     /// ```
+    #[deprecated(note = "Please use the timeout() function instead")]
     pub fn timeout_read(&mut self, millis: u64) -> &mut Request {
         self.timeout_read = millis;
         self
@@ -376,21 +378,26 @@ impl Request {
     ///     .call();
     /// println!("{:?}", r);
     /// ```
+    #[deprecated(note = "Please use the timeout() function instead")]
     pub fn timeout_write(&mut self, millis: u64) -> &mut Request {
         self.timeout_write = millis;
         self
     }
 
-    /// Timeout for the overall request.
+    /// Timeout for the overall request, including DNS resolution, connection
+    /// time, redirects, and reading the response body. Slow DNS resolution
+    /// may cause a request to exceed the timeout, because the DNS request
+    /// cannot be interrupted with the available APIs.
     ///
     /// ```
+    /// // wait max 1 second for whole request to complete.
     /// let r = ureq::get("/my_page")
-    ///     .timeout_write(1_000)   // wait max 1 second for whole request to complete.
+    ///     .timeout(std::time::Duration::from_secs(1))
     ///     .call();
     /// println!("{:?}", r);
     /// ```
-    pub fn timeout(&mut self, millis: u64) -> &mut Request {
-        self.timeout = millis;
+    pub fn timeout(&mut self, timeout: time::Duration) -> &mut Request {
+        self.timeout = Some(timeout);
         self
     }
 

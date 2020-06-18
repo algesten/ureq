@@ -7,7 +7,7 @@ use chunked_transfer::Decoder as ChunkDecoder;
 use crate::error::Error;
 use crate::header::Header;
 use crate::pool::PoolReturnRead;
-use crate::stream::Stream;
+use crate::stream::{DeadlineStream, Stream};
 use crate::unit::Unit;
 
 #[cfg(feature = "json")]
@@ -307,6 +307,8 @@ impl Response {
 
         let stream = self.stream.expect("No reader in response?!");
         let unit = self.unit;
+        let deadline = unit.as_ref().and_then(|u| u.deadline);
+        let stream = DeadlineStream::new(stream, deadline);
 
         match (use_chunked, limit_bytes) {
             (true, _) => {
@@ -585,13 +587,13 @@ fn read_next_line<R: Read>(reader: &mut R) -> IoResult<String> {
 }
 
 /// Limits a `Read` to a content size (as set by a "Content-Length" header).
-struct LimitedRead<R> {
+struct LimitedRead<R: Read> {
     reader: R,
     limit: usize,
     position: usize,
 }
 
-impl<R> LimitedRead<R> {
+impl<R: Read> LimitedRead<R> {
     fn new(reader: R, limit: usize) -> Self {
         LimitedRead {
             reader,
@@ -622,7 +624,7 @@ impl<R: Read> Read for LimitedRead<R> {
     }
 }
 
-impl<R> From<LimitedRead<R>> for Stream
+impl<R: Read> From<LimitedRead<R>> for Stream
 where
     Stream: From<R>,
 {
