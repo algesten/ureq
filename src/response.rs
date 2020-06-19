@@ -587,7 +587,7 @@ fn read_next_line<R: Read>(reader: &mut R) -> IoResult<String> {
 }
 
 /// Limits a `Read` to a content size (as set by a "Content-Length" header).
-struct LimitedRead<R: Read> {
+struct LimitedRead<R> {
     reader: R,
     limit: usize,
     position: usize,

@@ -338,6 +338,8 @@ impl Request {
     }
 
     /// Timeout for the socket connection to be successful.
+    /// If both this and .timeout() are both set, .timeout_connect()
+    /// takes precedence.
     ///
     /// The default is `0`, which means a request can block forever.
     ///
@@ -353,6 +355,8 @@ impl Request {
     }
 
     /// Timeout for the individual reads of the socket.
+    /// If both this and .timeout() are both set, .timeout()
+    /// takes precedence.
     ///
     /// The default is `0`, which means it can block forever.
     ///
@@ -369,6 +373,8 @@ impl Request {
     }
 
     /// Timeout for the individual writes to the socket.
+    /// If both this and .timeout() are both set, .timeout()
+    /// takes precedence.
     ///
     /// The default is `0`, which means it can block forever.
     ///
@@ -388,6 +394,9 @@ impl Request {
     /// time, redirects, and reading the response body. Slow DNS resolution
     /// may cause a request to exceed the timeout, because the DNS request
     /// cannot be interrupted with the available APIs.
+    ///
+    /// This takes precedence over .timeout_read() and .timeout_write(), but
+    /// not .timeout_connect().
     ///
     /// ```
     /// // wait max 1 second for whole request to complete.

@@ -77,6 +77,8 @@ impl Read for DeadlineStream {
     }
 }
 
+// If the deadline is in the future, return the remaining time until
+// then. Otherwise return a TimedOut error.
 fn time_until_deadline(deadline: Instant) -> IoResult<Duration> {
     let now = Instant::now();
     match now.checked_duration_since(deadline) {
