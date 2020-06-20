@@ -28,8 +28,16 @@ pub const DEFAULT_CHARACTER_SET: &str = "utf-8";
 /// [`into_json_deserialize()`](#method.into_json_deserialize) or
 /// [`into_string()`](#method.into_string) consumes the response.
 ///
+/// All error handling, including URL parse errors and connection errors, is done by mapping onto
+/// [synthetic errors](#method.synthetic). Callers must check response.synthetic_error(),
+/// response.is_ok(), or response.error() before relying on the contents of the reader.
+///
 /// ```
 /// let response = ureq::get("https://www.google.com").call();
+/// if let Some(error) = response.synthetic_error() {
+///     eprintln!("{}", error);
+///     return;
+/// }
 ///
 /// // socket is still open and the response body has not been read.
 ///

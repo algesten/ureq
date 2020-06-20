@@ -13,20 +13,21 @@
 #[macro_use]
 extern crate ureq;
 
-fn main() {
+// sync post request of some json.
+let resp = ureq::post("https://myapi.example.com/ingest")
+    .set("X-My-Header", "Secret")
+    .send_json(json!({
+        "name": "martin",
+        "rust": true
+    }));
 
-    // sync post request of some json.
-    let resp = ureq::post("https://myapi.acme.com/ingest")
-        .set("X-My-Header", "Secret")
-        .send_json(json!({
-            "name": "martin",
-            "rust": true
-        }));
-
-    // .ok() tells if response is 200-299.
-    if resp.ok() {
-        // ...
-    }
+// .ok() tells if response is 200-299.
+if resp.ok() {
+  println!("success: {}", resp.into_string()?);
+} else {
+  // This can include errors like failure to parse URL or connect timeout.
+  // They are treated as synthetic HTTP-level error statuses.
+  println!("error {}: {}", resp.status(), resp.into_string()?);
 }
 ```
 
@@ -77,7 +78,9 @@ You can control them when including `ureq` as a dependency.
 
   * Minimal dependency tree
   * Obvious API
-  * Convencience over correctness
+  * Blocking API
+  * Convenience over correctness
+  * No use of unsafe
 
 This library tries to provide a convenient request library with a minimal dependency
 tree and an obvious API. It is inspired by libraries like
@@ -104,8 +107,8 @@ for convenience over correctness, so the decision is left to the user.
 This library uses blocking socket reads and writes. When it was
 created, there wasn't any async/await support in rust, and for my own
 purposes, blocking IO was fine. At this point, one good reason to keep
-this library going is that it is blocking (the other is that it relies
-on very little use of unsafe).
+this library going is that it is blocking (the other is that it does not
+use unsafe).
 
 ## TODO
 
