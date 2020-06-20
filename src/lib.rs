@@ -30,6 +30,7 @@
 //!   // They are treated as synthetic HTTP-level error statuses.
 //!   println!("error {}: {}", resp.status(), resp.into_string()?);
 //! }
+//! # }
 //! ```
 //!
 //! # Plain requests
