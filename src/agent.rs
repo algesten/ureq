@@ -249,11 +249,6 @@ impl Agent {
     pub fn patch(&self, path: &str) -> Request {
         self.request("PATCH", path)
     }
-
-    #[cfg(all(test, any(feature = "tls", feature = "native-tls")))]
-    pub(crate) fn state(&self) -> &Arc<Mutex<Option<AgentState>>> {
-        &self.state
-    }
 }
 
 pub(crate) fn basic_auth(user: &str, pass: &str) -> String {

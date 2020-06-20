@@ -29,7 +29,7 @@ impl ConnectionPool {
         self.recycle.remove(&PoolKey::new(url))
     }
 
-    #[cfg(all(test, any(feature = "tls", feature = "native-tls")))]
+    #[cfg(test)]
     pub fn len(&self) -> usize {
         self.recycle.len()
     }

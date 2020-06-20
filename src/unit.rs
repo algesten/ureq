@@ -10,11 +10,6 @@ use cookie::{Cookie, CookieJar};
 use crate::agent::AgentState;
 use crate::body::{self, Payload, SizedReader};
 use crate::header;
-#[cfg(any(
-    all(feature = "tls", not(feature = "native-tls")),
-    all(feature = "native-tls", not(feature = "tls")),
-))]
-use crate::stream::connect_https;
 use crate::stream::{self, connect_test, Stream};
 use crate::Proxy;
 use crate::{Error, Header, Request, Response};
@@ -291,11 +286,7 @@ fn connect_socket(unit: &Unit, use_pooled: bool) -> Result<(Stream, bool), Error
     }
     let stream = match unit.url.scheme() {
         "http" => stream::connect_http(&unit),
-        #[cfg(any(
-            all(feature = "tls", not(feature = "native-tls")),
-            all(feature = "native-tls", not(feature = "tls")),
-        ))]
-        "https" => connect_https(&unit),
+        "https" => stream::connect_https(&unit),
         "test" => connect_test(&unit),
         _ => Err(Error::UnknownScheme(unit.url.scheme().to_string())),
     };

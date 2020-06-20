@@ -79,6 +79,7 @@ impl Stream {
     pub(crate) fn server_closed(&self) -> IoResult<bool> {
         match self {
             Stream::Http(tcpstream) => Stream::serverclosed_stream(tcpstream),
+            #[cfg(all(feature = "tls", not(feature = "native-tls")))]
             Stream::Https(rustls_stream) => Stream::serverclosed_stream(&rustls_stream.sock),
             _ => Ok(false),
         }
@@ -130,6 +131,7 @@ where
     }
 }
 
+#[cfg(all(feature = "tls", not(feature = "native-tls")))]
 fn read_https(
     stream: &mut StreamOwned<ClientSession, TcpStream>,
     buf: &mut [u8],
