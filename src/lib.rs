@@ -48,6 +48,8 @@
 //! * [`.call()`](struct.Request.html#method.call) without a request body.
 //! * [`.send()`](struct.Request.html#method.send) with a request body as `Read`.
 //! * [`.send_string()`](struct.Request.html#method.send_string) body as string.
+//! * [`.send_bytes()`](struct.Request.html#method.send_bytes) body as bytes.
+//! * [`.send_form()`](struct.Request.html#method.send_form) key-value pairs as application/x-www-form-urlencoded.
 //!
 //! # JSON
 //!
