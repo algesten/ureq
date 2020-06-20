@@ -180,12 +180,6 @@ pub fn patch(path: &str) -> Request {
     request("PATCH", path)
 }
 
-// Compilation error when both tls and native-tls features are enabled
-#[cfg(all(feature = "tls", feature = "native-tls"))]
-std::compile_error!(
-    "You have both the \"tls\" and \"native-tls\" features enabled on ureq. Please disable one of these features."
-);
-
 #[cfg(test)]
 mod tests {
     use super::*;
