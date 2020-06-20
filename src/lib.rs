@@ -14,21 +14,24 @@
 //! # #[cfg(feature = "json")] {
 //! use ureq::json;
 //!
-//! // sync post request of some json.
-//! let resp = ureq::post("https://myapi.example.com/ingest")
-//!     .set("X-My-Header", "Secret")
-//!     .send_json(json!({
-//!         "name": "martin",
-//!         "rust": true
-//!     }));
+//! fn main() -> std::io::Result<()> {
+//!   // sync post request of some json.
+//!   let resp = ureq::post("https://myapi.example.com/ingest")
+//!       .set("X-My-Header", "Secret")
+//!       .send_json(json!({
+//!           "name": "martin",
+//!           "rust": true
+//!       }));
 //!
-//! // .ok() tells if response is 200-299.
-//! if resp.ok() {
-//!   println!("success: {}", resp.into_string()?);
-//! } else {
-//!   // This can include errors like failure to parse URL or connect timeout.
-//!   // They are treated as synthetic HTTP-level error statuses.
-//!   println!("error {}: {}", resp.status(), resp.into_string()?);
+//!   // .ok() tells if response is 200-299.
+//!   if resp.ok() {
+//!     println!("success: {}", resp.into_string()?);
+//!   } else {
+//!     // This can include errors like failure to parse URL or connect timeout.
+//!     // They are treated as synthetic HTTP-level error statuses.
+//!     println!("error {}: {}", resp.status(), resp.into_string()?);
+//!   }
+//!   Ok(())
 //! }
 //! # }
 //! ```
