@@ -99,7 +99,7 @@ fn connection_reuse() {
     resp.into_reader().read_to_end(&mut buf).unwrap();
 
     {
-        let mut guard_state = agent.state().lock().unwrap();
+        let mut guard_state = agent.state.lock().unwrap();
         let mut state = guard_state.take().unwrap();
         assert!(state.pool().len() > 0);
     }

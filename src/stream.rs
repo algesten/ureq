@@ -193,6 +193,7 @@ where
     }
 }
 
+#[cfg(all(feature = "tls", not(feature = "native-tls")))]
 fn read_https(
     stream: &mut StreamOwned<ClientSession, TcpStream>,
     buf: &mut [u8],

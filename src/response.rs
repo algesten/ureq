@@ -218,9 +218,11 @@ impl Response {
     /// Example:
     ///
     /// ```
+    /// # #[cfg(feature = "tls")] {
     /// let resp = ureq::get("https://www.google.com/").call();
     /// assert_eq!("text/html; charset=ISO-8859-1", resp.header("content-type").unwrap());
     /// assert_eq!("text/html", resp.content_type());
+    /// # }
     /// ```
     pub fn content_type(&self) -> &str {
         self.header("content-type")
@@ -238,9 +240,11 @@ impl Response {
     /// Example:
     ///
     /// ```
+    /// # #[cfg(feature = "tls")] {
     /// let resp = ureq::get("https://www.google.com/").call();
     /// assert_eq!("text/html; charset=ISO-8859-1", resp.header("content-type").unwrap());
     /// assert_eq!("ISO-8859-1", resp.charset());
+    /// # }
     /// ```
     pub fn charset(&self) -> &str {
         charset_from_content_type(self.header("content-type"))
@@ -257,6 +261,7 @@ impl Response {
     /// Example:
     ///
     /// ```
+    /// # #[cfg(feature = "tls")] {
     /// use std::io::Read;
     ///
     /// let resp =
@@ -272,6 +277,7 @@ impl Response {
     /// reader.read_to_end(&mut bytes);
     ///
     /// assert_eq!(bytes.len(), len);
+    /// # }
     /// ```
     pub fn into_reader(self) -> impl Read {
         //
@@ -331,6 +337,7 @@ impl Response {
     /// Example:
     ///
     /// ```
+    /// # #[cfg(feature = "tls")] {
     /// let resp =
     ///     ureq::get("https://ureq.s3.eu-central-1.amazonaws.com/hello_world.json")
     ///         .call();
@@ -338,6 +345,7 @@ impl Response {
     /// let text = resp.into_string().unwrap();
     ///
     /// assert!(text.contains("hello"));
+    /// # }
     /// ```
     ///
     /// ## Charset support

@@ -39,7 +39,7 @@ fn agent_pool() {
     assert_eq!(len, 1000);
 
     {
-        let mut lock = agent.state().lock().unwrap();
+        let mut lock = agent.state.lock().unwrap();
         let state = lock.as_mut().unwrap();
         let pool = state.pool();
         assert_eq!(pool.len(), 1);
