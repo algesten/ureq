@@ -369,7 +369,6 @@ impl Request {
     ///     .call();
     /// println!("{:?}", r);
     /// ```
-    #[deprecated(note = "Please use the timeout() function instead")]
     pub fn timeout_read(&mut self, millis: u64) -> &mut Request {
         self.timeout_read = millis;
         self
@@ -387,7 +386,6 @@ impl Request {
     ///     .call();
     /// println!("{:?}", r);
     /// ```
-    #[deprecated(note = "Please use the timeout() function instead")]
     pub fn timeout_write(&mut self, millis: u64) -> &mut Request {
         self.timeout_write = millis;
         self
