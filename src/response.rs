@@ -1,12 +1,13 @@
 use std::io::{Cursor, Error as IoError, ErrorKind, Read, Result as IoResult};
 use std::str::FromStr;
+use std::time::Instant;
 
 use chunked_transfer::Decoder as ChunkDecoder;
 
 use crate::error::Error;
 use crate::header::Header;
 use crate::pool::PoolReturnRead;
-use crate::stream::Stream;
+use crate::stream::{DeadlineStream, Stream};
 use crate::unit::Unit;
 
 #[cfg(feature = "json")]
@@ -46,6 +47,7 @@ pub struct Response {
     headers: Vec<Header>,
     unit: Option<Unit>,
     stream: Option<Stream>,
+    deadline: Option<Instant>,
 }
 
 /// index into status_line where we split: HTTP/1.1 200 OK
@@ -279,7 +281,6 @@ impl Response {
     /// ```
     pub fn into_reader(self) -> impl Read {
         //
-
         let is_http10 = self.http_version().eq_ignore_ascii_case("HTTP/1.0");
         let is_close = self
             .header("connection")
@@ -312,6 +313,8 @@ impl Response {
 
         let stream = self.stream.expect("No reader in response?!");
         let unit = self.unit;
+        let deadline = unit.as_ref().and_then(|u| u.deadline);
+        let stream = DeadlineStream::new(stream, deadline);
 
         match (use_chunked, limit_bytes) {
             (true, _) => {
@@ -480,6 +483,7 @@ impl Response {
             headers,
             unit: None,
             stream: None,
+            deadline: None,
         })
     }
 
@@ -559,6 +563,9 @@ impl Into<Response> for Error {
 /// *Internal API*
 pub(crate) fn set_stream(resp: &mut Response, url: String, unit: Option<Unit>, stream: Stream) {
     resp.url = Some(url);
+    if let Some(unit) = &unit {
+        resp.deadline = unit.deadline;
+    }
     resp.unit = unit;
     resp.stream = Some(stream);
 }
@@ -594,7 +601,7 @@ struct LimitedRead<R> {
     position: usize,
 }
 
-impl<R> LimitedRead<R> {
+impl<R: Read> LimitedRead<R> {
     fn new(reader: R, limit: usize) -> Self {
         LimitedRead {
             reader,
@@ -625,7 +632,7 @@ impl<R: Read> Read for LimitedRead<R> {
     }
 }
 
-impl<R> From<LimitedRead<R>> for Stream
+impl<R: Read> From<LimitedRead<R>> for Stream
 where
     Stream: From<R>,
 {

@@ -1,5 +1,6 @@
 use std::io::{Result as IoResult, Write};
 use std::sync::{Arc, Mutex};
+use std::time;
 
 use qstring::QString;
 use url::Url;
@@ -33,6 +34,7 @@ pub(crate) struct Unit {
     pub timeout_connect: u64,
     pub timeout_read: u64,
     pub timeout_write: u64,
+    pub deadline: Option<time::Instant>,
     pub method: String,
     pub proxy: Option<Proxy>,
     #[cfg(feature = "tls")]
@@ -84,6 +86,14 @@ impl Unit {
             .cloned()
             .collect();
 
+        let deadline = match req.timeout {
+            None => None,
+            Some(timeout) => {
+                let now = time::Instant::now();
+                Some(now.checked_add(timeout).unwrap())
+            }
+        };
+
         Unit {
             agent: Arc::clone(&req.agent),
             url: url.clone(),
@@ -93,6 +103,7 @@ impl Unit {
             timeout_connect: req.timeout_connect,
             timeout_read: req.timeout_read,
             timeout_write: req.timeout_write,
+            deadline,
             method: req.method.clone(),
             proxy: req.proxy.clone(),
             #[cfg(feature = "tls")]
@@ -149,6 +160,7 @@ pub(crate) fn connect(
     let body_bytes_sent = body::send_body(body, unit.is_chunked, &mut stream)?;
 
     // start reading the response to process cookies and redirects.
+    let mut stream = stream::DeadlineStream::new(stream, unit.deadline);
     let mut resp = Response::from_read(&mut stream);
 
     if let Some(err) = resp.synthetic_error() {
@@ -203,8 +215,8 @@ pub(crate) fn connect(
     }
 
     // since it is not a redirect, or we're not following redirects,
-    // give away the incoming stream to the response object
-    crate::response::set_stream(&mut resp, unit.url.to_string(), Some(unit), stream);
+    // give away the incoming stream to the response object.
+    crate::response::set_stream(&mut resp, unit.url.to_string(), Some(unit), stream.into());
 
     // release the response
     Ok(resp)
