@@ -1,7 +1,9 @@
 use crate::test;
+use std::io::{BufRead, BufReader, Read, Write};
+use std::thread;
+use std::time::Duration;
 
 use super::super::*;
-use std::thread;
 
 #[test]
 fn agent_reuse_headers() {
@@ -57,8 +59,6 @@ fn agent_cookies() {
 // Start a test server on an available port, that times out idle connections at 2 seconds.
 // Return the port this server is listening on.
 fn start_idle_timeout_server() -> u16 {
-    use std::io::{BufRead, BufReader, Write};
-    use std::time::Duration;
     let listener = std::net::TcpListener::bind("localhost:0").unwrap();
     let port = listener.local_addr().unwrap().port();
     thread::spawn(move || {
@@ -88,9 +88,6 @@ fn start_idle_timeout_server() -> u16 {
 
 #[test]
 fn connection_reuse() {
-    use std::io::Read;
-    use std::time::Duration;
-
     let port = start_idle_timeout_server();
     let url = format!("http://localhost:{}", port);
     let agent = Agent::default().build();

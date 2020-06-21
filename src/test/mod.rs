@@ -14,6 +14,7 @@ mod query_string;
 mod range;
 mod redirect;
 mod simple;
+mod timeout;
 
 type RequestHandler = dyn Fn(&Unit) -> Result<Stream, Error> + Send + 'static;
 

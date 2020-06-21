@@ -1,5 +1,6 @@
 use std::io::Read;
 use std::sync::{Arc, Mutex};
+use std::time;
 
 use lazy_static::lazy_static;
 use qstring::QString;
@@ -46,6 +47,7 @@ pub struct Request {
     pub(crate) timeout_connect: u64,
     pub(crate) timeout_read: u64,
     pub(crate) timeout_write: u64,
+    pub(crate) timeout: Option<time::Duration>,
     pub(crate) redirects: u32,
     pub(crate) proxy: Option<crate::proxy::Proxy>,
     #[cfg(feature = "tls")]
@@ -336,6 +338,8 @@ impl Request {
     }
 
     /// Timeout for the socket connection to be successful.
+    /// If both this and .timeout() are both set, .timeout_connect()
+    /// takes precedence.
     ///
     /// The default is `0`, which means a request can block forever.
     ///
@@ -351,6 +355,8 @@ impl Request {
     }
 
     /// Timeout for the individual reads of the socket.
+    /// If both this and .timeout() are both set, .timeout()
+    /// takes precedence.
     ///
     /// The default is `0`, which means it can block forever.
     ///
@@ -360,12 +366,15 @@ impl Request {
     ///     .call();
     /// println!("{:?}", r);
     /// ```
+    #[deprecated(note = "Please use the timeout() function instead")]
     pub fn timeout_read(&mut self, millis: u64) -> &mut Request {
         self.timeout_read = millis;
         self
     }
 
     /// Timeout for the individual writes to the socket.
+    /// If both this and .timeout() are both set, .timeout()
+    /// takes precedence.
     ///
     /// The default is `0`, which means it can block forever.
     ///
@@ -375,8 +384,29 @@ impl Request {
     ///     .call();
     /// println!("{:?}", r);
     /// ```
+    #[deprecated(note = "Please use the timeout() function instead")]
     pub fn timeout_write(&mut self, millis: u64) -> &mut Request {
         self.timeout_write = millis;
+        self
+    }
+
+    /// Timeout for the overall request, including DNS resolution, connection
+    /// time, redirects, and reading the response body. Slow DNS resolution
+    /// may cause a request to exceed the timeout, because the DNS request
+    /// cannot be interrupted with the available APIs.
+    ///
+    /// This takes precedence over .timeout_read() and .timeout_write(), but
+    /// not .timeout_connect().
+    ///
+    /// ```
+    /// // wait max 1 second for whole request to complete.
+    /// let r = ureq::get("/my_page")
+    ///     .timeout(std::time::Duration::from_secs(1))
+    ///     .call();
+    /// println!("{:?}", r);
+    /// ```
+    pub fn timeout(&mut self, timeout: time::Duration) -> &mut Request {
+        self.timeout = Some(timeout);
         self
     }
 
