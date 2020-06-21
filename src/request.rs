@@ -220,10 +220,9 @@ impl Request {
     /// ```
     /// use std::io::Cursor;
     ///
-    /// let text = "Hello there!\n";
-    /// let read = Cursor::new(text.to_string().into_bytes());
+    /// let read = Cursor::new(vec![0x20; 100_000]);
     ///
-    /// let resp = ureq::post("/somewhere")
+    /// let resp = ureq::post("http://localhost/example-upload")
     ///     .set("Content-Type", "text/plain")
     ///     .set("Transfer-Encoding", "chunked")
     ///     .send(read);
