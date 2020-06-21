@@ -214,16 +214,19 @@ impl Request {
 
     /// Send data from a reader.
     ///
-    /// The `Content-Length` header is not set because we can't know the length of the reader.
+    /// This uses [chunked transfer encoding](https://tools.ietf.org/html/rfc7230#section-4.1).
+    /// The caller is responsible for setting the Transfer-Encoding: chunked header.
+    ///
+    /// The input from the reader is buffered into chunks of size 16,384, the max size of a TLS fragment.
     ///
     /// ```
     /// use std::io::Cursor;
     ///
-    /// let text = "Hello there!\n";
-    /// let read = Cursor::new(text.to_string().into_bytes());
+    /// let read = Cursor::new(vec![0x20; 100_000]);
     ///
-    /// let resp = ureq::post("/somewhere")
+    /// let resp = ureq::post("http://localhost/example-upload")
     ///     .set("Content-Type", "text/plain")
+    ///     .set("Transfer-Encoding", "chunked")
     ///     .send(read);
     /// ```
     pub fn send(&mut self, reader: impl Read + 'static) -> Response {
