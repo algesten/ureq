@@ -10,7 +10,7 @@ use url::{form_urlencoded, Url};
 use std::fmt;
 
 use crate::agent::{self, Agent, AgentState};
-use crate::body::Payload;
+use crate::body::{Payload, SizedReader};
 use crate::error::Error;
 use crate::header::{self, Header};
 use crate::pool;
@@ -606,6 +606,22 @@ impl Request {
     pub fn set_tls_config(&mut self, tls_config: Arc<rustls::ClientConfig>) -> &mut Request {
         self.tls_config = Some(TLSClientConfig(tls_config));
         self
+    }
+
+    // Returns true if this request, with the provided body, is retryable.
+    pub(crate) fn is_retryable(&self, body: &SizedReader) -> bool {
+        // Per https://tools.ietf.org/html/rfc7231#section-8.1.3
+        // these methods are idempotent.
+        let idempotent = match self.method.as_str() {
+            "DELETE" | "GET" | "HEAD" | "OPTIONS" | "PUT" | "TRACE" => true,
+            _ => false,
+        };
+        // Unsized bodies aren't retryable because we can't rewind the reader.
+        // Sized bodies are retryable only if they are zero-length because of
+        // coincidences of the current implementation - the function responsible
+        // for retries doesn't have a way to replay a Payload.
+        let no_body = body.size.is_none() || body.size.unwrap() > 0;
+        idempotent && no_body
     }
 }
 
