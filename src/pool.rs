@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::io::{Read, Result as IoResult};
 
 use crate::stream::Stream;
@@ -7,6 +7,7 @@ use crate::unit::Unit;
 use url::Url;
 
 pub const DEFAULT_HOST: &str = "localhost";
+const MAX_IDLE_CONNECTIONS: usize = 100;
 
 /// Holder of recycled connections.
 ///
@@ -15,6 +16,13 @@ pub const DEFAULT_HOST: &str = "localhost";
 pub(crate) struct ConnectionPool {
     // the actual pooled connection. however only one per hostname:port.
     recycle: HashMap<PoolKey, Stream>,
+    // This is used to keep track of which streams to expire when the
+    // pool reaches MAX_IDLE_CONNECTIONS. The corresponding PoolKey for
+    // recently used Streams are added to the back of the queue;
+    // old streams are removed from the front.
+    // Invariant: The length of recycle and lru are the same.
+    // Invariant: Every PoolKey exists as a key in recycle, and vice versa.
+    lru: VecDeque<PoolKey>,
 }
 
 impl ConnectionPool {
@@ -26,7 +34,35 @@ impl ConnectionPool {
 
     /// How the unit::connect tries to get a pooled connection.
     pub fn try_get_connection(&mut self, url: &Url) -> Option<Stream> {
-        self.recycle.remove(&PoolKey::new(url))
+        let key = PoolKey::new(url);
+        if !self.recycle.contains_key(&key) {
+            return None;
+        }
+        let index = self.lru.iter().position(|k| k == &key);
+        assert!(
+            index.is_some(),
+            "invariant failed: key existed in recycle but not lru"
+        );
+        self.lru.remove(index.unwrap());
+        self.recycle.remove(&key)
+    }
+
+    fn add(&mut self, key: PoolKey, stream: Stream) {
+        if self.recycle.len() + 1 > MAX_IDLE_CONNECTIONS {
+            self.remove_oldest();
+        }
+        self.lru.push_back(key.clone());
+        self.recycle.insert(key, stream);
+    }
+
+    fn remove_oldest(&mut self) {
+        if let Some(key) = self.lru.pop_front() {
+            assert!(
+                self.recycle.contains_key(&key),
+                "invariant failed: key existed in lru but not in recycle"
+            );
+            self.recycle.remove(&key);
+        }
     }
 
     #[cfg(test)]
@@ -102,7 +138,7 @@ impl<R: Read + Sized + Into<Stream>> PoolReturnRead<R> {
                 }
                 // insert back into pool
                 let key = PoolKey::new(&unit.url);
-                agent.pool().recycle.insert(key, stream);
+                agent.pool().add(key, stream);
             }
         }
     }
