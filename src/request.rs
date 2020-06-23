@@ -214,8 +214,10 @@ impl Request {
 
     /// Send data from a reader.
     ///
-    /// This uses [chunked transfer encoding](https://tools.ietf.org/html/rfc7230#section-4.1).
-    /// The caller is responsible for setting the Transfer-Encoding: chunked header.
+    /// If no Content-Length and Transfer-Encoding header has been set, it uses the [chunked transfer encoding](https://tools.ietf.org/html/rfc7230#section-4.1).
+    ///
+    /// The caller may set the Content-Length header to the expected byte size of the reader if is
+    /// known.
     ///
     /// The input from the reader is buffered into chunks of size 16,384, the max size of a TLS fragment.
     ///
@@ -226,7 +228,6 @@ impl Request {
     ///
     /// let resp = ureq::post("http://localhost/example-upload")
     ///     .set("Content-Type", "text/plain")
-    ///     .set("Transfer-Encoding", "chunked")
     ///     .send(read);
     /// ```
     pub fn send(&mut self, reader: impl Read + 'static) -> Response {
