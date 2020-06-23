@@ -1,4 +1,3 @@
-#![feature(duration_constants)]
 use chrono::Local;
 use rayon::prelude::*;
 use rayon_core;
@@ -39,10 +38,9 @@ impl fmt::Display for Oops {
     }
 }
 
-type Bytes = Vec<u8>;
 type Result<T> = result::Result<T, Oops>;
 
-fn get(agent: &ureq::Agent, url: &String) -> Result<Bytes> {
+fn get(agent: &ureq::Agent, url: &String) -> Result<Vec<u8>> {
     let response = agent
         .get(url)
         .timeout_connect(5_000)
@@ -96,16 +94,13 @@ using 50 threads concurrently.
     }
     let file = std::fs::File::open(args.skip(1).next().unwrap())?;
     let bufreader = BufReader::new(file);
-    let hostnames = bufreader
-        .lines()
-        .map(|line| Ok(line?.rsplit(",").next().unwrap().to_string()))
-        .collect::<io::Result<Vec<String>>>()?;
     let mut urls = vec![];
-    for hostname in hostnames {
-        urls.push(format!("http://{}/", hostname));
-        urls.push(format!("https://{}/", hostname));
-        urls.push(format!("http://www.{}/", hostname));
-        urls.push(format!("https://www.{}/", hostname));
+    for line in bufreader.lines() {
+        let domain = line?.rsplit(",").next().unwrap().to_string();
+        urls.push(format!("http://{}/", domain));
+        urls.push(format!("https://{}/", domain));
+        urls.push(format!("http://www.{}/", domain));
+        urls.push(format!("https://www.{}/", domain));
     }
     get_many(urls, 50)?;
     Ok(())
