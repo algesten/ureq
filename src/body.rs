@@ -66,7 +66,7 @@ impl SizedReader {
 impl Payload {
     pub fn into_read(self) -> SizedReader {
         match self {
-            Payload::Empty => SizedReader::new(None, Box::new(empty())),
+            Payload::Empty => SizedReader::new(Some(0), Box::new(empty())),
             Payload::Text(text, _charset) => {
                 #[cfg(feature = "charset")]
                 let bytes = {

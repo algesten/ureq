@@ -35,12 +35,12 @@ impl Unit {
     pub(crate) fn new(req: &Request, url: &Url, mix_queries: bool, body: &SizedReader) -> Self {
         //
 
-        let is_chunked = req
+        let (is_transfer_encoding_set, mut is_chunked) = req
             .header("transfer-encoding")
             // if the user has set an encoding header, obey that.
-            .map(|enc| !enc.is_empty())
+            .map(|enc| (!enc.is_empty(), enc == "chunked"))
             // otherwise, no chunking.
-            .unwrap_or(false);
+            .unwrap_or((false, false));
 
         let query_string = combine_query(&url, &req.query, mix_queries);
 
@@ -52,8 +52,19 @@ impl Unit {
             // chunking and Content-Length headers are mutually exclusive
             // also don't write this if the user has set it themselves
             if !is_chunked && !req.has("content-length") {
+                // if the payload is of known size (everything beside an unsized reader), set
+                // Content-Length,
+                // otherwise, use the chunked Transfer-Encoding (only if no other Transfer-Encoding
+                // has been set
                 if let Some(size) = body.size {
-                    extra.push(Header::new("Content-Length", &format!("{}", size)));
+                    if size != 0 {
+                        extra.push(Header::new("Content-Length", &format!("{}", size)));
+                    }
+                } else {
+                    if !is_transfer_encoding_set {
+                        extra.push(Header::new("Transfer-Encoding", "chunked"));
+                        is_chunked = true;
+                    }
                 }
             }
 
