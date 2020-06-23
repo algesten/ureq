@@ -166,12 +166,12 @@ pub(crate) fn send_body(
     mut body: SizedReader,
     do_chunk: bool,
     stream: &mut Stream,
-) -> IoResult<u64> {
-    let n = if do_chunk {
-        copy_chunked(&mut body.reader, stream)?
+) -> IoResult<()> {
+    if do_chunk {
+        copy_chunked(&mut body.reader, stream)?;
     } else {
-        copy(&mut body.reader, stream)?
+        copy(&mut body.reader, stream)?;
     };
 
-    Ok(n)
+    Ok(())
 }

@@ -155,21 +155,30 @@ pub(crate) fn connect(
             return Err(err.into());
         }
     }
+    let retryable = req.is_retryable(&body);
 
     // send the body (which can be empty now depending on redirects)
-    let body_bytes_sent = body::send_body(body, unit.is_chunked, &mut stream)?;
+    body::send_body(body, unit.is_chunked, &mut stream)?;
 
     // start reading the response to process cookies and redirects.
     let mut stream = stream::DeadlineStream::new(stream, unit.deadline);
     let mut resp = Response::from_read(&mut stream);
 
+    // https://tools.ietf.org/html/rfc7230#section-6.3.1
+    // When an inbound connection is closed prematurely, a client MAY
+    // open a new connection and automatically retransmit an aborted
+    // sequence of requests if all of those requests have idempotent
+    // methods.
+    //
+    // We choose to retry only once. To do that, we rely on is_recycled,
+    // the "one connection per hostname" police of the ConnectionPool,
+    // and the fact that connections with errors are dropped.
+    //
+    // TODO: is_bad_status_read is too narrow since it covers only the
+    // first line. It's also allowable to retry requests that hit a
+    // closed connection during the sending or receiving of headers.
     if let Some(err) = resp.synthetic_error() {
-        if err.is_bad_status_read() && body_bytes_sent == 0 && is_recycled {
-            // We try open a new connection, this happens if the remote server
-            // hangs a pooled connection and we only discover when trying to
-            // read from it. It's however only possible if we didn't send any
-            // body bytes. This is because we currently don't want to buffer
-            // any body to be able to replay it.
+        if err.is_bad_status_read() && retryable && is_recycled {
             let empty = Payload::Empty.into_read();
             return connect(req, unit, false, redirect_count, empty, redir);
         }
@@ -282,6 +291,10 @@ pub(crate) fn combine_query(url: &Url, query: &QString, mix_queries: bool) -> St
 
 /// Connect the socket, either by using the pool or grab a new one.
 fn connect_socket(unit: &Unit, use_pooled: bool) -> Result<(Stream, bool), Error> {
+    match unit.url.scheme() {
+        "http" | "https" | "test" => (),
+        _ => return Err(Error::UnknownScheme(unit.url.scheme().to_string())),
+    };
     if use_pooled {
         let state = &mut unit.agent.lock().unwrap();
         if let Some(agent) = state.as_mut() {
