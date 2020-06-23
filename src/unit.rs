@@ -291,6 +291,10 @@ pub(crate) fn combine_query(url: &Url, query: &QString, mix_queries: bool) -> St
 
 /// Connect the socket, either by using the pool or grab a new one.
 fn connect_socket(unit: &Unit, use_pooled: bool) -> Result<(Stream, bool), Error> {
+    match unit.url.scheme() {
+        "http" | "https" | "test" => (),
+        _ => return Err(Error::UnknownScheme(unit.url.scheme().to_string())),
+    };
     if use_pooled {
         let state = &mut unit.agent.lock().unwrap();
         if let Some(agent) = state.as_mut() {

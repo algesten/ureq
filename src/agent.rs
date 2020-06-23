@@ -262,6 +262,7 @@ pub(crate) fn basic_auth(user: &str, pass: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Read;
 
     ///////////////////// AGENT TESTS //////////////////////////////
 
@@ -271,6 +272,35 @@ mod tests {
         ::std::thread::spawn(move || {
             agent.set("Foo", "Bar");
         });
+    }
+
+    #[test]
+    #[cfg(any(feature = "tls", feature = "native-tls"))]
+    fn agent_pool() {
+        let agent = crate::agent();
+        let url = "https://ureq.s3.eu-central-1.amazonaws.com/sherlock.txt";
+        // req 1
+        let resp = agent.get(url).call();
+        assert!(resp.ok());
+        let mut reader = resp.into_reader();
+        let mut buf = vec![];
+        // reading the entire content will return the connection to the pool
+        reader.read_to_end(&mut buf).unwrap();
+
+        fn poolsize(agent: &Agent) -> usize {
+            let mut lock = agent.state.lock().unwrap();
+            let state = lock.as_mut().unwrap();
+            state.pool().len()
+        }
+        assert_eq!(poolsize(&agent), 1);
+
+        // req 2 should be done with a reused connection
+        let resp = agent.get(url).call();
+        assert!(resp.ok());
+        assert_eq!(poolsize(&agent), 0);
+        let mut reader = resp.into_reader();
+        let mut buf = vec![];
+        reader.read_to_end(&mut buf).unwrap();
     }
 
     //////////////////// REQUEST TESTS /////////////////////////////
