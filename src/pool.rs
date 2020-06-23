@@ -33,41 +33,30 @@ impl ConnectionPool {
     pub fn len(&self) -> usize {
         self.recycle.len()
     }
-
-    #[cfg(all(test, any(feature = "tls", feature = "native-tls")))]
-    pub fn get(&self, hostname: &str, port: u16) -> Option<&Stream> {
-        let key = PoolKey {
-            hostname: hostname.into(),
-            port,
-        };
-        self.recycle.get(&key)
-    }
 }
 
 #[derive(Debug, PartialEq, Clone, Eq, Hash)]
 struct PoolKey {
+    scheme: String,
     hostname: String,
-    port: u16,
+    port: Option<u16>,
 }
 
 impl PoolKey {
     fn new(url: &Url) -> Self {
-        let port = if cfg!(test) {
-            if let Some(p) = url.port_or_known_default() {
-                Some(p)
-            } else if url.scheme() == "test" {
-                Some(42)
-            } else {
-                None
-            }
-        } else {
-            url.port_or_known_default()
-        };
+        let port = url.port_or_known_default();
         PoolKey {
-            hostname: url.host_str().unwrap_or(DEFAULT_HOST).into(),
-            port: port.expect("Failed to get port for pool key"),
+            scheme: url.scheme().to_string(),
+            hostname: url.host_str().unwrap_or("").to_string(),
+            port,
         }
     }
+}
+
+#[test]
+fn poolkey_new() {
+    // Test that PoolKey::new() does not panic on unrecognized schemes.
+    PoolKey::new(&Url::parse("zzz:///example.com").unwrap());
 }
 
 /// Read wrapper that returns the stream to the pool once the
