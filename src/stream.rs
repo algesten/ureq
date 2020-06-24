@@ -523,8 +523,9 @@ fn connect_socks5(
         let (lock, cvar) = &*master_signal;
         let done = lock.lock().unwrap();
 
+        let timeout_connect = time_until_deadline(deadline)?;
         let done_result = cvar
-            .wait_timeout(done, time_until_deadline(deadline)?)
+            .wait_timeout(done, timeout_connect)
             .unwrap();
         let done = done_result.0;
         if *done {
@@ -534,7 +535,7 @@ fn connect_socks5(
                 ErrorKind::TimedOut,
                 format!(
                     "SOCKS5 proxy: {}:{} timed out connecting after {}ms.",
-                    host, port, timeout_connect
+                    host, port, timeout_connect.as_millis()
                 ),
             ));
         }
