@@ -11,17 +11,19 @@ const MAX_IDLE_CONNECTIONS: usize = 100;
 
 /// Holder of recycled connections.
 ///
+/// Invariant: The length of recycle and lru are the same.
+/// Invariant: Each PoolKey exists as a key in recycle, and vice versa.
+/// Invariant: Each PoolKey exists in recycle at most once and lru at most once.
+///
 /// *Internal API*
 #[derive(Default, Debug)]
 pub(crate) struct ConnectionPool {
     // the actual pooled connection. however only one per hostname:port.
     recycle: HashMap<PoolKey, Stream>,
     // This is used to keep track of which streams to expire when the
-    // pool reaches MAX_IDLE_CONNECTIONS. The corresponding PoolKey for
+    // pool reaches MAX_IDLE_CONNECTIONS. The corresponding PoolKeys for
     // recently used Streams are added to the back of the queue;
     // old streams are removed from the front.
-    // Invariant: The length of recycle and lru are the same.
-    // Invariant: Every PoolKey exists as a key in recycle, and vice versa.
     lru: VecDeque<PoolKey>,
 }
 
@@ -35,10 +37,14 @@ impl ConnectionPool {
     /// How the unit::connect tries to get a pooled connection.
     pub fn try_get_connection(&mut self, url: &Url) -> Option<Stream> {
         let key = PoolKey::new(url);
+        self.remove(&key)
+    }
+
+    fn remove(&mut self, key: &PoolKey) -> Option<Stream> {
         if !self.recycle.contains_key(&key) {
             return None;
         }
-        let index = self.lru.iter().position(|k| k == &key);
+        let index = self.lru.iter().position(|k| k == key);
         assert!(
             index.is_some(),
             "invariant failed: key existed in recycle but not lru"
@@ -48,6 +54,9 @@ impl ConnectionPool {
     }
 
     fn add(&mut self, key: PoolKey, stream: Stream) {
+        // If an entry with the same key already exists, remove it.
+        // The more recently used stream is likely to live longer.
+        self.remove(&key);
         if self.recycle.len() + 1 > MAX_IDLE_CONNECTIONS {
             self.remove_oldest();
         }
@@ -57,11 +66,13 @@ impl ConnectionPool {
 
     fn remove_oldest(&mut self) {
         if let Some(key) = self.lru.pop_front() {
+            let removed = self.recycle.remove(&key);
             assert!(
-                self.recycle.contains_key(&key),
+                removed.is_some(),
                 "invariant failed: key existed in lru but not in recycle"
             );
-            self.recycle.remove(&key);
+        } else {
+            panic!("tried to remove oldest but no entries found!");
         }
     }
 
@@ -71,11 +82,24 @@ impl ConnectionPool {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Eq, Hash)]
+#[derive(PartialEq, Clone, Eq, Hash)]
 struct PoolKey {
     scheme: String,
     hostname: String,
     port: Option<u16>,
+}
+
+use std::fmt;
+
+impl fmt::Debug for PoolKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!(
+            "{}|{}|{}",
+            self.scheme,
+            self.hostname,
+            self.port.unwrap_or(0)
+        ))
+    }
 }
 
 impl PoolKey {
@@ -93,6 +117,52 @@ impl PoolKey {
 fn poolkey_new() {
     // Test that PoolKey::new() does not panic on unrecognized schemes.
     PoolKey::new(&Url::parse("zzz:///example.com").unwrap());
+}
+
+#[test]
+fn pool_size_limit() {
+    assert_eq!(MAX_IDLE_CONNECTIONS, 100);
+    let mut pool = ConnectionPool::new();
+    let hostnames = (0..200).map(|i| format!("{}.example", i));
+    let poolkeys = hostnames.map(|hostname| PoolKey {
+        scheme: "https".to_string(),
+        hostname,
+        port: Some(999),
+    });
+    for key in poolkeys.clone() {
+        pool.add(key, Stream::Cursor(std::io::Cursor::new(vec![])));
+    }
+    assert_eq!(pool.len(), 100);
+
+    for key in poolkeys.skip(100) {
+        let result = pool.remove(&key);
+        assert!(result.is_some(), "expected key was not in pool");
+    }
+}
+
+#[test]
+fn pool_duplicates_limit() {
+    // Test inserting duplicates into the pool, and subsequently
+    // filling and draining it. The duplicates should evict earlier
+    // entries with the same key.
+    assert_eq!(MAX_IDLE_CONNECTIONS, 100);
+    let mut pool = ConnectionPool::new();
+    let hostnames = (0..100).map(|i| format!("{}.example", i));
+    let poolkeys = hostnames.map(|hostname| PoolKey {
+        scheme: "https".to_string(),
+        hostname,
+        port: Some(999),
+    });
+    for key in poolkeys.clone() {
+        pool.add(key.clone(), Stream::Cursor(std::io::Cursor::new(vec![])));
+        pool.add(key, Stream::Cursor(std::io::Cursor::new(vec![])));
+    }
+    assert_eq!(pool.len(), 100);
+
+    for key in poolkeys {
+        let result = pool.remove(&key);
+        assert!(result.is_some(), "expected key was not in pool");
+    }
 }
 
 /// Read wrapper that returns the stream to the pool once the
