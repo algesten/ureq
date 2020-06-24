@@ -81,12 +81,12 @@ impl Read for DeadlineStream {
 // then. Otherwise return a TimedOut error.
 fn time_until_deadline(deadline: Instant) -> IoResult<Duration> {
     let now = Instant::now();
-    match now.checked_duration_since(deadline) {
-        Some(_) => Err(IoError::new(
+    match deadline.checked_duration_since(now) {
+        None => Err(IoError::new(
             ErrorKind::TimedOut,
             "timed out reading response",
         )),
-        None => Ok(deadline - now),
+        Some(duration) => Ok(duration),
     }
 }
 
@@ -394,7 +394,7 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
     // Setting it to None will disable the native system timeout
     if let Some(deadline) = deadline {
         stream
-            .set_read_timeout(Some(deadline - Instant::now()))
+            .set_read_timeout(Some(time_until_deadline(deadline)?))
             .ok();
     } else if unit.timeout_read > 0 {
         stream
@@ -406,7 +406,7 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
 
     if let Some(deadline) = deadline {
         stream
-            .set_write_timeout(Some(deadline - Instant::now()))
+            .set_write_timeout(Some(time_until_deadline(deadline)?))
             .ok();
     } else if unit.timeout_write > 0 {
         stream
@@ -523,7 +523,9 @@ fn connect_socks5(
         let (lock, cvar) = &*master_signal;
         let done = lock.lock().unwrap();
 
-        let done_result = cvar.wait_timeout(done, deadline - Instant::now()).unwrap();
+        let done_result = cvar
+            .wait_timeout(done, time_until_deadline(deadline)?)
+            .unwrap();
         let done = done_result.0;
         if *done {
             rx.recv().unwrap()?
