@@ -26,3 +26,9 @@ jobs:
         with:
           command: test
           args: --no-default-features --features "json tls ${{ matrix.feature }}"
+      - name: Docs
+        uses: actions-rs/cargo@v1
+        with:
+          command: doc
+          # Keep in sync with Cargo.toml's [package.metadata.docs.rs]
+          args: --no-default-features --features "tls json charset cookies socks-proxy"
