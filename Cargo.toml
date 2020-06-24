@@ -11,7 +11,7 @@ categories = ["web-programming::http-client"]
 edition = "2018"
 
 [package.metadata.docs.rs]
-all-features = true
+features = [ "tls", "json", "charset", "cookies", "socks-proxy" ]
 
 [features]
 default = ["tls", "cookies"]
