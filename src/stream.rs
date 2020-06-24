@@ -467,7 +467,7 @@ fn socks5_local_nslookup(hostname: &str, port: u16) -> Result<TargetAddr, std::i
 #[cfg(feature = "socks-proxy")]
 fn connect_socks5(
     proxy: Proxy,
-    deadline: Option<time::Instant>,
+    deadline: Option<Instant>,
     proxy_addr: SocketAddr,
     host: &str,
     port: u16,
