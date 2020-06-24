@@ -30,4 +30,5 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: doc
-          args: --all-features
+          # Keep in sync with Cargo.toml's [package.metadata.docs.rs]
+          args: --no-default-features --features "tls json charset cookies socks-proxy"
