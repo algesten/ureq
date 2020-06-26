@@ -38,7 +38,14 @@ impl Unit {
         let (is_transfer_encoding_set, mut is_chunked) = req
             .header("transfer-encoding")
             // if the user has set an encoding header, obey that.
-            .map(|enc| (!enc.is_empty(), enc == "chunked"))
+            .map(|enc| {
+                let is_transfer_encoding_set = !enc.is_empty();
+                let last_encoding = enc.split(',').last();
+                let is_chunked = last_encoding
+                    .map(|last_enc| last_enc.trim() == "chunked")
+                    .unwrap_or(false);
+                (is_transfer_encoding_set, is_chunked)
+            })
             // otherwise, no chunking.
             .unwrap_or((false, false));
 
