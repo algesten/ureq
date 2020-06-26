@@ -42,11 +42,21 @@ impl Default for Payload {
     }
 }
 
+/// The size of the body.
+///
+/// *Internal API*
+#[derive(Debug)]
+pub(crate) enum BodySize {
+    Empty,
+    Unknown,
+    Known(u64),
+}
+
 /// Payloads are turned into this type where we can hold both a size and the reader.
 ///
 /// *Internal API*
 pub(crate) struct SizedReader {
-    pub size: Option<usize>,
+    pub size: BodySize,
     pub reader: Box<dyn Read + 'static>,
 }
 
@@ -57,7 +67,7 @@ impl ::std::fmt::Debug for SizedReader {
 }
 
 impl SizedReader {
-    fn new(size: Option<usize>, reader: Box<dyn Read + 'static>) -> Self {
+    fn new(size: BodySize, reader: Box<dyn Read + 'static>) -> Self {
         SizedReader { size, reader }
     }
 }
@@ -65,7 +75,7 @@ impl SizedReader {
 impl Payload {
     pub fn into_read(self) -> SizedReader {
         match self {
-            Payload::Empty => SizedReader::new(Some(0), Box::new(empty())),
+            Payload::Empty => SizedReader::new(BodySize::Empty, Box::new(empty())),
             Payload::Text(text, _charset) => {
                 #[cfg(feature = "charset")]
                 let bytes = {
@@ -78,20 +88,20 @@ impl Payload {
                 let bytes = text.into_bytes();
                 let len = bytes.len();
                 let cursor = Cursor::new(bytes);
-                SizedReader::new(Some(len), Box::new(cursor))
+                SizedReader::new(BodySize::Known(len as u64), Box::new(cursor))
             }
             #[cfg(feature = "json")]
             Payload::JSON(v) => {
                 let bytes = serde_json::to_vec(&v).expect("Bad JSON in payload");
                 let len = bytes.len();
                 let cursor = Cursor::new(bytes);
-                SizedReader::new(Some(len), Box::new(cursor))
+                SizedReader::new(BodySize::Known(len as u64), Box::new(cursor))
             }
-            Payload::Reader(read) => SizedReader::new(None, read),
+            Payload::Reader(read) => SizedReader::new(BodySize::Unknown, read),
             Payload::Bytes(bytes) => {
                 let len = bytes.len();
                 let cursor = Cursor::new(bytes);
-                SizedReader::new(Some(len), Box::new(cursor))
+                SizedReader::new(BodySize::Known(len as u64), Box::new(cursor))
             }
         }
     }
