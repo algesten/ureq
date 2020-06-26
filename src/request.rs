@@ -8,6 +8,7 @@ use qstring::QString;
 use url::{form_urlencoded, Url};
 
 use crate::agent::{self, Agent, AgentState};
+use crate::body::BodySize;
 use crate::body::{Payload, SizedReader};
 use crate::error::Error;
 use crate::header::{self, Header};
@@ -604,8 +605,14 @@ impl Request {
         // Sized bodies are retryable only if they are zero-length because of
         // coincidences of the current implementation - the function responsible
         // for retries doesn't have a way to replay a Payload.
-        let no_body = body.size.is_none() || body.size.unwrap() > 0;
-        idempotent && no_body
+        let retryable_body = match body.size {
+            BodySize::Unknown => false,
+            BodySize::Known(0) => true,
+            BodySize::Known(_) => false,
+            BodySize::Empty => true,
+        };
+
+        idempotent && retryable_body
     }
 }
 

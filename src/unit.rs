@@ -8,7 +8,7 @@ use url::Url;
 use cookie::{Cookie, CookieJar};
 
 use crate::agent::AgentState;
-use crate::body::{self, Payload, SizedReader};
+use crate::body::{self, BodySize, Payload, SizedReader};
 use crate::header;
 use crate::resolve::ArcResolver;
 use crate::stream::{self, connect_test, Stream};
@@ -56,15 +56,17 @@ impl Unit {
                 // Content-Length,
                 // otherwise, use the chunked Transfer-Encoding (only if no other Transfer-Encoding
                 // has been set
-                if let Some(size) = body.size {
-                    if size != 0 {
-                        extra.push(Header::new("Content-Length", &format!("{}", size)));
+                match body.size {
+                    BodySize::Known(size) => {
+                        extra.push(Header::new("Content-Length", &format!("{}", size)))
                     }
-                } else {
-                    if !is_transfer_encoding_set {
-                        extra.push(Header::new("Transfer-Encoding", "chunked"));
-                        is_chunked = true;
+                    BodySize::Unknown => {
+                        if !is_transfer_encoding_set {
+                            extra.push(Header::new("Transfer-Encoding", "chunked"));
+                            is_chunked = true;
+                        }
                     }
+                    BodySize::Empty => {}
                 }
             }
 
