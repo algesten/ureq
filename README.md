@@ -9,14 +9,12 @@
 ## Usage
 
 ```rust
-// requires feature: `ureq = { version = "*", features = ["json"] }`
-#[macro_use]
-extern crate ureq;
-
 // sync post request of some json.
+// requires feature:
+// `ureq = { version = "*", features = ["json"] }`
 let resp = ureq::post("https://myapi.example.com/ingest")
     .set("X-My-Header", "Secret")
-    .send_json(json!({
+    .send_json(serde_json::json!({
         "name": "martin",
         "rust": true
     }));
@@ -25,8 +23,9 @@ let resp = ureq::post("https://myapi.example.com/ingest")
 if resp.ok() {
   println!("success: {}", resp.into_string()?);
 } else {
-  // This can include errors like failure to parse URL or connect timeout.
-  // They are treated as synthetic HTTP-level error statuses.
+  // This can include errors like failure to parse URL or
+  // connect timeout. They are treated as synthetic
+  // HTTP-level error statuses.
   println!("error {}: {}", resp.status(), resp.into_string()?);
 }
 ```
@@ -36,8 +35,7 @@ if resp.ok() {
 This crate is now 1.x.x. It signifies there will be no more breaking
 API changes (for better or worse). I personally use this code in
 production system reading data from AWS. Whether the quality is good
-enough for other use cases is a "YMMV". I know the Agent related code
-is rather  undertested and probably has issues.
+enough for other use cases is a "YMMV".
 
 ## ureq's future
 
@@ -69,7 +67,7 @@ You can control them when including `ureq` as a dependency.
 * `native-tls` enables https using the [`native-tls`](https://crates.io/crates/native-tls) crate. 
   NB: To make this work you currently need to use `default-features: false` to disable `tls`.
   We plan on fixing that.
-* `json` enables `response.into_json()` and `request.send_json()` serde json.
+* `json` enables `response.into_json()` and `request.send_json()` via serde_json.
 * `charset` enables interpreting the charset part of
   `Content-Type: text/plain; charset=iso-8859-1`. Without this, the library
   defaults to rust's built in `utf-8`.
