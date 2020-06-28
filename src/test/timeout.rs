@@ -47,7 +47,6 @@ fn overall_timeout_during_body() {
     let server = TestServer::new(dribble_body_respond);
     let url = format!("http://localhost:{}/", server.port);
     get_and_expect_timeout(url);
-    server.shutdown();
 }
 
 // Send HTTP headers on the TcpStream at a rate of one header every 100
@@ -68,5 +67,4 @@ fn overall_timeout_during_headers() {
     let server = TestServer::new(dribble_headers_respond);
     let url = format!("http://localhost:{}/", server.port);
     get_and_expect_timeout(url);
-    server.shutdown();
 }

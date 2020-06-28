@@ -29,21 +29,24 @@ impl TestServer {
         let port = listener.local_addr().unwrap().port();
         let done = Arc::new(AtomicBool::new(false));
         let done_clone = done.clone();
-        thread::spawn(move || {
+        let handle = thread::spawn(move || {
             for stream in listener.incoming() {
                 thread::spawn(move || handler(stream.unwrap()));
                 if done.load(Ordering::Relaxed) {
                     break;
                 }
             }
+            println!("tesserver on {} exiting", port);
         });
         TestServer {
             port,
             done: done_clone,
         }
     }
+}
 
-    pub fn shutdown(self) {
+impl Drop for TestServer {
+    fn drop(&mut self) {
         self.done.store(true, Ordering::Relaxed);
         // Connect once to unblock the listen loop.
         TcpStream::connect(format!("localhost:{}", self.port)).unwrap();
