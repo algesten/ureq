@@ -2,9 +2,15 @@ use crate::error::Error;
 use std::str::FromStr;
 
 #[derive(Clone)]
-/// Wrapper type for a header line.
+/// Wrapper type for a header field.
+/// https://tools.ietf.org/html/rfc7230#section-3.2
 pub struct Header {
+    // Line contains the unmodified bytes of single header field.
+    // It does not contain the final CRLF.
     line: String,
+    // Index is the position of the colon within the header field.
+    // Invariant: index > 0
+    // Invariant: index + 1 < line.len()
     index: usize,
 }
 
@@ -82,6 +88,32 @@ pub fn add_header(headers: &mut Vec<Header>, header: Header) {
     headers.push(header);
 }
 
+// https://tools.ietf.org/html/rfc7230#section-3.2.3
+// Each header field consists of a case-insensitive field name followed
+// by a colon (":"), optional leading whitespace, the field value, and
+// optional trailing whitespace.
+// field-name     = token
+// token = 1*tchar
+// tchar = "!" / "#" / "$" / "%" / "&" / "'" / "*" / "+" / "-" / "." /
+// "^" / "_" / "`" / "|" / "~" / DIGIT / ALPHA
+fn valid_name(name: &str) -> bool {
+    name.len() > 0 && name.bytes().all(is_tchar)
+}
+
+#[inline]
+fn is_tchar(b: u8) -> bool {
+    match b {
+        b'!' | b'#' | b'$' | b'%' | b'&' | b'\'' | b'*' | b'+' | b'-' | b'.' | b'^' | b'_'
+        | b'`' | b'|' | b'~' | b'A' | b'B' | b'C' | b'D' | b'E' | b'F' | b'G' | b'H' | b'I'
+        | b'J' | b'K' | b'L' | b'M' | b'N' | b'O' | b'P' | b'Q' | b'R' | b'S' | b'T' | b'U'
+        | b'V' | b'W' | b'X' | b'Y' | b'Z' | b'a' | b'b' | b'c' | b'd' | b'e' | b'f' | b'g'
+        | b'h' | b'i' | b'j' | b'k' | b'l' | b'm' | b'n' | b'o' | b'p' | b'q' | b'r' | b's'
+        | b't' | b'u' | b'v' | b'w' | b'x' | b'y' | b'z' | b'0' | b'1' | b'2' | b'3' | b'4'
+        | b'5' | b'6' | b'7' | b'8' | b'9' => true,
+        _ => false,
+    }
+}
+
 impl FromStr for Header {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -94,16 +126,43 @@ impl FromStr for Header {
             return Err(Error::BadHeader);
         }
 
-        // https://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.2
-        // The field value MAY be preceded by any amount of LWS, though a single SP is preferred.
-        let value_from = &s[index..];
-        let voff = match value_from.find(|c: char| !c.is_whitespace()) {
-            Some(n) => n,
-            None => 0,
-        };
-
-        let index = index + voff;
+        if !valid_name(&line[0..index]) {
+            return Err(Error::BadHeader);
+        }
 
         Ok(Header { line, index })
     }
+}
+
+#[test]
+fn test_valid_name() {
+    assert!(valid_name("example"));
+    assert!(valid_name("Content-Type"));
+    assert!(valid_name("h-123456789"));
+    assert!(!valid_name("Content-Type:"));
+    assert!(!valid_name("Content-Type "));
+    assert!(!valid_name(" some-header"));
+    assert!(!valid_name("\"invalid\""));
+    assert!(!valid_name("Gödel"));
+}
+
+#[test]
+fn test_parse_invalid_name() {
+    let h = "Content-Type   :".parse::<Header>();
+    match h {
+        Err(Error::BadHeader) => {}
+        h => assert!(false, "expected BadHeader error, got {:?}", h),
+    }
+}
+
+#[test]
+fn empty_value() {
+    let h = "foo:".parse::<Header>().unwrap();
+    assert_eq!(h.value(), "");
+}
+
+#[test]
+fn value_with_whitespace() {
+    let h = "foo:      bar    ".parse::<Header>().unwrap();
+    assert_eq!(h.value(), "bar");
 }
