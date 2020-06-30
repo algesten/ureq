@@ -1,5 +1,5 @@
 use crate::test;
-use crate::test::testserver::*;
+use crate::test::testserver::{read_headers, TestServer};
 use std::io::{self, Write};
 use std::net::TcpStream;
 use std::time::Duration;

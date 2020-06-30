@@ -13,11 +13,7 @@ pub struct TestServer {
 // request headers.
 pub fn read_headers(stream: &TcpStream) {
     for line in BufReader::new(stream).lines() {
-        let line = match line {
-            Ok(x) => x,
-            Err(_) => return,
-        };
-        if line == "" {
+        if line.unwrap() == "" {
             break;
         }
     }
@@ -29,14 +25,14 @@ impl TestServer {
         let port = listener.local_addr().unwrap().port();
         let done = Arc::new(AtomicBool::new(false));
         let done_clone = done.clone();
-        let handle = thread::spawn(move || {
+        thread::spawn(move || {
             for stream in listener.incoming() {
                 thread::spawn(move || handler(stream.unwrap()));
                 if done.load(Ordering::Relaxed) {
                     break;
                 }
             }
-            println!("tesserver on {} exiting", port);
+            println!("testserver on {} exiting", port);
         });
         TestServer {
             port,
