@@ -1,6 +1,7 @@
 use crate::test;
-use std::io::{BufRead, BufReader, Read, Write};
-use std::thread;
+use crate::test::testserver::{read_headers, TestServer};
+use std::io::{self, Write};
+use std::net::TcpStream;
 use std::time::Duration;
 
 use super::super::*;
@@ -56,47 +57,25 @@ fn agent_cookies() {
     agent.get("test://host/agent_cookies").call();
 }
 
-// Start a test server on an available port, that times out idle connections at 2 seconds.
-// Return the port this server is listening on.
-fn start_idle_timeout_server() -> u16 {
-    let listener = std::net::TcpListener::bind("localhost:0").unwrap();
-    let port = listener.local_addr().unwrap().port();
-    thread::spawn(move || {
-        for stream in listener.incoming() {
-            thread::spawn(move || {
-                let stream = stream.unwrap();
-                stream
-                    .set_read_timeout(Some(Duration::from_secs(2)))
-                    .unwrap();
-                let mut write_stream = stream.try_clone().unwrap();
-                for line in BufReader::new(stream).lines() {
-                    let line = match line {
-                        Ok(x) => x,
-                        Err(_) => return,
-                    };
-                    if line == "" {
-                        write_stream
-                            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 8\r\n\r\nresponse")
-                            .unwrap();
-                    }
-                }
-            });
-        }
-    });
-    port
+// Handler that answers with a simple HTTP response, and times
+// out idle connections after 2 seconds.
+fn idle_timeout_handler(mut stream: TcpStream) -> io::Result<()> {
+    read_headers(&stream);
+    stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 8\r\n\r\nresponse")?;
+    stream.set_read_timeout(Some(Duration::from_secs(2)))?;
+    Ok(())
 }
 
 #[test]
 fn connection_reuse() {
-    let port = start_idle_timeout_server();
-    let url = format!("http://localhost:{}", port);
+    let testserver = TestServer::new(idle_timeout_handler);
+    let url = format!("http://localhost:{}", testserver.port);
     let agent = Agent::default().build();
     let resp = agent.get(&url).call();
 
     // use up the connection so it gets returned to the pool
     assert_eq!(resp.status(), 200);
-    let mut buf = vec![];
-    resp.into_reader().read_to_end(&mut buf).unwrap();
+    resp.into_string().unwrap();
 
     {
         let mut guard_state = agent.state.lock().unwrap();
