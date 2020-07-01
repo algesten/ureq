@@ -31,4 +31,4 @@ jobs:
         with:
           command: doc
           # Keep in sync with Cargo.toml's [package.metadata.docs.rs]
-          args: --no-default-features --features "tls json charset cookies socks-proxy"
+          args: --no-default-features --no-deps --features "tls json charset cookies socks-proxy"
