@@ -116,15 +116,15 @@ impl Unit {
     }
 
     #[cfg(test)]
-    pub fn header<'a>(&self, name: &'a str) -> Option<&str> {
+    pub fn header(&self, name: &str) -> Option<&str> {
         header::get_header(&self.headers, name)
     }
     #[cfg(test)]
-    pub fn has<'a>(&self, name: &'a str) -> bool {
+    pub fn has(&self, name: &str) -> bool {
         header::has_header(&self.headers, name)
     }
     #[cfg(test)]
-    pub fn all<'a>(&self, name: &'a str) -> Vec<&str> {
+    pub fn all(&self, name: &str) -> Vec<&str> {
         header::get_all_headers(&self.headers, name)
     }
 }
@@ -250,7 +250,7 @@ fn extract_cookies(_state: &std::sync::Mutex<Option<AgentState>>, _url: &Url) ->
 
 // TODO check so cookies can't be set for tld:s
 #[cfg(feature = "cookie")]
-fn match_cookies<'a>(jar: &'a CookieJar, domain: &str, path: &str, is_secure: bool) -> Vec<Header> {
+fn match_cookies(jar: &CookieJar, domain: &str, path: &str, is_secure: bool) -> Vec<Header> {
     jar.iter()
         .filter(|c| {
             // if there is a domain, it must be matched.

@@ -122,7 +122,7 @@ impl Response {
     }
 
     /// The header corresponding header value for the give name, if any.
-    pub fn header<'a>(&self, name: &'a str) -> Option<&str> {
+    pub fn header(&self, name: &str) -> Option<&str> {
         self.headers
             .iter()
             .find(|h| h.is_name(name))
@@ -139,12 +139,12 @@ impl Response {
     }
 
     /// Tells if the response has the named header.
-    pub fn has<'a>(&self, name: &'a str) -> bool {
+    pub fn has(&self, name: &str) -> bool {
         self.header(name).is_some()
     }
 
     /// All headers corresponding values for the give name, or empty vector.
-    pub fn all<'a>(&self, name: &'a str) -> Vec<&str> {
+    pub fn all(&self, name: &str) -> Vec<&str> {
         self.headers
             .iter()
             .filter(|h| h.is_name(name))
