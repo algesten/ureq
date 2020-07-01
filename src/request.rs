@@ -39,7 +39,7 @@ pub struct Request {
 
     // via agent
     pub(crate) method: String,
-    path: String,
+    url: String,
 
     // from request itself
     pub(crate) headers: Vec<Header>,
@@ -72,11 +72,11 @@ impl ::std::fmt::Debug for Request {
 }
 
 impl Request {
-    pub(crate) fn new(agent: &Agent, method: String, path: String) -> Request {
+    pub(crate) fn new(agent: &Agent, method: String, url: String) -> Request {
         Request {
             agent: Arc::clone(&agent.state),
             method,
-            path,
+            url,
             headers: agent.headers.clone(),
             redirects: 5,
             ..Default::default()
@@ -512,7 +512,7 @@ impl Request {
     /// assert_eq!(req.get_url(), "https://cool.server/innit");
     /// ```
     pub fn get_url(&self) -> &str {
-        &self.path
+        &self.url
     }
 
     /// Normalizes and returns the host that will be used for this request.
@@ -558,7 +558,7 @@ impl Request {
             .map(|u| unit::combine_query(&u, &self.query, true))
     }
 
-    /// The normalized path of this request.
+    /// The normalized url of this request.
     ///
     /// Example:
     /// ```
@@ -572,7 +572,7 @@ impl Request {
 
     fn to_url(&self) -> Result<Url, Error> {
         URL_BASE
-            .join(&self.path)
+            .join(&self.url)
             .map_err(|e| Error::BadUrl(format!("{}", e)))
     }
 
