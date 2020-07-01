@@ -260,7 +260,7 @@ impl Request {
     ///     .build();
     /// assert_eq!("foobar", req.header("x-api-Key").unwrap());
     /// ```
-    pub fn header<'a>(&self, name: &'a str) -> Option<&str> {
+    pub fn header(&self, name: &str) -> Option<&str> {
         header::get_header(&self.headers, name)
     }
 
@@ -288,7 +288,7 @@ impl Request {
     ///     .build();
     /// assert_eq!(true, req.has("x-api-Key"));
     /// ```
-    pub fn has<'a>(&self, name: &'a str) -> bool {
+    pub fn has(&self, name: &str) -> bool {
         header::has_header(&self.headers, name)
     }
 
@@ -304,7 +304,7 @@ impl Request {
     ///     "2.3.4.5",
     /// ]);
     /// ```
-    pub fn all<'a>(&self, name: &'a str) -> Vec<&str> {
+    pub fn all(&self, name: &str) -> Vec<&str> {
         header::get_all_headers(&self.headers, name)
     }
 
