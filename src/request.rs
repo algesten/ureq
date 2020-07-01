@@ -523,7 +523,7 @@ impl Request {
     ///     .build();
     /// assert_eq!(req1.get_host().unwrap(), "cool.server");
     ///
-    /// let req2 = ureq::post("/some/url")
+    /// let req2 = ureq::post("/some/path")
     ///     .build();
     /// assert_eq!(req2.get_host().unwrap(), "localhost");
     /// ```
