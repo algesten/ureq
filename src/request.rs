@@ -2,7 +2,6 @@ use std::io::Read;
 use std::sync::{Arc, Mutex};
 use std::time;
 
-use lazy_static::lazy_static;
 use qstring::QString;
 use url::{form_urlencoded, Url};
 
@@ -19,10 +18,6 @@ use crate::Response;
 
 #[cfg(feature = "json")]
 use super::SerdeValue;
-
-lazy_static! {
-    static ref URL_BASE: Url = Url::parse("http://localhost/").expect("Failed to parse URL_BASE");
-}
 
 /// Request instances are builders that creates a request.
 ///
@@ -571,9 +566,7 @@ impl Request {
     }
 
     fn to_url(&self) -> Result<Url, Error> {
-        URL_BASE
-            .join(&self.url)
-            .map_err(|e| Error::BadUrl(format!("{}", e)))
+        Url::parse(&self.url).map_err(|e| Error::BadUrl(format!("{}", e)))
     }
 
     /// Set the proxy server to use for the connection.
