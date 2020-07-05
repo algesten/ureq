@@ -631,6 +631,15 @@ impl<R: Read> Read for LimitedRead<R> {
             buf
         };
         match self.reader.read(from) {
+            // https://tools.ietf.org/html/rfc7230#page-33
+            // If the sender closes the connection or
+            // the recipient times out before the indicated number of octets are
+            // received, the recipient MUST consider the message to be
+            // incomplete and close the connection.
+            Ok(0) => Err(IoError::new(
+                ErrorKind::InvalidData,
+                "response body closed before all bytes were read",
+            )),
             Ok(amount) => {
                 self.position += amount;
                 Ok(amount)
@@ -638,6 +647,15 @@ impl<R: Read> Read for LimitedRead<R> {
             Err(e) => Err(e),
         }
     }
+}
+
+#[test]
+fn short_read() {
+    use std::io::Cursor;
+    let mut lr = LimitedRead::new(Cursor::new(vec![b'a'; 3]), 10);
+    let mut buf = vec![0; 1000];
+    let result = lr.read_to_end(&mut buf);
+    assert!(result.is_err());
 }
 
 impl<R: Read> From<LimitedRead<R>> for Stream
