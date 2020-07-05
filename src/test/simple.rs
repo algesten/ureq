@@ -122,7 +122,7 @@ fn escape_path() {
 
 #[test]
 fn request_debug() {
-    let req = get("/my/page")
+    let req = get("http://localhost/my/page")
         .set("Authorization", "abcdef")
         .set("Content-Length", "1234")
         .set("Content-Type", "application/json")
@@ -136,7 +136,7 @@ fn request_debug() {
          Content-Length: 1234, Content-Type: application/json])"
     );
 
-    let req = get("/my/page?q=z")
+    let req = get("http://localhost/my/page?q=z")
         .query("foo", "bar baz")
         .set("Authorization", "abcdef")
         .build();
