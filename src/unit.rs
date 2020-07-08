@@ -301,7 +301,7 @@ fn connect_socket(unit: &Unit, use_pooled: bool) -> Result<(Stream, bool), Error
             // The connection may have been closed by the server
             // due to idle timeout while it was sitting in the pool.
             // Loop until we find one that is still good or run out of connections.
-            while let Some(stream) = agent.pool.try_get_connection(&unit.url) {
+            while let Some(stream) = agent.pool.try_get_connection(&unit.url, &unit.proxy) {
                 let server_closed = stream.server_closed()?;
                 if !server_closed {
                     return Ok((stream, true));
