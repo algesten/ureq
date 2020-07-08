@@ -1,14 +1,14 @@
 use crate::error::Error;
 
 /// Proxy protocol
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Proto {
     HTTPConnect,
     SOCKS5,
 }
 
 /// Proxy server definition
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Proxy {
     pub(crate) server: String,
     pub(crate) port: u32,
