@@ -136,30 +136,59 @@ pub(crate) fn connect(
     use_pooled: bool,
     redirect_count: u32,
     body: SizedReader,
-    redir: bool,
+    is_redir: bool,
 ) -> Result<Response, Error> {
-    //
+    let (mut stream, is_recycled) = connect_and_send_prelude(&unit, use_pooled, is_redir)?;
 
+    // send the body (which can be empty now depending on redirects)
+    let retryable = req.is_retryable(&body);
+    body::send_body(body, unit.is_chunked, &mut stream)?;
+
+    let should_retry = retryable && is_recycled;
+
+    handle_response(
+        req,
+        unit,
+        use_pooled,
+        should_retry,
+        stream,
+        redirect_count,
+        is_redir,
+    )
+}
+
+pub(crate) fn connect_and_send_prelude(
+    unit: &Unit,
+    use_pooled: bool,
+    redir: bool,
+) -> Result<(Stream, bool), Error> {
     // open socket
-    let (mut stream, is_recycled) = connect_socket(&unit, use_pooled)?;
+    let (mut stream, is_recycled) = connect_socket(unit, use_pooled)?;
 
-    let send_result = send_prelude(&unit, &mut stream, redir);
+    let send_result = send_prelude(unit, &mut stream, redir);
 
     if let Err(err) = send_result {
         if is_recycled {
             // we try open a new connection, this time there will be
             // no connection in the pool. don't use it.
-            return connect(req, unit, false, redirect_count, body, redir);
+            return connect_and_send_prelude(unit, false, redir);
         } else {
             // not a pooled connection, propagate the error.
             return Err(err.into());
         }
     }
-    let retryable = req.is_retryable(&body);
+    Ok((stream, is_recycled))
+}
 
-    // send the body (which can be empty now depending on redirects)
-    body::send_body(body, unit.is_chunked, &mut stream)?;
-
+pub(crate) fn handle_response(
+    req: &Request,
+    unit: Unit,
+    use_pooled: bool,
+    should_retry: bool,
+    stream: Stream,
+    redirect_count: u32,
+    is_redir: bool,
+) -> Result<Response, Error> {
     // start reading the response to process cookies and redirects.
     let mut stream = stream::DeadlineStream::new(stream, unit.deadline);
     let mut resp = Response::from_read(&mut stream);
@@ -178,9 +207,9 @@ pub(crate) fn connect(
     // first line. It's also allowable to retry requests that hit a
     // closed connection during the sending or receiving of headers.
     if let Some(err) = resp.synthetic_error() {
-        if err.is_bad_status_read() && retryable && is_recycled {
+        if err.is_bad_status_read() && should_retry {
             let empty = Payload::Empty.into_read();
-            return connect(req, unit, false, redirect_count, empty, redir);
+            return connect(req, unit, false, redirect_count, empty, is_redir);
         }
     }
 
