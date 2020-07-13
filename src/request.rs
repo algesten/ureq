@@ -1,3 +1,4 @@
+use crate::write::RequestWrite;
 use std::io::Read;
 use std::sync::{Arc, Mutex};
 use std::time;
@@ -110,7 +111,7 @@ impl Request {
         self.to_url()
             .and_then(|url| {
                 let reader = payload.into_read();
-                let unit = Unit::new(&self, &url, true, &reader);
+                let unit = Unit::new(&self, &url, true, reader.size);
                 unit::connect(&self, unit, true, 0, reader, false)
             })
             .unwrap_or_else(|e| e.into())
@@ -226,6 +227,29 @@ impl Request {
     /// ```
     pub fn send(&mut self, reader: impl Read + 'static) -> Response {
         self.do_call(Payload::Reader(Box::new(reader)))
+    }
+
+    /// Send data via a writer.
+    ///
+    /// The `Content-Length` header is not set because we can't know the length that will be written.
+    ///
+    /// ```
+    /// use std::io::Write;
+    ///
+    /// let text = b"Hello there!\n";
+    ///
+    /// let mut body = ureq::post("http://example.com/somewhere")
+    ///     .into_write().unwrap();
+    ///
+    ///  body.write(text);
+    ///
+    ///  let resp = body.finish();
+    /// ```
+    pub fn into_write(self) -> Result<RequestWrite, Error> {
+        self.to_url().and_then(|url| {
+            let unit = Unit::new(&self, &url, true, None);
+            RequestWrite::new(unit)
+        })
     }
 
     /// Set a header field.

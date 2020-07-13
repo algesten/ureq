@@ -108,7 +108,11 @@ const CHUNK_MAX_PAYLOAD_SIZE: usize = CHUNK_MAX_SIZE - CHUNK_HEADER_MAX_SIZE - C
 // 2) chunked_transfer's Encoder issues 4 separate write() per chunk. This is costly
 //    overhead. Instead, we do a single write() per chunk.
 // The measured benefit on a Linux machine is a 50% reduction in CPU usage on a https connection.
-fn copy_chunked<R: Read, W: Write>(reader: &mut R, writer: &mut W) -> IoResult<u64> {
+pub(crate) fn copy_chunked<R: Read, W: Write>(
+    reader: &mut R,
+    writer: &mut W,
+    write_eof: bool,
+) -> IoResult<u64> {
     // The chunk layout is:
     // header:header_max_size | payload:max_payload_size | footer:footer_size
     let mut chunk = Vec::with_capacity(CHUNK_MAX_SIZE);
@@ -131,7 +135,9 @@ fn copy_chunked<R: Read, W: Write>(reader: &mut R, writer: &mut W) -> IoResult<u
         chunk.extend_from_slice(b"\r\n");
 
         // Finally Write the chunk
-        writer.write_all(&chunk[start_index..])?;
+        if payload_size != 0 || write_eof {
+            writer.write_all(&chunk[start_index..])?;
+        }
         written += payload_size as u64;
 
         // On EOF, we wrote a 0 sized chunk. This is what the chunked encoding protocol requires.
@@ -148,7 +154,7 @@ fn test_copy_chunked() {
     source.extend_from_slice(b"hello world");
 
     let mut dest = Vec::<u8>::new();
-    copy_chunked(&mut &source[..], &mut dest).unwrap();
+    copy_chunked(&mut &source[..], &mut dest, true).unwrap();
 
     let mut dest_expected = Vec::<u8>::new();
     dest_expected.extend_from_slice(format!("{:x}\r\n", CHUNK_MAX_PAYLOAD_SIZE).as_bytes());
@@ -168,7 +174,7 @@ pub(crate) fn send_body(
     stream: &mut Stream,
 ) -> IoResult<()> {
     if do_chunk {
-        copy_chunked(&mut body.reader, stream)?;
+        copy_chunked(&mut body.reader, stream, true)?;
     } else {
         copy(&mut body.reader, stream)?;
     };

@@ -128,6 +128,7 @@ mod request;
 mod response;
 mod stream;
 mod unit;
+mod write;
 
 #[cfg(feature = "json")]
 mod serde_macros;
@@ -141,6 +142,7 @@ pub use crate::header::Header;
 pub use crate::proxy::Proxy;
 pub use crate::request::Request;
 pub use crate::response::Response;
+pub use crate::write::RequestWrite;
 
 // re-export
 #[cfg(feature = "cookie")]

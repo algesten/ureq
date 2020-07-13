@@ -44,7 +44,12 @@ pub(crate) struct Unit {
 impl Unit {
     //
 
-    pub(crate) fn new(req: &Request, url: &Url, mix_queries: bool, body: &SizedReader) -> Self {
+    pub(crate) fn new(
+        req: &Request,
+        url: &Url,
+        mix_queries: bool,
+        body_size: Option<usize>,
+    ) -> Self {
         //
 
         let is_chunked = req
@@ -64,7 +69,7 @@ impl Unit {
             // chunking and Content-Length headers are mutually exclusive
             // also don't write this if the user has set it themselves
             if !is_chunked && !req.has("content-length") {
-                if let Some(size) = body.size {
+                if let Some(size) = body_size {
                     extra.push(Header::new("Content-Length", &format!("{}", size)));
                 }
             }
@@ -236,7 +241,7 @@ pub(crate) fn handle_response(
                 301 | 302 | 303 => {
                     let empty = Payload::Empty.into_read();
                     // recreate the unit to get a new hostname and cookies for the new host.
-                    let mut new_unit = Unit::new(req, &new_url, false, &empty);
+                    let mut new_unit = Unit::new(req, &new_url, false, None);
                     // this is to follow how curl does it. POST, PUT etc change
                     // to GET on a redirect.
                     new_unit.method = match &unit.method[..] {
@@ -409,11 +414,11 @@ fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> IoResult<()> {
 }
 
 #[cfg(not(feature = "cookie"))]
-fn save_cookies(_unit: &Unit, _resp: &Response) {}
+pub(crate) fn save_cookies(_unit: &Unit, _resp: &Response) {}
 
 /// Investigate a response for "Set-Cookie" headers.
 #[cfg(feature = "cookie")]
-fn save_cookies(unit: &Unit, resp: &Response) {
+pub(crate) fn save_cookies(unit: &Unit, resp: &Response) {
     //
 
     let cookies = resp.all("set-cookie");
