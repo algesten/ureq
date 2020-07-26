@@ -599,6 +599,34 @@ impl Request {
         self
     }
 
+    /// Creates new TLS client config, with disabled certification validation
+    ///
+    /// # Warning
+    ///
+    /// You should think very carefully before using this method. If
+    /// invalid certificates are trusted, *any* certificate for *any* site
+    /// will be trusted for use. This includes expired certificates. This
+    /// introduces significant vulnerabilities, and should only be used
+    /// as a last resort.
+    #[cfg(feature = "tls")]
+    pub fn danger_accept_invalid_certs(&mut self) -> &mut Request {
+        // New TLS client config, because the old one is not editable (stucked in Arc)
+        let mut tls_config = rustls::ClientConfig::new();
+
+        // Take a certificate verifier which is not checking the certificate
+        let arc_no_verifier = std::sync::Arc::new(NoServerCertVerifier {});
+
+        // Set the verifier in the tls config
+        tls_config
+            .dangerous()
+            .set_certificate_verifier(arc_no_verifier);
+
+        // set the new TLS config to the request struct
+        self.tls_config = Some(TLSClientConfig(std::sync::Arc::new(tls_config)));
+
+        self
+    }
+
     // Returns true if this request, with the provided body, is retryable.
     pub(crate) fn is_retryable(&self, body: &SizedReader) -> bool {
         // Per https://tools.ietf.org/html/rfc7231#section-8.1.3
@@ -624,5 +652,24 @@ pub(crate) struct TLSClientConfig(pub(crate) Arc<rustls::ClientConfig>);
 impl fmt::Debug for TLSClientConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("TLSClientConfig").finish()
+    }
+}
+
+/// Struct to implement the Server Certification on which is
+/// not checking for the certification
+#[cfg(feature = "tls")]
+struct NoServerCertVerifier();
+
+#[cfg(feature = "tls")]
+impl rustls::ServerCertVerifier for NoServerCertVerifier {
+    /// Will not verify the certificate at all
+    fn verify_server_cert(
+        &self,
+        _roots: &rustls::RootCertStore,
+        _presented_certs: &[rustls::Certificate],
+        _dns_name: webpki::DNSNameRef,
+        _ocsp_response: &[u8],
+    ) -> Result<rustls::ServerCertVerified, rustls::TLSError> {
+        Ok(rustls::ServerCertVerified::assertion())
     }
 }

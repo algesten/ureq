@@ -209,3 +209,14 @@ pub fn host_with_port() {
     let s = String::from_utf8_lossy(&vec);
     assert!(s.contains("\r\nHost: myhost:234\r\n"));
 }
+
+#[cfg(feature = "tls")]
+#[test]
+pub fn danger_accept_invalid_certs() {
+    // Without .danger_accept_invalid_certs() we get an 500 error
+    let resp = get("https://self-signed.badssl.com/")
+        .danger_accept_invalid_certs()
+        .call();
+
+    assert_eq!(resp.status(), 200);
+}
