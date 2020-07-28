@@ -8,6 +8,9 @@ use url::{form_urlencoded, Url};
 #[cfg(feature = "tls")]
 use std::fmt;
 
+#[cfg(all(feature = "native-tls", not(feature = "tls")))]
+use std::fmt;
+
 use crate::agent::{self, Agent, AgentState};
 use crate::body::{Payload, SizedReader};
 use crate::error::Error;
@@ -47,6 +50,8 @@ pub struct Request {
     pub(crate) proxy: Option<crate::proxy::Proxy>,
     #[cfg(feature = "tls")]
     pub(crate) tls_config: Option<TLSClientConfig>,
+    #[cfg(all(feature = "native-tls", not(feature = "tls")))]
+    pub(crate) tls_connector: Option<TLSConnector>,
 }
 
 impl ::std::fmt::Debug for Request {
@@ -599,6 +604,20 @@ impl Request {
         self
     }
 
+    /// Sets the TLS connector that will be used for the connection.
+    ///
+    /// Example:
+    /// ```
+    /// let tls_connector = std::sync::Arc::new(native_tls::TlsConnector::new());
+    /// let req = ureq::post("https://cool.server")
+    ///     .set_tls_connector(tls_connector.clone());
+    /// ```
+    #[cfg(all(feature = "native-tls", not(feature = "tls")))]
+    pub fn set_tls_connector(&mut self, tls_connector: Arc<native_tls::TlsConnector>) -> &mut Request {
+        self.tls_connector = Some(TLSConnector(tls_connector));
+        self
+    }
+
     // Returns true if this request, with the provided body, is retryable.
     pub(crate) fn is_retryable(&self, body: &SizedReader) -> bool {
         // Per https://tools.ietf.org/html/rfc7231#section-8.1.3
@@ -624,5 +643,16 @@ pub(crate) struct TLSClientConfig(pub(crate) Arc<rustls::ClientConfig>);
 impl fmt::Debug for TLSClientConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("TLSClientConfig").finish()
+    }
+}
+
+#[cfg(all(feature = "native-tls", not(feature = "tls")))]
+#[derive(Clone)]
+pub(crate) struct TLSConnector(pub(crate) Arc<native_tls::TlsConnector>);
+
+#[cfg(all(feature = "native-tls", not(feature = "tls")))]
+impl fmt::Debug for TLSConnector {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TLSConnector").finish()
     }
 }

@@ -15,7 +15,7 @@ use rustls::StreamOwned;
 use socks::{TargetAddr, ToTargetAddr};
 
 #[cfg(feature = "native-tls")]
-use native_tls::{HandshakeError, TlsConnector, TlsStream};
+use native_tls::{HandshakeError, TlsStream};
 
 use crate::proxy::Proto;
 use crate::proxy::Proxy;
@@ -311,15 +311,22 @@ pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
 
 #[cfg(all(feature = "native-tls", not(feature = "tls")))]
 pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
+    use std::sync::Arc;
+
     let hostname = unit.url.host_str().unwrap();
     let port = unit.url.port().unwrap_or(443);
     let sock = connect_host(unit, hostname, port)?;
 
-    let tls_connector = TlsConnector::new().map_err(|e| Error::TlsError(e))?;
-    let stream = tls_connector.connect(&hostname.trim_matches(|c| c == '[' || c == ']'), sock).map_err(|e| match e {
-        HandshakeError::Failure(err) => Error::TlsError(err),
-        _ => Error::BadStatusRead,
-    })?;
+    let tls_connector: Arc<native_tls::TlsConnector> = match &unit.tls_connector {
+        Some(connector) => connector.0.clone(),
+        None => Arc::new(native_tls::TlsConnector::new().map_err(|e| Error::TlsError(e))?),
+    };
+    let stream = tls_connector
+        .connect(&hostname.trim_matches(|c| c == '[' || c == ']'), sock)
+        .map_err(|e| match e {
+            HandshakeError::Failure(err) => Error::TlsError(err),
+            _ => Error::BadStatusRead,
+        })?;
 
     Ok(Stream::Https(stream))
 }
