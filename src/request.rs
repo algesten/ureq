@@ -51,7 +51,7 @@ pub struct Request {
     #[cfg(feature = "tls")]
     pub(crate) tls_config: Option<TLSClientConfig>,
     #[cfg(all(feature = "native-tls", not(feature = "tls")))]
-    pub(crate) tls_builder: Option<TLSBuilder>,
+    pub(crate) tls_connector: Option<TLSConnector>,
 }
 
 impl ::std::fmt::Debug for Request {
@@ -604,17 +604,17 @@ impl Request {
         self
     }
 
-    /// Sets the TLS connection builder that will be used for the connection.
+    /// Sets the TLS connector that will be used for the connection.
     ///
     /// Example:
     /// ```
-    /// let tls_builder = std::sync::Arc::new(native_tls::TlsConnector::builder());
+    /// let tls_connector = std::sync::Arc::new(native_tls::TlsConnector::new());
     /// let req = ureq::post("https://cool.server")
-    ///     .set_tls_builder(tls_builder.clone());
+    ///     .set_tls_connector(tls_connector.clone());
     /// ```
     #[cfg(all(feature = "native-tls", not(feature = "tls")))]
-    pub fn set_tls_builder(&mut self, tls_builder: Arc<native_tls::TlsConnectorBuilder>) -> &mut Request {
-        self.tls_builder = Some(TLSBuilder(tls_builder));
+    pub fn set_tls_connector(&mut self, tls_connector: Arc<native_tls::TlsConnector>) -> &mut Request {
+        self.tls_connector = Some(TLSConnector(tls_connector));
         self
     }
 
@@ -648,11 +648,11 @@ impl fmt::Debug for TLSClientConfig {
 
 #[cfg(all(feature = "native-tls", not(feature = "tls")))]
 #[derive(Clone)]
-pub(crate) struct TLSBuilder(pub(crate) Arc<native_tls::TlsConnectorBuilder>);
+pub(crate) struct TLSConnector(pub(crate) Arc<native_tls::TlsConnector>);
 
 #[cfg(all(feature = "native-tls", not(feature = "tls")))]
-impl fmt::Debug for TLSBuilder {
+impl fmt::Debug for TLSConnector {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("TLSBuilder").finish()
+        f.debug_struct("TLSConnector").finish()
     }
 }

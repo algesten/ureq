@@ -19,7 +19,7 @@ use crate::{Error, Header, Request, Response};
 use crate::request::TLSClientConfig;
 
 #[cfg(all(feature = "native-tls", not(feature = "tls")))]
-use crate::request::TLSBuilder;
+use crate::request::TLSConnector;
 
 #[cfg(feature = "cookie")]
 use crate::pool::DEFAULT_HOST;
@@ -43,7 +43,7 @@ pub(crate) struct Unit {
     #[cfg(feature = "tls")]
     pub tls_config: Option<TLSClientConfig>,
     #[cfg(all(feature = "native-tls", not(feature = "tls")))]
-    pub tls_builder: Option<TLSBuilder>,
+    pub tls_connector: Option<TLSConnector>,
 }
 
 impl Unit {
@@ -114,7 +114,7 @@ impl Unit {
             #[cfg(feature = "tls")]
             tls_config: req.tls_config.clone(),
             #[cfg(all(feature = "native-tls", not(feature = "tls")))]
-            tls_builder: req.tls_builder.clone(),
+            tls_connector: req.tls_connector.clone(),
         }
     }
 
