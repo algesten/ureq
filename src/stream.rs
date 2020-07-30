@@ -79,7 +79,7 @@ impl Read for DeadlineStream {
             // Since the socket most definitely not set_nonblocking(true),
             // we can safely normalize WouldBlock to TimedOut
             if e.kind() == ErrorKind::WouldBlock {
-                return io_error_timeout();
+                return io_err_timeout("timed out reading response".to_string());
             }
             e
         })
@@ -91,13 +91,13 @@ impl Read for DeadlineStream {
 fn time_until_deadline(deadline: Instant) -> IoResult<Duration> {
     let now = Instant::now();
     match deadline.checked_duration_since(now) {
-        None => Err(io_error_timeout()),
+        None => Err(io_err_timeout("timed out reading response".to_string())),
         Some(duration) => Ok(duration),
     }
 }
 
-fn io_error_timeout() -> IoError {
-    IoError::new(ErrorKind::TimedOut, "timed out reading response")
+pub(crate) fn io_err_timeout(error: String) -> IoError {
+    IoError::new(ErrorKind::TimedOut, error)
 }
 
 impl ::std::fmt::Debug for Stream {
@@ -541,20 +541,17 @@ fn connect_socks5(
         let done = lock.lock().unwrap();
 
         let timeout_connect = time_until_deadline(deadline)?;
-        let done_result = cvar
-            .wait_timeout(done, timeout_connect)
-            .unwrap();
+        let done_result = cvar.wait_timeout(done, timeout_connect).unwrap();
         let done = done_result.0;
         if *done {
             rx.recv().unwrap()?
         } else {
-            return Err(std::io::Error::new(
-                ErrorKind::TimedOut,
-                format!(
-                    "SOCKS5 proxy: {}:{} timed out connecting after {}ms.",
-                    host, port, timeout_connect.as_millis()
-                ),
-            ));
+            return Err(io_err_timeout(format!(
+                "SOCKS5 proxy: {}:{} timed out connecting after {}ms.",
+                host,
+                port,
+                timeout_connect.as_millis()
+            )));
         }
     } else {
         get_socks5_stream(&proxy, &proxy_addr, host_addr)?
