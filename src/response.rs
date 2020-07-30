@@ -400,8 +400,20 @@ impl Response {
     /// ```
     #[cfg(feature = "json")]
     pub fn into_json(self) -> IoResult<serde_json::Value> {
+        use crate::stream::io_err_timeout;
+        use std::error::Error;
+
         let reader = self.into_reader();
         serde_json::from_reader(reader).map_err(|e| {
+            // This is to unify TimedOut IoError in the API.
+            // We make a clone of the original error since serde_json::Error doesn't
+            // let us get the wrapped error instance back.
+            if let Some(ioe) = e.source().and_then(|s| s.downcast_ref::<IoError>()) {
+                if ioe.kind() == ErrorKind::TimedOut {
+                    return io_err_timeout(ioe.to_string());
+                }
+            }
+
             IoError::new(
                 ErrorKind::InvalidData,
                 format!("Failed to read JSON: {}", e),
