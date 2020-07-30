@@ -613,7 +613,10 @@ impl Request {
     ///     .set_tls_connector(tls_connector.clone());
     /// ```
     #[cfg(all(feature = "native-tls", not(feature = "tls")))]
-    pub fn set_tls_connector(&mut self, tls_connector: Arc<native_tls::TlsConnector>) -> &mut Request {
+    pub fn set_tls_connector(
+        &mut self,
+        tls_connector: Arc<native_tls::TlsConnector>,
+    ) -> &mut Request {
         self.tls_connector = Some(TLSConnector(tls_connector));
         self
     }
