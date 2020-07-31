@@ -8,9 +8,8 @@ use super::super::*;
 
 // Send an HTTP response on the TcpStream at a rate of two bytes every 10
 // milliseconds, for a total of 600 bytes.
-fn dribble_body_respond(mut stream: TcpStream) -> io::Result<()> {
+fn dribble_body_respond(mut stream: TcpStream, contents: &[u8]) -> io::Result<()> {
     read_headers(&stream);
-    let contents = [b'a'; 300];
     let headers = format!(
         "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n",
         contents.len() * 2
@@ -43,7 +42,7 @@ fn get_and_expect_timeout(url: String) {
 #[test]
 fn overall_timeout_during_body() {
     // Start a test server on an available port, that dribbles out a response at 1 write per 10ms.
-    let server = TestServer::new(dribble_body_respond);
+    let server = TestServer::new(|stream| dribble_body_respond(stream, &[b'a'; 300]));
     let url = format!("http://localhost:{}/", server.port);
     get_and_expect_timeout(url);
 }
@@ -66,4 +65,34 @@ fn overall_timeout_during_headers() {
     let server = TestServer::new(dribble_headers_respond);
     let url = format!("http://localhost:{}/", server.port);
     get_and_expect_timeout(url);
+}
+
+#[test]
+#[cfg(feature = "json")]
+fn overall_timeout_reading_json() {
+    // Start a test server on an available port, that dribbles out a response at 1 write per 10ms.
+    let server = TestServer::new(|stream| {
+        dribble_body_respond(
+            stream,
+            b"[1,1,1,1,1,1,1,1,1,1,1,1,1,
+        1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+        1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+        1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+        1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]",
+        )
+    });
+    let url = format!("http://localhost:{}/", server.port);
+
+    let agent = Agent::default().build();
+    let timeout = Duration::from_millis(500);
+    let resp = agent.get(&url).timeout(timeout).call();
+
+    match resp.into_json() {
+        Ok(_) => Err("successful response".to_string()),
+        Err(e) => match e.kind() {
+            io::ErrorKind::TimedOut => Ok(()),
+            _ => Err(format!("Unexpected io::ErrorKind: {:?}", e)),
+        },
+    }
+    .expect("expected timeout but got something else");
 }
