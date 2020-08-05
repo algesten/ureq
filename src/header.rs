@@ -1,7 +1,7 @@
 use crate::error::Error;
 use std::str::FromStr;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 /// Wrapper type for a header field.
 /// https://tools.ietf.org/html/rfc7230#section-3.2
 pub struct Header {
