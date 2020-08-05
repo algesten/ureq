@@ -9,14 +9,35 @@ pub struct TestServer {
     pub done: Arc<AtomicBool>,
 }
 
-// Read a stream until reaching a blank line, in order to consume
-// request headers.
-pub fn read_headers(stream: &TcpStream) {
-    for line in BufReader::new(stream).lines() {
-        if line.unwrap() == "" {
-            break;
+pub struct TestHeaders(Vec<String>);
+
+impl TestHeaders {
+    // Return the path for a request, e.g. /foo from "GET /foo HTTP/1.1"
+    pub fn path(&self) -> &str {
+        if self.0.len() == 0 {
+            ""
+        } else {
+            &self.0[0].split(" ").nth(1).unwrap()
         }
     }
+
+    pub fn headers(&self) -> &[String] {
+        &self.0[1..]
+    }
+}
+
+// Read a stream until reaching a blank line, in order to consume
+// request headers.
+pub fn read_headers(stream: &TcpStream) -> TestHeaders {
+    let mut results = vec![];
+    for line in BufReader::new(stream).lines() {
+        match line {
+            Err(e) => panic!(e),
+            Ok(line) if line == "" => break,
+            Ok(line) => results.push(line),
+        };
+    }
+    TestHeaders(results)
 }
 
 impl TestServer {
