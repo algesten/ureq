@@ -32,7 +32,6 @@ fn get_and_expect_timeout(url: String) {
 
     match resp.into_string() {
         Err(io_error) => match io_error.kind() {
-            io::ErrorKind::WouldBlock => Ok(()),
             io::ErrorKind::TimedOut => Ok(()),
             _ => Err(format!("{:?}", io_error)),
         },

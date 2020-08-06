@@ -73,7 +73,16 @@ impl Read for DeadlineStream {
                 socket.set_write_timeout(Some(timeout))?;
             }
         }
-        self.stream.read(buf)
+        self.stream.read(buf).map_err(|e| {
+            // On unix-y platforms set_read_timeout and set_write_timeout
+            // causes ErrorKind::WouldBlock instead of ErrorKind::TimedOut.
+            // Since the socket most definitely not set_nonblocking(true),
+            // we can safely normalize WouldBlock to TimedOut
+            if e.kind() == ErrorKind::WouldBlock {
+                return io_error_timeout();
+            }
+            e
+        })
     }
 }
 
@@ -82,12 +91,13 @@ impl Read for DeadlineStream {
 fn time_until_deadline(deadline: Instant) -> IoResult<Duration> {
     let now = Instant::now();
     match deadline.checked_duration_since(now) {
-        None => Err(IoError::new(
-            ErrorKind::TimedOut,
-            "timed out reading response",
-        )),
+        None => Err(io_error_timeout()),
         Some(duration) => Ok(duration),
     }
+}
+
+fn io_error_timeout() -> IoError {
+    IoError::new(ErrorKind::TimedOut, "timed out reading response")
 }
 
 impl ::std::fmt::Debug for Stream {
