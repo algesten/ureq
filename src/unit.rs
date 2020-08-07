@@ -61,7 +61,7 @@ impl Unit {
 
         let query_string = combine_query(&url, &req.query, mix_queries);
 
-        let cookie_headers: Vec<_> = extract_cookies(&req.agent, &url);
+        let cookie_header: Option<Header> = extract_cookies(&req.agent, &url);
 
         let extra_headers = {
             let mut extra = vec![];
@@ -86,7 +86,7 @@ impl Unit {
         let headers: Vec<_> = req
             .headers
             .iter()
-            .chain(cookie_headers.iter())
+            .chain(cookie_header.iter())
             .chain(extra_headers.iter())
             .cloned()
             .collect();
@@ -239,51 +239,56 @@ pub(crate) fn connect(
 }
 
 #[cfg(feature = "cookie")]
-fn extract_cookies(state: &std::sync::Mutex<Option<AgentState>>, url: &Url) -> Vec<Header> {
+fn extract_cookies(state: &std::sync::Mutex<Option<AgentState>>, url: &Url) -> Option<Header> {
     let state = state.lock().unwrap();
     let is_secure = url.scheme().eq_ignore_ascii_case("https");
     let hostname = url.host_str().unwrap_or(DEFAULT_HOST).to_string();
 
-    match state.as_ref().map(|state| &state.jar) {
-        None => vec![],
-        Some(jar) => match_cookies(jar, &hostname, url.path(), is_secure),
-    }
+    state
+        .as_ref()
+        .map(|state| &state.jar)
+        .and_then(|jar| match_cookies(jar, &hostname, url.path(), is_secure))
 }
 
 #[cfg(not(feature = "cookie"))]
-fn extract_cookies(_state: &std::sync::Mutex<Option<AgentState>>, _url: &Url) -> Vec<Header> {
-    vec![]
+fn extract_cookies(_state: &std::sync::Mutex<Option<AgentState>>, _url: &Url) -> Option<Header> {
+    None
 }
 
 // TODO check so cookies can't be set for tld:s
 #[cfg(feature = "cookie")]
-fn match_cookies(jar: &CookieJar, domain: &str, path: &str, is_secure: bool) -> Vec<Header> {
-    jar.iter()
-        .filter(|c| {
-            // if there is a domain, it must be matched.
-            // if there is no domain, then ignore cookie
-            let domain_ok = c
-                .domain()
-                .map(|cdom| domain.contains(cdom))
-                .unwrap_or(false);
-            // a path must match the beginning of request path.
-            // no cookie path, we say is ok. is it?!
-            let path_ok = c
-                .path()
-                .map(|cpath| path.find(cpath).map(|pos| pos == 0).unwrap_or(false))
-                .unwrap_or(true);
-            // either the cookie isnt secure, or we're not doing a secure request.
-            let secure_ok = !c.secure().unwrap_or(false) || is_secure;
+fn match_cookies(jar: &CookieJar, domain: &str, path: &str, is_secure: bool) -> Option<Header> {
+    Some(
+        jar.iter()
+            .filter(|c| {
+                // if there is a domain, it must be matched.
+                // if there is no domain, then ignore cookie
+                let domain_ok = c
+                    .domain()
+                    .map(|cdom| domain.contains(cdom))
+                    .unwrap_or(false);
+                // a path must match the beginning of request path.
+                // no cookie path, we say is ok. is it?!
+                let path_ok = c
+                    .path()
+                    .map(|cpath| path.find(cpath).map(|pos| pos == 0).unwrap_or(false))
+                    .unwrap_or(true);
+                // either the cookie isnt secure, or we're not doing a secure request.
+                let secure_ok = !c.secure().unwrap_or(false) || is_secure;
 
-            domain_ok && path_ok && secure_ok
-        })
-        .map(|c| {
-            let name = c.name().to_string();
-            let value = c.value().to_string();
-            let nameval = Cookie::new(name, value).encoded().to_string();
-            Header::new("Cookie", &nameval)
-        })
-        .collect()
+                domain_ok && path_ok && secure_ok
+            })
+            .map(|c| {
+                let name = c.name().to_string();
+                let value = c.value().to_string();
+                let nameval = Cookie::new(name, value).encoded().to_string();
+                nameval
+            })
+            .collect::<Vec<_>>()
+            .join(";"),
+    )
+    .filter(|x| !x.is_empty())
+    .map(|s| Header::new("Cookie", &s))
 }
 
 /// Combine the query of the url and the query options set on the request object.
@@ -417,5 +422,41 @@ fn save_cookies(unit: &Unit, resp: &Response) {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+#[cfg(feature = "cookies")]
+mod tests {
+    use super::*;
+
+    ///////////////////// COOKIE TESTS //////////////////////////////
+
+    #[test]
+    fn match_cookies_returns_nothing_when_no_cookies() {
+        let jar = CookieJar::new();
+
+        let result = match_cookies(&jar, "crates.io", "/", false);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn match_cookies_returns_one_header() {
+        let mut jar = CookieJar::new();
+        let cookie1 = Cookie::parse("cookie1=value1; Domain=crates.io").unwrap();
+        let cookie2 = Cookie::parse("cookie2=value2; Domain=crates.io").unwrap();
+        jar.add(cookie1);
+        jar.add(cookie2);
+
+        // There's no guarantee to the order in which cookies are defined.
+        // Ensure that they're either in one order or the other.
+        let result = match_cookies(&jar, "crates.io", "/", false);
+        let order1 = "cookie1=value1;cookie2=value2";
+        let order2 = "cookie2=value2;cookie1=value1";
+
+        assert!(
+            result == Some(Header::new("Cookie", order1))
+                || result == Some(Header::new("Cookie", order2))
+        );
     }
 }
