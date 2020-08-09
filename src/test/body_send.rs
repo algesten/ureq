@@ -71,7 +71,8 @@ fn str_with_encoding() {
     });
     let resp = post("test://host/str_with_encoding")
         .set("Content-Type", "text/plain; charset=iso-8859-1")
-        .send_string("Hällo Wörld!!!");
+        .send_string("Hällo Wörld!!!")
+        .unwrap();
     let vec = resp.to_write_vec();
     assert_eq!(
         &vec[vec.len() - 14..],
