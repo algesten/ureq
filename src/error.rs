@@ -30,6 +30,8 @@ pub enum Error {
     ProxyConnect,
     /// Incorrect credentials for proxy
     InvalidProxyCreds,
+    /// HTTP status code indicating an error (e.g. 4xx, 5xx)
+    HTTP(u16, String),
     /// TLS Error
     #[cfg(feature = "native-tls")]
     TlsError(native_tls::Error),
