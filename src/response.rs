@@ -29,10 +29,6 @@ pub const DEFAULT_CHARACTER_SET: &str = "utf-8";
 /// [`into_json_deserialize()`](#method.into_json_deserialize) or
 /// [`into_string()`](#method.into_string) consumes the response.
 ///
-/// All error handling, including URL parse errors and connection errors, is done by mapping onto
-/// [synthetic errors](#method.synthetic). Callers must check response.synthetic_error(),
-/// response.is_ok(), or response.error() before relying on the contents of the reader.
-///
 /// ```
 /// let response = ureq::get("https://www.google.com").call().unwrap();
 ///
@@ -44,7 +40,6 @@ pub const DEFAULT_CHARACTER_SET: &str = "utf-8";
 /// ```
 pub struct Response {
     url: Option<String>,
-    error: Option<Error>,
     status_line: String,
     index: ResponseStatusIndex,
     status: u16,
@@ -80,15 +75,13 @@ impl Response {
     /// Example:
     ///
     /// ```
-    /// let resp = ureq::Response::new(401, "Authorization Required", "Please log in");
+    /// let resp = ureq::Response::new(401, "Authorization Required", "Please log in").unwrap();
     ///
     /// assert_eq!(resp.status(), 401);
     /// ```
-    pub fn new(status: u16, status_text: &str, body: &str) -> Self {
+    pub fn new(status: u16, status_text: &str, body: &str) -> Result<Response, Error> {
         let r = format!("HTTP/1.1 {} {}\r\n\r\n{}\n", status, status_text, body);
-        (r.as_ref() as &str)
-            .parse::<Response>()
-            .unwrap_or_else(|e| e.into())
+        (r.as_ref() as &str).parse::<Response>()
     }
 
     /// The URL we ended up at. This can differ from the request url when
@@ -442,7 +435,6 @@ impl Response {
 
         Ok(Response {
             url: None,
-            error: None,
             status_line,
             index,
             status,
@@ -510,17 +502,6 @@ impl FromStr for Response {
         let mut resp = Self::do_from_read(&mut cursor)?;
         set_stream(&mut resp, "".into(), None, Stream::Cursor(cursor));
         Ok(resp)
-    }
-}
-
-impl Into<Response> for Error {
-    fn into(self) -> Response {
-        let status = self.status();
-        let status_text = self.status_text().to_string();
-        let body_text = self.body_text();
-        let mut resp = Response::new(status, &status_text, &body_text);
-        resp.error = Some(self);
-        resp
     }
 }
 
@@ -743,12 +724,7 @@ mod tests {
     #[test]
     fn parse_borked_header() {
         let s = "HTTP/1.1 BORKED\r\n".to_string();
-        let resp: Response = s.parse::<Response>().unwrap_err().into();
-        assert_eq!(resp.http_version(), "HTTP/1.1");
-        assert_eq!(resp.status(), 500);
-        assert_eq!(resp.status_text(), "Bad Status");
-        assert_eq!(resp.content_type(), "text/plain");
-        let v = resp.into_string().unwrap();
-        assert_eq!(v, "Bad Status\n");
+        let err = s.parse::<Response>().unwrap_err();
+        assert!(matches!(err, Error::BadStatus));
     }
 }

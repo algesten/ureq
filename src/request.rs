@@ -448,8 +448,7 @@ impl Request {
     /// Defaults to `5`. Set to `0` to avoid redirects and instead
     /// get a response object with the 3xx status code.
     ///
-    /// If the redirect count hits this limit (and it's > 0), a synthetic 500 error
-    /// response is produced.
+    /// If the redirect count hits this limit (and it's > 0), TooManyRedirects is returned.
     ///
     /// ```
     /// let r = ureq::get("/my_page")
