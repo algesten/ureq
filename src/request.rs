@@ -22,6 +22,8 @@ use crate::Response;
 #[cfg(feature = "json")]
 use super::SerdeValue;
 
+type Result<T> = std::result::Result<T, Error>;
+
 /// Request instances are builders that creates a request.
 ///
 /// ```
@@ -107,18 +109,16 @@ impl Request {
     ///
     /// println!("{:?}", r);
     /// ```
-    pub fn call(&mut self) -> Response {
+    pub fn call(&mut self) -> Result<Response> {
         self.do_call(Payload::Empty)
     }
 
-    fn do_call(&mut self, payload: Payload) -> Response {
-        self.to_url()
-            .and_then(|url| {
-                let reader = payload.into_read();
-                let unit = Unit::new(&self, &url, true, &reader);
-                unit::connect(&self, unit, true, 0, reader, false)
-            })
-            .unwrap_or_else(|e| e.into())
+    fn do_call(&self, payload: Payload) -> Result<Response> {
+        self.to_url().and_then(|url| {
+            let reader = payload.into_read();
+            let unit = Unit::new(&self, &url, true, &reader);
+            unit::connect(&self, unit, true, 0, reader, false)
+        })
     }
 
     /// Send data a json value.
@@ -138,7 +138,7 @@ impl Request {
     /// }
     /// ```
     #[cfg(feature = "json")]
-    pub fn send_json(&mut self, data: SerdeValue) -> Response {
+    pub fn send_json(&mut self, data: SerdeValue) -> Result<Response> {
         if self.header("Content-Type").is_none() {
             self.set("Content-Type", "application/json");
         }
@@ -155,7 +155,7 @@ impl Request {
     ///     .send_bytes(body);
     /// println!("{:?}", r);
     /// ```
-    pub fn send_bytes(&mut self, data: &[u8]) -> Response {
+    pub fn send_bytes(&mut self, data: &[u8]) -> Result<Response> {
         self.do_call(Payload::Bytes(data.to_owned()))
     }
 
@@ -180,7 +180,7 @@ impl Request {
     ///     .send_string("Hällo Wörld!");
     /// println!("{:?}", r);
     /// ```
-    pub fn send_string(&mut self, data: &str) -> Response {
+    pub fn send_string(&mut self, data: &str) -> Result<Response> {
         let text = data.into();
         let charset =
             crate::response::charset_from_content_type(self.header("content-type")).to_string();
@@ -202,7 +202,7 @@ impl Request {
     /// println!("{:?}", r);
     /// }
     /// ```
-    pub fn send_form(&mut self, data: &[(&str, &str)]) -> Response {
+    pub fn send_form(&mut self, data: &[(&str, &str)]) -> Result<Response> {
         if self.header("Content-Type").is_none() {
             self.set("Content-Type", "application/x-www-form-urlencoded");
         }
@@ -229,7 +229,7 @@ impl Request {
     ///     .set("Transfer-Encoding", "chunked")
     ///     .send(read);
     /// ```
-    pub fn send(&mut self, reader: impl Read + 'static) -> Response {
+    pub fn send(&mut self, reader: impl Read + 'static) -> Result<Response> {
         self.do_call(Payload::Reader(Box::new(reader)))
     }
 
@@ -241,8 +241,8 @@ impl Request {
     ///     .set("Accept", "text/plain")
     ///     .call();
     ///
-    ///  if r.ok() {
-    ///      println!("yay got {}", r.into_string().unwrap());
+    ///  if r.is_ok() {
+    ///      println!("yay got {}", r.unwrap().into_string().unwrap());
     ///  } else {
     ///      println!("Oh no error!");
     ///  }
@@ -527,7 +527,7 @@ impl Request {
     ///     .build();
     /// assert_eq!(req2.get_host().unwrap(), "localhost");
     /// ```
-    pub fn get_host(&self) -> Result<String, Error> {
+    pub fn get_host(&self) -> Result<String> {
         self.to_url()
             .map(|u| u.host_str().unwrap_or(pool::DEFAULT_HOST).to_string())
     }
@@ -540,7 +540,7 @@ impl Request {
     ///     .build();
     /// assert_eq!(req.get_scheme().unwrap(), "https");
     /// ```
-    pub fn get_scheme(&self) -> Result<String, Error> {
+    pub fn get_scheme(&self) -> Result<String> {
         self.to_url().map(|u| u.scheme().to_string())
     }
 
@@ -553,7 +553,7 @@ impl Request {
     ///     .build();
     /// assert_eq!(req.get_query().unwrap(), "?foo=bar&format=json");
     /// ```
-    pub fn get_query(&self) -> Result<String, Error> {
+    pub fn get_query(&self) -> Result<String> {
         self.to_url()
             .map(|u| unit::combine_query(&u, &self.query, true))
     }
@@ -566,11 +566,11 @@ impl Request {
     ///     .build();
     /// assert_eq!(req.get_path().unwrap(), "/innit");
     /// ```
-    pub fn get_path(&self) -> Result<String, Error> {
+    pub fn get_path(&self) -> Result<String> {
         self.to_url().map(|u| u.path().to_string())
     }
 
-    fn to_url(&self) -> Result<Url, Error> {
+    fn to_url(&self) -> Result<Url> {
         Url::parse(&self.url).map_err(|e| Error::BadUrl(format!("{}", e)))
     }
 

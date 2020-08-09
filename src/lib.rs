@@ -156,7 +156,7 @@ pub fn agent() -> Agent {
 /// Make a request setting the HTTP method via a string.
 ///
 /// ```
-/// ureq::request("GET", "https://www.google.com").call();
+/// ureq::request("GET", "https://www.google.com").call().unwrap();
 /// ```
 pub fn request(method: &str, path: &str) -> Request {
     Agent::new().request(method, path)
@@ -213,7 +213,7 @@ mod tests {
 
     #[test]
     fn connect_http_google() {
-        let resp = get("http://www.google.com/").call();
+        let resp = get("http://www.google.com/").call().unwrap();
         assert_eq!(
             "text/html; charset=ISO-8859-1",
             resp.header("content-type").unwrap()
@@ -224,7 +224,7 @@ mod tests {
     #[test]
     #[cfg(any(feature = "tls", feature = "native-tls"))]
     fn connect_https_google() {
-        let resp = get("https://www.google.com/").call();
+        let resp = get("https://www.google.com/").call().unwrap();
         assert_eq!(
             "text/html; charset=ISO-8859-1",
             resp.header("content-type").unwrap()
@@ -235,8 +235,9 @@ mod tests {
     #[test]
     #[cfg(any(feature = "tls", feature = "native-tls"))]
     fn connect_https_invalid_name() {
-        let resp = get("https://example.com{REQUEST_URI}/").call();
-        assert_eq!(400, resp.status());
-        assert!(resp.synthetic());
+        let result = get("https://example.com{REQUEST_URI}/").call();
+        let err = result.err().unwrap();
+        println!("err {}", err);
+        assert!(matches!(err, Error::DnsFailed(_)));
     }
 }

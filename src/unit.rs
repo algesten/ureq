@@ -169,7 +169,7 @@ pub(crate) fn connect(
 
     // start reading the response to process cookies and redirects.
     let mut stream = stream::DeadlineStream::new(stream, unit.deadline);
-    let mut resp = Response::from_read(&mut stream);
+    let result = Response::do_from_read(&mut stream);
 
     // https://tools.ietf.org/html/rfc7230#section-6.3.1
     // When an inbound connection is closed prematurely, a client MAY
@@ -184,12 +184,14 @@ pub(crate) fn connect(
     // TODO: is_bad_status_read is too narrow since it covers only the
     // first line. It's also allowable to retry requests that hit a
     // closed connection during the sending or receiving of headers.
-    if let Some(err) = resp.synthetic_error() {
-        if err.is_bad_status_read() && retryable && is_recycled {
+    let mut resp = match result {
+        Err(err) if err.is_bad_status_read() && retryable && is_recycled => {
             let empty = Payload::Empty.into_read();
             return connect(req, unit, false, redirect_count, empty, redir);
         }
-    }
+        Err(e) => return Err(e),
+        Ok(resp) => resp,
+    };
 
     // squirrel away cookies
     save_cookies(&unit, &resp);

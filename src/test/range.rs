@@ -9,7 +9,8 @@ use super::super::*;
 fn read_range() {
     let resp = get("https://ureq.s3.eu-central-1.amazonaws.com/sherlock.txt")
         .set("Range", "bytes=1000-1999")
-        .call();
+        .call()
+        .unwrap();
     assert_eq!(resp.status(), 206);
     let mut reader = resp.into_reader();
     let mut buf = vec![];

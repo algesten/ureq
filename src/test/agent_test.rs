@@ -16,7 +16,7 @@ fn agent_reuse_headers() {
         test::make_response(200, "OK", vec!["X-Call: 1"], vec![])
     });
 
-    let resp = agent.get("test://host/agent_reuse_headers").call();
+    let resp = agent.get("test://host/agent_reuse_headers").call().unwrap();
     assert_eq!(resp.header("X-Call").unwrap(), "1");
 
     test::set_handler("/agent_reuse_headers", |unit| {
@@ -25,7 +25,7 @@ fn agent_reuse_headers() {
         test::make_response(200, "OK", vec!["X-Call: 2"], vec![])
     });
 
-    let resp = agent.get("test://host/agent_reuse_headers").call();
+    let resp = agent.get("test://host/agent_reuse_headers").call().unwrap();
     assert_eq!(resp.header("X-Call").unwrap(), "2");
 }
 
@@ -43,7 +43,7 @@ fn agent_cookies() {
         )
     });
 
-    agent.get("test://host/agent_cookies").call();
+    agent.get("test://host/agent_cookies").call().unwrap();
 
     assert!(agent.cookie("foo").is_some());
     assert_eq!(agent.cookie("foo").unwrap().value(), "bar baz");
@@ -54,7 +54,7 @@ fn agent_cookies() {
         test::make_response(200, "OK", vec![], vec![])
     });
 
-    agent.get("test://host/agent_cookies").call();
+    agent.get("test://host/agent_cookies").call().unwrap();
 }
 
 // Handler that answers with a simple HTTP response, and times
@@ -71,7 +71,7 @@ fn connection_reuse() {
     let testserver = TestServer::new(idle_timeout_handler);
     let url = format!("http://localhost:{}", testserver.port);
     let agent = Agent::default().build();
-    let resp = agent.get(&url).call();
+    let resp = agent.get(&url).call().unwrap();
 
     // use up the connection so it gets returned to the pool
     assert_eq!(resp.status(), 200);
@@ -93,9 +93,6 @@ fn connection_reuse() {
     // pulls from the pool. If for some reason the timed-out
     // connection wasn't in the pool, we won't be testing what
     // we thought we were testing.
-    let resp = agent.get(&url).call();
-    if let Some(err) = resp.synthetic_error() {
-        panic!("Pooled connection failed! {:?}", err);
-    }
+    let resp = agent.get(&url).call().unwrap();
     assert_eq!(resp.status(), 200);
 }
