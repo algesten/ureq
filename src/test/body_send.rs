@@ -40,7 +40,9 @@ fn content_length_on_json() {
         "Hello".to_string(),
         SerdeValue::String("World!!!".to_string()),
     );
-    let resp = post("test://host/content_length_on_json").send_json(SerdeValue::Object(json));
+    let resp = post("test://host/content_length_on_json")
+        .send_json(SerdeValue::Object(json))
+        .unwrap();
     let vec = resp.to_write_vec();
     let s = String::from_utf8_lossy(&vec);
     assert!(s.contains("\r\nContent-Length: 20\r\n"));
@@ -89,7 +91,9 @@ fn content_type_on_json() {
         "Hello".to_string(),
         SerdeValue::String("World!!!".to_string()),
     );
-    let resp = post("test://host/content_type_on_json").send_json(SerdeValue::Object(json));
+    let resp = post("test://host/content_type_on_json")
+        .send_json(SerdeValue::Object(json))
+        .unwrap();
     let vec = resp.to_write_vec();
     let s = String::from_utf8_lossy(&vec);
     assert!(s.contains("\r\nContent-Type: application/json\r\n"));
@@ -108,7 +112,8 @@ fn content_type_not_overriden_on_json() {
     );
     let resp = post("test://host/content_type_not_overriden_on_json")
         .set("content-type", "text/plain")
-        .send_json(SerdeValue::Object(json));
+        .send_json(SerdeValue::Object(json))
+        .unwrap();
     let vec = resp.to_write_vec();
     let s = String::from_utf8_lossy(&vec);
     assert!(s.contains("\r\ncontent-type: text/plain\r\n"));

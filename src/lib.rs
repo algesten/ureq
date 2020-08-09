@@ -24,13 +24,11 @@
 //!           "rust": true
 //!       }));
 //!
-//!   // .ok() tells if response is 200-299.
-//!   if resp.ok() {
-//!     println!("success: {}", resp.into_string()?);
+//!   if resp.is_ok() {
+//!     println!("success: {}", resp.unwrap().into_string()?);
 //!   } else {
 //!     // This can include errors like failure to parse URL or connect timeout.
-//!     // They are treated as synthetic HTTP-level error statuses.
-//!     println!("error {}: {}", resp.status(), resp.into_string()?);
+//!     println!("error {}", resp.err().unwrap());
 //!   }
 //!   Ok(())
 //! }
@@ -237,7 +235,6 @@ mod tests {
     fn connect_https_invalid_name() {
         let result = get("https://example.com{REQUEST_URI}/").call();
         let err = result.err().unwrap();
-        println!("err {}", err);
         assert!(matches!(err, Error::DnsFailed(_)));
     }
 }
