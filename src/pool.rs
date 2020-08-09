@@ -9,8 +9,8 @@ use crate::Proxy;
 use url::Url;
 
 pub const DEFAULT_HOST: &str = "localhost";
-const MAX_IDLE_CONNECTIONS: usize = 100;
-const MAX_IDLE_CONNECTIONS_PER_HOST: usize = 1;
+const DEFAULT_MAX_IDLE_CONNECTIONS: usize = 100;
+const DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST: usize = 1;
 
 /// Holder of recycled connections.
 ///
@@ -28,12 +28,62 @@ pub(crate) struct ConnectionPool {
     // recently used Streams are added to the back of the queue;
     // old streams are removed from the front.
     lru: VecDeque<PoolKey>,
+    max_idle_connections: usize,
+    max_idle_connections_per_host: usize,
 }
 
 impl ConnectionPool {
     pub fn new() -> Self {
         ConnectionPool {
+            max_idle_connections: DEFAULT_MAX_IDLE_CONNECTIONS,
+            max_idle_connections_per_host: DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST,
             ..Default::default()
+        }
+    }
+
+    pub fn set_max_idle_connections(&mut self, max_connections: usize) {
+        if self.max_idle_connections == max_connections {
+            return;
+        }
+        self.max_idle_connections = max_connections;
+
+        if max_connections == 0 {
+            // Clear the connection pool, caching is disabled.
+            self.lru.clear();
+            self.recycle.clear();
+            return;
+        }
+
+        // Remove any extra connections if the number was decreased.
+        while self.lru.len() > max_connections {
+            self.remove_oldest();
+        }
+    }
+
+    pub fn set_max_idle_connections_per_host(&mut self, max_connections: usize) {
+        if self.max_idle_connections_per_host == max_connections {
+            return;
+        }
+        self.max_idle_connections_per_host = max_connections;
+
+        if max_connections == 0 {
+            // Clear the connection pool, caching is disabled.
+            self.lru.clear();
+            self.recycle.clear();
+            return;
+        }
+
+        // Remove any extra streams if the number was decreased.
+        for (key, val) in self.recycle.iter_mut() {
+            while val.len() > max_connections {
+                val.pop_front();
+                let index = self
+                    .lru
+                    .iter()
+                    .position(|x| x == key)
+                    .expect("PoolKey not found in lru");
+                self.lru.remove(index);
+            }
         }
     }
 
@@ -80,11 +130,15 @@ impl ConnectionPool {
     }
 
     fn add(&mut self, key: PoolKey, stream: Stream) {
+        if self.max_idle_connections == 0 || self.max_idle_connections_per_host == 0 {
+            return;
+        }
+
         match self.recycle.entry(key.clone()) {
             Entry::Occupied(mut occupied_entry) => {
                 let streams = occupied_entry.get_mut();
                 streams.push_back(stream);
-                if streams.len() > MAX_IDLE_CONNECTIONS_PER_HOST {
+                if streams.len() > self.max_idle_connections_per_host {
                     streams.pop_front();
                     self.remove_from_lru(&key);
                 }
@@ -96,7 +150,7 @@ impl ConnectionPool {
             }
         }
         self.lru.push_back(key);
-        if self.lru.len() > MAX_IDLE_CONNECTIONS {
+        if self.lru.len() > self.max_idle_connections {
             self.remove_oldest()
         }
     }
@@ -175,7 +229,7 @@ fn pool_connections_limit() {
     // filling and draining it. The pool should evict earlier connections
     // when the connection limit is reached.
     let mut pool = ConnectionPool::new();
-    let hostnames = (0..MAX_IDLE_CONNECTIONS * 2).map(|i| format!("{}.example", i));
+    let hostnames = (0..DEFAULT_MAX_IDLE_CONNECTIONS * 2).map(|i| format!("{}.example", i));
     let poolkeys = hostnames.map(|hostname| PoolKey {
         scheme: "https".to_string(),
         hostname,
@@ -185,9 +239,9 @@ fn pool_connections_limit() {
     for key in poolkeys.clone() {
         pool.add(key, Stream::Cursor(std::io::Cursor::new(vec![])));
     }
-    assert_eq!(pool.len(), MAX_IDLE_CONNECTIONS);
+    assert_eq!(pool.len(), DEFAULT_MAX_IDLE_CONNECTIONS);
 
-    for key in poolkeys.skip(MAX_IDLE_CONNECTIONS) {
+    for key in poolkeys.skip(DEFAULT_MAX_IDLE_CONNECTIONS) {
         let result = pool.remove(&key);
         assert!(result.is_some(), "expected key was not in pool");
     }
@@ -207,15 +261,15 @@ fn pool_per_host_connections_limit() {
         proxy: None,
     };
 
-    for _ in 0..MAX_IDLE_CONNECTIONS_PER_HOST * 2 {
+    for _ in 0..pool.max_idle_connections_per_host * 2 {
         pool.add(
             poolkey.clone(),
             Stream::Cursor(std::io::Cursor::new(vec![])),
         );
     }
-    assert_eq!(pool.len(), MAX_IDLE_CONNECTIONS_PER_HOST);
+    assert_eq!(pool.len(), DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST);
 
-    for _ in 0..MAX_IDLE_CONNECTIONS_PER_HOST {
+    for _ in 0..DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST {
         let result = pool.remove(&poolkey);
         assert!(result.is_some(), "expected key was not in pool");
     }

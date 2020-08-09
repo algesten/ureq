@@ -166,6 +166,38 @@ impl Agent {
         Request::new(&self, method.into(), path.into())
     }
 
+    /// Sets the maximum number of connections allowed in the connection pool.
+    /// By default, this is set to 100. Setting this to zero would disable
+    /// connection pooling.
+    ///
+    /// ```
+    /// let agent = ureq::agent();
+    /// agent.set_max_pool_connections(200);
+    /// ```
+    pub fn set_max_pool_connections(&self, max_connections: usize) {
+        let mut optional_state = self.state.lock().unwrap();
+        if let Some(state) = optional_state.as_mut() {
+            state.pool.set_max_idle_connections(max_connections);
+        }
+    }
+
+    /// Sets the maximum number of connections per host to keep in the
+    /// connection pool. By default, this is set to 1. Setting this to zero
+    /// would disable connection pooling.
+    ///
+    /// ```
+    /// let agent = ureq::agent();
+    /// agent.set_max_pool_connections_per_host(10);
+    /// ```
+    pub fn set_max_pool_connections_per_host(&self, max_connections: usize) {
+        let mut optional_state = self.state.lock().unwrap();
+        if let Some(state) = optional_state.as_mut() {
+            state
+                .pool
+                .set_max_idle_connections_per_host(max_connections);
+        }
+    }
+
     /// Gets a cookie in this agent by name. Cookies are available
     /// either by setting it in the agent, or by making requests
     /// that `Set-Cookie` in the agent.
