@@ -220,7 +220,6 @@ mod tests {
     #[cfg(any(feature = "tls", feature = "native-tls"))]
     fn connect_https_invalid_name() {
         let result = get("https://example.com{REQUEST_URI}/").call();
-        let err = result.err().unwrap();
-        assert!(matches!(err, Error::DnsFailed(_)));
+        assert!(matches!(result.unwrap_err(), Error::DnsFailed(_)));
     }
 }

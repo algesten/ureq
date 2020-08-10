@@ -185,7 +185,7 @@ impl Response {
     /// # }
     /// ```
     pub fn error_for_status(self) -> Result<Response, Error> {
-        if self.status > 400 {
+        if self.status >= 400 {
             Err(Error::HTTP(self.status, self.status_text().to_string()))
         } else {
             Ok(self)

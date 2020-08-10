@@ -22,7 +22,7 @@ use crate::Response;
 #[cfg(feature = "json")]
 use super::SerdeValue;
 
-type Result<T> = std::result::Result<T, Error>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 /// Request instances are builders that creates a request.
 ///
