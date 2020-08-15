@@ -277,6 +277,50 @@ fn pool_per_host_connections_limit() {
 }
 
 #[test]
+fn pool_update_connection_limit() {
+    let mut pool = ConnectionPool::new();
+    pool.set_max_idle_connections(50);
+
+    let hostnames = (0..pool.max_idle_connections).map(|i| format!("{}.example", i));
+    let poolkeys = hostnames.map(|hostname| PoolKey {
+        scheme: "https".to_string(),
+        hostname,
+        port: Some(999),
+        proxy: None,
+    });
+    for key in poolkeys.clone() {
+        pool.add(key, Stream::Cursor(std::io::Cursor::new(vec![])));
+    }
+    assert_eq!(pool.len(), 50);
+    pool.set_max_idle_connections(25);
+    assert_eq!(pool.len(), 25);
+}
+
+#[test]
+fn pool_update_per_host_connection_limit() {
+    let mut pool = ConnectionPool::new();
+    pool.set_max_idle_connections(50);
+    pool.set_max_idle_connections_per_host(50);
+
+    let poolkey = PoolKey {
+        scheme: "https".to_string(),
+        hostname: "example.com".to_string(),
+        port: Some(999),
+        proxy: None,
+    };
+
+    for _ in 0..50 {
+        pool.add(
+            poolkey.clone(),
+            Stream::Cursor(std::io::Cursor::new(vec![])),
+        );
+    }
+    assert_eq!(pool.len(), 50);
+    pool.set_max_idle_connections_per_host(25);
+    assert_eq!(pool.len(), 25);
+}
+
+#[test]
 fn pool_checks_proxy() {
     // Test inserting different poolkeys with same address but different proxies.
     // Each insertion should result in an additional entry in the pool.
