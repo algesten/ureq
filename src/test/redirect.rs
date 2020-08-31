@@ -32,7 +32,12 @@ fn redirect_off() {
     test::set_handler("/redirect_off", |_| {
         test::make_response(302, "Go here", vec!["Location: somewhere.else"], vec![])
     });
-    let resp = get("test://host/redirect_off").redirects(0).call().unwrap();
+    let result = get("test://host/redirect_off").redirects(0).call();
+    let resp = match result {
+        Ok(_) => panic!("expected error"),
+        Err(Error::HTTP(resp)) => resp,
+        Err(_) => panic!("expected HTTP error"),
+    };
     assert_eq!(resp.status(), 302);
     assert!(resp.has("Location"));
     assert_eq!(resp.header("Location").unwrap(), "somewhere.else");

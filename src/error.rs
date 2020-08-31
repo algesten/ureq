@@ -1,3 +1,4 @@
+use crate::response::Response;
 use std::fmt;
 use std::io::Error as IoError;
 
@@ -31,7 +32,9 @@ pub enum Error {
     /// Incorrect credentials for proxy
     InvalidProxyCreds,
     /// HTTP status code indicating an error (e.g. 4xx, 5xx)
-    HTTP(u16, String),
+    /// Read the inner response body for details and to return
+    /// the connection to the pool.
+    HTTP(Box<Response>),
     /// TLS Error
     #[cfg(feature = "native-tls")]
     TlsError(native_tls::Error),

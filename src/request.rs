@@ -42,6 +42,7 @@ pub struct Request {
     url: String,
 
     // from request itself
+    return_error_for_status: bool,
     pub(crate) headers: Vec<Header>,
     pub(crate) query: QString,
     pub(crate) timeout_connect: u64,
@@ -81,6 +82,7 @@ impl Request {
             url,
             headers: agent.headers.clone(),
             redirects: 5,
+            return_error_for_status: true,
             ..Default::default()
         }
     }
@@ -114,11 +116,17 @@ impl Request {
     }
 
     fn do_call(&self, payload: Payload) -> Result<Response> {
-        self.to_url().and_then(|url| {
+        let response = self.to_url().and_then(|url| {
             let reader = payload.into_read();
             let unit = Unit::new(&self, &url, true, &reader);
             unit::connect(&self, unit, true, 0, reader, false)
-        })
+        })?;
+
+        if (response.error() || response.redirect()) && self.return_error_for_status {
+            Err(Error::HTTP(response.into()))
+        } else {
+            Ok(response)
+        }
     }
 
     /// Send data a json value.
@@ -458,6 +466,25 @@ impl Request {
     /// ```
     pub fn redirects(&mut self, n: u32) -> &mut Request {
         self.redirects = n;
+        self
+    }
+
+    /// By default, if a response's status is anything but a 2xx,
+    /// send() and related methods will return an Error. If you want
+    /// to handle such responses as non-errors, set this to false.
+    ///
+    /// Example:
+    /// ```
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// let result = ureq::get("http://httpbin.org/status/500")
+    ///     .error_for_status(false)
+    ///     .call();
+    /// assert!(result.is_ok());
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn error_for_status(&mut self, value: bool) -> &mut Request {
+        self.return_error_for_status = value;
         self
     }
 

@@ -1,18 +1,3 @@
-#[cfg(all(test, any(feature = "tls", feature = "native-tls")))]
-use std::io::Read;
-
-#[cfg(any(feature = "tls", feature = "native-tls"))]
-#[test]
-fn tls_connection_close() {
-    let agent = ureq::Agent::default().build();
-    let resp = agent
-        .get("https://example.com/404")
-        .set("Connection", "close")
-        .call().unwrap();
-    assert_eq!(resp.status(), 404);
-    resp.into_reader().read_to_end(&mut vec![]).unwrap();
-}
-
 #[cfg(feature = "tls")]
 #[cfg(feature = "cookies")]
 #[cfg(feature = "json")]
@@ -35,7 +20,8 @@ fn agent_set_cookie() {
     let resp = agent
         .get("https://httpbin.org/get")
         .set("Connection", "close")
-        .call().unwrap();
+        .call()
+        .unwrap();
     assert_eq!(resp.status(), 200);
     assert_eq!(
         "name=value",
@@ -133,7 +119,8 @@ fn tls_client_certificate() {
     let resp = agent
         .get("https://client.badssl.com/")
         .set_tls_config(std::sync::Arc::new(tls_config))
-        .call().unwrap();
+        .call()
+        .unwrap();
 
     assert_eq!(resp.status(), 200);
 }

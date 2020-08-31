@@ -165,33 +165,6 @@ impl Response {
         self.client_error() || self.server_error()
     }
 
-    /// If this response's status is 4xx or 5xx, return an Error.
-    /// The response body is not automatically read. That means
-    /// if you use the `?` operator on the output of this function,
-    /// 4xx and 5xx errors will cause keepalive connections to be
-    /// closed.
-    ///
-    /// If you prefer to keep connections alive, check the status
-    /// with `.error()` and then read the body unconditionally.
-    ///
-    /// Example:
-    /// ```
-    /// # fn main() -> Result<(), ureq::Error> {
-    /// let body = ureq::get("http://example.com")
-    ///     .call()?
-    ///     .error_for_status()?
-    ///     .into_string();
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub fn error_for_status(self) -> Result<Response, Error> {
-        if self.status >= 400 {
-            Err(Error::HTTP(self.status, self.status_text().to_string()))
-        } else {
-            Ok(self)
-        }
-    }
-
     /// The content type part of the "Content-Type" header without
     /// the charset.
     ///
