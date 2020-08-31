@@ -1,3 +1,4 @@
+use std::fmt;
 use std::io::{Cursor, Error as IoError, ErrorKind, Read, Result as IoResult};
 use std::str::FromStr;
 use std::time::Instant;
@@ -65,8 +66,8 @@ struct ResponseStatusIndex {
     response_code: usize,
 }
 
-impl ::std::fmt::Debug for Response {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::result::Result<(), ::std::fmt::Error> {
+impl fmt::Debug for Response {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
             "Response[status: {}, status_text: {}]",

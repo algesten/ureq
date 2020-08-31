@@ -256,20 +256,21 @@ pub(crate) fn basic_auth(user: &str, pass: &str) -> String {
         Some(idx) => &user[..idx],
         None => user,
     };
-    ::base64::encode(&format!("{}:{}", safe, pass))
+    base64::encode(&format!("{}:{}", safe, pass))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::io::Read;
+    use std::thread;
 
     ///////////////////// AGENT TESTS //////////////////////////////
 
     #[test]
     fn agent_implements_send() {
         let mut agent = Agent::new();
-        ::std::thread::spawn(move || {
+        thread::spawn(move || {
             agent.set("Foo", "Bar");
         });
     }
@@ -309,7 +310,7 @@ mod tests {
     fn request_implements_send() {
         let agent = Agent::new();
         let mut request = Request::new(&agent, "GET".to_string(), "/foo".to_string());
-        ::std::thread::spawn(move || {
+        thread::spawn(move || {
             request.set("Foo", "Bar");
         });
     }

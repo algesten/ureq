@@ -1,3 +1,4 @@
+use std::fmt;
 use std::io::{Cursor, Error as IoError, ErrorKind, Read, Result as IoResult, Write};
 use std::net::SocketAddr;
 use std::net::TcpStream;
@@ -100,8 +101,8 @@ pub(crate) fn io_err_timeout(error: String) -> IoError {
     IoError::new(ErrorKind::TimedOut, error)
 }
 
-impl ::std::fmt::Debug for Stream {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::result::Result<(), ::std::fmt::Error> {
+impl fmt::Debug for Stream {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
             "Stream[{}]",
