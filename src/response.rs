@@ -1,4 +1,4 @@
-use std::io::{Cursor, Error as IoError, ErrorKind, Read, Result as IoResult};
+use std::io::{BufRead, Cursor, Error as IoError, ErrorKind, Read, Result as IoResult};
 use std::str::FromStr;
 use std::time::Instant;
 
@@ -469,11 +469,11 @@ impl Response {
     ///
     /// assert_eq!(resp.status(), 401);
     /// ```
-    pub fn from_read(reader: impl Read) -> Self {
+    pub fn from_read(reader: impl BufRead) -> Self {
         Self::do_from_read(reader).unwrap_or_else(|e| e.into())
     }
 
-    fn do_from_read(mut reader: impl Read) -> Result<Response, Error> {
+    fn do_from_read(mut reader: impl BufRead) -> Result<Response, Error> {
         //
         // HTTP/1.1 200 OK\r\n
         let status_line = read_next_line(&mut reader).map_err(|e| match e.kind() {
@@ -590,17 +590,25 @@ pub(crate) fn set_stream(resp: &mut Response, url: String, unit: Option<Unit>, s
     resp.stream = Some(stream);
 }
 
-fn read_next_line<R: Read>(reader: &mut R) -> IoResult<String> {
+fn read_next_line<R: BufRead>(reader: &mut R) -> IoResult<String> {
     let mut buf = Vec::new();
     let mut prev_byte_was_cr = false;
+    let mut one = [0_u8];
+
+    let mut fill_amount = 0;
 
     loop {
-        let byte = reader.bytes().next();
+        if fill_amount == 0 {
+            fill_amount = reader.fill_buf()?.len();
+        }
 
-        let byte = match byte {
-            Some(b) => b?,
-            None => return Err(IoError::new(ErrorKind::ConnectionAborted, "Unexpected EOF")),
-        };
+        let amt = reader.read(&mut one[..])?;
+
+        if amt == 0 {
+            return Err(IoError::new(ErrorKind::ConnectionAborted, "Unexpected EOF"));
+        }
+
+        let byte = one[0];
 
         if byte == b'\n' && prev_byte_was_cr {
             buf.pop(); // removing the '\r'
@@ -611,6 +619,8 @@ fn read_next_line<R: Read>(reader: &mut R) -> IoResult<String> {
         prev_byte_was_cr = byte == b'\r';
 
         buf.push(byte);
+
+        fill_amount -= 1;
     }
 }
 
