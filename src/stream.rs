@@ -88,16 +88,6 @@ impl Read for DeadlineStream {
     }
 }
 
-impl BufRead for DeadlineStream {
-    fn fill_buf(&mut self) -> IoResult<&[u8]> {
-        self.stream.fill_buf()
-    }
-
-    fn consume(&mut self, amt: usize) {
-        self.stream.consume(amt)
-    }
-}
-
 // If the deadline is in the future, return the remaining time until
 // then. Otherwise return a TimedOut error.
 fn time_until_deadline(deadline: Instant) -> IoResult<Duration> {
