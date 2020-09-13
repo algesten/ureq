@@ -111,7 +111,7 @@ fn cookie_and_redirect(mut stream: TcpStream) -> io::Result<()> {
             stream.write_all(b"Content-Length: 0\r\n\r\n")?;
         },
         "/second" => {
-            if headers.headers().iter().find(|&x| x.contains("Cookie: first")).is_none() {
+            if headers.headers().iter().find(|&x| x.contains("first=true")).is_none() {
                 panic!("request did not contain cookie 'first'");
             }
             stream.write_all(b"HTTP/1.1 302 Found\r\n")?;
@@ -120,7 +120,7 @@ fn cookie_and_redirect(mut stream: TcpStream) -> io::Result<()> {
             stream.write_all(b"Content-Length: 0\r\n\r\n")?;
         },
         "/third" => {
-            if headers.headers().iter().find(|&x| x.contains("Cookie: first")).is_none() {
+            if headers.headers().iter().find(|&x| x.contains("second=true")).is_none() {
                 panic!("request did not contain cookie 'second'");
             }
             stream.write_all(b"HTTP/1.1 200 OK\r\n")?;
