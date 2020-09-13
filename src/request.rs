@@ -578,7 +578,7 @@ impl Request {
     ///
     /// Example:
     /// ```
-    /// let tls_connector = std::sync::Arc::new(native_tls::TlsConnector::new());
+    /// let tls_connector = std::sync::Arc::new(native_tls::TlsConnector::new().unwrap());
     /// let req = ureq::post("https://cool.server")
     ///     .set_tls_connector(tls_connector.clone());
     /// ```
