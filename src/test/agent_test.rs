@@ -100,6 +100,7 @@ fn connection_reuse() {
     assert_eq!(resp.status(), 200);
 }
 
+#[cfg(feature = "cookie")]
 #[cfg(test)]
 fn cookie_and_redirect(mut stream: TcpStream) -> io::Result<()> {
     let headers = read_headers(&stream);

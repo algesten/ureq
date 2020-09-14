@@ -13,6 +13,7 @@ pub struct TestHeaders(Vec<String>);
 
 impl TestHeaders {
     // Return the path for a request, e.g. /foo from "GET /foo HTTP/1.1"
+    #[cfg(feature = "cookie")]
     pub fn path(&self) -> &str {
         if self.0.len() == 0 {
             ""
@@ -21,6 +22,7 @@ impl TestHeaders {
         }
     }
 
+    #[cfg(feature = "cookie")]
     pub fn headers(&self) -> &[String] {
         &self.0[1..]
     }
