@@ -294,7 +294,6 @@ pub(crate) fn basic_auth(user: &str, pass: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Read;
     use std::thread;
 
     ///////////////////// AGENT TESTS //////////////////////////////
@@ -310,6 +309,8 @@ mod tests {
     #[test]
     #[cfg(any(feature = "tls", feature = "native-tls"))]
     fn agent_pool() {
+        use std::io::Read;
+
         let agent = crate::agent();
         let url = "https://ureq.s3.eu-central-1.amazonaws.com/sherlock.txt";
         // req 1
