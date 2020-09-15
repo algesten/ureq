@@ -30,7 +30,7 @@ const DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST: usize = 1;
 /// These invariants hold at the start and end of each method:
 ///  - The length `lru` is equal to the sum of lengths of `recycle`'s VecDeques.
 ///  - Each PoolKey exists the same number of times in `lru` as it has entries in `recycle`.
-///  - If there is an entry in `recycle`, the VecDeque has at least one element.
+///  - If there is an entry in `recycle`, it has at least one element.
 ///  - The length of `lru` is less than or equal to max_idle_connections.
 ///  - The length of recycle[K] is less than or equal to max_idle_connections_per_host.
 ///
@@ -49,14 +49,14 @@ pub(crate) struct ConnectionPool {
 }
 
 fn remove_first_match(list: &mut VecDeque<PoolKey>, key: &PoolKey) -> Option<PoolKey> {
-    match list.iter_mut().position(|x| x == key) {
+    match list.iter().position(|x| x == key) {
         Some(i) => list.remove(i),
         None => None,
     }
 }
 
 fn remove_last_match(list: &mut VecDeque<PoolKey>, key: &PoolKey) -> Option<PoolKey> {
-    match list.iter_mut().rposition(|x| x == key) {
+    match list.iter().rposition(|x| x == key) {
         Some(i) => list.remove(i),
         None => None,
     }
