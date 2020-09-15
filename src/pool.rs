@@ -374,15 +374,13 @@ impl<R: Read + Sized + Into<Stream>> PoolReturnRead<R> {
             let state = &mut unit.agent.lock().unwrap();
             // bring back stream here to either go into pool or dealloc
             let stream = reader.into();
-            if let Some(agent) = state.as_mut() {
-                if !stream.is_poolable() {
-                    // just let it deallocate
-                    return;
-                }
-                // insert back into pool
-                let key = PoolKey::new(&unit.url, &unit.proxy);
-                agent.pool().add(key, stream);
+            if !stream.is_poolable() {
+                // just let it deallocate
+                return;
             }
+            // insert back into pool
+            let key = PoolKey::new(&unit.url, &unit.proxy);
+            state.pool().add(key, stream);
         }
     }
 
