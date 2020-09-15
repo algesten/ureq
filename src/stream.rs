@@ -4,7 +4,6 @@ use std::io::{
 };
 use std::net::SocketAddr;
 use std::net::TcpStream;
-use std::net::ToSocketAddrs;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -383,14 +382,16 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         unit.deadline
     };
 
-    // TODO: Find a way to apply deadline to DNS lookup.
-    let sock_addrs: Vec<SocketAddr> = match unit.proxy {
+    let netloc = match unit.proxy {
         Some(ref proxy) => format!("{}:{}", proxy.server, proxy.port),
         None => format!("{}:{}", hostname, port),
-    }
-    .to_socket_addrs()
-    .map_err(|e| Error::DnsFailed(format!("{}", e)))?
-    .collect();
+    };
+
+    // TODO: Find a way to apply deadline to DNS lookup.
+    let sock_addrs = unit
+        .resolver()
+        .resolve(&netloc)
+        .map_err(|e| Error::DnsFailed(format!("{}", e)))?;
 
     if sock_addrs.is_empty() {
         return Err(Error::DnsFailed(format!("No ip address for {}", hostname)));
@@ -415,6 +416,7 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         // connect with a configured timeout.
         let stream = if Some(Proto::SOCKS5) == proto {
             connect_socks5(
+                &unit,
                 unit.proxy.to_owned().unwrap(),
                 deadline,
                 sock_addr,
@@ -492,11 +494,15 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
 }
 
 #[cfg(feature = "socks-proxy")]
-fn socks5_local_nslookup(hostname: &str, port: u16) -> Result<TargetAddr, std::io::Error> {
-    let addrs: Vec<SocketAddr> = format!("{}:{}", hostname, port)
-        .to_socket_addrs()
-        .map_err(|e| std::io::Error::new(ErrorKind::NotFound, format!("DNS failure: {}.", e)))?
-        .collect();
+fn socks5_local_nslookup(
+    unit: &Unit,
+    hostname: &str,
+    port: u16,
+) -> Result<TargetAddr, std::io::Error> {
+    let addrs: Vec<SocketAddr> = unit
+        .resolver()
+        .resolve(&format!("{}:{}", hostname, port))
+        .map_err(|e| std::io::Error::new(ErrorKind::NotFound, format!("DNS failure: {}.", e)))?;
 
     if addrs.is_empty() {
         return Err(std::io::Error::new(
@@ -518,6 +524,7 @@ fn socks5_local_nslookup(hostname: &str, port: u16) -> Result<TargetAddr, std::i
 
 #[cfg(feature = "socks-proxy")]
 fn connect_socks5(
+    unit: &Unit,
     proxy: Proxy,
     deadline: Option<Instant>,
     proxy_addr: SocketAddr,
@@ -529,7 +536,7 @@ fn connect_socks5(
     use std::str::FromStr;
 
     let host_addr = if Ipv4Addr::from_str(host).is_ok() || Ipv6Addr::from_str(host).is_ok() {
-        match socks5_local_nslookup(host, port) {
+        match socks5_local_nslookup(unit, host, port) {
             Ok(addr) => addr,
             Err(err) => return Err(err),
         }
@@ -621,6 +628,7 @@ fn get_socks5_stream(
 
 #[cfg(not(feature = "socks-proxy"))]
 fn connect_socks5(
+    _unit: &Unit,
     _proxy: Proxy,
     _deadline: Option<Instant>,
     _proxy_addr: SocketAddr,
