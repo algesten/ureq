@@ -19,7 +19,7 @@ const DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST: usize = 1;
 /// Invariant: Each PoolKey exists in recycle at most once and lru at most once.
 ///
 /// *Internal API*
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub(crate) struct ConnectionPool {
     // the actual pooled connection. however only one per hostname:port.
     recycle: HashMap<PoolKey, VecDeque<Stream>>,
@@ -32,13 +32,20 @@ pub(crate) struct ConnectionPool {
     max_idle_connections_per_host: usize,
 }
 
-impl ConnectionPool {
-    pub fn new() -> Self {
-        ConnectionPool {
+impl Default for ConnectionPool {
+    fn default() -> Self {
+        Self {
             max_idle_connections: DEFAULT_MAX_IDLE_CONNECTIONS,
             max_idle_connections_per_host: DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST,
-            ..Default::default()
+            recycle: HashMap::default(),
+            lru: VecDeque::default(),
         }
+    }
+}
+
+impl ConnectionPool {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn set_max_idle_connections(&mut self, max_connections: usize) {
