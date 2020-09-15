@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::test;
 use crate::test::testserver::{read_headers, TestServer};
 use std::io::{self, Write};
