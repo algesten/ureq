@@ -165,9 +165,7 @@ impl ConnectionPool {
                 }
             }
             Entry::Vacant(vacant_entry) => {
-                let mut new_deque = VecDeque::new();
-                new_deque.push_back(stream);
-                vacant_entry.insert(new_deque);
+                vacant_entry.insert(vec![stream].into());
             }
         }
         self.lru.push_back(key);
