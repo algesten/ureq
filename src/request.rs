@@ -44,6 +44,7 @@ pub struct Request {
     pub(crate) timeout: Option<time::Duration>,
     pub(crate) redirects: u32,
     pub(crate) proxy: Option<crate::proxy::Proxy>,
+    pub(crate) addresses: Vec<std::net::SocketAddr>,
     #[cfg(feature = "tls")]
     pub(crate) tls_config: Option<TLSClientConfig>,
     #[cfg(all(feature = "native-tls", not(feature = "tls")))]
@@ -555,6 +556,19 @@ impl Request {
     /// ```
     pub fn set_proxy(&mut self, proxy: crate::proxy::Proxy) -> &mut Request {
         self.proxy = Some(proxy);
+        self
+    }
+
+    /// Set the exact list of addresses that will be tried to connect to, in
+    /// order. Useful to override address-resolution, for testing or for
+    /// requirements of special application
+    /// ```
+    /// let req = ureq::get("https://cool.server/")
+    ///     .set_addresses(vec![(std::net::Ipv4Addr::LOCALHOST, 80).into()])
+    ///     .build();
+    /// ```
+    pub fn set_addresses(&mut self, addresses: Vec<std::net::SocketAddr>) -> &mut Request {
+        self.addresses = addresses;
         self
     }
 

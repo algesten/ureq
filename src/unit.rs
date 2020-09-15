@@ -40,6 +40,7 @@ pub(crate) struct Unit {
     pub deadline: Option<time::Instant>,
     pub method: String,
     pub proxy: Option<Proxy>,
+    pub addresses: Vec<std::net::SocketAddr>,
     #[cfg(feature = "tls")]
     pub tls_config: Option<TLSClientConfig>,
     #[cfg(all(feature = "native-tls", not(feature = "tls")))]
@@ -111,6 +112,7 @@ impl Unit {
             deadline,
             method: req.method.clone(),
             proxy: req.proxy.clone(),
+            addresses: req.addresses.clone(),
             #[cfg(feature = "tls")]
             tls_config: req.tls_config.clone(),
             #[cfg(all(feature = "native-tls", not(feature = "tls")))]
