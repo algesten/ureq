@@ -3,17 +3,46 @@ on: [push, pull_request]
 name: CI
 
 jobs:
+  doc:
+    name: Docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - name: Docs
+        uses: actions-rs/cargo@v1
+        with:
+          command: doc
+          # Keep in sync with Cargo.toml's [package.metadata.docs.rs]
+          args: --no-default-features --no-deps --features "tls json charset cookies socks-proxy"
   build_and_test:
-    name: Rust project
+    name: Test
     runs-on: ubuntu-latest
     strategy:
       matrix:
+        tls:
+          - ""
+          - tls
+          - native-tls
         feature:
+          - ""
+          - json
           - charset
           - cookies
           - socks-proxy
+        what:
+          - "--doc"
+          - "--tests"
+        exclude:
+          - tls: ""
+            what: "--doc"
     env:
       RUST_BACKTRACE: "1"
+      RUSTFLAGS: "-D dead_code -D unused-variables -D unused"
     steps:
       - uses: actions/checkout@master
       - name: Install Rust
@@ -25,10 +54,4 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --no-default-features --features "json tls ${{ matrix.feature }}"
-      - name: Docs
-        uses: actions-rs/cargo@v1
-        with:
-          command: doc
-          # Keep in sync with Cargo.toml's [package.metadata.docs.rs]
-          args: --no-default-features --no-deps --features "tls json charset cookies socks-proxy"
+          args: ${{ matrix.what }} --no-default-features --features "${{ matrix.tls }} ${{ matrix.feature }}"
