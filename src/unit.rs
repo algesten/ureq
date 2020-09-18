@@ -27,9 +27,8 @@ use crate::pool::DEFAULT_HOST;
 /// It's a "unit of work". Maybe a bad name for it?
 ///
 /// *Internal API*
-#[derive(Debug)]
 pub(crate) struct Unit {
-    pub agent: Arc<Mutex<Option<AgentState>>>,
+    pub agent: Arc<Mutex<AgentState>>,
     pub url: Url,
     pub is_chunked: bool,
     pub query_string: String,
@@ -239,19 +238,16 @@ pub(crate) fn connect(
 }
 
 #[cfg(feature = "cookie")]
-fn extract_cookies(state: &std::sync::Mutex<Option<AgentState>>, url: &Url) -> Option<Header> {
+fn extract_cookies(state: &std::sync::Mutex<AgentState>, url: &Url) -> Option<Header> {
     let state = state.lock().unwrap();
     let is_secure = url.scheme().eq_ignore_ascii_case("https");
     let hostname = url.host_str().unwrap_or(DEFAULT_HOST).to_string();
 
-    state
-        .as_ref()
-        .map(|state| &state.jar)
-        .and_then(|jar| match_cookies(jar, &hostname, url.path(), is_secure))
+    match_cookies(&state.jar, &hostname, url.path(), is_secure)
 }
 
 #[cfg(not(feature = "cookie"))]
-fn extract_cookies(_state: &std::sync::Mutex<Option<AgentState>>, _url: &Url) -> Option<Header> {
+fn extract_cookies(_state: &std::sync::Mutex<AgentState>, _url: &Url) -> Option<Header> {
     None
 }
 
@@ -309,15 +305,13 @@ fn connect_socket(unit: &Unit, use_pooled: bool) -> Result<(Stream, bool), Error
     };
     if use_pooled {
         let state = &mut unit.agent.lock().unwrap();
-        if let Some(agent) = state.as_mut() {
-            // The connection may have been closed by the server
-            // due to idle timeout while it was sitting in the pool.
-            // Loop until we find one that is still good or run out of connections.
-            while let Some(stream) = agent.pool.try_get_connection(&unit.url, &unit.proxy) {
-                let server_closed = stream.server_closed()?;
-                if !server_closed {
-                    return Ok((stream, true));
-                }
+        // The connection may have been closed by the server
+        // due to idle timeout while it was sitting in the pool.
+        // Loop until we find one that is still good or run out of connections.
+        while let Some(stream) = state.pool.try_get_connection(&unit.url, &unit.proxy) {
+            let server_closed = stream.server_closed()?;
+            if !server_closed {
+                return Ok((stream, true));
             }
         }
     }
@@ -406,20 +400,18 @@ fn save_cookies(unit: &Unit, resp: &Response) {
 
     // only lock if we know there is something to process
     let state = &mut unit.agent.lock().unwrap();
-    if let Some(add_jar) = state.as_mut().map(|state| &mut state.jar) {
-        for raw_cookie in cookies.iter() {
-            let to_parse = if raw_cookie.to_lowercase().contains("domain=") {
-                (*raw_cookie).to_string()
-            } else {
-                let host = &unit.url.host_str().unwrap_or(DEFAULT_HOST).to_string();
-                format!("{}; Domain={}", raw_cookie, host)
-            };
-            match Cookie::parse_encoded(&to_parse[..]) {
-                Err(_) => (), // ignore unparseable cookies
-                Ok(cookie) => {
-                    let cookie = cookie.into_owned();
-                    add_jar.add(cookie)
-                }
+    for raw_cookie in cookies.iter() {
+        let to_parse = if raw_cookie.to_lowercase().contains("domain=") {
+            (*raw_cookie).to_string()
+        } else {
+            let host = &unit.url.host_str().unwrap_or(DEFAULT_HOST).to_string();
+            format!("{}; Domain={}", raw_cookie, host)
+        };
+        match Cookie::parse_encoded(&to_parse[..]) {
+            Err(_) => (), // ignore unparseable cookies
+            Ok(cookie) => {
+                let cookie = cookie.into_owned();
+                state.jar.add(cookie)
             }
         }
     }
