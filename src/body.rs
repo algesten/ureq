@@ -1,4 +1,5 @@
 use crate::stream::Stream;
+use std::fmt;
 use std::io::{copy, empty, Cursor, Read, Result as IoResult, Write};
 
 #[cfg(feature = "charset")]
@@ -23,8 +24,8 @@ pub(crate) enum Payload {
     Bytes(Vec<u8>),
 }
 
-impl ::std::fmt::Debug for Payload {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::result::Result<(), ::std::fmt::Error> {
+impl fmt::Debug for Payload {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Payload::Empty => write!(f, "Empty"),
             Payload::Text(t, _) => write!(f, "{}", t),
@@ -50,8 +51,8 @@ pub(crate) struct SizedReader {
     pub reader: Box<dyn Read + 'static>,
 }
 
-impl ::std::fmt::Debug for SizedReader {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::result::Result<(), ::std::fmt::Error> {
+impl fmt::Debug for SizedReader {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "SizedReader[size={:?},reader]", self.size)
     }
 }

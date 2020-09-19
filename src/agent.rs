@@ -40,13 +40,13 @@ pub struct Agent {
     /// Copied into each request of this agent.
     pub(crate) headers: Vec<Header>,
     /// Reused agent state for repeated requests from this agent.
-    pub(crate) state: Arc<Mutex<Option<AgentState>>>,
+    pub(crate) state: Arc<Mutex<AgentState>>,
 }
 
 /// Container of the state
 ///
 /// *Internal API*.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(crate) struct AgentState {
     /// Reused connections between requests.
     pub(crate) pool: ConnectionPool,
@@ -89,7 +89,7 @@ impl Agent {
     pub fn build(&self) -> Self {
         Agent {
             headers: self.headers.clone(),
-            state: Arc::new(Mutex::new(Some(AgentState::new()))),
+            state: Arc::new(Mutex::new(AgentState::new())),
         }
     }
 
@@ -166,6 +166,34 @@ impl Agent {
         Request::new(&self, method.into(), path.into())
     }
 
+    /// Sets the maximum number of connections allowed in the connection pool.
+    /// By default, this is set to 100. Setting this to zero would disable
+    /// connection pooling.
+    ///
+    /// ```
+    /// let agent = ureq::agent();
+    /// agent.set_max_pool_connections(200);
+    /// ```
+    pub fn set_max_pool_connections(&self, max_connections: usize) {
+        let mut state = self.state.lock().unwrap();
+        state.pool.set_max_idle_connections(max_connections);
+    }
+
+    /// Sets the maximum number of connections per host to keep in the
+    /// connection pool. By default, this is set to 1. Setting this to zero
+    /// would disable connection pooling.
+    ///
+    /// ```
+    /// let agent = ureq::agent();
+    /// agent.set_max_pool_connections_per_host(10);
+    /// ```
+    pub fn set_max_pool_connections_per_host(&self, max_connections: usize) {
+        let mut state = self.state.lock().unwrap();
+        state
+            .pool
+            .set_max_idle_connections_per_host(max_connections);
+    }
+
     /// Gets a cookie in this agent by name. Cookies are available
     /// either by setting it in the agent, or by making requests
     /// that `Set-Cookie` in the agent.
@@ -180,10 +208,7 @@ impl Agent {
     #[cfg(feature = "cookie")]
     pub fn cookie(&self, name: &str) -> Option<Cookie<'static>> {
         let state = self.state.lock().unwrap();
-        state
-            .as_ref()
-            .and_then(|state| state.jar.get(name))
-            .cloned()
+        state.jar.get(name).cloned()
     }
 
     /// Set a cookie in this agent.
@@ -197,12 +222,7 @@ impl Agent {
     #[cfg(feature = "cookie")]
     pub fn set_cookie(&self, cookie: Cookie<'static>) {
         let mut state = self.state.lock().unwrap();
-        match state.as_mut() {
-            None => (),
-            Some(state) => {
-                state.jar.add_original(cookie);
-            }
-        }
+        state.jar.add_original(cookie);
     }
 
     /// Make a GET request from this agent.
@@ -256,20 +276,20 @@ pub(crate) fn basic_auth(user: &str, pass: &str) -> String {
         Some(idx) => &user[..idx],
         None => user,
     };
-    ::base64::encode(&format!("{}:{}", safe, pass))
+    base64::encode(&format!("{}:{}", safe, pass))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Read;
+    use std::thread;
 
     ///////////////////// AGENT TESTS //////////////////////////////
 
     #[test]
     fn agent_implements_send() {
         let mut agent = Agent::new();
-        ::std::thread::spawn(move || {
+        thread::spawn(move || {
             agent.set("Foo", "Bar");
         });
     }
@@ -277,6 +297,8 @@ mod tests {
     #[test]
     #[cfg(any(feature = "tls", feature = "native-tls"))]
     fn agent_pool() {
+        use std::io::Read;
+
         let agent = crate::agent();
         let url = "https://ureq.s3.eu-central-1.amazonaws.com/sherlock.txt";
         // req 1
@@ -287,8 +309,7 @@ mod tests {
         reader.read_to_end(&mut buf).unwrap();
 
         fn poolsize(agent: &Agent) -> usize {
-            let mut lock = agent.state.lock().unwrap();
-            let state = lock.as_mut().unwrap();
+            let mut state = agent.state.lock().unwrap();
             state.pool().len()
         }
         assert_eq!(poolsize(&agent), 1);
@@ -307,7 +328,7 @@ mod tests {
     fn request_implements_send() {
         let agent = Agent::new();
         let mut request = Request::new(&agent, "GET".to_string(), "/foo".to_string());
-        ::std::thread::spawn(move || {
+        thread::spawn(move || {
             request.set("Foo", "Bar");
         });
     }

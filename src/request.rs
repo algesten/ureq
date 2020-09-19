@@ -1,15 +1,10 @@
+use std::fmt;
 use std::io::Read;
 use std::sync::{Arc, Mutex};
 use std::time;
 
 use qstring::QString;
 use url::{form_urlencoded, Url};
-
-#[cfg(feature = "tls")]
-use std::fmt;
-
-#[cfg(all(feature = "native-tls", not(feature = "tls")))]
-use std::fmt;
 
 use crate::agent::{self, Agent, AgentState};
 use crate::body::{Payload, SizedReader};
@@ -35,7 +30,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// ```
 #[derive(Clone, Default)]
 pub struct Request {
-    pub(crate) agent: Arc<Mutex<Option<AgentState>>>,
+    pub(crate) agent: Arc<Mutex<AgentState>>,
 
     // via agent
     pub(crate) method: String,
@@ -57,8 +52,8 @@ pub struct Request {
     pub(crate) tls_connector: Option<TLSConnector>,
 }
 
-impl ::std::fmt::Debug for Request {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::result::Result<(), ::std::fmt::Error> {
+impl fmt::Debug for Request {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let (path, query) = self
             .to_url()
             .map(|u| {
@@ -488,32 +483,6 @@ impl Request {
         self
     }
 
-    // pub fn retry(&self, times: u16) -> Request {
-    //     unimplemented!()
-    // }
-    // pub fn sortQuery(&self) -> Request {
-    //     unimplemented!()
-    // }
-    // pub fn sortQueryBy(&self, by: Box<Fn(&str, &str) -> usize>) -> Request {
-    //     unimplemented!()
-    // }
-    // pub fn ca<S>(&self, accept: S) -> Request
-    //     where S: Into<String> {
-    //     unimplemented!()
-    // }
-    // pub fn cert<S>(&self, accept: S) -> Request
-    //     where S: Into<String> {
-    //     unimplemented!()
-    // }
-    // pub fn key<S>(&self, accept: S) -> Request
-    //     where S: Into<String> {
-    //     unimplemented!()
-    // }
-    // pub fn pfx<S>(&self, accept: S) -> Request // TODO what type? u8?
-    //     where S: Into<String> {
-    //     unimplemented!()
-    // }
-
     /// Get the method this request is using.
     ///
     /// Example:
@@ -634,7 +603,7 @@ impl Request {
     ///
     /// Example:
     /// ```
-    /// let tls_connector = std::sync::Arc::new(native_tls::TlsConnector::new());
+    /// let tls_connector = std::sync::Arc::new(native_tls::TlsConnector::new().unwrap());
     /// let req = ureq::post("https://cool.server")
     ///     .set_tls_connector(tls_connector.clone());
     /// ```

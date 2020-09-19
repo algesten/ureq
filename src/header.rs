@@ -1,4 +1,5 @@
 use crate::error::Error;
+use std::fmt;
 use std::str::FromStr;
 
 #[derive(Clone, PartialEq)]
@@ -14,8 +15,8 @@ pub struct Header {
     index: usize,
 }
 
-impl ::std::fmt::Debug for Header {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::result::Result<(), ::std::fmt::Error> {
+impl fmt::Debug for Header {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.line)
     }
 }

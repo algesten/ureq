@@ -1,3 +1,4 @@
+use std::fmt;
 use std::io::{Cursor, Error as IoError, ErrorKind, Read, Result as IoResult};
 use std::str::FromStr;
 use std::time::Instant;
@@ -56,8 +57,8 @@ struct ResponseStatusIndex {
     response_code: usize,
 }
 
-impl ::std::fmt::Debug for Response {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::result::Result<(), ::std::fmt::Error> {
+impl fmt::Debug for Response {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
             "Response[status: {}, status_text: {}]",
@@ -520,14 +521,16 @@ pub(crate) fn set_stream(resp: &mut Response, url: String, unit: Option<Unit>, s
 fn read_next_line<R: Read>(reader: &mut R) -> IoResult<String> {
     let mut buf = Vec::new();
     let mut prev_byte_was_cr = false;
+    let mut one = [0_u8];
 
     loop {
-        let byte = reader.bytes().next();
+        let amt = reader.read(&mut one[..])?;
 
-        let byte = match byte {
-            Some(b) => b?,
-            None => return Err(IoError::new(ErrorKind::ConnectionAborted, "Unexpected EOF")),
-        };
+        if amt == 0 {
+            return Err(IoError::new(ErrorKind::ConnectionAborted, "Unexpected EOF"));
+        }
+
+        let byte = one[0];
 
         if byte == b'\n' && prev_byte_was_cr {
             buf.pop(); // removing the '\r'
