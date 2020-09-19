@@ -363,7 +363,11 @@ fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> IoResult<()> {
         }
     }
     if !header::has_header(&unit.headers, "user-agent") {
-        write!(prelude, "User-Agent: ureq/{}\r\n", env!("CARGO_PKG_VERSION"))?;
+        write!(
+            prelude,
+            "User-Agent: ureq/{}\r\n",
+            env!("CARGO_PKG_VERSION")
+        )?;
     }
     if !header::has_header(&unit.headers, "accept") {
         write!(prelude, "Accept: */*\r\n")?;
