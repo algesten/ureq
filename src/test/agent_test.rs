@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::test;
 use crate::test::testserver::{read_headers, TestServer};
 use std::io::{self, Write};
@@ -78,8 +80,7 @@ fn connection_reuse() {
     resp.into_string().unwrap();
 
     {
-        let mut guard_state = agent.state.lock().unwrap();
-        let mut state = guard_state.take().unwrap();
+        let mut state = agent.state.lock().unwrap();
         assert!(state.pool().len() > 0);
     }
 
@@ -98,4 +99,52 @@ fn connection_reuse() {
         panic!("Pooled connection failed! {:?}", err);
     }
     assert_eq!(resp.status(), 200);
+}
+
+#[cfg(feature = "cookie")]
+#[cfg(test)]
+fn cookie_and_redirect(mut stream: TcpStream) -> io::Result<()> {
+    let headers = read_headers(&stream);
+    match headers.path() {
+        "/first" => {
+            stream.write_all(b"HTTP/1.1 302 Found\r\n")?;
+            stream.write_all(b"Location: /second\r\n")?;
+            stream.write_all(b"Set-Cookie: first=true\r\n")?;
+            stream.write_all(b"Content-Length: 0\r\n\r\n")?;
+        },
+        "/second" => {
+            if headers.headers().iter().find(|&x| x.contains("first=true")).is_none() {
+                panic!("request did not contain cookie 'first'");
+            }
+            stream.write_all(b"HTTP/1.1 302 Found\r\n")?;
+            stream.write_all(b"Location: /third\r\n")?;
+            stream.write_all(b"Set-Cookie: second=true\r\n")?;
+            stream.write_all(b"Content-Length: 0\r\n\r\n")?;
+        },
+        "/third" => {
+            if headers.headers().iter().find(|&x| x.contains("second=true")).is_none() {
+                panic!("request did not contain cookie 'second'");
+            }
+            stream.write_all(b"HTTP/1.1 200 OK\r\n")?;
+            stream.write_all(b"Set-Cookie: third=true\r\n")?;
+            stream.write_all(b"Content-Length: 0\r\n\r\n")?;
+        },
+        _ => {},
+    }
+    Ok(())
+}
+
+#[cfg(feature = "cookie")]
+#[test]
+fn test_cookies_on_redirect() {
+    let testserver = TestServer::new(cookie_and_redirect);
+    let url = format!("http://localhost:{}/first", testserver.port);
+    let agent = Agent::default().build();
+    let resp = agent.post(&url).call();
+    if resp.error() {
+        panic!("error: {} {}", resp.status(), resp.into_string().unwrap());
+    }
+    assert!(agent.cookie("first").is_some());
+    assert!(agent.cookie("second").is_some());
+    assert!(agent.cookie("third").is_some());
 }

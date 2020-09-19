@@ -40,13 +40,13 @@ pub struct Agent {
     /// Copied into each request of this agent.
     pub(crate) headers: Vec<Header>,
     /// Reused agent state for repeated requests from this agent.
-    pub(crate) state: Arc<Mutex<Option<AgentState>>>,
+    pub(crate) state: Arc<Mutex<AgentState>>,
 }
 
 /// Container of the state
 ///
 /// *Internal API*.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(crate) struct AgentState {
     /// Reused connections between requests.
     pub(crate) pool: ConnectionPool,
@@ -89,7 +89,7 @@ impl Agent {
     pub fn build(&self) -> Self {
         Agent {
             headers: self.headers.clone(),
-            state: Arc::new(Mutex::new(Some(AgentState::new()))),
+            state: Arc::new(Mutex::new(AgentState::new())),
         }
     }
 
@@ -175,10 +175,8 @@ impl Agent {
     /// agent.set_max_pool_connections(200);
     /// ```
     pub fn set_max_pool_connections(&self, max_connections: usize) {
-        let mut optional_state = self.state.lock().unwrap();
-        if let Some(state) = optional_state.as_mut() {
-            state.pool.set_max_idle_connections(max_connections);
-        }
+        let mut state = self.state.lock().unwrap();
+        state.pool.set_max_idle_connections(max_connections);
     }
 
     /// Sets the maximum number of connections per host to keep in the
@@ -190,12 +188,10 @@ impl Agent {
     /// agent.set_max_pool_connections_per_host(10);
     /// ```
     pub fn set_max_pool_connections_per_host(&self, max_connections: usize) {
-        let mut optional_state = self.state.lock().unwrap();
-        if let Some(state) = optional_state.as_mut() {
-            state
-                .pool
-                .set_max_idle_connections_per_host(max_connections);
-        }
+        let mut state = self.state.lock().unwrap();
+        state
+            .pool
+            .set_max_idle_connections_per_host(max_connections);
     }
 
     /// Gets a cookie in this agent by name. Cookies are available
@@ -212,10 +208,7 @@ impl Agent {
     #[cfg(feature = "cookie")]
     pub fn cookie(&self, name: &str) -> Option<Cookie<'static>> {
         let state = self.state.lock().unwrap();
-        state
-            .as_ref()
-            .and_then(|state| state.jar.get(name))
-            .cloned()
+        state.jar.get(name).cloned()
     }
 
     /// Set a cookie in this agent.
@@ -229,12 +222,7 @@ impl Agent {
     #[cfg(feature = "cookie")]
     pub fn set_cookie(&self, cookie: Cookie<'static>) {
         let mut state = self.state.lock().unwrap();
-        match state.as_mut() {
-            None => (),
-            Some(state) => {
-                state.jar.add_original(cookie);
-            }
-        }
+        state.jar.add_original(cookie);
     }
 
     /// Make a GET request from this agent.
@@ -294,7 +282,6 @@ pub(crate) fn basic_auth(user: &str, pass: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Read;
     use std::thread;
 
     ///////////////////// AGENT TESTS //////////////////////////////
@@ -310,6 +297,8 @@ mod tests {
     #[test]
     #[cfg(any(feature = "tls", feature = "native-tls"))]
     fn agent_pool() {
+        use std::io::Read;
+
         let agent = crate::agent();
         let url = "https://ureq.s3.eu-central-1.amazonaws.com/sherlock.txt";
         // req 1
@@ -321,8 +310,7 @@ mod tests {
         reader.read_to_end(&mut buf).unwrap();
 
         fn poolsize(agent: &Agent) -> usize {
-            let mut lock = agent.state.lock().unwrap();
-            let state = lock.as_mut().unwrap();
+            let mut state = agent.state.lock().unwrap();
             state.pool().len()
         }
         assert_eq!(poolsize(&agent), 1);

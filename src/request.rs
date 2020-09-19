@@ -29,7 +29,7 @@ use super::SerdeValue;
 /// ```
 #[derive(Clone, Default)]
 pub struct Request {
-    pub(crate) agent: Arc<Mutex<Option<AgentState>>>,
+    pub(crate) agent: Arc<Mutex<AgentState>>,
 
     // via agent
     pub(crate) method: String,

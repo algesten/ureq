@@ -35,7 +35,7 @@ const DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST: usize = 1;
 ///  - The length of recycle[K] is less than or equal to max_idle_connections_per_host.
 ///
 /// *Internal API*
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub(crate) struct ConnectionPool {
     // the actual pooled connection. however only one per hostname:port.
     recycle: HashMap<PoolKey, VecDeque<Stream>>,
@@ -62,13 +62,20 @@ fn remove_last_match(list: &mut VecDeque<PoolKey>, key: &PoolKey) -> Option<Pool
     }
 }
 
-impl ConnectionPool {
-    pub fn new() -> Self {
-        ConnectionPool {
+impl Default for ConnectionPool {
+    fn default() -> Self {
+        Self {
             max_idle_connections: DEFAULT_MAX_IDLE_CONNECTIONS,
             max_idle_connections_per_host: DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST,
-            ..Default::default()
+            recycle: HashMap::default(),
+            lru: VecDeque::default(),
         }
+    }
+}
+
+impl ConnectionPool {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn set_max_idle_connections(&mut self, max_connections: usize) {
@@ -390,15 +397,13 @@ impl<R: Read + Sized + Into<Stream>> PoolReturnRead<R> {
             let state = &mut unit.agent.lock().unwrap();
             // bring back stream here to either go into pool or dealloc
             let stream = reader.into();
-            if let Some(agent) = state.as_mut() {
-                if !stream.is_poolable() {
-                    // just let it deallocate
-                    return;
-                }
-                // insert back into pool
-                let key = PoolKey::new(&unit.url, &unit.proxy);
-                agent.pool().add(key, stream);
+            if !stream.is_poolable() {
+                // just let it deallocate
+                return;
             }
+            // insert back into pool
+            let key = PoolKey::new(&unit.url, &unit.proxy);
+            state.pool().add(key, stream);
         }
     }
 
