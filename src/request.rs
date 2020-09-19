@@ -117,7 +117,7 @@ impl Request {
             unit::connect(&self, unit, true, 0, reader, false)
         })?;
 
-        if (response.error() || response.redirect()) && self.return_error_for_status {
+        if response.error() && self.return_error_for_status {
             Err(Error::HTTP(response.into()))
         } else {
             Ok(response)
@@ -464,7 +464,7 @@ impl Request {
         self
     }
 
-    /// By default, if a response's status is anything but a 2xx,
+    /// By default, if a response's status is anything but a 2xx or 3xx,
     /// send() and related methods will return an Error. If you want
     /// to handle such responses as non-errors, set this to false.
     ///
