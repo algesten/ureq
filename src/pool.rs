@@ -8,7 +8,6 @@ use crate::Proxy;
 
 use url::Url;
 
-pub const DEFAULT_HOST: &str = "localhost";
 const DEFAULT_MAX_IDLE_CONNECTIONS: usize = 100;
 const DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST: usize = 1;
 

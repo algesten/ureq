@@ -11,7 +11,6 @@ use crate::agent::{self, Agent, AgentState};
 use crate::body::{Payload, SizedReader};
 use crate::error::Error;
 use crate::header::{self, Header};
-use crate::pool;
 use crate::unit::{self, Unit};
 use crate::Response;
 
@@ -498,8 +497,13 @@ impl Request {
     /// assert_eq!(req2.get_host().unwrap(), "localhost");
     /// ```
     pub fn get_host(&self) -> Result<String, Error> {
-        self.to_url()
-            .map(|u| u.host_str().unwrap_or(pool::DEFAULT_HOST).to_string())
+        match self.to_url() {
+            Ok(u) => match u.host_str() {
+                Some(host) => Ok(host.to_string()),
+                None => Err(Error::BadUrl("No hostname in URL".into())),
+            },
+            Err(e) => Err(e),
+        }
     }
 
     /// Returns the scheme for this request.

@@ -21,9 +21,6 @@ use crate::request::TLSClientConfig;
 #[cfg(all(feature = "native-tls", not(feature = "tls")))]
 use crate::request::TLSConnector;
 
-#[cfg(feature = "cookie")]
-use crate::pool::DEFAULT_HOST;
-
 /// It's a "unit of work". Maybe a bad name for it?
 ///
 /// *Internal API*
@@ -60,7 +57,9 @@ impl Unit {
 
         let query_string = combine_query(&url, &req.query, mix_queries);
 
-        let cookie_header: Option<Header> = extract_cookies(&req.agent, &url);
+        let cookie_header: Option<Header> = url
+            .host_str()
+            .and_then(|host_str| extract_cookies(&req.agent, &url.scheme(), host_str, &url.path()));
 
         let extra_headers = {
             let mut extra = vec![];
@@ -147,7 +146,7 @@ pub(crate) fn connect(
     //
 
     // open socket
-    let (mut stream, is_recycled) = connect_socket(&unit, use_pooled)?;
+    let (mut stream, is_recycled) = connect_socket(&unit, &req.get_host()?, use_pooled)?;
 
     let send_result = send_prelude(&unit, &mut stream, redir);
 
@@ -238,16 +237,25 @@ pub(crate) fn connect(
 }
 
 #[cfg(feature = "cookie")]
-fn extract_cookies(state: &std::sync::Mutex<AgentState>, url: &Url) -> Option<Header> {
+fn extract_cookies(
+    state: &std::sync::Mutex<AgentState>,
+    scheme: &str,
+    host: &str,
+    path: &str,
+) -> Option<Header> {
     let state = state.lock().unwrap();
-    let is_secure = url.scheme().eq_ignore_ascii_case("https");
-    let hostname = url.host_str().unwrap_or(DEFAULT_HOST).to_string();
+    let is_secure = scheme.eq_ignore_ascii_case("https");
 
-    match_cookies(&state.jar, &hostname, url.path(), is_secure)
+    match_cookies(&state.jar, host, path, is_secure)
 }
 
 #[cfg(not(feature = "cookie"))]
-fn extract_cookies(_state: &std::sync::Mutex<AgentState>, _url: &Url) -> Option<Header> {
+fn extract_cookies(
+    _state: &std::sync::Mutex<AgentState>,
+    _scheme: &str,
+    _host: &str,
+    _path: &str,
+) -> Option<Header> {
     None
 }
 
@@ -298,7 +306,7 @@ pub(crate) fn combine_query(url: &Url, query: &QString, mix_queries: bool) -> St
 }
 
 /// Connect the socket, either by using the pool or grab a new one.
-fn connect_socket(unit: &Unit, use_pooled: bool) -> Result<(Stream, bool), Error> {
+fn connect_socket(unit: &Unit, hostname: &str, use_pooled: bool) -> Result<(Stream, bool), Error> {
     match unit.url.scheme() {
         "http" | "https" | "test" => (),
         _ => return Err(Error::UnknownScheme(unit.url.scheme().to_string())),
@@ -316,8 +324,8 @@ fn connect_socket(unit: &Unit, use_pooled: bool) -> Result<(Stream, bool), Error
         }
     }
     let stream = match unit.url.scheme() {
-        "http" => stream::connect_http(&unit),
-        "https" => stream::connect_https(&unit),
+        "http" => stream::connect_http(&unit, hostname),
+        "https" => stream::connect_https(&unit, hostname),
         "test" => connect_test(&unit),
         _ => Err(Error::UnknownScheme(unit.url.scheme().to_string())),
     };
@@ -408,7 +416,7 @@ fn save_cookies(unit: &Unit, resp: &Response) {
         let to_parse = if raw_cookie.to_lowercase().contains("domain=") {
             (*raw_cookie).to_string()
         } else {
-            let host = &unit.url.host_str().unwrap_or(DEFAULT_HOST).to_string();
+            let host = &unit.url.host_str().unwrap().to_string();
             format!("{}; Domain={}", raw_cookie, host)
         };
         match Cookie::parse_encoded(&to_parse[..]) {
