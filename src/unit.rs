@@ -145,8 +145,9 @@ pub(crate) fn connect(
 ) -> Result<Response, Error> {
     //
 
+    let host = req.get_host()?;
     // open socket
-    let (mut stream, is_recycled) = connect_socket(&unit, &req.get_host()?, use_pooled)?;
+    let (mut stream, is_recycled) = connect_socket(&unit, &host, use_pooled)?;
 
     let send_result = send_prelude(&unit, &mut stream, redir);
 
