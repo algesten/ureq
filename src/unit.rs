@@ -176,9 +176,10 @@ pub(crate) fn connect(
     // sequence of requests if all of those requests have idempotent
     // methods.
     //
-    // We choose to retry only once. To do that, we rely on is_recycled,
-    // the "one connection per hostname" police of the ConnectionPool,
-    // and the fact that connections with errors are dropped.
+    // We choose to retry only requests that used a recycled connection
+    // from the ConnectionPool, since those are most likely to have
+    // reached a server-side timeout. Note that this means we may do
+    // up to N+1 total tries, where N is max_idle_connections_per_host.
     //
     // TODO: is_bad_status_read is too narrow since it covers only the
     // first line. It's also allowable to retry requests that hit a
