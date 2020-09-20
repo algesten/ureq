@@ -633,3 +633,13 @@ impl fmt::Debug for TLSConnector {
         f.debug_struct("TLSConnector").finish()
     }
 }
+
+#[test]
+fn no_hostname() {
+    let req = Request::new(
+        &Agent::default(),
+        "GET".to_string(),
+        "unix:/run/foo.socket".to_string(),
+    );
+    assert!(req.get_host().is_err());
+}
