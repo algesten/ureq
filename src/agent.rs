@@ -57,11 +57,7 @@ pub(crate) struct AgentState {
 
 impl AgentState {
     fn new() -> Self {
-        AgentState {
-            pool: ConnectionPool::new(),
-            #[cfg(feature = "cookie")]
-            jar: CookieJar::new(),
-        }
+        Self::default()
     }
     pub fn pool(&mut self) -> &mut ConnectionPool {
         &mut self.pool
