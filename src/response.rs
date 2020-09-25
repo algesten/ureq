@@ -288,7 +288,7 @@ impl Response {
     /// assert_eq!(bytes.len(), len);
     /// # }
     /// ```
-    pub fn into_reader(self) -> impl Read {
+    pub fn into_reader(self) -> impl Read + Send + Sync {
         //
         let is_http10 = self.http_version().eq_ignore_ascii_case("HTTP/1.0");
         let is_close = self
@@ -326,9 +326,8 @@ impl Response {
         let stream = DeadlineStream::new(stream, deadline);
 
         match (use_chunked, limit_bytes) {
-            (true, _) => {
-                Box::new(PoolReturnRead::new(unit, ChunkDecoder::new(stream))) as Box<dyn Read>
-            }
+            (true, _) => Box::new(PoolReturnRead::new(unit, ChunkDecoder::new(stream)))
+                as Box<dyn Read + Send + Sync>,
             (false, Some(len)) => {
                 Box::new(PoolReturnRead::new(unit, LimitedRead::new(stream, len)))
             }
