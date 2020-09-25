@@ -32,7 +32,7 @@ pub enum Stream {
     Https(BufReader<TlsStream<TcpStream>>),
     Cursor(Cursor<Vec<u8>>),
     #[cfg(test)]
-    Test(Box<dyn BufRead + Send>, Vec<u8>),
+    Test(Box<dyn BufRead + Send + Sync>, Vec<u8>),
 }
 
 // DeadlineStream wraps a stream such that read() will return an error
