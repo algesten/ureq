@@ -83,13 +83,6 @@ impl ConnectionPool {
             return;
         }
 
-        if max_connections == 0 {
-            // Clear the connection pool, caching is disabled.
-            self.lru.clear();
-            self.recycle.clear();
-            return;
-        }
-
         // Remove any extra connections if the number was decreased.
         while self.lru.len() > max_connections {
             self.remove_oldest();
