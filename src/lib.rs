@@ -125,6 +125,7 @@ mod header;
 mod pool;
 mod proxy;
 mod request;
+mod resolve;
 mod response;
 mod stream;
 mod unit;
@@ -140,6 +141,7 @@ pub use crate::error::Error;
 pub use crate::header::Header;
 pub use crate::proxy::Proxy;
 pub use crate::request::Request;
+pub use crate::resolve::Resolver;
 pub use crate::response::Response;
 
 // re-export

@@ -10,6 +10,7 @@ use cookie::{Cookie, CookieJar};
 use crate::agent::AgentState;
 use crate::body::{self, Payload, SizedReader};
 use crate::header;
+use crate::resolve::ArcResolver;
 use crate::stream::{self, connect_test, Stream};
 use crate::{Error, Header, Request, Response};
 
@@ -93,6 +94,10 @@ impl Unit {
 
     pub fn is_head(&self) -> bool {
         self.req.method.eq_ignore_ascii_case("head")
+    }
+
+    pub fn resolver(&self) -> ArcResolver {
+        self.req.agent.lock().unwrap().resolver.clone()
     }
 
     #[cfg(test)]
