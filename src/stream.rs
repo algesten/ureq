@@ -360,7 +360,6 @@ pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error
 pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error> {
     use std::sync::Arc;
 
-    let hostname = unit.url.host_str().unwrap();
     let port = unit.url.port().unwrap_or(443);
     let sock = connect_host(unit, hostname, port)?;
 
