@@ -647,6 +647,6 @@ pub(crate) fn connect_test(unit: &Unit) -> Result<Stream, Error> {
 }
 
 #[cfg(not(any(feature = "tls", feature = "native-tls")))]
-pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error> {
+pub(crate) fn connect_https(unit: &Unit, _hostname: &str) -> Result<Stream, Error> {
     Err(Error::UnknownScheme(unit.url.scheme().to_string()))
 }
