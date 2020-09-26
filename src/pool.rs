@@ -390,7 +390,7 @@ impl<R: Read + Sized + Into<Stream>> PoolReturnRead<R> {
     fn return_connection(&mut self) {
         // guard we only do this once.
         if let (Some(unit), Some(reader)) = (self.unit.take(), self.reader.take()) {
-            let state = &mut unit.agent.lock().unwrap();
+            let state = &mut unit.req.agent.lock().unwrap();
             // bring back stream here to either go into pool or dealloc
             let stream = reader.into();
             if !stream.is_poolable() {
@@ -398,7 +398,7 @@ impl<R: Read + Sized + Into<Stream>> PoolReturnRead<R> {
                 return;
             }
             // insert back into pool
-            let key = PoolKey::new(&unit.url, &unit.proxy);
+            let key = PoolKey::new(&unit.url, &unit.req.proxy);
             state.pool().add(key, stream);
         }
     }
