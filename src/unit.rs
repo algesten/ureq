@@ -13,9 +13,6 @@ use crate::header;
 use crate::stream::{self, connect_test, Stream};
 use crate::{Error, Header, Request, Response};
 
-#[cfg(all(feature = "native-tls", not(feature = "tls")))]
-use crate::request::TLSConnector;
-
 #[cfg(feature = "cookie")]
 use crate::pool::DEFAULT_HOST;
 

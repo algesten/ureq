@@ -366,7 +366,7 @@ pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
     let port = unit.url.port().unwrap_or(443);
     let sock = connect_host(unit, hostname, port)?;
 
-    let tls_connector: Arc<native_tls::TlsConnector> = match &unit.tls_connector {
+    let tls_connector: Arc<native_tls::TlsConnector> = match &unit.req.tls_connector {
         Some(connector) => connector.0.clone(),
         None => Arc::new(native_tls::TlsConnector::new().map_err(|e| Error::TlsError(e))?),
     };
