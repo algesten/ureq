@@ -97,7 +97,7 @@ impl Unit {
     }
 
     pub fn resolver(&self) -> ArcResolver {
-        self.agent.lock().unwrap().resolver.clone()
+        self.req.agent.lock().unwrap().resolver.clone()
     }
 
     #[cfg(test)]
