@@ -1,6 +1,6 @@
 use crate::stream::Stream;
 use std::fmt;
-use std::io::{copy, empty, Cursor, Read, Result as IoResult, Write};
+use std::io::{self, copy, empty, Cursor, Read, Write};
 
 #[cfg(feature = "charset")]
 use crate::response::DEFAULT_CHARACTER_SET;
@@ -43,11 +43,21 @@ impl Default for Payload {
     }
 }
 
+/// The size of the body.
+///
+/// *Internal API*
+#[derive(Debug)]
+pub(crate) enum BodySize {
+    Empty,
+    Unknown,
+    Known(u64),
+}
+
 /// Payloads are turned into this type where we can hold both a size and the reader.
 ///
 /// *Internal API*
 pub(crate) struct SizedReader {
-    pub size: Option<usize>,
+    pub size: BodySize,
     pub reader: Box<dyn Read + 'static>,
 }
 
@@ -58,7 +68,7 @@ impl fmt::Debug for SizedReader {
 }
 
 impl SizedReader {
-    fn new(size: Option<usize>, reader: Box<dyn Read + 'static>) -> Self {
+    fn new(size: BodySize, reader: Box<dyn Read + 'static>) -> Self {
         SizedReader { size, reader }
     }
 }
@@ -66,7 +76,7 @@ impl SizedReader {
 impl Payload {
     pub fn into_read(self) -> SizedReader {
         match self {
-            Payload::Empty => SizedReader::new(None, Box::new(empty())),
+            Payload::Empty => SizedReader::new(BodySize::Empty, Box::new(empty())),
             Payload::Text(text, _charset) => {
                 #[cfg(feature = "charset")]
                 let bytes = {
@@ -79,20 +89,20 @@ impl Payload {
                 let bytes = text.into_bytes();
                 let len = bytes.len();
                 let cursor = Cursor::new(bytes);
-                SizedReader::new(Some(len), Box::new(cursor))
+                SizedReader::new(BodySize::Known(len as u64), Box::new(cursor))
             }
             #[cfg(feature = "json")]
             Payload::JSON(v) => {
                 let bytes = serde_json::to_vec(&v).expect("Bad JSON in payload");
                 let len = bytes.len();
                 let cursor = Cursor::new(bytes);
-                SizedReader::new(Some(len), Box::new(cursor))
+                SizedReader::new(BodySize::Known(len as u64), Box::new(cursor))
             }
-            Payload::Reader(read) => SizedReader::new(None, read),
+            Payload::Reader(read) => SizedReader::new(BodySize::Unknown, read),
             Payload::Bytes(bytes) => {
                 let len = bytes.len();
                 let cursor = Cursor::new(bytes);
-                SizedReader::new(Some(len), Box::new(cursor))
+                SizedReader::new(BodySize::Known(len as u64), Box::new(cursor))
             }
         }
     }
@@ -109,7 +119,7 @@ const CHUNK_MAX_PAYLOAD_SIZE: usize = CHUNK_MAX_SIZE - CHUNK_HEADER_MAX_SIZE - C
 // 2) chunked_transfer's Encoder issues 4 separate write() per chunk. This is costly
 //    overhead. Instead, we do a single write() per chunk.
 // The measured benefit on a Linux machine is a 50% reduction in CPU usage on a https connection.
-fn copy_chunked<R: Read, W: Write>(reader: &mut R, writer: &mut W) -> IoResult<u64> {
+fn copy_chunked<R: Read, W: Write>(reader: &mut R, writer: &mut W) -> io::Result<u64> {
     // The chunk layout is:
     // header:header_max_size | payload:max_payload_size | footer:footer_size
     let mut chunk = Vec::with_capacity(CHUNK_MAX_SIZE);
@@ -167,7 +177,7 @@ pub(crate) fn send_body(
     mut body: SizedReader,
     do_chunk: bool,
     stream: &mut Stream,
-) -> IoResult<()> {
+) -> io::Result<()> {
     if do_chunk {
         copy_chunked(&mut body.reader, stream)?;
     } else {

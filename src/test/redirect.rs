@@ -46,7 +46,7 @@ fn redirect_head() {
         test::make_response(302, "Go here", vec!["Location: /redirect_head2"], vec![])
     });
     test::set_handler("/redirect_head2", |unit| {
-        assert_eq!(unit.method, "HEAD");
+        assert_eq!(unit.req.method, "HEAD");
         test::make_response(200, "OK", vec!["x-foo: bar"], vec![])
     });
     let resp = head("test://host/redirect_head1").call();
@@ -62,7 +62,7 @@ fn redirect_get() {
         test::make_response(302, "Go here", vec!["Location: /redirect_get2"], vec![])
     });
     test::set_handler("/redirect_get2", |unit| {
-        assert_eq!(unit.method, "GET");
+        assert_eq!(unit.req.method, "GET");
         assert!(unit.has("Range"));
         assert_eq!(unit.header("Range").unwrap(), "bytes=10-50");
         test::make_response(200, "OK", vec!["x-foo: bar"], vec![])
@@ -82,7 +82,7 @@ fn redirect_post() {
         test::make_response(302, "Go here", vec!["Location: /redirect_post2"], vec![])
     });
     test::set_handler("/redirect_post2", |unit| {
-        assert_eq!(unit.method, "GET");
+        assert_eq!(unit.req.method, "GET");
         test::make_response(200, "OK", vec!["x-foo: bar"], vec![])
     });
     let resp = post("test://host/redirect_post1").call();

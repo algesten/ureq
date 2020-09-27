@@ -1,5 +1,4 @@
-use std::io::{Result as IoResult, Write};
-use std::sync::{Arc, Mutex};
+use std::io::{self, Write};
 use std::time;
 
 use qstring::QString;
@@ -9,40 +8,22 @@ use url::Url;
 use cookie::{Cookie, CookieJar};
 
 use crate::agent::AgentState;
-use crate::body::{self, Payload, SizedReader};
+use crate::body::{self, BodySize, Payload, SizedReader};
 use crate::header;
+use crate::resolve::ArcResolver;
 use crate::stream::{self, connect_test, Stream};
-use crate::Proxy;
 use crate::{Error, Header, Request, Response};
-
-#[cfg(feature = "tls")]
-use crate::request::TLSClientConfig;
-
-#[cfg(all(feature = "native-tls", not(feature = "tls")))]
-use crate::request::TLSConnector;
-
-#[cfg(feature = "cookie")]
-use crate::pool::DEFAULT_HOST;
 
 /// It's a "unit of work". Maybe a bad name for it?
 ///
 /// *Internal API*
 pub(crate) struct Unit {
-    pub agent: Arc<Mutex<AgentState>>,
+    pub req: Request,
     pub url: Url,
     pub is_chunked: bool,
     pub query_string: String,
     pub headers: Vec<Header>,
-    pub timeout_connect: u64,
-    pub timeout_read: u64,
-    pub timeout_write: u64,
     pub deadline: Option<time::Instant>,
-    pub method: String,
-    pub proxy: Option<Proxy>,
-    #[cfg(feature = "tls")]
-    pub tls_config: Option<TLSClientConfig>,
-    #[cfg(all(feature = "native-tls", not(feature = "tls")))]
-    pub tls_connector: Option<TLSConnector>,
 }
 
 impl Unit {
@@ -51,16 +32,25 @@ impl Unit {
     pub(crate) fn new(req: &Request, url: &Url, mix_queries: bool, body: &SizedReader) -> Self {
         //
 
-        let is_chunked = req
+        let (is_transfer_encoding_set, mut is_chunked) = req
             .header("transfer-encoding")
             // if the user has set an encoding header, obey that.
-            .map(|enc| !enc.is_empty())
+            .map(|enc| {
+                let is_transfer_encoding_set = !enc.is_empty();
+                let last_encoding = enc.split(',').last();
+                let is_chunked = last_encoding
+                    .map(|last_enc| last_enc.trim() == "chunked")
+                    .unwrap_or(false);
+                (is_transfer_encoding_set, is_chunked)
+            })
             // otherwise, no chunking.
-            .unwrap_or(false);
+            .unwrap_or((false, false));
 
         let query_string = combine_query(&url, &req.query, mix_queries);
 
-        let cookie_header: Option<Header> = extract_cookies(&req.agent, &url);
+        let cookie_header: Option<Header> = url
+            .host_str()
+            .and_then(|host_str| extract_cookies(&req.agent, &url.scheme(), host_str, &url.path()));
 
         let extra_headers = {
             let mut extra = vec![];
@@ -68,8 +58,21 @@ impl Unit {
             // chunking and Content-Length headers are mutually exclusive
             // also don't write this if the user has set it themselves
             if !is_chunked && !req.has("content-length") {
-                if let Some(size) = body.size {
-                    extra.push(Header::new("Content-Length", &format!("{}", size)));
+                // if the payload is of known size (everything beside an unsized reader), set
+                // Content-Length,
+                // otherwise, use the chunked Transfer-Encoding (only if no other Transfer-Encoding
+                // has been set
+                match body.size {
+                    BodySize::Known(size) => {
+                        extra.push(Header::new("Content-Length", &format!("{}", size)))
+                    }
+                    BodySize::Unknown => {
+                        if !is_transfer_encoding_set {
+                            extra.push(Header::new("Transfer-Encoding", "chunked"));
+                            is_chunked = true;
+                        }
+                    }
+                    BodySize::Empty => {}
                 }
             }
 
@@ -99,26 +102,21 @@ impl Unit {
         };
 
         Unit {
-            agent: Arc::clone(&req.agent),
+            req: req.clone(),
             url: url.clone(),
             is_chunked,
             query_string,
             headers,
-            timeout_connect: req.timeout_connect,
-            timeout_read: req.timeout_read,
-            timeout_write: req.timeout_write,
             deadline,
-            method: req.method.clone(),
-            proxy: req.proxy.clone(),
-            #[cfg(feature = "tls")]
-            tls_config: req.tls_config.clone(),
-            #[cfg(all(feature = "native-tls", not(feature = "tls")))]
-            tls_connector: req.tls_connector.clone(),
         }
     }
 
     pub fn is_head(&self) -> bool {
-        self.method.eq_ignore_ascii_case("head")
+        self.req.method.eq_ignore_ascii_case("head")
+    }
+
+    pub fn resolver(&self) -> ArcResolver {
+        self.req.agent.lock().unwrap().resolver.clone()
     }
 
     #[cfg(test)]
@@ -146,8 +144,9 @@ pub(crate) fn connect(
 ) -> Result<Response, Error> {
     //
 
+    let host = req.get_host()?;
     // open socket
-    let (mut stream, is_recycled) = connect_socket(&unit, use_pooled)?;
+    let (mut stream, is_recycled) = connect_socket(&unit, &host, use_pooled)?;
 
     let send_result = send_prelude(&unit, &mut stream, redir);
 
@@ -176,9 +175,10 @@ pub(crate) fn connect(
     // sequence of requests if all of those requests have idempotent
     // methods.
     //
-    // We choose to retry only once. To do that, we rely on is_recycled,
-    // the "one connection per hostname" police of the ConnectionPool,
-    // and the fact that connections with errors are dropped.
+    // We choose to retry only requests that used a recycled connection
+    // from the ConnectionPool, since those are most likely to have
+    // reached a server-side timeout. Note that this means we may do
+    // up to N+1 total tries, where N is max_idle_connections_per_host.
     //
     // TODO: is_bad_status_read is too narrow since it covers only the
     // first line. It's also allowable to retry requests that hit a
@@ -216,8 +216,8 @@ pub(crate) fn connect(
                     let mut new_unit = Unit::new(req, &new_url, false, &empty);
                     // this is to follow how curl does it. POST, PUT etc change
                     // to GET on a redirect.
-                    new_unit.method = match &unit.method[..] {
-                        "GET" | "HEAD" => unit.method,
+                    new_unit.req.method = match &unit.req.method[..] {
+                        "GET" | "HEAD" => unit.req.method,
                         _ => "GET".into(),
                     };
                     return connect(req, new_unit, use_pooled, redirect_count + 1, empty, true);
@@ -238,16 +238,25 @@ pub(crate) fn connect(
 }
 
 #[cfg(feature = "cookie")]
-fn extract_cookies(state: &std::sync::Mutex<AgentState>, url: &Url) -> Option<Header> {
+fn extract_cookies(
+    state: &std::sync::Mutex<AgentState>,
+    scheme: &str,
+    host: &str,
+    path: &str,
+) -> Option<Header> {
     let state = state.lock().unwrap();
-    let is_secure = url.scheme().eq_ignore_ascii_case("https");
-    let hostname = url.host_str().unwrap_or(DEFAULT_HOST).to_string();
+    let is_secure = scheme.eq_ignore_ascii_case("https");
 
-    match_cookies(&state.jar, &hostname, url.path(), is_secure)
+    match_cookies(&state.jar, host, path, is_secure)
 }
 
 #[cfg(not(feature = "cookie"))]
-fn extract_cookies(_state: &std::sync::Mutex<AgentState>, _url: &Url) -> Option<Header> {
+fn extract_cookies(
+    _state: &std::sync::Mutex<AgentState>,
+    _scheme: &str,
+    _host: &str,
+    _path: &str,
+) -> Option<Header> {
     None
 }
 
@@ -298,17 +307,17 @@ pub(crate) fn combine_query(url: &Url, query: &QString, mix_queries: bool) -> St
 }
 
 /// Connect the socket, either by using the pool or grab a new one.
-fn connect_socket(unit: &Unit, use_pooled: bool) -> Result<(Stream, bool), Error> {
+fn connect_socket(unit: &Unit, hostname: &str, use_pooled: bool) -> Result<(Stream, bool), Error> {
     match unit.url.scheme() {
         "http" | "https" | "test" => (),
         _ => return Err(Error::UnknownScheme(unit.url.scheme().to_string())),
     };
     if use_pooled {
-        let state = &mut unit.agent.lock().unwrap();
+        let state = &mut unit.req.agent.lock().unwrap();
         // The connection may have been closed by the server
         // due to idle timeout while it was sitting in the pool.
         // Loop until we find one that is still good or run out of connections.
-        while let Some(stream) = state.pool.try_get_connection(&unit.url, &unit.proxy) {
+        while let Some(stream) = state.pool.try_get_connection(&unit.url, &unit.req.proxy) {
             let server_closed = stream.server_closed()?;
             if !server_closed {
                 return Ok((stream, true));
@@ -316,8 +325,8 @@ fn connect_socket(unit: &Unit, use_pooled: bool) -> Result<(Stream, bool), Error
         }
     }
     let stream = match unit.url.scheme() {
-        "http" => stream::connect_http(&unit),
-        "https" => stream::connect_https(&unit),
+        "http" => stream::connect_http(&unit, hostname),
+        "https" => stream::connect_https(&unit, hostname),
         "test" => connect_test(&unit),
         _ => Err(Error::UnknownScheme(unit.url.scheme().to_string())),
     };
@@ -326,7 +335,7 @@ fn connect_socket(unit: &Unit, use_pooled: bool) -> Result<(Stream, bool), Error
 
 /// Send request line + headers (all up until the body).
 #[allow(clippy::write_with_newline)]
-fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> IoResult<()> {
+fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> io::Result<()> {
     //
 
     // build into a buffer and send in one go.
@@ -336,7 +345,7 @@ fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> IoResult<()> {
     write!(
         prelude,
         "{} {}{} HTTP/1.1\r\n",
-        unit.method,
+        unit.req.method,
         unit.url.path(),
         &unit.query_string
     )?;
@@ -403,12 +412,12 @@ fn save_cookies(unit: &Unit, resp: &Response) {
     }
 
     // only lock if we know there is something to process
-    let state = &mut unit.agent.lock().unwrap();
+    let state = &mut unit.req.agent.lock().unwrap();
     for raw_cookie in cookies.iter() {
         let to_parse = if raw_cookie.to_lowercase().contains("domain=") {
             (*raw_cookie).to_string()
         } else {
-            let host = &unit.url.host_str().unwrap_or(DEFAULT_HOST).to_string();
+            let host = &unit.url.host_str().unwrap().to_string();
             format!("{}; Domain={}", raw_cookie, host)
         };
         match Cookie::parse_encoded(&to_parse[..]) {

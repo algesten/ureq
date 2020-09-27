@@ -1,10 +1,7 @@
 use std::fmt;
-use std::io::{
-    BufRead, BufReader, Cursor, Error as IoError, ErrorKind, Read, Result as IoResult, Write,
-};
+use std::io::{self, BufRead, BufReader, Cursor, ErrorKind, Read, Write};
 use std::net::SocketAddr;
 use std::net::TcpStream;
-use std::net::ToSocketAddrs;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -68,7 +65,7 @@ impl From<DeadlineStream> for Stream {
 }
 
 impl Read for DeadlineStream {
-    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         if let Some(deadline) = self.deadline {
             let timeout = time_until_deadline(deadline)?;
             if let Some(socket) = self.stream.socket() {
@@ -91,7 +88,7 @@ impl Read for DeadlineStream {
 
 // If the deadline is in the future, return the remaining time until
 // then. Otherwise return a TimedOut error.
-fn time_until_deadline(deadline: Instant) -> IoResult<Duration> {
+fn time_until_deadline(deadline: Instant) -> io::Result<Duration> {
     let now = Instant::now();
     match deadline.checked_duration_since(now) {
         None => Err(io_err_timeout("timed out reading response".to_string())),
@@ -99,8 +96,8 @@ fn time_until_deadline(deadline: Instant) -> IoResult<Duration> {
     }
 }
 
-pub(crate) fn io_err_timeout(error: String) -> IoError {
-    IoError::new(ErrorKind::TimedOut, error)
+pub(crate) fn io_err_timeout(error: String) -> io::Error {
+    io::Error::new(ErrorKind::TimedOut, error)
 }
 
 impl fmt::Debug for Stream {
@@ -129,7 +126,7 @@ impl Stream {
     // connection: return true. If this returns WouldBlock (aka EAGAIN),
     // that means the connection is still open: return false. Otherwise
     // return an error.
-    fn serverclosed_stream(stream: &std::net::TcpStream) -> IoResult<bool> {
+    fn serverclosed_stream(stream: &std::net::TcpStream) -> io::Result<bool> {
         let mut buf = [0; 1];
         stream.set_nonblocking(true)?;
 
@@ -144,7 +141,7 @@ impl Stream {
         result
     }
     // Return true if the server has closed this connection.
-    pub(crate) fn server_closed(&self) -> IoResult<bool> {
+    pub(crate) fn server_closed(&self) -> io::Result<bool> {
         match self.socket() {
             Some(socket) => Stream::serverclosed_stream(socket),
             None => Ok(false),
@@ -181,7 +178,7 @@ impl Stream {
 }
 
 impl Read for Stream {
-    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         match self {
             Stream::Http(sock) => sock.read(buf),
             #[cfg(any(
@@ -197,7 +194,7 @@ impl Read for Stream {
 }
 
 impl BufRead for Stream {
-    fn fill_buf(&mut self) -> IoResult<&[u8]> {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
         match self {
             Stream::Http(r) => r.fill_buf(),
             #[cfg(any(
@@ -240,7 +237,7 @@ where
 fn read_https(
     stream: &mut BufReader<StreamOwned<ClientSession, TcpStream>>,
     buf: &mut [u8],
-) -> IoResult<usize> {
+) -> io::Result<usize> {
     match stream.read(buf) {
         Ok(size) => Ok(size),
         Err(ref e) if is_close_notify(e) => Ok(0),
@@ -249,7 +246,7 @@ fn read_https(
 }
 
 #[cfg(all(feature = "native-tls", not(feature = "tls")))]
-fn read_https(stream: &mut BufReader<TlsStream<TcpStream>>, buf: &mut [u8]) -> IoResult<usize> {
+fn read_https(stream: &mut BufReader<TlsStream<TcpStream>>, buf: &mut [u8]) -> io::Result<usize> {
     match stream.read(buf) {
         Ok(size) => Ok(size),
         Err(ref e) if is_close_notify(e) => Ok(0),
@@ -274,7 +271,7 @@ fn is_close_notify(e: &std::io::Error) -> bool {
 }
 
 impl Write for Stream {
-    fn write(&mut self, buf: &[u8]) -> IoResult<usize> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         match self {
             Stream::Http(sock) => sock.get_mut().write(buf),
             #[cfg(any(
@@ -287,7 +284,7 @@ impl Write for Stream {
             Stream::Test(_, writer) => writer.write(buf),
         }
     }
-    fn flush(&mut self) -> IoResult<()> {
+    fn flush(&mut self) -> io::Result<()> {
         match self {
             Stream::Http(sock) => sock.get_mut().flush(),
             #[cfg(any(
@@ -302,9 +299,8 @@ impl Write for Stream {
     }
 }
 
-pub(crate) fn connect_http(unit: &Unit) -> Result<Stream, Error> {
+pub(crate) fn connect_http(unit: &Unit, hostname: &str) -> Result<Stream, Error> {
     //
-    let hostname = unit.url.host_str().unwrap();
     let port = unit.url.port().unwrap_or(80);
 
     connect_host(unit, hostname, port)
@@ -326,7 +322,7 @@ fn configure_certs(config: &mut rustls::ClientConfig) {
 }
 
 #[cfg(all(feature = "tls", not(feature = "native-tls")))]
-pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
+pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error> {
     use lazy_static::lazy_static;
     use std::sync::Arc;
 
@@ -338,13 +334,16 @@ pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
         };
     }
 
-    let hostname = unit.url.host_str().unwrap();
     let port = unit.url.port().unwrap_or(443);
 
     let sni = webpki::DNSNameRef::try_from_ascii_str(hostname)
         .map_err(|err| Error::DnsFailed(err.to_string()))?;
-    let tls_conf: &Arc<rustls::ClientConfig> =
-        unit.tls_config.as_ref().map(|c| &c.0).unwrap_or(&*TLS_CONF);
+    let tls_conf: &Arc<rustls::ClientConfig> = unit
+        .req
+        .tls_config
+        .as_ref()
+        .map(|c| &c.0)
+        .unwrap_or(&*TLS_CONF);
     let sess = rustls::ClientSession::new(&tls_conf, sni);
 
     let sock = connect_host(unit, hostname, port)?;
@@ -355,14 +354,13 @@ pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
 }
 
 #[cfg(all(feature = "native-tls", not(feature = "tls")))]
-pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
+pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error> {
     use std::sync::Arc;
 
-    let hostname = unit.url.host_str().unwrap();
     let port = unit.url.port().unwrap_or(443);
     let sock = connect_host(unit, hostname, port)?;
 
-    let tls_connector: Arc<native_tls::TlsConnector> = match &unit.tls_connector {
+    let tls_connector: Arc<native_tls::TlsConnector> = match &unit.req.tls_connector {
         Some(connector) => connector.0.clone(),
         None => Arc::new(native_tls::TlsConnector::new().map_err(|e| Error::TlsError(e))?),
     };
@@ -377,26 +375,28 @@ pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
 }
 
 pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<TcpStream, Error> {
-    let deadline: Option<Instant> = if unit.timeout_connect > 0 {
-        Instant::now().checked_add(Duration::from_millis(unit.timeout_connect))
+    let deadline: Option<Instant> = if unit.req.timeout_connect > 0 {
+        Instant::now().checked_add(Duration::from_millis(unit.req.timeout_connect))
     } else {
         unit.deadline
     };
-
-    // TODO: Find a way to apply deadline to DNS lookup.
-    let sock_addrs: Vec<SocketAddr> = match unit.proxy {
+  
+    let netloc = match unit.req.proxy {
         Some(ref proxy) => format!("{}:{}", proxy.server, proxy.port),
         None => format!("{}:{}", hostname, port),
-    }
-    .to_socket_addrs()
-    .map_err(|e| Error::DnsFailed(format!("{}", e)))?
-    .collect();
+    };
+
+    // TODO: Find a way to apply deadline to DNS lookup.
+    let sock_addrs = unit
+        .resolver()
+        .resolve(&netloc)
+        .map_err(|e| Error::DnsFailed(format!("{}", e)))?;
 
     if sock_addrs.is_empty() {
         return Err(Error::DnsFailed(format!("No ip address for {}", hostname)));
     }
 
-    let proto = if let Some(ref proxy) = unit.proxy {
+    let proto = if let Some(ref proxy) = unit.req.proxy {
         Some(proxy.proto)
     } else {
         None
@@ -415,7 +415,8 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         // connect with a configured timeout.
         let stream = if Some(Proto::SOCKS5) == proto {
             connect_socks5(
-                unit.proxy.to_owned().unwrap(),
+                &unit,
+                unit.req.proxy.to_owned().unwrap(),
                 deadline,
                 sock_addr,
                 hostname,
@@ -448,9 +449,9 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         stream
             .set_read_timeout(Some(time_until_deadline(deadline)?))
             .ok();
-    } else if unit.timeout_read > 0 {
+    } else if unit.req.timeout_read > 0 {
         stream
-            .set_read_timeout(Some(Duration::from_millis(unit.timeout_read as u64)))
+            .set_read_timeout(Some(Duration::from_millis(unit.req.timeout_read as u64)))
             .ok();
     } else {
         stream.set_read_timeout(None).ok();
@@ -460,16 +461,16 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         stream
             .set_write_timeout(Some(time_until_deadline(deadline)?))
             .ok();
-    } else if unit.timeout_write > 0 {
+    } else if unit.req.timeout_write > 0 {
         stream
-            .set_write_timeout(Some(Duration::from_millis(unit.timeout_write as u64)))
+            .set_write_timeout(Some(Duration::from_millis(unit.req.timeout_write as u64)))
             .ok();
     } else {
         stream.set_write_timeout(None).ok();
     }
 
     if proto == Some(Proto::HTTPConnect) {
-        if let Some(ref proxy) = unit.proxy {
+        if let Some(ref proxy) = unit.req.proxy {
             write!(stream, "{}", proxy.connect(hostname, port)).unwrap();
             stream.flush()?;
 
@@ -492,11 +493,15 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
 }
 
 #[cfg(feature = "socks-proxy")]
-fn socks5_local_nslookup(hostname: &str, port: u16) -> Result<TargetAddr, std::io::Error> {
-    let addrs: Vec<SocketAddr> = format!("{}:{}", hostname, port)
-        .to_socket_addrs()
-        .map_err(|e| std::io::Error::new(ErrorKind::NotFound, format!("DNS failure: {}.", e)))?
-        .collect();
+fn socks5_local_nslookup(
+    unit: &Unit,
+    hostname: &str,
+    port: u16,
+) -> Result<TargetAddr, std::io::Error> {
+    let addrs: Vec<SocketAddr> = unit
+        .resolver()
+        .resolve(&format!("{}:{}", hostname, port))
+        .map_err(|e| std::io::Error::new(ErrorKind::NotFound, format!("DNS failure: {}.", e)))?;
 
     if addrs.is_empty() {
         return Err(std::io::Error::new(
@@ -518,6 +523,7 @@ fn socks5_local_nslookup(hostname: &str, port: u16) -> Result<TargetAddr, std::i
 
 #[cfg(feature = "socks-proxy")]
 fn connect_socks5(
+    unit: &Unit,
     proxy: Proxy,
     deadline: Option<Instant>,
     proxy_addr: SocketAddr,
@@ -529,7 +535,7 @@ fn connect_socks5(
     use std::str::FromStr;
 
     let host_addr = if Ipv4Addr::from_str(host).is_ok() || Ipv6Addr::from_str(host).is_ok() {
-        match socks5_local_nslookup(host, port) {
+        match socks5_local_nslookup(unit, host, port) {
             Ok(addr) => addr,
             Err(err) => return Err(err),
         }
@@ -621,6 +627,7 @@ fn get_socks5_stream(
 
 #[cfg(not(feature = "socks-proxy"))]
 fn connect_socks5(
+    _unit: &Unit,
     _proxy: Proxy,
     _deadline: Option<Instant>,
     _proxy_addr: SocketAddr,
@@ -645,6 +652,6 @@ pub(crate) fn connect_test(unit: &Unit) -> Result<Stream, Error> {
 }
 
 #[cfg(not(any(feature = "tls", feature = "native-tls")))]
-pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
+pub(crate) fn connect_https(unit: &Unit, _hostname: &str) -> Result<Stream, Error> {
     Err(Error::UnknownScheme(unit.url.scheme().to_string()))
 }

@@ -1,5 +1,5 @@
 use std::fmt;
-use std::io::{Cursor, Error as IoError, ErrorKind, Read, Result as IoResult};
+use std::io::{self, Cursor, ErrorKind, Read};
 use std::str::FromStr;
 use std::time::Instant;
 
@@ -365,7 +365,7 @@ impl Response {
     ///
     /// I.e. `Content-Length: text/plain; charset=iso-8859-1` would be decoded in latin-1.
     ///
-    pub fn into_string(self) -> IoResult<String> {
+    pub fn into_string(self) -> io::Result<String> {
         #[cfg(feature = "charset")]
         {
             let encoding = encoding_from_whatwg_label(self.charset())
@@ -399,22 +399,22 @@ impl Response {
     /// assert_eq!(json["hello"], "world");
     /// ```
     #[cfg(feature = "json")]
-    pub fn into_json(self) -> IoResult<serde_json::Value> {
+    pub fn into_json(self) -> io::Result<serde_json::Value> {
         use crate::stream::io_err_timeout;
         use std::error::Error;
 
         let reader = self.into_reader();
         serde_json::from_reader(reader).map_err(|e| {
-            // This is to unify TimedOut IoError in the API.
+            // This is to unify TimedOut io::Error in the API.
             // We make a clone of the original error since serde_json::Error doesn't
             // let us get the wrapped error instance back.
-            if let Some(ioe) = e.source().and_then(|s| s.downcast_ref::<IoError>()) {
+            if let Some(ioe) = e.source().and_then(|s| s.downcast_ref::<io::Error>()) {
                 if ioe.kind() == ErrorKind::TimedOut {
                     return io_err_timeout(ioe.to_string());
                 }
             }
 
-            IoError::new(
+            io::Error::new(
                 ErrorKind::InvalidData,
                 format!("Failed to read JSON: {}", e),
             )
@@ -444,10 +444,10 @@ impl Response {
     /// assert_eq!(json.hello, "world");
     /// ```
     #[cfg(feature = "json")]
-    pub fn into_json_deserialize<T: DeserializeOwned>(self) -> IoResult<T> {
+    pub fn into_json_deserialize<T: DeserializeOwned>(self) -> io::Result<T> {
         let reader = self.into_reader();
         serde_json::from_reader(reader).map_err(|e| {
-            IoError::new(
+            io::Error::new(
                 ErrorKind::InvalidData,
                 format!("Failed to read JSON: {}", e),
             )
@@ -590,7 +590,7 @@ pub(crate) fn set_stream(resp: &mut Response, url: String, unit: Option<Unit>, s
     resp.stream = Some(stream);
 }
 
-fn read_next_line<R: Read>(reader: &mut R) -> IoResult<String> {
+fn read_next_line<R: Read>(reader: &mut R) -> io::Result<String> {
     let mut buf = Vec::new();
     let mut prev_byte_was_cr = false;
     let mut one = [0_u8];
@@ -599,7 +599,10 @@ fn read_next_line<R: Read>(reader: &mut R) -> IoResult<String> {
         let amt = reader.read(&mut one[..])?;
 
         if amt == 0 {
-            return Err(IoError::new(ErrorKind::ConnectionAborted, "Unexpected EOF"));
+            return Err(io::Error::new(
+                ErrorKind::ConnectionAborted,
+                "Unexpected EOF",
+            ));
         }
 
         let byte = one[0];
@@ -607,7 +610,7 @@ fn read_next_line<R: Read>(reader: &mut R) -> IoResult<String> {
         if byte == b'\n' && prev_byte_was_cr {
             buf.pop(); // removing the '\r'
             return String::from_utf8(buf)
-                .map_err(|_| IoError::new(ErrorKind::InvalidInput, "Header is not in ASCII"));
+                .map_err(|_| io::Error::new(ErrorKind::InvalidInput, "Header is not in ASCII"));
         }
 
         prev_byte_was_cr = byte == b'\r';
@@ -634,7 +637,7 @@ impl<R: Read> LimitedRead<R> {
 }
 
 impl<R: Read> Read for LimitedRead<R> {
-    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let left = self.limit - self.position;
         if left == 0 {
             return Ok(0);
@@ -650,7 +653,7 @@ impl<R: Read> Read for LimitedRead<R> {
             // the recipient times out before the indicated number of octets are
             // received, the recipient MUST consider the message to be
             // incomplete and close the connection.
-            Ok(0) => Err(IoError::new(
+            Ok(0) => Err(io::Error::new(
                 ErrorKind::InvalidData,
                 "response body closed before all bytes were read",
             )),
