@@ -74,10 +74,6 @@ impl Default for ConnectionPool {
 }
 
 impl ConnectionPool {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     pub fn set_max_idle_connections(&mut self, max_connections: usize) {
         if self.max_idle_connections == max_connections {
             return;
@@ -251,7 +247,7 @@ fn pool_connections_limit() {
     // Test inserting connections with different keys into the pool,
     // filling and draining it. The pool should evict earlier connections
     // when the connection limit is reached.
-    let mut pool = ConnectionPool::new();
+    let mut pool = ConnectionPool::default();
     let hostnames = (0..DEFAULT_MAX_IDLE_CONNECTIONS * 2).map(|i| format!("{}.example", i));
     let poolkeys = hostnames.map(|hostname| PoolKey {
         scheme: "https".to_string(),
@@ -276,7 +272,7 @@ fn pool_per_host_connections_limit() {
     // Test inserting connections with the same key into the pool,
     // filling and draining it. The pool should evict earlier connections
     // when the per-host connection limit is reached.
-    let mut pool = ConnectionPool::new();
+    let mut pool = ConnectionPool::default();
     let poolkey = PoolKey {
         scheme: "https".to_string(),
         hostname: "example.com".to_string(),
@@ -301,7 +297,7 @@ fn pool_per_host_connections_limit() {
 
 #[test]
 fn pool_update_connection_limit() {
-    let mut pool = ConnectionPool::new();
+    let mut pool = ConnectionPool::default();
     pool.set_max_idle_connections(50);
 
     let hostnames = (0..pool.max_idle_connections).map(|i| format!("{}.example", i));
@@ -321,7 +317,7 @@ fn pool_update_connection_limit() {
 
 #[test]
 fn pool_update_per_host_connection_limit() {
-    let mut pool = ConnectionPool::new();
+    let mut pool = ConnectionPool::default();
     pool.set_max_idle_connections(50);
     pool.set_max_idle_connections_per_host(50);
 
@@ -347,7 +343,7 @@ fn pool_update_per_host_connection_limit() {
 fn pool_checks_proxy() {
     // Test inserting different poolkeys with same address but different proxies.
     // Each insertion should result in an additional entry in the pool.
-    let mut pool = ConnectionPool::new();
+    let mut pool = ConnectionPool::default();
     let url = Url::parse("zzz:///example.com").unwrap();
 
     pool.add(
@@ -394,7 +390,7 @@ impl<R: Read + Sized + Into<Stream>> PoolReturnRead<R> {
     fn return_connection(&mut self) {
         // guard we only do this once.
         if let (Some(unit), Some(reader)) = (self.unit.take(), self.reader.take()) {
-            let state = &mut unit.agent.lock().unwrap();
+            let state = &mut unit.req.agent.lock().unwrap();
             // bring back stream here to either go into pool or dealloc
             let stream = reader.into();
             if !stream.is_poolable() {
@@ -402,7 +398,7 @@ impl<R: Read + Sized + Into<Stream>> PoolReturnRead<R> {
                 return;
             }
             // insert back into pool
-            let key = PoolKey::new(&unit.url, &unit.proxy);
+            let key = PoolKey::new(&unit.url, &unit.req.proxy);
             state.pool().add(key, stream);
         }
     }

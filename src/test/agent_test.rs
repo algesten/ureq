@@ -101,6 +101,31 @@ fn connection_reuse() {
     assert_eq!(resp.status(), 200);
 }
 
+#[test]
+fn custom_resolver() {
+    use std::io::Read;
+    use std::net::TcpListener;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+
+    let local_addr = listener.local_addr().unwrap();
+
+    let server = std::thread::spawn(move || {
+        let (mut client, _) = listener.accept().unwrap();
+        let mut buf = vec![0u8; 16];
+        let read = client.read(&mut buf).unwrap();
+        buf.truncate(read);
+        buf
+    });
+
+    crate::agent()
+        .set_resolver(move |_: &str| Ok(vec![local_addr]))
+        .get("http://cool.server/")
+        .call();
+
+    assert_eq!(&server.join().unwrap(), b"GET / HTTP/1.1\r\n");
+}
+
 #[cfg(feature = "cookie")]
 #[cfg(test)]
 fn cookie_and_redirect(mut stream: TcpStream) -> io::Result<()> {

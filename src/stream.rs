@@ -2,7 +2,6 @@ use std::fmt;
 use std::io::{self, BufRead, BufReader, Cursor, ErrorKind, Read, Write};
 use std::net::SocketAddr;
 use std::net::TcpStream;
-use std::net::ToSocketAddrs;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -341,8 +340,12 @@ pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
 
     let sni = webpki::DNSNameRef::try_from_ascii_str(hostname)
         .map_err(|err| Error::DnsFailed(err.to_string()))?;
-    let tls_conf: &Arc<rustls::ClientConfig> =
-        unit.tls_config.as_ref().map(|c| &c.0).unwrap_or(&*TLS_CONF);
+    let tls_conf: &Arc<rustls::ClientConfig> = unit
+        .req
+        .tls_config
+        .as_ref()
+        .map(|c| &c.0)
+        .unwrap_or(&*TLS_CONF);
     let sess = rustls::ClientSession::new(&tls_conf, sni);
 
     let sock = connect_host(unit, hostname, port)?;
@@ -360,7 +363,7 @@ pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
     let port = unit.url.port().unwrap_or(443);
     let sock = connect_host(unit, hostname, port)?;
 
-    let tls_connector: Arc<native_tls::TlsConnector> = match &unit.tls_connector {
+    let tls_connector: Arc<native_tls::TlsConnector> = match &unit.req.tls_connector {
         Some(connector) => connector.0.clone(),
         None => Arc::new(native_tls::TlsConnector::new().map_err(|e| Error::TlsError(e))?),
     };
@@ -375,26 +378,28 @@ pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
 }
 
 pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<TcpStream, Error> {
-    let deadline: Option<Instant> = if unit.timeout_connect > 0 {
-        Instant::now().checked_add(Duration::from_millis(unit.timeout_connect))
+    let deadline: Option<Instant> = if unit.req.timeout_connect > 0 {
+        Instant::now().checked_add(Duration::from_millis(unit.req.timeout_connect))
     } else {
         unit.deadline
     };
-
-    // TODO: Find a way to apply deadline to DNS lookup.
-    let sock_addrs: Vec<SocketAddr> = match unit.proxy {
+  
+    let netloc = match unit.req.proxy {
         Some(ref proxy) => format!("{}:{}", proxy.server, proxy.port),
         None => format!("{}:{}", hostname, port),
-    }
-    .to_socket_addrs()
-    .map_err(|e| Error::DnsFailed(format!("{}", e)))?
-    .collect();
+    };
+
+    // TODO: Find a way to apply deadline to DNS lookup.
+    let sock_addrs = unit
+        .resolver()
+        .resolve(&netloc)
+        .map_err(|e| Error::DnsFailed(format!("{}", e)))?;
 
     if sock_addrs.is_empty() {
         return Err(Error::DnsFailed(format!("No ip address for {}", hostname)));
     }
 
-    let proto = if let Some(ref proxy) = unit.proxy {
+    let proto = if let Some(ref proxy) = unit.req.proxy {
         Some(proxy.proto)
     } else {
         None
@@ -413,7 +418,8 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         // connect with a configured timeout.
         let stream = if Some(Proto::SOCKS5) == proto {
             connect_socks5(
-                unit.proxy.to_owned().unwrap(),
+                &unit,
+                unit.req.proxy.to_owned().unwrap(),
                 deadline,
                 sock_addr,
                 hostname,
@@ -446,9 +452,9 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         stream
             .set_read_timeout(Some(time_until_deadline(deadline)?))
             .ok();
-    } else if unit.timeout_read > 0 {
+    } else if unit.req.timeout_read > 0 {
         stream
-            .set_read_timeout(Some(Duration::from_millis(unit.timeout_read as u64)))
+            .set_read_timeout(Some(Duration::from_millis(unit.req.timeout_read as u64)))
             .ok();
     } else {
         stream.set_read_timeout(None).ok();
@@ -458,16 +464,16 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         stream
             .set_write_timeout(Some(time_until_deadline(deadline)?))
             .ok();
-    } else if unit.timeout_write > 0 {
+    } else if unit.req.timeout_write > 0 {
         stream
-            .set_write_timeout(Some(Duration::from_millis(unit.timeout_write as u64)))
+            .set_write_timeout(Some(Duration::from_millis(unit.req.timeout_write as u64)))
             .ok();
     } else {
         stream.set_write_timeout(None).ok();
     }
 
     if proto == Some(Proto::HTTPConnect) {
-        if let Some(ref proxy) = unit.proxy {
+        if let Some(ref proxy) = unit.req.proxy {
             write!(stream, "{}", proxy.connect(hostname, port)).unwrap();
             stream.flush()?;
 
@@ -490,11 +496,15 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
 }
 
 #[cfg(feature = "socks-proxy")]
-fn socks5_local_nslookup(hostname: &str, port: u16) -> Result<TargetAddr, std::io::Error> {
-    let addrs: Vec<SocketAddr> = format!("{}:{}", hostname, port)
-        .to_socket_addrs()
-        .map_err(|e| std::io::Error::new(ErrorKind::NotFound, format!("DNS failure: {}.", e)))?
-        .collect();
+fn socks5_local_nslookup(
+    unit: &Unit,
+    hostname: &str,
+    port: u16,
+) -> Result<TargetAddr, std::io::Error> {
+    let addrs: Vec<SocketAddr> = unit
+        .resolver()
+        .resolve(&format!("{}:{}", hostname, port))
+        .map_err(|e| std::io::Error::new(ErrorKind::NotFound, format!("DNS failure: {}.", e)))?;
 
     if addrs.is_empty() {
         return Err(std::io::Error::new(
@@ -516,6 +526,7 @@ fn socks5_local_nslookup(hostname: &str, port: u16) -> Result<TargetAddr, std::i
 
 #[cfg(feature = "socks-proxy")]
 fn connect_socks5(
+    unit: &Unit,
     proxy: Proxy,
     deadline: Option<Instant>,
     proxy_addr: SocketAddr,
@@ -527,7 +538,7 @@ fn connect_socks5(
     use std::str::FromStr;
 
     let host_addr = if Ipv4Addr::from_str(host).is_ok() || Ipv6Addr::from_str(host).is_ok() {
-        match socks5_local_nslookup(host, port) {
+        match socks5_local_nslookup(unit, host, port) {
             Ok(addr) => addr,
             Err(err) => return Err(err),
         }
@@ -619,6 +630,7 @@ fn get_socks5_stream(
 
 #[cfg(not(feature = "socks-proxy"))]
 fn connect_socks5(
+    _unit: &Unit,
     _proxy: Proxy,
     _deadline: Option<Instant>,
     _proxy_addr: SocketAddr,

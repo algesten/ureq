@@ -6,6 +6,7 @@ use std::sync::Mutex;
 use crate::header::{self, Header};
 use crate::pool::ConnectionPool;
 use crate::request::Request;
+use crate::resolve::ArcResolver;
 
 /// Agents keep state between requests.
 ///
@@ -53,15 +54,12 @@ pub(crate) struct AgentState {
     /// Cookies saved between requests.
     #[cfg(feature = "cookie")]
     pub(crate) jar: CookieJar,
+    pub(crate) resolver: ArcResolver,
 }
 
 impl AgentState {
     fn new() -> Self {
-        AgentState {
-            pool: ConnectionPool::new(),
-            #[cfg(feature = "cookie")]
-            jar: CookieJar::new(),
-        }
+        Self::default()
     }
     pub fn pool(&mut self) -> &mut ConnectionPool {
         &mut self.pool
@@ -192,6 +190,29 @@ impl Agent {
         state
             .pool
             .set_max_idle_connections_per_host(max_connections);
+    }
+
+    /// Configures a custom resolver to be used by this agent. By default,
+    /// address-resolution is done by std::net::ToSocketAddrs. This allows you
+    /// to override that resolution with your own alternative. Useful for
+    /// testing and special-cases like DNS-based load balancing.
+    ///
+    /// A `Fn(&str) -> io::Result<Vec<SocketAddr>>` is a valid resolver,
+    /// passing a closure is a simple way to override. Note that you might need
+    /// explicit type `&str` on the closure argument for type inference to
+    /// succeed.
+    /// ```
+    /// use std::net::ToSocketAddrs;
+    ///
+    /// let mut agent = ureq::agent();
+    /// agent.set_resolver(|addr: &str| match addr {
+    ///    "example.com" => Ok(vec![([127,0,0,1], 8096).into()]),
+    ///    addr => addr.to_socket_addrs().map(Iterator::collect),
+    /// });
+    /// ```
+    pub fn set_resolver(&mut self, resolver: impl crate::Resolver + 'static) -> &mut Self {
+        self.state.lock().unwrap().resolver = resolver.into();
+        self
     }
 
     /// Gets a cookie in this agent by name. Cookies are available
