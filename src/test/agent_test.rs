@@ -202,16 +202,17 @@ fn dirty_streams_not_returned() -> io::Result<()> {
     let url = format!("http://localhost:{}/", testserver.port);
     let agent = Agent::default().build();
     let resp = agent.get(&url).call();
-    assert!(resp.ok(), format!("error: {}", resp.status()));
+    if let Some(err) = resp.synthetic_error() {
+        panic!("resp failed: {:?}", err);
+    }
     let resp_str = resp.into_string()?;
     assert_eq!(resp_str, "corgidachsund");
 
     // Now fetch it again, but only read part of the body.
     let resp_to_be_dropped = agent.get(&url).call();
-    assert!(
-        resp_to_be_dropped.ok(),
-        format!("error: {}", resp_to_be_dropped.status())
-    );
+    if let Some(err) = resp_to_be_dropped.synthetic_error() {
+        panic!("resp_to_be_dropped failed: {:?}", err);
+    }
     let mut reader = resp_to_be_dropped.into_reader();
 
     // Read 9 bytes of the response and then drop the reader.
@@ -222,10 +223,9 @@ fn dirty_streams_not_returned() -> io::Result<()> {
     drop(reader);
 
     let resp_to_succeed = agent.get(&url).call();
-    assert!(
-        resp_to_succeed.ok(),
-        format!("error: {}", resp_to_succeed.status())
-    );
+    if let Some(err) = resp_to_succeed.synthetic_error() {
+        panic!("resp_to_succeed failed: {:?}", err);
+    }
 
     Ok(())
 }
