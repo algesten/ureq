@@ -1,5 +1,4 @@
 use std::io::{Result as IoResult, Write};
-use std::sync::{Arc, Mutex};
 use std::time;
 
 use qstring::QString;
@@ -11,15 +10,9 @@ use cookie::{Cookie, CookieJar};
 use crate::agent::AgentState;
 use crate::body::{self, Payload, SizedReader};
 use crate::header;
+use crate::resolve::ArcResolver;
 use crate::stream::{self, connect_test, Stream};
-use crate::Proxy;
 use crate::{Error, Header, Request, Response};
-
-#[cfg(feature = "tls")]
-use crate::request::TLSClientConfig;
-
-#[cfg(all(feature = "native-tls", not(feature = "tls")))]
-use crate::request::TLSConnector;
 
 #[cfg(feature = "cookie")]
 use crate::pool::DEFAULT_HOST;
@@ -28,21 +21,12 @@ use crate::pool::DEFAULT_HOST;
 ///
 /// *Internal API*
 pub(crate) struct Unit {
-    pub agent: Arc<Mutex<AgentState>>,
+    pub req: Request,
     pub url: Url,
     pub is_chunked: bool,
     pub query_string: String,
     pub headers: Vec<Header>,
-    pub timeout_connect: u64,
-    pub timeout_read: u64,
-    pub timeout_write: u64,
     pub deadline: Option<time::Instant>,
-    pub method: String,
-    pub proxy: Option<Proxy>,
-    #[cfg(feature = "tls")]
-    pub tls_config: Option<TLSClientConfig>,
-    #[cfg(all(feature = "native-tls", not(feature = "tls")))]
-    pub tls_connector: Option<TLSConnector>,
 }
 
 impl Unit {
@@ -99,26 +83,21 @@ impl Unit {
         };
 
         Unit {
-            agent: Arc::clone(&req.agent),
+            req: req.clone(),
             url: url.clone(),
             is_chunked,
             query_string,
             headers,
-            timeout_connect: req.timeout_connect,
-            timeout_read: req.timeout_read,
-            timeout_write: req.timeout_write,
             deadline,
-            method: req.method.clone(),
-            proxy: req.proxy.clone(),
-            #[cfg(feature = "tls")]
-            tls_config: req.tls_config.clone(),
-            #[cfg(all(feature = "native-tls", not(feature = "tls")))]
-            tls_connector: req.tls_connector.clone(),
         }
     }
 
     pub fn is_head(&self) -> bool {
-        self.method.eq_ignore_ascii_case("head")
+        self.req.method.eq_ignore_ascii_case("head")
+    }
+
+    pub fn resolver(&self) -> ArcResolver {
+        self.req.agent.lock().unwrap().resolver.clone()
     }
 
     #[cfg(test)]
@@ -176,9 +155,10 @@ pub(crate) fn connect(
     // sequence of requests if all of those requests have idempotent
     // methods.
     //
-    // We choose to retry only once. To do that, we rely on is_recycled,
-    // the "one connection per hostname" police of the ConnectionPool,
-    // and the fact that connections with errors are dropped.
+    // We choose to retry only requests that used a recycled connection
+    // from the ConnectionPool, since those are most likely to have
+    // reached a server-side timeout. Note that this means we may do
+    // up to N+1 total tries, where N is max_idle_connections_per_host.
     //
     // TODO: is_bad_status_read is too narrow since it covers only the
     // first line. It's also allowable to retry requests that hit a
@@ -218,8 +198,8 @@ pub(crate) fn connect(
                     let mut new_unit = Unit::new(req, &new_url, false, &empty);
                     // this is to follow how curl does it. POST, PUT etc change
                     // to GET on a redirect.
-                    new_unit.method = match &unit.method[..] {
-                        "GET" | "HEAD" => unit.method,
+                    new_unit.req.method = match &unit.req.method[..] {
+                        "GET" | "HEAD" => unit.req.method,
                         _ => "GET".into(),
                     };
                     return connect(req, new_unit, use_pooled, redirect_count + 1, empty, true);
@@ -306,11 +286,11 @@ fn connect_socket(unit: &Unit, use_pooled: bool) -> Result<(Stream, bool), Error
         _ => return Err(Error::UnknownScheme(unit.url.scheme().to_string())),
     };
     if use_pooled {
-        let state = &mut unit.agent.lock().unwrap();
+        let state = &mut unit.req.agent.lock().unwrap();
         // The connection may have been closed by the server
         // due to idle timeout while it was sitting in the pool.
         // Loop until we find one that is still good or run out of connections.
-        while let Some(stream) = state.pool.try_get_connection(&unit.url, &unit.proxy) {
+        while let Some(stream) = state.pool.try_get_connection(&unit.url, &unit.req.proxy) {
             let server_closed = stream.server_closed()?;
             if !server_closed {
                 return Ok((stream, true));
@@ -338,7 +318,7 @@ fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> IoResult<()> {
     write!(
         prelude,
         "{} {}{} HTTP/1.1\r\n",
-        unit.method,
+        unit.req.method,
         unit.url.path(),
         &unit.query_string
     )?;
@@ -365,7 +345,11 @@ fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> IoResult<()> {
         }
     }
     if !header::has_header(&unit.headers, "user-agent") {
-        write!(prelude, "User-Agent: ureq/{}\r\n", env!("CARGO_PKG_VERSION"))?;
+        write!(
+            prelude,
+            "User-Agent: ureq/{}\r\n",
+            env!("CARGO_PKG_VERSION")
+        )?;
     }
     if !header::has_header(&unit.headers, "accept") {
         write!(prelude, "Accept: */*\r\n")?;
@@ -401,7 +385,7 @@ fn save_cookies(unit: &Unit, resp: &Response) {
     }
 
     // only lock if we know there is something to process
-    let state = &mut unit.agent.lock().unwrap();
+    let state = &mut unit.req.agent.lock().unwrap();
     for raw_cookie in cookies.iter() {
         let to_parse = if raw_cookie.to_lowercase().contains("domain=") {
             (*raw_cookie).to_string()

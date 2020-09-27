@@ -98,6 +98,31 @@ fn connection_reuse() {
     assert_eq!(resp.status(), 200);
 }
 
+#[test]
+fn custom_resolver() {
+    use std::io::Read;
+    use std::net::TcpListener;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+
+    let local_addr = listener.local_addr().unwrap();
+
+    let server = std::thread::spawn(move || {
+        let (mut client, _) = listener.accept().unwrap();
+        let mut buf = vec![0u8; 16];
+        let read = client.read(&mut buf).unwrap();
+        buf.truncate(read);
+        buf
+    });
+
+    crate::agent()
+        .set_resolver(move |_: &str| Ok(vec![local_addr]))
+        .get("http://cool.server/")
+        .call();
+
+    assert_eq!(&server.join().unwrap(), b"GET / HTTP/1.1\r\n");
+}
+
 #[cfg(feature = "cookie")]
 #[cfg(test)]
 fn cookie_and_redirect(mut stream: TcpStream) -> io::Result<()> {
@@ -108,25 +133,35 @@ fn cookie_and_redirect(mut stream: TcpStream) -> io::Result<()> {
             stream.write_all(b"Location: /second\r\n")?;
             stream.write_all(b"Set-Cookie: first=true\r\n")?;
             stream.write_all(b"Content-Length: 0\r\n\r\n")?;
-        },
+        }
         "/second" => {
-            if headers.headers().iter().find(|&x| x.contains("first=true")).is_none() {
+            if headers
+                .headers()
+                .iter()
+                .find(|&x| x.contains("first=true"))
+                .is_none()
+            {
                 panic!("request did not contain cookie 'first'");
             }
             stream.write_all(b"HTTP/1.1 302 Found\r\n")?;
             stream.write_all(b"Location: /third\r\n")?;
             stream.write_all(b"Set-Cookie: second=true\r\n")?;
             stream.write_all(b"Content-Length: 0\r\n\r\n")?;
-        },
+        }
         "/third" => {
-            if headers.headers().iter().find(|&x| x.contains("second=true")).is_none() {
+            if headers
+                .headers()
+                .iter()
+                .find(|&x| x.contains("second=true"))
+                .is_none()
+            {
                 panic!("request did not contain cookie 'second'");
             }
             stream.write_all(b"HTTP/1.1 200 OK\r\n")?;
             stream.write_all(b"Set-Cookie: third=true\r\n")?;
             stream.write_all(b"Content-Length: 0\r\n\r\n")?;
-        },
-        _ => {},
+        }
+        _ => {}
     }
     Ok(())
 }
