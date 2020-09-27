@@ -1,6 +1,6 @@
 use crate::stream::Stream;
 use std::fmt;
-use std::io::{copy, empty, Cursor, Read, Result as IoResult, Write};
+use std::io::{self, copy, empty, Cursor, Read, Write};
 
 #[cfg(feature = "charset")]
 use crate::response::DEFAULT_CHARACTER_SET;
@@ -109,7 +109,7 @@ const CHUNK_MAX_PAYLOAD_SIZE: usize = CHUNK_MAX_SIZE - CHUNK_HEADER_MAX_SIZE - C
 // 2) chunked_transfer's Encoder issues 4 separate write() per chunk. This is costly
 //    overhead. Instead, we do a single write() per chunk.
 // The measured benefit on a Linux machine is a 50% reduction in CPU usage on a https connection.
-fn copy_chunked<R: Read, W: Write>(reader: &mut R, writer: &mut W) -> IoResult<u64> {
+fn copy_chunked<R: Read, W: Write>(reader: &mut R, writer: &mut W) -> io::Result<u64> {
     // The chunk layout is:
     // header:header_max_size | payload:max_payload_size | footer:footer_size
     let mut chunk = Vec::with_capacity(CHUNK_MAX_SIZE);
@@ -167,7 +167,7 @@ pub(crate) fn send_body(
     mut body: SizedReader,
     do_chunk: bool,
     stream: &mut Stream,
-) -> IoResult<()> {
+) -> io::Result<()> {
     if do_chunk {
         copy_chunked(&mut body.reader, stream)?;
     } else {

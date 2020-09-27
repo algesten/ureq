@@ -1,7 +1,5 @@
 use std::fmt;
-use std::io::{
-    BufRead, BufReader, Cursor, Error as IoError, ErrorKind, Read, Result as IoResult, Write,
-};
+use std::io::{self, BufRead, BufReader, Cursor, ErrorKind, Read, Write};
 use std::net::SocketAddr;
 use std::net::TcpStream;
 use std::net::ToSocketAddrs;
@@ -68,7 +66,7 @@ impl From<DeadlineStream> for Stream {
 }
 
 impl Read for DeadlineStream {
-    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         if let Some(deadline) = self.deadline {
             let timeout = time_until_deadline(deadline)?;
             if let Some(socket) = self.stream.socket() {
@@ -91,7 +89,7 @@ impl Read for DeadlineStream {
 
 // If the deadline is in the future, return the remaining time until
 // then. Otherwise return a TimedOut error.
-fn time_until_deadline(deadline: Instant) -> IoResult<Duration> {
+fn time_until_deadline(deadline: Instant) -> io::Result<Duration> {
     let now = Instant::now();
     match deadline.checked_duration_since(now) {
         None => Err(io_err_timeout("timed out reading response".to_string())),
@@ -99,8 +97,8 @@ fn time_until_deadline(deadline: Instant) -> IoResult<Duration> {
     }
 }
 
-pub(crate) fn io_err_timeout(error: String) -> IoError {
-    IoError::new(ErrorKind::TimedOut, error)
+pub(crate) fn io_err_timeout(error: String) -> io::Error {
+    io::Error::new(ErrorKind::TimedOut, error)
 }
 
 impl fmt::Debug for Stream {
@@ -129,7 +127,7 @@ impl Stream {
     // connection: return true. If this returns WouldBlock (aka EAGAIN),
     // that means the connection is still open: return false. Otherwise
     // return an error.
-    fn serverclosed_stream(stream: &std::net::TcpStream) -> IoResult<bool> {
+    fn serverclosed_stream(stream: &std::net::TcpStream) -> io::Result<bool> {
         let mut buf = [0; 1];
         stream.set_nonblocking(true)?;
 
@@ -144,7 +142,7 @@ impl Stream {
         result
     }
     // Return true if the server has closed this connection.
-    pub(crate) fn server_closed(&self) -> IoResult<bool> {
+    pub(crate) fn server_closed(&self) -> io::Result<bool> {
         match self.socket() {
             Some(socket) => Stream::serverclosed_stream(socket),
             None => Ok(false),
@@ -181,7 +179,7 @@ impl Stream {
 }
 
 impl Read for Stream {
-    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         match self {
             Stream::Http(sock) => sock.read(buf),
             #[cfg(any(
@@ -197,7 +195,7 @@ impl Read for Stream {
 }
 
 impl BufRead for Stream {
-    fn fill_buf(&mut self) -> IoResult<&[u8]> {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
         match self {
             Stream::Http(r) => r.fill_buf(),
             #[cfg(any(
@@ -240,7 +238,7 @@ where
 fn read_https(
     stream: &mut BufReader<StreamOwned<ClientSession, TcpStream>>,
     buf: &mut [u8],
-) -> IoResult<usize> {
+) -> io::Result<usize> {
     match stream.read(buf) {
         Ok(size) => Ok(size),
         Err(ref e) if is_close_notify(e) => Ok(0),
@@ -249,7 +247,7 @@ fn read_https(
 }
 
 #[cfg(all(feature = "native-tls", not(feature = "tls")))]
-fn read_https(stream: &mut BufReader<TlsStream<TcpStream>>, buf: &mut [u8]) -> IoResult<usize> {
+fn read_https(stream: &mut BufReader<TlsStream<TcpStream>>, buf: &mut [u8]) -> io::Result<usize> {
     match stream.read(buf) {
         Ok(size) => Ok(size),
         Err(ref e) if is_close_notify(e) => Ok(0),
@@ -274,7 +272,7 @@ fn is_close_notify(e: &std::io::Error) -> bool {
 }
 
 impl Write for Stream {
-    fn write(&mut self, buf: &[u8]) -> IoResult<usize> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         match self {
             Stream::Http(sock) => sock.get_mut().write(buf),
             #[cfg(any(
@@ -287,7 +285,7 @@ impl Write for Stream {
             Stream::Test(_, writer) => writer.write(buf),
         }
     }
-    fn flush(&mut self) -> IoResult<()> {
+    fn flush(&mut self) -> io::Result<()> {
         match self {
             Stream::Http(sock) => sock.get_mut().flush(),
             #[cfg(any(
