@@ -1,4 +1,4 @@
-use std::io::{Result as IoResult, Write};
+use std::io::{self, Write};
 use std::time;
 
 use qstring::QString;
@@ -335,7 +335,7 @@ fn connect_socket(unit: &Unit, hostname: &str, use_pooled: bool) -> Result<(Stre
 
 /// Send request line + headers (all up until the body).
 #[allow(clippy::write_with_newline)]
-fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> IoResult<()> {
+fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> io::Result<()> {
     //
 
     // build into a buffer and send in one go.

@@ -1,5 +1,5 @@
 use std::fmt;
-use std::io::Error as IoError;
+use std::io;
 
 /// Errors that are translated to ["synthetic" responses](struct.Response.html#method.synthetic).
 #[derive(Debug)]
@@ -22,7 +22,7 @@ pub enum Error {
     /// A header line that couldn't be parsed. Synthetic error `500`.
     BadHeader,
     /// Some unspecified `std::io::Error`. Synthetic error `500`.
-    Io(IoError),
+    Io(io::Error),
     /// Proxy information was not properly formatted
     BadProxy,
     /// Proxy credentials were not properly formatted
@@ -110,8 +110,8 @@ impl Error {
     }
 }
 
-impl From<IoError> for Error {
-    fn from(err: IoError) -> Error {
+impl From<io::Error> for Error {
+    fn from(err: io::Error) -> Error {
         Error::Io(err)
     }
 }

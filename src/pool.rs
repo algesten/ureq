@@ -1,6 +1,6 @@
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, VecDeque};
-use std::io::{Read, Result as IoResult};
+use std::io::{self, Read};
 
 use crate::stream::Stream;
 use crate::unit::Unit;
@@ -395,7 +395,7 @@ impl<R: Read + Sized + Into<Stream>> PoolReturnRead<R> {
         }
     }
 
-    fn do_read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
+    fn do_read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         match self.reader.as_mut() {
             None => Ok(0),
             Some(reader) => reader.read(buf),
@@ -404,7 +404,7 @@ impl<R: Read + Sized + Into<Stream>> PoolReturnRead<R> {
 }
 
 impl<R: Read + Sized + Into<Stream>> Read for PoolReturnRead<R> {
-    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let amount = self.do_read(buf)?;
         // only if the underlying reader is exhausted can we send a new
         // request to the same socket. hence, we only return it now.
