@@ -28,19 +28,15 @@ fn redirect_many() {
 }
 
 #[test]
-fn redirect_off() {
+fn redirect_off() -> Result<(), Error> {
     test::set_handler("/redirect_off", |_| {
         test::make_response(302, "Go here", vec!["Location: somewhere.else"], vec![])
     });
-    let result = get("test://host/redirect_off").redirects(0).call();
-    let resp = match result {
-        Ok(_) => panic!("expected error"),
-        Err(Error::HTTP(resp)) => resp,
-        Err(_) => panic!("expected HTTP error"),
-    };
+    let resp = get("test://host/redirect_off").redirects(0).call()?;
     assert_eq!(resp.status(), 302);
     assert!(resp.has("Location"));
     assert_eq!(resp.header("Location").unwrap(), "somewhere.else");
+    Ok(())
 }
 
 #[test]

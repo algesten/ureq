@@ -3,7 +3,7 @@
 use crate::test;
 use crate::test::testserver::{read_headers, TestServer};
 use std::io::{self, Write};
-use std::net::TcpStream;
+use std::net::{SocketAddr, TcpStream};
 use std::time::Duration;
 
 use super::super::*;
@@ -99,28 +99,22 @@ fn connection_reuse() {
 }
 
 #[test]
-fn custom_resolver() {
-    use std::io::Read;
-    use std::net::TcpListener;
-
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-
-    let local_addr = listener.local_addr().unwrap();
-
-    let server = std::thread::spawn(move || {
-        let (mut client, _) = listener.accept().unwrap();
-        let mut buf = vec![0u8; 16];
-        let read = client.read(&mut buf).unwrap();
-        buf.truncate(read);
-        buf
+fn custom_resolver() -> Result<(), Error> {
+    let testserver = TestServer::new(|mut stream: TcpStream| -> io::Result<()> {
+        read_headers(&mut stream);
+        stream.write_all(b"HTTP/1.1 200 OK\r\n\r\nbody")?;
+        Ok(())
     });
 
-    crate::agent()
-        .set_resolver(move |_: &str| Ok(vec![local_addr]))
-        .get("http://cool.server/")
-        .call();
+    let addr: SocketAddr = format!("127.0.0.1:{}", testserver.port).parse().unwrap();
+    let body = crate::agent()
+        .set_resolver(move |_: &str| Ok(vec![addr]))
+        .get("http://example.invalid/")
+        .call()?
+        .into_string()?;
 
-    assert_eq!(&server.join().unwrap(), b"GET / HTTP/1.1\r\n");
+    assert_eq!(body, "body");
+    Ok(())
 }
 
 #[cfg(feature = "cookie")]
@@ -168,15 +162,13 @@ fn cookie_and_redirect(mut stream: TcpStream) -> io::Result<()> {
 
 #[cfg(feature = "cookie")]
 #[test]
-fn test_cookies_on_redirect() {
+fn test_cookies_on_redirect() -> Result<(), Error> {
     let testserver = TestServer::new(cookie_and_redirect);
     let url = format!("http://localhost:{}/first", testserver.port);
     let agent = Agent::default().build();
-    let resp = agent.post(&url).call();
-    if resp.error() {
-        panic!("error: {} {}", resp.status(), resp.into_string().unwrap());
-    }
+    agent.post(&url).call()?;
     assert!(agent.cookie("first").is_some());
     assert!(agent.cookie("second").is_some());
     assert!(agent.cookie("third").is_some());
+    Ok(())
 }
