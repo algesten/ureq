@@ -426,9 +426,3 @@ impl<R: Read + Sized + Into<Stream>> Read for PoolReturnRead<R> {
         Ok(amount)
     }
 }
-
-impl<R: Read + Sized + Into<Stream>> Drop for PoolReturnRead<R> {
-    fn drop(&mut self) {
-        self.return_connection();
-    }
-}
