@@ -1,12 +1,12 @@
 # 1.5.0
  * Add pluggable name resolution. Users can now override the IP addresses for
-   hostnames of their choice.
+   hostnames of their choice (#148).
  * bugfix: Don't re-pool streams on drop. This would occur if the user called
    `response.into_reader()` and dropped the resulting `Read` before reading all
    the way to EOF. The result would be a BadStatus error on the next request to
-   the same hostname. This only affected users using an explicit Agent.
- * Automatically set Transfer-Encoding when using `send`.
- * `into_reader()` now returns `impl Read + Send` instead of `impl Read`.
+   the same hostname. This only affected users using an explicit Agent (#160).
+ * Automatically set Transfer-Encoding: chunked when using `send` (#86).
+ * `into_reader()` now returns `impl Read + Send` instead of `impl Read` (#156).
 
 # 1.4.1
 
