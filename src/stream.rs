@@ -301,9 +301,8 @@ impl Write for Stream {
     }
 }
 
-pub(crate) fn connect_http(unit: &Unit) -> Result<Stream, Error> {
+pub(crate) fn connect_http(unit: &Unit, hostname: &str) -> Result<Stream, Error> {
     //
-    let hostname = unit.url.host_str().unwrap();
     let port = unit.url.port().unwrap_or(80);
 
     connect_host(unit, hostname, port)
@@ -325,7 +324,7 @@ fn configure_certs(config: &mut rustls::ClientConfig) {
 }
 
 #[cfg(all(feature = "tls", not(feature = "native-tls")))]
-pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
+pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error> {
     use lazy_static::lazy_static;
     use std::sync::Arc;
 
@@ -337,7 +336,6 @@ pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
         };
     }
 
-    let hostname = unit.url.host_str().unwrap();
     let port = unit.url.port().unwrap_or(443);
 
     let sni = webpki::DNSNameRef::try_from_ascii_str(hostname)
@@ -358,10 +356,9 @@ pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
 }
 
 #[cfg(all(feature = "native-tls", not(feature = "tls")))]
-pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
+pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error> {
     use std::sync::Arc;
 
-    let hostname = unit.url.host_str().unwrap();
     let port = unit.url.port().unwrap_or(443);
     let sock = connect_host(unit, hostname, port)?;
 
@@ -657,6 +654,6 @@ pub(crate) fn connect_test(unit: &Unit) -> Result<Stream, Error> {
 }
 
 #[cfg(not(any(feature = "tls", feature = "native-tls")))]
-pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
+pub(crate) fn connect_https(unit: &Unit, _hostname: &str) -> Result<Stream, Error> {
     Err(Error::UnknownScheme(unit.url.scheme().to_string()))
 }
