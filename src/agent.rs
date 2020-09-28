@@ -52,6 +52,7 @@ pub(crate) struct AgentState {
     /// Reused connections between requests.
     pub(crate) pool: ConnectionPool,
     /// Cookies saved between requests.
+    /// Invariant: All cookies must have a nonempty domain and path.
     #[cfg(feature = "cookie")]
     pub(crate) jar: CookieJar,
     pub(crate) resolver: ArcResolver,
@@ -237,11 +238,23 @@ impl Agent {
     /// ```
     /// let agent = ureq::agent();
     ///
-    /// let cookie = ureq::Cookie::new("name", "value");
+    /// let  cookie = ureq::Cookie::build("name", "value")
+    ///   .domain("example.com")
+    ///   .path("/")
+    ///   .secure(true)
+    ///   .finish();
     /// agent.set_cookie(cookie);
     /// ```
     #[cfg(feature = "cookie")]
     pub fn set_cookie(&self, cookie: Cookie<'static>) {
+        if cookie.domain().is_none() {
+            return;
+        }
+        let mut cookie = cookie.clone();
+        if cookie.path().is_none() {
+            cookie.set_path("/");
+        }
+
         let mut state = self.state.lock().unwrap();
         state.jar.add_original(cookie);
     }
