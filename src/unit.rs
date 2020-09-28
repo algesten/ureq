@@ -238,9 +238,12 @@ pub(crate) fn connect(
 
     debug!("response {} to {} {}", resp.status(), method, url);
 
+    let mut stream: Stream = stream.into();
+    stream.reset()?;
+
     // since it is not a redirect, or we're not following redirects,
     // give away the incoming stream to the response object.
-    crate::response::set_stream(&mut resp, url.to_string(), Some(unit), stream.into());
+    crate::response::set_stream(&mut resp, unit.url.to_string(), Some(unit), stream);
 
     // release the response
     Ok(resp)
