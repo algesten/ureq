@@ -391,7 +391,7 @@ impl Response {
     ///
     /// ```
     /// let resp =
-    ///     ureq::get("https://ureq.s3.eu-central-1.amazonaws.com/hello_world.json")
+    ///     ureq::get("http://ureq.s3.eu-central-1.amazonaws.com/hello_world.json")
     ///         .call();
     ///
     /// let json = resp.into_json().unwrap();
@@ -436,7 +436,7 @@ impl Response {
     /// }
     ///
     /// let resp =
-    ///     ureq::get("https://ureq.s3.eu-central-1.amazonaws.com/hello_world.json")
+    ///     ureq::get("http://ureq.s3.eu-central-1.amazonaws.com/hello_world.json")
     ///         .call();
     ///
     /// let json = resp.into_json_deserialize::<Hello>().unwrap();
