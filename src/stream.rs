@@ -53,14 +53,7 @@ impl DeadlineStream {
 
 impl From<DeadlineStream> for Stream {
     fn from(deadline_stream: DeadlineStream) -> Stream {
-        // Since we are turning this back into a regular, non-deadline Stream,
-        // remove any timeouts we set.
-        let stream = deadline_stream.stream;
-        if let Some(socket) = stream.socket() {
-            socket.set_read_timeout(None).unwrap();
-            socket.set_write_timeout(None).unwrap();
-        }
-        stream
+        deadline_stream.stream
     }
 }
 
@@ -157,6 +150,17 @@ impl Stream {
             Stream::Https(_) => true,
             _ => false,
         }
+    }
+
+    pub(crate) fn reset(&mut self) -> io::Result<()> {
+        // When we are turning this back into a regular, non-deadline Stream,
+        // remove any timeouts we set.
+        if let Some(socket) = self.socket() {
+            socket.set_read_timeout(None)?;
+            socket.set_write_timeout(None)?;
+        }
+
+        Ok(())
     }
 
     pub(crate) fn socket(&self) -> Option<&TcpStream> {

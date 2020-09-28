@@ -379,20 +379,26 @@ impl<R: Read + Sized + Into<Stream>> PoolReturnRead<R> {
         }
     }
 
-    fn return_connection(&mut self) {
+    fn return_connection(&mut self) -> io::Result<()> {
         // guard we only do this once.
         if let (Some(unit), Some(reader)) = (self.unit.take(), self.reader.take()) {
             let state = &mut unit.req.agent.lock().unwrap();
             // bring back stream here to either go into pool or dealloc
-            let stream = reader.into();
+            let mut stream = reader.into();
             if !stream.is_poolable() {
                 // just let it deallocate
-                return;
+                return Ok(());
             }
+
+            // ensure stream can be reused
+            stream.reset()?;
+
             // insert back into pool
             let key = PoolKey::new(&unit.url, &unit.req.proxy);
             state.pool().add(key, stream);
         }
+
+        Ok(())
     }
 
     fn do_read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
@@ -409,7 +415,7 @@ impl<R: Read + Sized + Into<Stream>> Read for PoolReturnRead<R> {
         // only if the underlying reader is exhausted can we send a new
         // request to the same socket. hence, we only return it now.
         if amount == 0 {
-            self.return_connection();
+            self.return_connection()?;
         }
         Ok(amount)
     }
