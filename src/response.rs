@@ -478,14 +478,14 @@ impl Response {
         // HTTP/1.1 200 OK\r\n
         let status_line = read_next_line(&mut reader).map_err(|e| match e.kind() {
             ErrorKind::ConnectionAborted => Error::BadStatusRead,
-            _ => Error::BadStatus,
+            _ => Error::Io(e),
         })?;
 
         let (index, status) = parse_status_line(status_line.as_str())?;
 
         let mut headers: Vec<Header> = Vec::new();
         loop {
-            let line = read_next_line(&mut reader).map_err(|_| Error::BadHeader)?;
+            let line = read_next_line(&mut reader)?;
             if line.is_empty() {
                 break;
             }
