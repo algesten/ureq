@@ -7,6 +7,8 @@
    the same hostname. This only affected users using an explicit Agent (#160).
  * Automatically set Transfer-Encoding: chunked when using `send` (#86).
  * `into_reader()` now returns `impl Read + Send` instead of `impl Read` (#156).
+ * Add support for log crate (#170).
+ * Retry broken connections in more cases (should reduce BadStatus errors; #168).
 
 # 1.4.1
 
