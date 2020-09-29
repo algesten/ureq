@@ -1,7 +1,11 @@
 #[cfg(feature = "cookie")]
-use cookie::{Cookie, CookieJar};
+use cookie::Cookie;
+#[cfg(feature = "cookie")]
+use cookie_store::CookieStore;
 use std::sync::Arc;
 use std::sync::Mutex;
+#[cfg(feature = "cookie")]
+use url::Url;
 
 use crate::header::{self, Header};
 use crate::pool::ConnectionPool;
@@ -54,7 +58,7 @@ pub(crate) struct AgentState {
     /// Cookies saved between requests.
     /// Invariant: All cookies must have a nonempty domain and path.
     #[cfg(feature = "cookie")]
-    pub(crate) jar: CookieJar,
+    pub(crate) jar: CookieStore,
     pub(crate) resolver: ArcResolver,
 }
 
@@ -220,6 +224,9 @@ impl Agent {
     /// either by setting it in the agent, or by making requests
     /// that `Set-Cookie` in the agent.
     ///
+    /// Note that this will return any cookie for the given name,
+    /// regardless of which host and path that cookie was set on.
+    ///
     /// ```
     /// let agent = ureq::agent();
     ///
@@ -230,15 +237,24 @@ impl Agent {
     #[cfg(feature = "cookie")]
     pub fn cookie(&self, name: &str) -> Option<Cookie<'static>> {
         let state = self.state.lock().unwrap();
-        state.jar.get(name).cloned()
+        let first_found = state.jar.iter_any().find(|c| c.name() == name);
+        if let Some(first_found) = first_found {
+            let c: &Cookie = &*first_found;
+            Some(c.clone())
+        } else {
+            None
+        }
     }
 
     /// Set a cookie in this agent.
     ///
+    /// Cookies without a domain, or with a malformed domain or path,
+    /// will be silently ignored.
+    ///
     /// ```
     /// let agent = ureq::agent();
     ///
-    /// let  cookie = ureq::Cookie::build("name", "value")
+    /// let cookie = ureq::Cookie::build("name", "value")
     ///   .domain("example.com")
     ///   .path("/")
     ///   .secure(true)
@@ -247,16 +263,27 @@ impl Agent {
     /// ```
     #[cfg(feature = "cookie")]
     pub fn set_cookie(&self, cookie: Cookie<'static>) {
+        let mut cookie = cookie.clone();
         if cookie.domain().is_none() {
             return;
         }
-        let mut cookie = cookie.clone();
+
         if cookie.path().is_none() {
             cookie.set_path("/");
         }
+        let path = cookie.path().unwrap();
+        let domain = cookie.domain().unwrap();
 
+        let fake_url: Url = match format!("http://{}{}", domain, path).parse() {
+            Ok(u) => u,
+            Err(_) => return,
+        };
         let mut state = self.state.lock().unwrap();
-        state.jar.add_original(cookie);
+        let cs_cookie = match cookie_store::Cookie::try_from_raw_cookie(&cookie, &fake_url) {
+            Ok(c) => c,
+            Err(_) => return,
+        };
+        state.jar.insert(cs_cookie, &fake_url).ok();
     }
 
     /// Make a GET request from this agent.

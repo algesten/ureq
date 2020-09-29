@@ -5,7 +5,7 @@ use qstring::QString;
 use url::Url;
 
 #[cfg(feature = "cookie")]
-use cookie::{Cookie, CookieJar};
+use cookie::Cookie;
 
 use crate::agent::AgentState;
 use crate::body::{self, BodySize, Payload, SizedReader};
@@ -239,71 +239,10 @@ pub(crate) fn connect(
 
 #[cfg(feature = "cookie")]
 fn extract_cookies(state: &std::sync::Mutex<AgentState>, url: &Url) -> Option<Header> {
-    // We specifically use url.domain() here because cookies cannot be
-    // set for IP addresses.
-    let domain = match url.domain() {
-        Some(d) => d,
-        None => return None,
-    };
-    let path = url.path();
-    let is_secure = url.scheme().eq_ignore_ascii_case("https");
-
     let state = state.lock().unwrap();
-    match_cookies(&state.jar, domain, path, is_secure)
-}
-
-// Return true iff the string domain-matches the domain.
-// This function must only be called on hostnames, not IP addresses.
-//
-// https://tools.ietf.org/html/rfc6265#section-5.1.3
-// A string domain-matches a given domain string if at least one of the
-// following conditions hold:
-//
-// o  The domain string and the string are identical.  (Note that both
-//    the domain string and the string will have been canonicalized to
-//    lower case at this point.)
-// o  All of the following conditions hold:
-//    *  The domain string is a suffix of the string.
-//    *  The last character of the string that is not included in the
-//       domain string is a %x2E (".") character.
-//    *  The string is a host name (i.e., not an IP address).
-#[cfg(feature = "cookie")]
-fn domain_match(s: &str, domain: &str) -> bool {
-    match s.strip_suffix(domain) {
-        Some("") => true, // domain and string are identical.
-        Some(remains) => remains.ends_with('.'),
-        None => false, // domain was not a suffix of string.
-    }
-}
-
-// Return true iff the request-path path-matches the cookie-path.
-// https://tools.ietf.org/html/rfc6265#section-5.1.4
-//  A request-path path-matches a given cookie-path if at least one of
-//  the following conditions holds:
-//
-//  o  The cookie-path and the request-path are identical.
-//  o  The cookie-path is a prefix of the request-path, and the last
-//       character of the cookie-path is %x2F ("/").
-//  o  The cookie-path is a prefix of the request-path, and the first
-//       character of the request-path that is not included in the cookie-
-//       path is a %x2F ("/") character.
-#[cfg(feature = "cookie")]
-fn path_match(request_path: &str, cookie_path: &str) -> bool {
-    match request_path.strip_prefix(cookie_path) {
-        Some("") => true, // cookie path and request path were identical.
-        Some(remains) => cookie_path.ends_with('/') || remains.starts_with('/'),
-        None => false, // cookie path was not a prefix of request path
-    }
-}
-
-#[cfg(feature = "cookie")]
-fn match_cookies(jar: &CookieJar, domain: &str, path: &str, is_secure: bool) -> Option<Header> {
-    let header_value = jar
-        .iter()
-        .filter(|c| domain_match(domain, c.domain().unwrap()))
-        .filter(|c| path_match(path, c.path().unwrap()))
-        .filter(|c| is_secure || !c.secure().unwrap_or(false))
-        // Create a new cookie with just the name and value so we don't send attributes.
+    let header_value = state
+        .jar
+        .get_request_cookies(url)
         .map(|c| Cookie::new(c.name(), c.value()).encoded().to_string())
         .collect::<Vec<_>>()
         .join(";");
@@ -420,45 +359,19 @@ fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> io::Result<()>
 fn save_cookies(unit: &Unit, resp: &Response) {
     //
 
-    // Specifically use domain here because IPs cannot have cookies.
-    let request_domain = match unit.url.domain() {
-        Some(d) => d.to_ascii_lowercase(),
-        None => return,
-    };
     let headers = resp.all("set-cookie");
     // Avoid locking if there are no cookie headers
     if headers.is_empty() {
         return;
     }
     let cookies = headers.into_iter().flat_map(|header_value| {
-        let mut cookie = match Cookie::parse_encoded(header_value) {
-            Err(_) => return None,
-            Ok(c) => c,
-        };
-        // Canonicalize the cookie domain, check that it matches the request,
-        // and store it back in the cookie.
-        // https://tools.ietf.org/html/rfc6265#section-5.3, Item 6
-        // Summary: If domain is empty, set it from the request and
-        // set the host_only flag.
-        // TODO: store a host_only flag.
-        // TODO: Check so cookies can't be set for TLDs.
-        let cookie_domain = match cookie.domain() {
-            None => request_domain.clone(),
-            Some(d) if domain_match(&request_domain, &d) => d.to_ascii_lowercase(),
-            Some(_) => return None,
-        };
-        cookie.set_domain(cookie_domain);
-        if cookie.path().is_none() {
-            cookie.set_path("/");
+        match Cookie::parse(header_value.to_string()) {
+            Err(_) => None,
+            Ok(c) => Some(c),
         }
-        Some(cookie)
     });
     let state = &mut unit.req.agent.lock().unwrap();
-    for c in cookies {
-        assert!(c.domain().is_some());
-        assert!(c.path().is_some());
-        state.jar.add(c.into_owned());
-    }
+    state.jar.store_response_cookies(cookies, &unit.url.clone());
 }
 
 #[cfg(test)]
@@ -466,27 +379,25 @@ fn save_cookies(unit: &Unit, resp: &Response) {
 mod tests {
     use super::*;
 
+    use crate::Agent;
     ///////////////////// COOKIE TESTS //////////////////////////////
 
     #[test]
-    fn match_cookies_returns_nothing_when_no_cookies() {
-        let jar = CookieJar::new();
-
-        let result = match_cookies(&jar, "crates.io", "/", false);
-        assert_eq!(result, None);
-    }
-
-    #[test]
     fn match_cookies_returns_one_header() {
-        let mut jar = CookieJar::new();
-        let cookie1 = Cookie::parse("cookie1=value1; Domain=crates.io; Path=/").unwrap();
-        let cookie2 = Cookie::parse("cookie2=value2; Domain=crates.io; Path=/").unwrap();
-        jar.add(cookie1);
-        jar.add(cookie2);
+        let agent = Agent::default();
+        let url: Url = "https://crates.io/".parse().unwrap();
+        let cookie1: Cookie = "cookie1=value1; Domain=crates.io; Path=/".parse().unwrap();
+        let cookie2: Cookie = "cookie2=value2; Domain=crates.io; Path=/".parse().unwrap();
+        agent
+            .state
+            .lock()
+            .unwrap()
+            .jar
+            .store_response_cookies(vec![cookie1, cookie2].into_iter(), &url);
 
         // There's no guarantee to the order in which cookies are defined.
         // Ensure that they're either in one order or the other.
-        let result = match_cookies(&jar, "crates.io", "/", false);
+        let result = extract_cookies(&agent.state, &url);
         let order1 = "cookie1=value1;cookie2=value2";
         let order2 = "cookie2=value2;cookie1=value1";
 

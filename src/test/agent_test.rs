@@ -31,34 +31,6 @@ fn agent_reuse_headers() {
     assert_eq!(resp.header("X-Call").unwrap(), "2");
 }
 
-#[cfg(feature = "cookie")]
-#[test]
-fn agent_cookies() {
-    let agent = agent();
-
-    test::set_handler("/agent_cookies", |_unit| {
-        test::make_response(
-            200,
-            "OK",
-            vec!["Set-Cookie: foo=bar%20baz; Path=/; HttpOnly"],
-            vec![],
-        )
-    });
-
-    agent.get("test://host/agent_cookies").call();
-
-    assert!(agent.cookie("foo").is_some());
-    assert_eq!(agent.cookie("foo").unwrap().value(), "bar baz");
-
-    test::set_handler("/agent_cookies", |unit| {
-        assert!(unit.has("cookie"));
-        assert_eq!(unit.header("cookie").unwrap(), "foo=bar%20baz");
-        test::make_response(200, "OK", vec![], vec![])
-    });
-
-    agent.get("test://host/agent_cookies").call();
-}
-
 // Handler that answers with a simple HTTP response, and times
 // out idle connections after 2 seconds.
 fn idle_timeout_handler(mut stream: TcpStream) -> io::Result<()> {
