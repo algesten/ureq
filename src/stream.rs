@@ -368,7 +368,9 @@ pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error
         .connect(&hostname.trim_matches(|c| c == '[' || c == ']'), sock)
         .map_err(|e| match e {
             HandshakeError::Failure(err) => Error::TlsError(err),
-            _ => Error::BadStatusRead,
+            // The only other possibility is WouldBlock. Since we don't
+            // handle retries of WouldBlock, turn it into a generic error.
+            _ => Error::ConnectionFailed("TLS handshake unexpected error".to_string()),
         })?;
 
     Ok(Stream::Https(BufReader::new(stream)))
@@ -380,7 +382,6 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
     } else {
         unit.deadline
     };
-  
     let netloc = match unit.req.proxy {
         Some(ref proxy) => format!("{}:{}", proxy.server, proxy.port),
         None => format!("{}:{}", hostname, port),
