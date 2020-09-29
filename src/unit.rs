@@ -1,6 +1,7 @@
 use std::io::{self, Write};
 use std::time;
 
+use log::{debug, info};
 use qstring::QString;
 use url::Url;
 
@@ -145,13 +146,22 @@ pub(crate) fn connect(
     //
 
     let host = req.get_host()?;
+    let url = &unit.url;
+    let method = &unit.req.method;
     // open socket
     let (mut stream, is_recycled) = connect_socket(&unit, &host, use_pooled)?;
+
+    if is_recycled {
+        info!("sending request (reused connection) {} {}", method, url);
+    } else {
+        info!("sending request {} {}", method, url);
+    }
 
     let send_result = send_prelude(&unit, &mut stream, redir);
 
     if let Err(err) = send_result {
         if is_recycled {
+            debug!("retrying request early {} {}", method, url);
             // we try open a new connection, this time there will be
             // no connection in the pool. don't use it.
             return connect(req, unit, false, redirect_count, body, redir);
@@ -185,6 +195,7 @@ pub(crate) fn connect(
     // closed connection during the sending or receiving of headers.
     if let Some(err) = resp.synthetic_error() {
         if err.is_bad_status_read() && retryable && is_recycled {
+            debug!("retrying request {} {}", method, url);
             let empty = Payload::Empty.into_read();
             return connect(req, unit, false, redirect_count, empty, redir);
         }
@@ -203,8 +214,7 @@ pub(crate) fn connect(
         let location = resp.header("location");
         if let Some(location) = location {
             // join location header to current url in case it it relative
-            let new_url = unit
-                .url
+            let new_url = url
                 .join(location)
                 .map_err(|_| Error::BadUrl(format!("Bad redirection: {}", location)))?;
 
@@ -216,10 +226,11 @@ pub(crate) fn connect(
                     let mut new_unit = Unit::new(req, &new_url, false, &empty);
                     // this is to follow how curl does it. POST, PUT etc change
                     // to GET on a redirect.
-                    new_unit.req.method = match &unit.req.method[..] {
-                        "GET" | "HEAD" => unit.req.method,
+                    new_unit.req.method = match &method[..] {
+                        "GET" | "HEAD" => method.to_string(),
                         _ => "GET".into(),
                     };
+                    debug!("redirect {} {} -> {}", resp.status(), url, new_url);
                     return connect(req, new_unit, use_pooled, redirect_count + 1, empty, true);
                 }
                 _ => (),
@@ -229,9 +240,11 @@ pub(crate) fn connect(
         }
     }
 
+    debug!("response {} to {} {}", resp.status(), method, url);
+
     // since it is not a redirect, or we're not following redirects,
     // give away the incoming stream to the response object.
-    crate::response::set_stream(&mut resp, unit.url.to_string(), Some(unit), stream.into());
+    crate::response::set_stream(&mut resp, url.to_string(), Some(unit), stream.into());
 
     // release the response
     Ok(resp)
