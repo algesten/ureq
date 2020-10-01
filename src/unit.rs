@@ -189,10 +189,6 @@ pub(crate) fn connect(
     // from the ConnectionPool, since those are most likely to have
     // reached a server-side timeout. Note that this means we may do
     // up to N+1 total tries, where N is max_idle_connections_per_host.
-    //
-    // TODO: is_bad_status_read is too narrow since it covers only the
-    // first line. It's also allowable to retry requests that hit a
-    // closed connection during the sending or receiving of headers.
     let mut resp = match result {
         Err(err) if err.connection_closed() && retryable && is_recycled => {
             debug!("retrying request {} {}", method, url);
