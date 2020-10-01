@@ -31,7 +31,7 @@ pub const DEFAULT_CHARACTER_SET: &str = "utf-8";
 /// [`into_string()`](#method.into_string) consumes the response.
 ///
 /// ```
-/// let response = ureq::get("https://www.google.com").call().unwrap();
+/// let response = ureq::get("http://example.com/").call().unwrap();
 ///
 /// // socket is still open and the response body has not been read.
 ///
@@ -336,7 +336,7 @@ impl Response {
     ///
     /// ```
     /// let resp =
-    ///     ureq::get("https://ureq.s3.eu-central-1.amazonaws.com/hello_world.json")
+    ///     ureq::get("http://ureq.s3.eu-central-1.amazonaws.com/hello_world.json")
     ///         .call().unwrap();
     ///
     /// let json = resp.into_json().unwrap();
@@ -381,7 +381,7 @@ impl Response {
     /// }
     ///
     /// let resp =
-    ///     ureq::get("https://ureq.s3.eu-central-1.amazonaws.com/hello_world.json")
+    ///     ureq::get("http://ureq.s3.eu-central-1.amazonaws.com/hello_world.json")
     ///         .call().unwrap();
     ///
     /// let json = resp.into_json_deserialize::<Hello>().unwrap();
