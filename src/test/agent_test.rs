@@ -3,7 +3,7 @@
 use crate::test;
 use crate::test::testserver::{read_headers, TestServer};
 use std::io::{self, Read, Write};
-use std::net::{SocketAddr, TcpStream};
+use std::net::TcpStream;
 use std::time::Duration;
 
 use super::super::*;
@@ -99,22 +99,29 @@ fn connection_reuse() {
 }
 
 #[test]
-fn custom_resolver() -> Result<(), Error> {
-    let testserver = TestServer::new(|mut stream: TcpStream| -> io::Result<()> {
-        read_headers(&mut stream);
-        stream.write_all(b"HTTP/1.1 200 OK\r\n\r\nbody")?;
-        Ok(())
+fn custom_resolver() {
+    use std::io::Read;
+    use std::net::TcpListener;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+
+    let local_addr = listener.local_addr().unwrap();
+
+    let server = std::thread::spawn(move || {
+        let (mut client, _) = listener.accept().unwrap();
+        let mut buf = vec![0u8; 16];
+        let read = client.read(&mut buf).unwrap();
+        buf.truncate(read);
+        buf
     });
 
-    let addr: SocketAddr = format!("127.0.0.1:{}", testserver.port).parse().unwrap();
-    let body = crate::agent()
-        .set_resolver(move |_: &str| Ok(vec![addr]))
-        .get("http://example.invalid/")
-        .call()?
-        .into_string()?;
+    crate::agent()
+        .set_resolver(move |_: &str| Ok(vec![local_addr]))
+        .get("http://cool.server/")
+        .call()
+        .ok();
 
-    assert_eq!(body, "body");
-    Ok(())
+    assert_eq!(&server.join().unwrap(), b"GET / HTTP/1.1\r\n");
 }
 
 #[cfg(feature = "cookie")]
