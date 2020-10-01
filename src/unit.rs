@@ -8,6 +8,7 @@ use url::Url;
 #[cfg(feature = "cookie")]
 use cookie::Cookie;
 
+#[cfg(feature = "cookie")]
 use crate::agent::AgentState;
 use crate::body::{self, BodySize, Payload, SizedReader};
 use crate::header;
