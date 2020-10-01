@@ -24,7 +24,7 @@ cookies = ["cookie"]
 socks-proxy = ["socks"]
 
 [dependencies]
-base64 = "0.12"
+base64 = "0.13"
 chunked_transfer = "1.2.0"
 cookie = { version = "0.14", features = ["percent-encode"], optional = true}
 lazy_static = "1"
