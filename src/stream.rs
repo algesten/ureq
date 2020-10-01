@@ -417,6 +417,7 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
             None => None,
         };
 
+        println!("connecting to {}", &sock_addr);
         // connect with a configured timeout.
         let stream = if Some(Proto::SOCKS5) == proto {
             connect_socks5(
