@@ -1,6 +1,6 @@
 use crate::response::Response;
 use std::fmt;
-use std::io::Error as IoError;
+use std::io::{self, ErrorKind};
 
 #[derive(Debug)]
 pub enum Error {
@@ -14,15 +14,12 @@ pub enum Error {
     ConnectionFailed(String),
     /// Too many redirects.
     TooManyRedirects,
-    /// We fail to read the status line. This happens for pooled connections when
-    /// TLS fails and we don't notice until trying to read.
-    BadStatusRead,
     /// A status line we don't understand `HTTP/1.1 200 OK`.
     BadStatus,
     /// A header line that couldn't be parsed.
     BadHeader,
     /// Some unspecified `std::io::Error`.
-    Io(IoError),
+    Io(io::Error),
     /// Proxy information was not properly formatted
     BadProxy,
     /// Proxy credentials were not properly formatted
@@ -41,18 +38,18 @@ pub enum Error {
 }
 
 impl Error {
-    // If the error is bad status read, which might happen if a TLS connections is
-    // closed and we only discover it when trying to read the status line from it.
-    pub(crate) fn is_bad_status_read(&self) -> bool {
+    // Return true iff the error was due to a connection closing.
+    pub(crate) fn connection_closed(&self) -> bool {
         match self {
-            Error::BadStatusRead => true,
+            Error::Io(e) if e.kind() == ErrorKind::ConnectionAborted => true,
+            Error::Io(e) if e.kind() == ErrorKind::ConnectionReset => true,
             _ => false,
         }
     }
 }
 
-impl From<IoError> for Error {
-    fn from(err: IoError) -> Error {
+impl From<io::Error> for Error {
+    fn from(err: io::Error) -> Error {
         Error::Io(err)
     }
 }

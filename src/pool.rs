@@ -1,6 +1,6 @@
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, VecDeque};
-use std::io::{Read, Result as IoResult};
+use std::io::{self, Read};
 
 use crate::stream::Stream;
 use crate::unit::Unit;
@@ -8,7 +8,6 @@ use crate::Proxy;
 
 use url::Url;
 
-pub const DEFAULT_HOST: &str = "localhost";
 const DEFAULT_MAX_IDLE_CONNECTIONS: usize = 100;
 const DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST: usize = 1;
 
@@ -76,13 +75,6 @@ impl Default for ConnectionPool {
 impl ConnectionPool {
     pub fn set_max_idle_connections(&mut self, max_connections: usize) {
         if self.max_idle_connections == max_connections {
-            return;
-        }
-
-        if max_connections == 0 {
-            // Clear the connection pool, caching is disabled.
-            self.lru.clear();
-            self.recycle.clear();
             return;
         }
 
@@ -387,23 +379,29 @@ impl<R: Read + Sized + Into<Stream>> PoolReturnRead<R> {
         }
     }
 
-    fn return_connection(&mut self) {
+    fn return_connection(&mut self) -> io::Result<()> {
         // guard we only do this once.
         if let (Some(unit), Some(reader)) = (self.unit.take(), self.reader.take()) {
             let state = &mut unit.req.agent.lock().unwrap();
             // bring back stream here to either go into pool or dealloc
-            let stream = reader.into();
+            let mut stream = reader.into();
             if !stream.is_poolable() {
                 // just let it deallocate
-                return;
+                return Ok(());
             }
+
+            // ensure stream can be reused
+            stream.reset()?;
+
             // insert back into pool
             let key = PoolKey::new(&unit.url, &unit.req.proxy);
             state.pool().add(key, stream);
         }
+
+        Ok(())
     }
 
-    fn do_read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
+    fn do_read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         match self.reader.as_mut() {
             None => Ok(0),
             Some(reader) => reader.read(buf),
@@ -412,19 +410,13 @@ impl<R: Read + Sized + Into<Stream>> PoolReturnRead<R> {
 }
 
 impl<R: Read + Sized + Into<Stream>> Read for PoolReturnRead<R> {
-    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let amount = self.do_read(buf)?;
         // only if the underlying reader is exhausted can we send a new
         // request to the same socket. hence, we only return it now.
         if amount == 0 {
-            self.return_connection();
+            self.return_connection()?;
         }
         Ok(amount)
-    }
-}
-
-impl<R: Read + Sized + Into<Stream>> Drop for PoolReturnRead<R> {
-    fn drop(&mut self) {
-        self.return_connection();
     }
 }

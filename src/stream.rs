@@ -1,7 +1,5 @@
 use std::fmt;
-use std::io::{
-    BufRead, BufReader, Cursor, Error as IoError, ErrorKind, Read, Result as IoResult, Write,
-};
+use std::io::{self, BufRead, BufReader, Cursor, ErrorKind, Read, Write};
 use std::net::SocketAddr;
 use std::net::TcpStream;
 use std::time::Duration;
@@ -34,7 +32,7 @@ pub enum Stream {
     Https(BufReader<TlsStream<TcpStream>>),
     Cursor(Cursor<Vec<u8>>),
     #[cfg(test)]
-    Test(Box<dyn BufRead + Send>, Vec<u8>),
+    Test(Box<dyn BufRead + Send + Sync>, Vec<u8>),
 }
 
 // DeadlineStream wraps a stream such that read() will return an error
@@ -55,19 +53,12 @@ impl DeadlineStream {
 
 impl From<DeadlineStream> for Stream {
     fn from(deadline_stream: DeadlineStream) -> Stream {
-        // Since we are turning this back into a regular, non-deadline Stream,
-        // remove any timeouts we set.
-        let stream = deadline_stream.stream;
-        if let Some(socket) = stream.socket() {
-            socket.set_read_timeout(None).unwrap();
-            socket.set_write_timeout(None).unwrap();
-        }
-        stream
+        deadline_stream.stream
     }
 }
 
 impl Read for DeadlineStream {
-    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         if let Some(deadline) = self.deadline {
             let timeout = time_until_deadline(deadline)?;
             if let Some(socket) = self.stream.socket() {
@@ -90,7 +81,7 @@ impl Read for DeadlineStream {
 
 // If the deadline is in the future, return the remaining time until
 // then. Otherwise return a TimedOut error.
-fn time_until_deadline(deadline: Instant) -> IoResult<Duration> {
+fn time_until_deadline(deadline: Instant) -> io::Result<Duration> {
     let now = Instant::now();
     match deadline.checked_duration_since(now) {
         None => Err(io_err_timeout("timed out reading response".to_string())),
@@ -98,8 +89,8 @@ fn time_until_deadline(deadline: Instant) -> IoResult<Duration> {
     }
 }
 
-pub(crate) fn io_err_timeout(error: String) -> IoError {
-    IoError::new(ErrorKind::TimedOut, error)
+pub(crate) fn io_err_timeout(error: String) -> io::Error {
+    io::Error::new(ErrorKind::TimedOut, error)
 }
 
 impl fmt::Debug for Stream {
@@ -128,7 +119,7 @@ impl Stream {
     // connection: return true. If this returns WouldBlock (aka EAGAIN),
     // that means the connection is still open: return false. Otherwise
     // return an error.
-    fn serverclosed_stream(stream: &std::net::TcpStream) -> IoResult<bool> {
+    fn serverclosed_stream(stream: &std::net::TcpStream) -> io::Result<bool> {
         let mut buf = [0; 1];
         stream.set_nonblocking(true)?;
 
@@ -143,7 +134,7 @@ impl Stream {
         result
     }
     // Return true if the server has closed this connection.
-    pub(crate) fn server_closed(&self) -> IoResult<bool> {
+    pub(crate) fn server_closed(&self) -> io::Result<bool> {
         match self.socket() {
             Some(socket) => Stream::serverclosed_stream(socket),
             None => Ok(false),
@@ -159,6 +150,17 @@ impl Stream {
             Stream::Https(_) => true,
             _ => false,
         }
+    }
+
+    pub(crate) fn reset(&mut self) -> io::Result<()> {
+        // When we are turning this back into a regular, non-deadline Stream,
+        // remove any timeouts we set.
+        if let Some(socket) = self.socket() {
+            socket.set_read_timeout(None)?;
+            socket.set_write_timeout(None)?;
+        }
+
+        Ok(())
     }
 
     pub(crate) fn socket(&self) -> Option<&TcpStream> {
@@ -180,7 +182,7 @@ impl Stream {
 }
 
 impl Read for Stream {
-    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         match self {
             Stream::Http(sock) => sock.read(buf),
             #[cfg(any(
@@ -196,7 +198,7 @@ impl Read for Stream {
 }
 
 impl BufRead for Stream {
-    fn fill_buf(&mut self) -> IoResult<&[u8]> {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
         match self {
             Stream::Http(r) => r.fill_buf(),
             #[cfg(any(
@@ -239,7 +241,7 @@ where
 fn read_https(
     stream: &mut BufReader<StreamOwned<ClientSession, TcpStream>>,
     buf: &mut [u8],
-) -> IoResult<usize> {
+) -> io::Result<usize> {
     match stream.read(buf) {
         Ok(size) => Ok(size),
         Err(ref e) if is_close_notify(e) => Ok(0),
@@ -248,7 +250,7 @@ fn read_https(
 }
 
 #[cfg(all(feature = "native-tls", not(feature = "tls")))]
-fn read_https(stream: &mut BufReader<TlsStream<TcpStream>>, buf: &mut [u8]) -> IoResult<usize> {
+fn read_https(stream: &mut BufReader<TlsStream<TcpStream>>, buf: &mut [u8]) -> io::Result<usize> {
     match stream.read(buf) {
         Ok(size) => Ok(size),
         Err(ref e) if is_close_notify(e) => Ok(0),
@@ -273,7 +275,7 @@ fn is_close_notify(e: &std::io::Error) -> bool {
 }
 
 impl Write for Stream {
-    fn write(&mut self, buf: &[u8]) -> IoResult<usize> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         match self {
             Stream::Http(sock) => sock.get_mut().write(buf),
             #[cfg(any(
@@ -286,7 +288,7 @@ impl Write for Stream {
             Stream::Test(_, writer) => writer.write(buf),
         }
     }
-    fn flush(&mut self) -> IoResult<()> {
+    fn flush(&mut self) -> io::Result<()> {
         match self {
             Stream::Http(sock) => sock.get_mut().flush(),
             #[cfg(any(
@@ -301,9 +303,8 @@ impl Write for Stream {
     }
 }
 
-pub(crate) fn connect_http(unit: &Unit) -> Result<Stream, Error> {
+pub(crate) fn connect_http(unit: &Unit, hostname: &str) -> Result<Stream, Error> {
     //
-    let hostname = unit.url.host_str().unwrap();
     let port = unit.url.port().unwrap_or(80);
 
     connect_host(unit, hostname, port)
@@ -325,7 +326,7 @@ fn configure_certs(config: &mut rustls::ClientConfig) {
 }
 
 #[cfg(all(feature = "tls", not(feature = "native-tls")))]
-pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
+pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error> {
     use lazy_static::lazy_static;
     use std::sync::Arc;
 
@@ -337,7 +338,6 @@ pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
         };
     }
 
-    let hostname = unit.url.host_str().unwrap();
     let port = unit.url.port().unwrap_or(443);
 
     let sni = webpki::DNSNameRef::try_from_ascii_str(hostname)
@@ -358,10 +358,9 @@ pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
 }
 
 #[cfg(all(feature = "native-tls", not(feature = "tls")))]
-pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
+pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error> {
     use std::sync::Arc;
 
-    let hostname = unit.url.host_str().unwrap();
     let port = unit.url.port().unwrap_or(443);
     let sock = connect_host(unit, hostname, port)?;
 
@@ -373,7 +372,9 @@ pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
         .connect(&hostname.trim_matches(|c| c == '[' || c == ']'), sock)
         .map_err(|e| match e {
             HandshakeError::Failure(err) => Error::TlsError(err),
-            _ => Error::BadStatusRead,
+            // The only other possibility is WouldBlock. Since we don't
+            // handle retries of WouldBlock, turn it into a generic error.
+            _ => Error::ConnectionFailed("TLS handshake unexpected error".to_string()),
         })?;
 
     Ok(Stream::Https(BufReader::new(stream)))
@@ -385,7 +386,6 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
     } else {
         unit.deadline
     };
-  
     let netloc = match unit.req.proxy {
         Some(ref proxy) => format!("{}:{}", proxy.server, proxy.port),
         None => format!("{}:{}", hostname, port),
@@ -657,6 +657,6 @@ pub(crate) fn connect_test(unit: &Unit) -> Result<Stream, Error> {
 }
 
 #[cfg(not(any(feature = "tls", feature = "native-tls")))]
-pub(crate) fn connect_https(unit: &Unit) -> Result<Stream, Error> {
+pub(crate) fn connect_https(unit: &Unit, _hostname: &str) -> Result<Stream, Error> {
     Err(Error::UnknownScheme(unit.url.scheme().to_string()))
 }

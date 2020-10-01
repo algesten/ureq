@@ -7,10 +7,10 @@ use qstring::QString;
 use url::{form_urlencoded, Url};
 
 use crate::agent::{self, Agent, AgentState};
+use crate::body::BodySize;
 use crate::body::{Payload, SizedReader};
 use crate::error::Error;
 use crate::header::{self, Header};
-use crate::pool;
 use crate::unit::{self, Unit};
 use crate::Response;
 
@@ -217,8 +217,10 @@ impl Request {
 
     /// Send data from a reader.
     ///
-    /// This uses [chunked transfer encoding](https://tools.ietf.org/html/rfc7230#section-4.1).
-    /// The caller is responsible for setting the Transfer-Encoding: chunked header.
+    /// If no Content-Length and Transfer-Encoding header has been set, it uses the [chunked transfer encoding](https://tools.ietf.org/html/rfc7230#section-4.1).
+    ///
+    /// The caller may set the Content-Length header to the expected byte size of the reader if is
+    /// known.
     ///
     /// The input from the reader is buffered into chunks of size 16,384, the max size of a TLS fragment.
     ///
@@ -229,7 +231,6 @@ impl Request {
     ///
     /// let resp = ureq::post("http://localhost/example-upload")
     ///     .set("Content-Type", "text/plain")
-    ///     .set("Transfer-Encoding", "chunked")
     ///     .send(read);
     /// ```
     pub fn send(&mut self, reader: impl Read + 'static) -> Result<Response> {
@@ -523,8 +524,13 @@ impl Request {
     /// assert_eq!(req2.get_host().unwrap(), "localhost");
     /// ```
     pub fn get_host(&self) -> Result<String> {
-        self.to_url()
-            .map(|u| u.host_str().unwrap_or(pool::DEFAULT_HOST).to_string())
+        match self.to_url() {
+            Ok(u) => match u.host_str() {
+                Some(host) => Ok(host.to_string()),
+                None => Err(Error::BadUrl("No hostname in URL".into())),
+            },
+            Err(e) => Err(e),
+        }
     }
 
     /// Returns the scheme for this request.
@@ -628,8 +634,14 @@ impl Request {
         // Sized bodies are retryable only if they are zero-length because of
         // coincidences of the current implementation - the function responsible
         // for retries doesn't have a way to replay a Payload.
-        let no_body = body.size.is_none() || body.size.unwrap() > 0;
-        idempotent && no_body
+        let retryable_body = match body.size {
+            BodySize::Unknown => false,
+            BodySize::Known(0) => true,
+            BodySize::Known(_) => false,
+            BodySize::Empty => true,
+        };
+
+        idempotent && retryable_body
     }
 }
 
@@ -653,4 +665,14 @@ impl fmt::Debug for TLSConnector {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("TLSConnector").finish()
     }
+}
+
+#[test]
+fn no_hostname() {
+    let req = Request::new(
+        &Agent::default(),
+        "GET".to_string(),
+        "unix:/run/foo.socket".to_string(),
+    );
+    assert!(req.get_host().is_err());
 }

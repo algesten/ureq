@@ -1,6 +1,7 @@
-use std::io::{Result as IoResult, Write};
+use std::io::{self, Write};
 use std::time;
 
+use log::{debug, info};
 use qstring::QString;
 use url::Url;
 
@@ -8,14 +9,11 @@ use url::Url;
 use cookie::{Cookie, CookieJar};
 
 use crate::agent::AgentState;
-use crate::body::{self, Payload, SizedReader};
+use crate::body::{self, BodySize, Payload, SizedReader};
 use crate::header;
 use crate::resolve::ArcResolver;
 use crate::stream::{self, connect_test, Stream};
 use crate::{Error, Header, Request, Response};
-
-#[cfg(feature = "cookie")]
-use crate::pool::DEFAULT_HOST;
 
 /// It's a "unit of work". Maybe a bad name for it?
 ///
@@ -35,16 +33,25 @@ impl Unit {
     pub(crate) fn new(req: &Request, url: &Url, mix_queries: bool, body: &SizedReader) -> Self {
         //
 
-        let is_chunked = req
+        let (is_transfer_encoding_set, mut is_chunked) = req
             .header("transfer-encoding")
             // if the user has set an encoding header, obey that.
-            .map(|enc| !enc.is_empty())
+            .map(|enc| {
+                let is_transfer_encoding_set = !enc.is_empty();
+                let last_encoding = enc.split(',').last();
+                let is_chunked = last_encoding
+                    .map(|last_enc| last_enc.trim() == "chunked")
+                    .unwrap_or(false);
+                (is_transfer_encoding_set, is_chunked)
+            })
             // otherwise, no chunking.
-            .unwrap_or(false);
+            .unwrap_or((false, false));
 
         let query_string = combine_query(&url, &req.query, mix_queries);
 
-        let cookie_header: Option<Header> = extract_cookies(&req.agent, &url);
+        let cookie_header: Option<Header> = url
+            .host_str()
+            .and_then(|host_str| extract_cookies(&req.agent, &url.scheme(), host_str, &url.path()));
 
         let extra_headers = {
             let mut extra = vec![];
@@ -52,8 +59,21 @@ impl Unit {
             // chunking and Content-Length headers are mutually exclusive
             // also don't write this if the user has set it themselves
             if !is_chunked && !req.has("content-length") {
-                if let Some(size) = body.size {
-                    extra.push(Header::new("Content-Length", &format!("{}", size)));
+                // if the payload is of known size (everything beside an unsized reader), set
+                // Content-Length,
+                // otherwise, use the chunked Transfer-Encoding (only if no other Transfer-Encoding
+                // has been set
+                match body.size {
+                    BodySize::Known(size) => {
+                        extra.push(Header::new("Content-Length", &format!("{}", size)))
+                    }
+                    BodySize::Unknown => {
+                        if !is_transfer_encoding_set {
+                            extra.push(Header::new("Transfer-Encoding", "chunked"));
+                            is_chunked = true;
+                        }
+                    }
+                    BodySize::Empty => {}
                 }
             }
 
@@ -125,13 +145,23 @@ pub(crate) fn connect(
 ) -> Result<Response, Error> {
     //
 
+    let host = req.get_host()?;
+    let url = &unit.url;
+    let method = &unit.req.method;
     // open socket
-    let (mut stream, is_recycled) = connect_socket(&unit, use_pooled)?;
+    let (mut stream, is_recycled) = connect_socket(&unit, &host, use_pooled)?;
+
+    if is_recycled {
+        info!("sending request (reused connection) {} {}", method, url);
+    } else {
+        info!("sending request {} {}", method, url);
+    }
 
     let send_result = send_prelude(&unit, &mut stream, redir);
 
     if let Err(err) = send_result {
         if is_recycled {
+            debug!("retrying request early {} {}", method, url);
             // we try open a new connection, this time there will be
             // no connection in the pool. don't use it.
             return connect(req, unit, false, redirect_count, body, redir);
@@ -164,7 +194,8 @@ pub(crate) fn connect(
     // first line. It's also allowable to retry requests that hit a
     // closed connection during the sending or receiving of headers.
     let mut resp = match result {
-        Err(err) if err.is_bad_status_read() && retryable && is_recycled => {
+        Err(err) if err.connection_closed() && retryable && is_recycled => {
+            debug!("retrying request {} {}", method, url);
             let empty = Payload::Empty.into_read();
             return connect(req, unit, false, redirect_count, empty, redir);
         }
@@ -185,8 +216,7 @@ pub(crate) fn connect(
         let location = resp.header("location");
         if let Some(location) = location {
             // join location header to current url in case it it relative
-            let new_url = unit
-                .url
+            let new_url = url
                 .join(location)
                 .map_err(|_| Error::BadUrl(format!("Bad redirection: {}", location)))?;
 
@@ -198,10 +228,11 @@ pub(crate) fn connect(
                     let mut new_unit = Unit::new(req, &new_url, false, &empty);
                     // this is to follow how curl does it. POST, PUT etc change
                     // to GET on a redirect.
-                    new_unit.req.method = match &unit.req.method[..] {
-                        "GET" | "HEAD" => unit.req.method,
+                    new_unit.req.method = match &method[..] {
+                        "GET" | "HEAD" => method.to_string(),
                         _ => "GET".into(),
                     };
+                    debug!("redirect {} {} -> {}", resp.status(), url, new_url);
                     return connect(req, new_unit, use_pooled, redirect_count + 1, empty, true);
                 }
                 _ => (),
@@ -211,25 +242,39 @@ pub(crate) fn connect(
         }
     }
 
+    debug!("response {} to {} {}", resp.status(), method, url);
+
+    let mut stream: Stream = stream.into();
+    stream.reset()?;
+
     // since it is not a redirect, or we're not following redirects,
     // give away the incoming stream to the response object.
-    crate::response::set_stream(&mut resp, unit.url.to_string(), Some(unit), stream.into());
+    crate::response::set_stream(&mut resp, unit.url.to_string(), Some(unit), stream);
 
     // release the response
     Ok(resp)
 }
 
 #[cfg(feature = "cookie")]
-fn extract_cookies(state: &std::sync::Mutex<AgentState>, url: &Url) -> Option<Header> {
+fn extract_cookies(
+    state: &std::sync::Mutex<AgentState>,
+    scheme: &str,
+    host: &str,
+    path: &str,
+) -> Option<Header> {
     let state = state.lock().unwrap();
-    let is_secure = url.scheme().eq_ignore_ascii_case("https");
-    let hostname = url.host_str().unwrap_or(DEFAULT_HOST).to_string();
+    let is_secure = scheme.eq_ignore_ascii_case("https");
 
-    match_cookies(&state.jar, &hostname, url.path(), is_secure)
+    match_cookies(&state.jar, host, path, is_secure)
 }
 
 #[cfg(not(feature = "cookie"))]
-fn extract_cookies(_state: &std::sync::Mutex<AgentState>, _url: &Url) -> Option<Header> {
+fn extract_cookies(
+    _state: &std::sync::Mutex<AgentState>,
+    _scheme: &str,
+    _host: &str,
+    _path: &str,
+) -> Option<Header> {
     None
 }
 
@@ -280,7 +325,7 @@ pub(crate) fn combine_query(url: &Url, query: &QString, mix_queries: bool) -> St
 }
 
 /// Connect the socket, either by using the pool or grab a new one.
-fn connect_socket(unit: &Unit, use_pooled: bool) -> Result<(Stream, bool), Error> {
+fn connect_socket(unit: &Unit, hostname: &str, use_pooled: bool) -> Result<(Stream, bool), Error> {
     match unit.url.scheme() {
         "http" | "https" | "test" => (),
         _ => return Err(Error::UnknownScheme(unit.url.scheme().to_string())),
@@ -298,8 +343,8 @@ fn connect_socket(unit: &Unit, use_pooled: bool) -> Result<(Stream, bool), Error
         }
     }
     let stream = match unit.url.scheme() {
-        "http" => stream::connect_http(&unit),
-        "https" => stream::connect_https(&unit),
+        "http" => stream::connect_http(&unit, hostname),
+        "https" => stream::connect_https(&unit, hostname),
         "test" => connect_test(&unit),
         _ => Err(Error::UnknownScheme(unit.url.scheme().to_string())),
     };
@@ -308,7 +353,7 @@ fn connect_socket(unit: &Unit, use_pooled: bool) -> Result<(Stream, bool), Error
 
 /// Send request line + headers (all up until the body).
 #[allow(clippy::write_with_newline)]
-fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> IoResult<()> {
+fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> io::Result<()> {
     //
 
     // build into a buffer and send in one go.
@@ -390,7 +435,7 @@ fn save_cookies(unit: &Unit, resp: &Response) {
         let to_parse = if raw_cookie.to_lowercase().contains("domain=") {
             (*raw_cookie).to_string()
         } else {
-            let host = &unit.url.host_str().unwrap_or(DEFAULT_HOST).to_string();
+            let host = &unit.url.host_str().unwrap().to_string();
             format!("{}; Domain={}", raw_cookie, host)
         };
         match Cookie::parse_encoded(&to_parse[..]) {

@@ -2,7 +2,7 @@
 
 use crate::test;
 use crate::test::testserver::{read_headers, TestServer};
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::net::{SocketAddr, TcpStream};
 use std::time::Duration;
 
@@ -170,5 +170,41 @@ fn test_cookies_on_redirect() -> Result<(), Error> {
     assert!(agent.cookie("first").is_some());
     assert!(agent.cookie("second").is_some());
     assert!(agent.cookie("third").is_some());
+    Ok(())
+}
+
+#[test]
+fn dirty_streams_not_returned() -> Result<(), Error> {
+    let testserver = TestServer::new(|mut stream: TcpStream| -> io::Result<()> {
+        read_headers(&stream);
+        stream.write_all(b"HTTP/1.1 200 OK\r\n")?;
+        stream.write_all(b"Transfer-Encoding: chunked\r\n")?;
+        stream.write_all(b"\r\n")?;
+        stream.write_all(b"5\r\n")?;
+        stream.write_all(b"corgi\r\n")?;
+        stream.write_all(b"8\r\n")?;
+        stream.write_all(b"dachsund\r\n")?;
+        stream.write_all(b"0\r\n")?;
+        stream.write_all(b"\r\n")?;
+        Ok(())
+    });
+    let url = format!("http://localhost:{}/", testserver.port);
+    let agent = Agent::default().build();
+    let resp = agent.get(&url).call()?;
+    let resp_str = resp.into_string()?;
+    assert_eq!(resp_str, "corgidachsund");
+
+    // Now fetch it again, but only read part of the body.
+    let resp_to_be_dropped = agent.get(&url).call()?;
+    let mut reader = resp_to_be_dropped.into_reader();
+
+    // Read 9 bytes of the response and then drop the reader.
+    let mut buf = [0_u8; 4];
+    let n = reader.read(&mut buf)?;
+    assert_ne!(n, 0, "early EOF");
+    assert_eq!(&buf, b"corg");
+    drop(reader);
+
+    let _resp_to_succeed = agent.get(&url).call()?;
     Ok(())
 }

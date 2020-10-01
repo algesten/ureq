@@ -1,6 +1,5 @@
 use chrono::Local;
 use rayon::prelude::*;
-use rayon_core;
 
 use std::io::{self, BufRead, BufReader, Read};
 use std::iter::Iterator;
@@ -89,6 +88,7 @@ using 50 threads concurrently.
         );
         return Ok(());
     }
+    env_logger::init();
     let file = std::fs::File::open(args.skip(1).next().unwrap())?;
     let bufreader = BufReader::new(file);
     let mut urls = vec![];
