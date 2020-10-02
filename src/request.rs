@@ -4,6 +4,8 @@ use std::result::Result;
 use std::sync::{Arc, Mutex};
 use std::time;
 
+#[cfg(any(feature = "tls", feature = "native-tls"))]
+use lazy_static::lazy_static;
 use qstring::QString;
 use url::{form_urlencoded, Url};
 
@@ -45,9 +47,9 @@ pub struct Request {
     pub(crate) redirects: u32,
     pub(crate) proxy: Option<crate::proxy::Proxy>,
     #[cfg(feature = "tls")]
-    pub(crate) tls_config: Option<TLSClientConfig>,
+    pub(crate) tls_config: Option<agent::TLSClientConfig>,
     #[cfg(all(feature = "native-tls", not(feature = "tls")))]
-    pub(crate) tls_connector: Option<TLSConnector>,
+    pub(crate) tls_connector: Option<agent::TLSConnector>,
 }
 
 impl fmt::Debug for Request {
@@ -576,8 +578,44 @@ impl Request {
     /// ```
     #[cfg(feature = "tls")]
     pub fn set_tls_config(&mut self, tls_config: Arc<rustls::ClientConfig>) -> &mut Request {
-        self.tls_config = Some(TLSClientConfig(tls_config));
+        self.tls_config = Some(agent::TLSClientConfig(tls_config));
         self
+    }
+
+    #[cfg(feature = "tls")]
+    pub(crate) fn tls_config(&self) -> Arc<rustls::ClientConfig> {
+        lazy_static! {
+            static ref TLS_CONF: Arc<rustls::ClientConfig> = {
+                let mut config = rustls::ClientConfig::new();
+                configure_certs(&mut config);
+                Arc::new(config)
+            };
+        }
+
+        self.tls_config
+            .as_ref()
+            .or(self.agent.lock().unwrap().tls_config.as_ref())
+            .as_ref()
+            .map(|c| c.0.clone())
+            .unwrap_or(TLS_CONF.clone())
+    }
+
+    #[cfg(feature = "native-tls")]
+    pub(crate) fn tls_connector(&self) -> Option<Arc<native_tls::TlsConnector>> {
+        lazy_static! {
+            static ref TLS_CONNECTOR: Option<Arc<native_tls::TlsConnector>> = {
+                match native_tls::TlsConnector::new() {
+                    Ok(tc) => Some(Arc::new(tc)),
+                    _ => None,
+                }
+            };
+        }
+        self.tls_connector
+            .as_ref()
+            .or(self.agent.lock().unwrap().tls_connector.as_ref())
+            .as_ref()
+            .map(|c| c.0.clone())
+            .or(TLS_CONNECTOR.clone())
     }
 
     /// Sets the TLS connector that will be used for the connection.
@@ -593,7 +631,7 @@ impl Request {
         &mut self,
         tls_connector: Arc<native_tls::TlsConnector>,
     ) -> &mut Request {
-        self.tls_connector = Some(TLSConnector(tls_connector));
+        self.tls_connector = Some(agent::TLSConnector(tls_connector));
         self
     }
 
@@ -620,26 +658,17 @@ impl Request {
     }
 }
 
-#[cfg(feature = "tls")]
-#[derive(Clone)]
-pub(crate) struct TLSClientConfig(pub(crate) Arc<rustls::ClientConfig>);
-
-#[cfg(feature = "tls")]
-impl fmt::Debug for TLSClientConfig {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("TLSClientConfig").finish()
-    }
+#[cfg(all(feature = "tls", feature = "native-certs"))]
+fn configure_certs(config: &mut rustls::ClientConfig) {
+    config.root_store =
+        rustls_native_certs::load_native_certs().expect("Could not load patform certs");
 }
 
-#[cfg(all(feature = "native-tls", not(feature = "tls")))]
-#[derive(Clone)]
-pub(crate) struct TLSConnector(pub(crate) Arc<native_tls::TlsConnector>);
-
-#[cfg(all(feature = "native-tls", not(feature = "tls")))]
-impl fmt::Debug for TLSConnector {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("TLSConnector").finish()
-    }
+#[cfg(all(feature = "tls", not(feature = "native-certs")))]
+fn configure_certs(config: &mut rustls::ClientConfig) {
+    config
+        .root_store
+        .add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
 }
 
 #[test]

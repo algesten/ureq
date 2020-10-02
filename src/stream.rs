@@ -312,42 +312,13 @@ pub(crate) fn connect_http(unit: &Unit, hostname: &str) -> Result<Stream, Error>
         .map(Stream::Http)
 }
 
-#[cfg(all(feature = "tls", feature = "native-certs"))]
-fn configure_certs(config: &mut rustls::ClientConfig) {
-    config.root_store =
-        rustls_native_certs::load_native_certs().expect("Could not load patform certs");
-}
-
-#[cfg(all(feature = "tls", not(feature = "native-certs")))]
-fn configure_certs(config: &mut rustls::ClientConfig) {
-    config
-        .root_store
-        .add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
-}
-
 #[cfg(all(feature = "tls", not(feature = "native-tls")))]
 pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error> {
-    use lazy_static::lazy_static;
-    use std::sync::Arc;
-
-    lazy_static! {
-        static ref TLS_CONF: Arc<rustls::ClientConfig> = {
-            let mut config = rustls::ClientConfig::new();
-            configure_certs(&mut config);
-            Arc::new(config)
-        };
-    }
-
     let port = unit.url.port().unwrap_or(443);
 
     let sni = webpki::DNSNameRef::try_from_ascii_str(hostname)
         .map_err(|err| Error::DnsFailed(err.to_string()))?;
-    let tls_conf: &Arc<rustls::ClientConfig> = unit
-        .req
-        .tls_config
-        .as_ref()
-        .map(|c| &c.0)
-        .unwrap_or(&*TLS_CONF);
+    let tls_conf = unit.req.tls_config();
     let sess = rustls::ClientSession::new(&tls_conf, sni);
 
     let sock = connect_host(unit, hostname, port)?;
@@ -364,8 +335,8 @@ pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error
     let port = unit.url.port().unwrap_or(443);
     let sock = connect_host(unit, hostname, port)?;
 
-    let tls_connector: Arc<native_tls::TlsConnector> = match &unit.req.tls_connector {
-        Some(connector) => connector.0.clone(),
+    let tls_connector: Arc<native_tls::TlsConnector> = match unit.req.tls_connector() {
+        Some(connector) => connector,
         None => Arc::new(native_tls::TlsConnector::new().map_err(|e| Error::TlsError(e))?),
     };
     let stream = tls_connector

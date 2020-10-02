@@ -90,6 +90,11 @@ impl ConnectionPool {
         self.max_idle_connections == 0 || self.max_idle_connections_per_host == 0
     }
 
+    pub(crate) fn clear(&mut self) {
+        self.lru.clear();
+        self.recycle.clear();
+    }
+
     pub fn set_max_idle_connections_per_host(&mut self, max_connections: usize) {
         if self.max_idle_connections_per_host == max_connections {
             return;

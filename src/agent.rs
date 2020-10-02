@@ -1,5 +1,7 @@
 #[cfg(feature = "cookie")]
 use cookie::{Cookie, CookieJar};
+#[cfg(any(feature = "tls", feature = "native-tls"))]
+use std::fmt;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -55,6 +57,31 @@ pub(crate) struct AgentState {
     #[cfg(feature = "cookie")]
     pub(crate) jar: CookieJar,
     pub(crate) resolver: ArcResolver,
+    #[cfg(feature = "tls")]
+    pub(crate) tls_config: Option<TLSClientConfig>,
+    #[cfg(all(feature = "native-tls", not(feature = "tls")))]
+    pub(crate) tls_connector: Option<TLSConnector>,
+}
+#[cfg(feature = "tls")]
+#[derive(Clone)]
+pub(crate) struct TLSClientConfig(pub(crate) Arc<rustls::ClientConfig>);
+
+#[cfg(feature = "tls")]
+impl fmt::Debug for TLSClientConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TLSClientConfig").finish()
+    }
+}
+
+#[cfg(all(feature = "native-tls", not(feature = "tls")))]
+#[derive(Clone)]
+pub(crate) struct TLSConnector(pub(crate) Arc<native_tls::TlsConnector>);
+
+#[cfg(all(feature = "native-tls", not(feature = "tls")))]
+impl fmt::Debug for TLSConnector {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TLSConnector").finish()
+    }
 }
 
 impl AgentState {
@@ -211,7 +238,10 @@ impl Agent {
     /// });
     /// ```
     pub fn set_resolver(&mut self, resolver: impl crate::Resolver + 'static) -> &mut Self {
-        self.state.lock().unwrap().resolver = resolver.into();
+        let mut state = self.state.lock().unwrap();
+        state.resolver = resolver.into();
+        state.pool.clear();
+        drop(state);
         self
     }
 
@@ -289,6 +319,45 @@ impl Agent {
     /// Make a PATCH request from this agent.
     pub fn patch(&self, path: &str) -> Request {
         self.request("PATCH", path)
+    }
+
+    /// Set the TLS client config to use for new connections.
+    ///
+    /// See [`ClientConfig`](https://docs.rs/rustls/latest/rustls/struct.ClientConfig.html).
+    ///
+    /// Example:
+    /// ```
+    /// let tls_config = std::sync::Arc::new(rustls::ClientConfig::new());
+    /// let req = ureq::Agent::new()
+    ///     .set_tls_config(tls_config.clone());
+    /// ```
+    #[cfg(feature = "tls")]
+    pub fn set_tls_config(&mut self, tls_config: Arc<rustls::ClientConfig>) -> &mut Agent {
+        let mut state = self.state.lock().unwrap();
+        state.tls_config = Some(TLSClientConfig(tls_config));
+        state.pool.clear();
+        drop(state);
+        self
+    }
+
+    /// Sets the TLS connector that will be used for new connections.
+    ///
+    /// Example:
+    /// ```
+    /// let tls_connector = std::sync::Arc::new(native_tls::TlsConnector::new().unwrap());
+    /// let req = ureq::Agent::new()
+    ///     .set_tls_connector(tls_connector.clone());
+    /// ```
+    #[cfg(feature = "native-tls")]
+    pub fn set_tls_connector(
+        &mut self,
+        tls_connector: Arc<native_tls::TlsConnector>,
+    ) -> &mut Agent {
+        let mut state = self.state.lock().unwrap();
+        state.tls_connector = Some(TLSConnector(tls_connector));
+        state.pool.clear();
+        drop(state);
+        self
     }
 }
 
