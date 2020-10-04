@@ -384,7 +384,8 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
     } else {
         unit.deadline
     };
-    let netloc = match unit.req.proxy {
+    let proxy: Option<Proxy> = unit.req.proxy();
+    let netloc = match proxy {
         Some(ref proxy) => format!("{}:{}", proxy.server, proxy.port),
         None => format!("{}:{}", hostname, port),
     };
@@ -399,7 +400,7 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         return Err(Error::DnsFailed(format!("No ip address for {}", hostname)));
     }
 
-    let proto = if let Some(ref proxy) = unit.req.proxy {
+    let proto = if let Some(ref proxy) = proxy {
         Some(proxy.proto)
     } else {
         None
@@ -419,7 +420,7 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         let stream = if Some(Proto::SOCKS5) == proto {
             connect_socks5(
                 &unit,
-                unit.req.proxy.to_owned().unwrap(),
+                proxy.clone().unwrap(),
                 deadline,
                 sock_addr,
                 hostname,
@@ -473,7 +474,7 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
     }
 
     if proto == Some(Proto::HTTPConnect) {
-        if let Some(ref proxy) = unit.req.proxy {
+        if let Some(ref proxy) = proxy {
             write!(stream, "{}", proxy.connect(hostname, port)).unwrap();
             stream.flush()?;
 
