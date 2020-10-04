@@ -16,7 +16,7 @@ use socks::{TargetAddr, ToTargetAddr};
 
 #[cfg(feature = "native-tls")]
 use native_tls::{HandshakeError, TlsStream};
-#[cfg(feature = "native-tls")]
+#[cfg(any(feature = "native-tls", feature = "socks-proxy"))]
 use std::sync::Arc;
 
 use crate::proxy::Proto;
