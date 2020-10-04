@@ -327,16 +327,14 @@ fn configure_certs(config: &mut rustls::ClientConfig) {
 
 #[cfg(all(feature = "tls", not(feature = "native-tls")))]
 pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error> {
-    use lazy_static::lazy_static;
+    use once_cell::sync::Lazy;
     use std::sync::Arc;
 
-    lazy_static! {
-        static ref TLS_CONF: Arc<rustls::ClientConfig> = {
-            let mut config = rustls::ClientConfig::new();
-            configure_certs(&mut config);
-            Arc::new(config)
-        };
-    }
+    static TLS_CONF: Lazy<Arc<rustls::ClientConfig>> = Lazy::new(|| {
+        let mut config = rustls::ClientConfig::new();
+        configure_certs(&mut config);
+        Arc::new(config)
+    });
 
     let port = unit.url.port().unwrap_or(443);
 
