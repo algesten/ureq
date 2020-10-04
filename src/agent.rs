@@ -281,11 +281,6 @@ impl Agent {
         self.request("OPTIONS", path)
     }
 
-    /// Make a CONNECT request from this agent.
-    pub fn connect(&self, path: &str) -> Request {
-        self.request("CONNECT", path)
-    }
-
     /// Make a PATCH request from this agent.
     pub fn patch(&self, path: &str) -> Request {
         self.request("PATCH", path)
