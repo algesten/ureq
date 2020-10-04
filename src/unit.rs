@@ -6,8 +6,9 @@ use qstring::QString;
 use url::Url;
 
 #[cfg(feature = "cookie")]
-use cookie::{Cookie, CookieJar};
+use cookie::Cookie;
 
+#[cfg(feature = "cookie")]
 use crate::agent::AgentState;
 use crate::body::{self, BodySize, Payload, SizedReader};
 use crate::header;
@@ -49,10 +50,6 @@ impl Unit {
 
         let query_string = combine_query(&url, &req.query, mix_queries);
 
-        let cookie_header: Option<Header> = url
-            .host_str()
-            .and_then(|host_str| extract_cookies(&req.agent, &url.scheme(), host_str, &url.path()));
-
         let extra_headers = {
             let mut extra = vec![];
 
@@ -84,12 +81,15 @@ impl Unit {
                 extra.push(Header::new("Authorization", &format!("Basic {}", encoded)));
             }
 
+            #[cfg(feature = "cookie")]
+            extra.extend(extract_cookies(&req.agent, &url).into_iter());
+
             extra
         };
+
         let headers: Vec<_> = req
             .headers
             .iter()
-            .chain(cookie_header.iter())
             .chain(extra_headers.iter())
             .cloned()
             .collect();
@@ -198,6 +198,7 @@ pub(crate) fn connect(
     }
 
     // squirrel away cookies
+    #[cfg(feature = "cookie")]
     save_cookies(&unit, &resp);
 
     // handle redirects
@@ -250,62 +251,18 @@ pub(crate) fn connect(
 }
 
 #[cfg(feature = "cookie")]
-fn extract_cookies(
-    state: &std::sync::Mutex<AgentState>,
-    scheme: &str,
-    host: &str,
-    path: &str,
-) -> Option<Header> {
+fn extract_cookies(state: &std::sync::Mutex<AgentState>, url: &Url) -> Option<Header> {
     let state = state.lock().unwrap();
-    let is_secure = scheme.eq_ignore_ascii_case("https");
-
-    match_cookies(&state.jar, host, path, is_secure)
-}
-
-#[cfg(not(feature = "cookie"))]
-fn extract_cookies(
-    _state: &std::sync::Mutex<AgentState>,
-    _scheme: &str,
-    _host: &str,
-    _path: &str,
-) -> Option<Header> {
-    None
-}
-
-// TODO check so cookies can't be set for tld:s
-#[cfg(feature = "cookie")]
-fn match_cookies(jar: &CookieJar, domain: &str, path: &str, is_secure: bool) -> Option<Header> {
-    Some(
-        jar.iter()
-            .filter(|c| {
-                // if there is a domain, it must be matched.
-                // if there is no domain, then ignore cookie
-                let domain_ok = c
-                    .domain()
-                    .map(|cdom| domain.contains(cdom))
-                    .unwrap_or(false);
-                // a path must match the beginning of request path.
-                // no cookie path, we say is ok. is it?!
-                let path_ok = c
-                    .path()
-                    .map(|cpath| path.find(cpath).map(|pos| pos == 0).unwrap_or(false))
-                    .unwrap_or(true);
-                // either the cookie isnt secure, or we're not doing a secure request.
-                let secure_ok = !c.secure().unwrap_or(false) || is_secure;
-
-                domain_ok && path_ok && secure_ok
-            })
-            .map(|c| {
-                let name = c.name().to_string();
-                let value = c.value().to_string();
-                let nameval = Cookie::new(name, value).encoded().to_string();
-                nameval
-            })
-            .collect::<Vec<_>>()
-            .join(";"),
-    )
-    .filter(|x| !x.is_empty())
-    .map(|s| Header::new("Cookie", &s))
+    let header_value = state
+        .jar
+        .get_request_cookies(url)
+        .map(|c| Cookie::new(c.name(), c.value()).encoded().to_string())
+        .collect::<Vec<_>>()
+        .join(";");
+    match header_value.as_str() {
+        "" => None,
+        val => Some(Header::new("Cookie", val)),
+    }
 }
 
 /// Combine the query of the url and the query options set on the request object.
@@ -410,36 +367,24 @@ fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> io::Result<()>
     Ok(())
 }
 
-#[cfg(not(feature = "cookie"))]
-fn save_cookies(_unit: &Unit, _resp: &Response) {}
-
 /// Investigate a response for "Set-Cookie" headers.
 #[cfg(feature = "cookie")]
 fn save_cookies(unit: &Unit, resp: &Response) {
     //
 
-    let cookies = resp.all("set-cookie");
-    if cookies.is_empty() {
+    let headers = resp.all("set-cookie");
+    // Avoid locking if there are no cookie headers
+    if headers.is_empty() {
         return;
     }
-
-    // only lock if we know there is something to process
-    let state = &mut unit.req.agent.lock().unwrap();
-    for raw_cookie in cookies.iter() {
-        let to_parse = if raw_cookie.to_lowercase().contains("domain=") {
-            (*raw_cookie).to_string()
-        } else {
-            let host = &unit.url.host_str().unwrap().to_string();
-            format!("{}; Domain={}", raw_cookie, host)
-        };
-        match Cookie::parse_encoded(&to_parse[..]) {
-            Err(_) => (), // ignore unparseable cookies
-            Ok(cookie) => {
-                let cookie = cookie.into_owned();
-                state.jar.add(cookie)
-            }
+    let cookies = headers.into_iter().flat_map(|header_value| {
+        match Cookie::parse(header_value.to_string()) {
+            Err(_) => None,
+            Ok(c) => Some(c),
         }
-    }
+    });
+    let state = &mut unit.req.agent.lock().unwrap();
+    state.jar.store_response_cookies(cookies, &unit.url.clone());
 }
 
 #[cfg(test)]
@@ -447,27 +392,25 @@ fn save_cookies(unit: &Unit, resp: &Response) {
 mod tests {
     use super::*;
 
+    use crate::Agent;
     ///////////////////// COOKIE TESTS //////////////////////////////
 
     #[test]
-    fn match_cookies_returns_nothing_when_no_cookies() {
-        let jar = CookieJar::new();
-
-        let result = match_cookies(&jar, "crates.io", "/", false);
-        assert_eq!(result, None);
-    }
-
-    #[test]
     fn match_cookies_returns_one_header() {
-        let mut jar = CookieJar::new();
-        let cookie1 = Cookie::parse("cookie1=value1; Domain=crates.io").unwrap();
-        let cookie2 = Cookie::parse("cookie2=value2; Domain=crates.io").unwrap();
-        jar.add(cookie1);
-        jar.add(cookie2);
+        let agent = Agent::default();
+        let url: Url = "https://crates.io/".parse().unwrap();
+        let cookie1: Cookie = "cookie1=value1; Domain=crates.io; Path=/".parse().unwrap();
+        let cookie2: Cookie = "cookie2=value2; Domain=crates.io; Path=/".parse().unwrap();
+        agent
+            .state
+            .lock()
+            .unwrap()
+            .jar
+            .store_response_cookies(vec![cookie1, cookie2].into_iter(), &url);
 
         // There's no guarantee to the order in which cookies are defined.
         // Ensure that they're either in one order or the other.
-        let result = match_cookies(&jar, "crates.io", "/", false);
+        let result = extract_cookies(&agent.state, &url);
         let order1 = "cookie1=value1;cookie2=value2";
         let order2 = "cookie2=value2;cookie1=value1";
 
