@@ -324,6 +324,11 @@ fn connect_socket(unit: &Unit, hostname: &str, use_pooled: bool) -> Result<(Stre
         "http" | "https" | "test" => (),
         _ => return Err(Error::UnknownScheme(unit.url.scheme().to_string())),
     };
+    // Disallowing pooling of connections if TLS config is set on a per-request basis.
+    #[cfg(feature = "tls")]
+    let use_pooled = use_pooled && unit.req.tls_config.is_none();
+    #[cfg(feature = "native-tls")]
+    let use_pooled = use_pooled && unit.req.tls_connector.is_none();
     if use_pooled {
         let state = &mut unit.req.agent.lock().unwrap();
         // The connection may have been closed by the server

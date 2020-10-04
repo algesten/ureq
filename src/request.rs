@@ -566,9 +566,13 @@ impl Request {
         self
     }
 
-    /// Set the TLS client config to use for the connection.
+    /// Set the TLS client config to use for the connection. See [`ClientConfig`](https://docs.rs/rustls/latest/rustls/struct.ClientConfig.html).
     ///
-    /// See [`ClientConfig`](https://docs.rs/rustls/latest/rustls/struct.ClientConfig.html).
+    /// Note: This prevents connection reuse, since it's not safe to reuse a connection
+    /// that may have been created with a different TLS config. In most cases you should
+    /// prefer [Agent.set_tls_config](struct.Agent.html#method.set_tls_config),
+    /// which sets the config for all requests made by the agent,
+    /// and allows connection pooling.
     ///
     /// Example:
     /// ```
@@ -613,7 +617,14 @@ impl Request {
             .or(TLS_CONNECTOR.clone())
     }
 
-    /// Sets the TLS connector that will be used for the connection.
+    /// Sets the TLS connector that will be used for new connections. See [`TLSConnector`](https://docs.rs/native-tls/0.2.4/native_tls/struct.TlsConnector.html).
+    ///
+    /// Note: This prevents connection reuse, since it's not safe to reuse a connection
+    /// that may have been created with a different TLS config. In most cases you should
+    /// prefer [Agent.set_tls_config](struct.Agent.html#method.set_tls_config),
+    /// which sets the config for all requests made by the agent,
+    /// and allows connection pooling.
+    ///
     ///
     /// Example:
     /// ```

@@ -321,10 +321,9 @@ impl Agent {
         self.request("PATCH", path)
     }
 
-    /// Set the TLS client config to use for new connections.
+    /// Set the TLS client config to use for new connections. See [`ClientConfig`](https://docs.rs/rustls/latest/rustls/struct.ClientConfig.html).
     ///
-    /// See [`ClientConfig`](https://docs.rs/rustls/latest/rustls/struct.ClientConfig.html).
-    /// This clears any existing pooled connections.
+    /// This clears any existing pooled connections, since it's not safe to reuse a connection created with a different TLS config.
     ///
     /// Example:
     /// ```
@@ -341,10 +340,9 @@ impl Agent {
         self
     }
 
-    /// Sets the TLS connector that will be used for new connections.
-    /// This clears any existing pooled connections.
-
-    /// See [`TLSConnector`](https://docs.rs/native-tls/0.2.4/native_tls/struct.TlsConnector.html).
+    /// Sets the TLS connector that will be used for new connections. See [`TLSConnector`](https://docs.rs/native-tls/0.2.4/native_tls/struct.TlsConnector.html).
+    ///
+    /// This clears any existing pooled connections, since it's not safe to reuse a connection created with a different TLS config.
     ///
     /// Example:
     /// ```
