@@ -537,7 +537,7 @@ fn connect_socks5(
     #[allow(clippy::mutex_atomic)]
     let stream = if let Some(deadline) = deadline {
         use std::sync::mpsc::channel;
-        use std::sync::{Arc, Condvar, Mutex};
+        use std::sync::{Condvar, Mutex};
         use std::thread;
         let master_signal = Arc::new((Mutex::new(false), Condvar::new()));
         let slave_signal = master_signal.clone();
