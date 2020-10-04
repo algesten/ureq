@@ -324,6 +324,7 @@ impl Agent {
     /// Set the TLS client config to use for new connections.
     ///
     /// See [`ClientConfig`](https://docs.rs/rustls/latest/rustls/struct.ClientConfig.html).
+    /// This clears any existing pooled connections.
     ///
     /// Example:
     /// ```
@@ -341,6 +342,9 @@ impl Agent {
     }
 
     /// Sets the TLS connector that will be used for new connections.
+    /// This clears any existing pooled connections.
+
+    /// See [`TLSConnector`](https://docs.rs/native-tls/0.2.4/native_tls/struct.TlsConnector.html).
     ///
     /// Example:
     /// ```
