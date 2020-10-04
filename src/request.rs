@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use std::time;
 
 #[cfg(any(feature = "tls", feature = "native-tls"))]
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use qstring::QString;
 use url::{form_urlencoded, Url};
 
@@ -584,13 +584,11 @@ impl Request {
 
     #[cfg(feature = "tls")]
     pub(crate) fn tls_config(&self) -> Arc<rustls::ClientConfig> {
-        lazy_static! {
-            static ref TLS_CONF: Arc<rustls::ClientConfig> = {
-                let mut config = rustls::ClientConfig::new();
-                configure_certs(&mut config);
-                Arc::new(config)
-            };
-        }
+        static TLS_CONF: Lazy<Arc<rustls::ClientConfig>> = Lazy::new(|| {
+            let mut config = rustls::ClientConfig::new();
+            configure_certs(&mut config);
+            Arc::new(config)
+        });
 
         self.tls_config
             .as_ref()
@@ -602,14 +600,11 @@ impl Request {
 
     #[cfg(feature = "native-tls")]
     pub(crate) fn tls_connector(&self) -> Option<Arc<native_tls::TlsConnector>> {
-        lazy_static! {
-            static ref TLS_CONNECTOR: Option<Arc<native_tls::TlsConnector>> = {
-                match native_tls::TlsConnector::new() {
-                    Ok(tc) => Some(Arc::new(tc)),
-                    _ => None,
-                }
-            };
-        }
+        static TLS_CONNECTOR: Lazy<Option<Arc<native_tls::TlsConnector>>> =
+            Lazy::new(|| match native_tls::TlsConnector::new() {
+                Ok(tc) => Some(Arc::new(tc)),
+                _ => None,
+            });
         self.tls_connector
             .as_ref()
             .or(self.agent.lock().unwrap().tls_connector.as_ref())

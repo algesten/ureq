@@ -330,17 +330,18 @@ pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error
 
 #[cfg(all(feature = "native-tls", not(feature = "tls")))]
 pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error> {
-    use std::sync::Arc;
-
     let port = unit.url.port().unwrap_or(443);
     let sock = connect_host(unit, hostname, port)?;
+    // If hostname is an IPv6 address, it will be surrounded by brackets.
+    // The brackets must be removed for hostname validation by the TLS library.
+    let trimmed_hostname = hostname.trim_matches(|c| c == '[' || c == ']');
 
     let tls_connector: Arc<native_tls::TlsConnector> = match unit.req.tls_connector() {
         Some(connector) => connector,
         None => Arc::new(native_tls::TlsConnector::new().map_err(|e| Error::TlsError(e))?),
     };
     let stream = tls_connector
-        .connect(&hostname.trim_matches(|c| c == '[' || c == ']'), sock)
+        .connect(&trimmed_hostname, sock)
         .map_err(|e| match e {
             HandshakeError::Failure(err) => Error::TlsError(err),
             // The only other possibility is WouldBlock. Since we don't
