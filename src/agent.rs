@@ -9,6 +9,7 @@ use url::Url;
 
 use crate::header::{self, Header};
 use crate::pool::ConnectionPool;
+use crate::proxy::Proxy;
 use crate::request::Request;
 use crate::resolve::ArcResolver;
 
@@ -55,6 +56,7 @@ pub struct Agent {
 pub(crate) struct AgentState {
     /// Reused connections between requests.
     pub(crate) pool: ConnectionPool,
+    pub(crate) proxy: Option<Proxy>,
     /// Cookies saved between requests.
     /// Invariant: All cookies must have a nonempty domain and path.
     #[cfg(feature = "cookie")]
@@ -217,6 +219,22 @@ impl Agent {
     /// ```
     pub fn set_resolver(&mut self, resolver: impl crate::Resolver + 'static) -> &mut Self {
         self.state.lock().unwrap().resolver = resolver.into();
+        self
+    }
+
+    /// Set the proxy server to use for all connections from this Agent.
+    ///
+    /// Example:
+    /// ```
+    /// let proxy = ureq::Proxy::new("user:password@cool.proxy:9090").unwrap();
+    /// let agent = ureq::agent()
+    ///     .set_proxy(proxy)
+    ///     .build();
+    /// ```
+    pub fn set_proxy(&mut self, proxy: Proxy) -> &mut Agent {
+        let mut state = self.state.lock().unwrap();
+        state.proxy = Some(proxy);
+        drop(state);
         self
     }
 
