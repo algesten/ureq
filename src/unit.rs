@@ -145,7 +145,10 @@ pub(crate) fn connect(
 ) -> Result<Response, Error> {
     //
 
-    let host = req.get_host()?;
+    let host = unit
+        .url
+        .host_str()
+        .ok_or(Error::BadUrl("no host".to_string()))?;
     let url = &unit.url;
     let method = &unit.req.method;
     // open socket
@@ -361,6 +364,7 @@ fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> io::Result<()>
     // finish
     write!(prelude, "\r\n")?;
 
+    debug!("writing prelude: {}", String::from_utf8_lossy(&prelude));
     // write all to the wire
     stream.write_all(&prelude[..])?;
 
