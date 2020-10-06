@@ -1,3 +1,8 @@
+# 1.5.1
+ * Use cookie_store crate for correct cookie handling (#169).
+ * Fix bug in picking wrong host for redirects introduced in 1.5.0 (#180).
+ * Allow proxy settings on Agent (#178).
+
 # 1.5.0
  * Add pluggable name resolution. Users can now override the IP addresses for
    hostnames of their choice (#148).
