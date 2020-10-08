@@ -199,11 +199,6 @@ pub fn options(path: &str) -> Request {
     request("OPTIONS", path)
 }
 
-/// Make an CONNECT request.
-pub fn connect(path: &str) -> Request {
-    request("CONNECT", path)
-}
-
 /// Make an PATCH request.
 pub fn patch(path: &str) -> Request {
     request("PATCH", path)
