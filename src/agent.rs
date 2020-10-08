@@ -65,9 +65,6 @@ pub(crate) struct AgentState {
 }
 
 impl AgentState {
-    fn new() -> Self {
-        Self::default()
-    }
     pub fn pool(&mut self) -> &mut ConnectionPool {
         &mut self.pool
     }
@@ -94,7 +91,10 @@ impl Agent {
     pub fn build(&self) -> Self {
         Agent {
             headers: self.headers.clone(),
-            state: Arc::new(Mutex::new(AgentState::new())),
+            state: Arc::new(Mutex::new(AgentState {
+                resolver: self.state.lock().unwrap().resolver.clone(),
+                ..Default::default()
+            })),
         }
     }
 
