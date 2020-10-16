@@ -42,7 +42,7 @@ type Result<T> = result::Result<T, Oops>;
 fn get(agent: &ureq::Agent, url: &String) -> Result<Vec<u8>> {
     let response = agent
         .get(url)
-        .timeout_connect(5_000)
+        .timeout_connect(std::time::Duration::from_secs(5))
         .timeout(Duration::from_secs(20))
         .call();
     if let Some(err) = response.synthetic_error() {
