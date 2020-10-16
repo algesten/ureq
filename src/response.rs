@@ -82,7 +82,7 @@ impl Response {
     /// ```
     pub fn new(status: u16, status_text: &str, body: &str) -> Result<Response, Error> {
         let r = format!("HTTP/1.1 {} {}\r\n\r\n{}\n", status, status_text, body);
-        (r.as_ref() as &str).parse::<Response>()
+        (r.as_ref() as &str).parse()
     }
 
     /// The URL we ended up at. This can differ from the request url when

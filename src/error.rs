@@ -56,7 +56,23 @@ impl From<io::Error> for Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
+        match self {
+            Error::BadUrl(url) => write!(f, "Bad URL: {}", url),
+            Error::UnknownScheme(scheme) => write!(f, "Unknown Scheme: {}", scheme),
+            Error::DnsFailed(err) => write!(f, "Dns Failed: {}", err),
+            Error::ConnectionFailed(err) => write!(f, "Connection Failed: {}", err),
+            Error::TooManyRedirects => write!(f, "Too Many Redirects"),
+            Error::BadStatus => write!(f, "Bad Status"),
+            Error::BadHeader => write!(f, "Bad Header"),
+            Error::Io(ioe) => write!(f, "Network Error: {}", ioe),
+            Error::BadProxy => write!(f, "Malformed proxy"),
+            Error::BadProxyCreds => write!(f, "Failed to parse proxy credentials"),
+            Error::ProxyConnect => write!(f, "Proxy failed to connect"),
+            Error::InvalidProxyCreds => write!(f, "Provided proxy credentials are incorrect"),
+            Error::HTTP(response) => write!(f, "HTTP status {}", response.status()),
+            #[cfg(feature = "native-tls")]
+            Error::TlsError(err) => write!(f, "TLS Error: {}", err),
+        }
     }
 }
 
