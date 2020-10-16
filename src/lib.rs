@@ -24,8 +24,8 @@
 //!           "rust": true
 //!       }));
 //!
-//!   if resp.is_ok() {
-//!     println!("success: {}", resp.unwrap().into_string()?);
+//!   if let Ok(resp) = resp {
+//!     println!("success: {}", resp.into_string()?);
 //!   } else {
 //!     // This can include errors like failure to parse URL or connect timeout.
 //!     println!("error {}", resp.err().unwrap());
