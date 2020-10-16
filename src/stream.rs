@@ -379,8 +379,8 @@ pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error
 }
 
 pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<TcpStream, Error> {
-    let deadline: Option<Instant> = if unit.req.timeout_connect > 0 {
-        Instant::now().checked_add(Duration::from_millis(unit.req.timeout_connect))
+    let deadline: Option<Instant> = if let Some(timeout_connect) = unit.req.timeout_connect {
+        Instant::now().checked_add(timeout_connect)
     } else {
         unit.deadline
     };
@@ -447,30 +447,20 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         return Err(err);
     };
 
-    // rust's absurd api returns Err if we set 0.
-    // Setting it to None will disable the native system timeout
     if let Some(deadline) = deadline {
-        stream
-            .set_read_timeout(Some(time_until_deadline(deadline)?))
-            .ok();
-    } else if unit.req.timeout_read > 0 {
-        stream
-            .set_read_timeout(Some(Duration::from_millis(unit.req.timeout_read as u64)))
-            .ok();
+        stream.set_read_timeout(Some(time_until_deadline(deadline)?))?;
+    } else if let Some(timeout_read) = unit.req.timeout_read {
+        stream.set_read_timeout(Some(timeout_read))?;
     } else {
-        stream.set_read_timeout(None).ok();
+        stream.set_read_timeout(None)?;
     }
 
     if let Some(deadline) = deadline {
-        stream
-            .set_write_timeout(Some(time_until_deadline(deadline)?))
-            .ok();
-    } else if unit.req.timeout_write > 0 {
-        stream
-            .set_write_timeout(Some(Duration::from_millis(unit.req.timeout_write as u64)))
-            .ok();
+        stream.set_write_timeout(Some(time_until_deadline(deadline)?))?;
+    } else if let Some(timeout_write) = unit.req.timeout_write {
+        stream.set_write_timeout(Some(timeout_write)).ok();
     } else {
-        stream.set_write_timeout(None).ok();
+        stream.set_write_timeout(None)?;
     }
 
     if proto == Some(Proto::HTTPConnect) {

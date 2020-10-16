@@ -39,9 +39,9 @@ pub struct Request {
     // from request itself
     pub(crate) headers: Vec<Header>,
     pub(crate) query: QString,
-    pub(crate) timeout_connect: u64,
-    pub(crate) timeout_read: u64,
-    pub(crate) timeout_write: u64,
+    pub(crate) timeout_connect: Option<time::Duration>,
+    pub(crate) timeout_read: Option<time::Duration>,
+    pub(crate) timeout_write: Option<time::Duration>,
     pub(crate) timeout: Option<time::Duration>,
     pub(crate) redirects: u32,
     pub(crate) proxy: Option<Proxy>,
@@ -99,7 +99,7 @@ impl Request {
     ///
     /// ```
     /// let r = ureq::get("/my_page")
-    ///     .timeout_connect(10_000) // max 10 seconds
+    ///     .timeout_connect(std::time::Duration::from_secs(10)) // max 10 seconds
     ///     .call();
     ///
     /// println!("{:?}", r);
@@ -346,12 +346,12 @@ impl Request {
     ///
     /// ```
     /// let r = ureq::get("/my_page")
-    ///     .timeout_connect(1_000) // wait max 1 second to connect
+    ///     .timeout(std::time::Duration::from_secs(1))
     ///     .call();
     /// println!("{:?}", r);
     /// ```
-    pub fn timeout_connect(&mut self, millis: u64) -> &mut Request {
-        self.timeout_connect = millis;
+    pub fn timeout_connect(&mut self, timeout: time::Duration) -> &mut Request {
+        self.timeout_connect = Some(timeout);
         self
     }
 
@@ -363,12 +363,12 @@ impl Request {
     ///
     /// ```
     /// let r = ureq::get("/my_page")
-    ///     .timeout_read(1_000) // wait max 1 second for the read
+    ///     .timeout(std::time::Duration::from_secs(1))
     ///     .call();
     /// println!("{:?}", r);
     /// ```
-    pub fn timeout_read(&mut self, millis: u64) -> &mut Request {
-        self.timeout_read = millis;
+    pub fn timeout_read(&mut self, timeout: time::Duration) -> &mut Request {
+        self.timeout_read = Some(timeout);
         self
     }
 
@@ -380,12 +380,12 @@ impl Request {
     ///
     /// ```
     /// let r = ureq::get("/my_page")
-    ///     .timeout_write(1_000)   // wait max 1 second for sending.
+    ///     .timeout(std::time::Duration::from_secs(1))
     ///     .call();
     /// println!("{:?}", r);
     /// ```
-    pub fn timeout_write(&mut self, millis: u64) -> &mut Request {
-        self.timeout_write = millis;
+    pub fn timeout_write(&mut self, timeout: time::Duration) -> &mut Request {
+        self.timeout_write = Some(timeout);
         self
     }
 
