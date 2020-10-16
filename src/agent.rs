@@ -110,8 +110,8 @@ impl Agent {
     ///     .get("/my-page")
     ///     .call();
     ///
-    ///  if r.is_ok() {
-    ///      println!("yay got {}", r.unwrap().into_string().unwrap());
+    ///  if let Ok(resp) = r {
+    ///      println!("yay got {}", resp.into_string().unwrap());
     ///  } else {
     ///      println!("Oh no error!");
     ///  }
