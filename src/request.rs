@@ -11,6 +11,7 @@ use crate::body::BodySize;
 use crate::body::{Payload, SizedReader};
 use crate::error::Error;
 use crate::header::{self, Header};
+use crate::proxy::Proxy;
 use crate::unit::{self, Unit};
 use crate::Response;
 
@@ -45,7 +46,7 @@ pub struct Request {
     pub(crate) timeout_write: u64,
     pub(crate) timeout: Option<time::Duration>,
     pub(crate) redirects: u32,
-    pub(crate) proxy: Option<crate::proxy::Proxy>,
+    pub(crate) proxy: Option<Proxy>,
     #[cfg(feature = "tls")]
     pub(crate) tls_config: Option<TLSClientConfig>,
     #[cfg(all(feature = "native-tls", not(feature = "tls")))]
@@ -584,12 +585,22 @@ impl Request {
     ///     .set_proxy(proxy)
     ///     .build();
     /// ```
-    pub fn set_proxy(&mut self, proxy: crate::proxy::Proxy) -> &mut Request {
+    pub fn set_proxy(&mut self, proxy: Proxy) -> &mut Request {
         self.proxy = Some(proxy);
         self
     }
 
-    /// Set the TLS client config to use for the connection.
+    pub(crate) fn proxy(&self) -> Option<Proxy> {
+        if let Some(proxy) = &self.proxy {
+            Some(proxy.clone())
+        } else if let Some(proxy) = &self.agent.lock().unwrap().proxy {
+            Some(proxy.clone())
+        } else {
+            None
+        }
+    }
+
+    /// Set the TLS client config to use for the connection. See [`ClientConfig`](https://docs.rs/rustls/latest/rustls/struct.ClientConfig.html).
     ///
     /// See [`ClientConfig`](https://docs.rs/rustls/latest/rustls/struct.ClientConfig.html).
     ///

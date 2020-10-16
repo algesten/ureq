@@ -327,16 +327,14 @@ fn configure_certs(config: &mut rustls::ClientConfig) {
 
 #[cfg(all(feature = "tls", not(feature = "native-tls")))]
 pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error> {
-    use lazy_static::lazy_static;
+    use once_cell::sync::Lazy;
     use std::sync::Arc;
 
-    lazy_static! {
-        static ref TLS_CONF: Arc<rustls::ClientConfig> = {
-            let mut config = rustls::ClientConfig::new();
-            configure_certs(&mut config);
-            Arc::new(config)
-        };
-    }
+    static TLS_CONF: Lazy<Arc<rustls::ClientConfig>> = Lazy::new(|| {
+        let mut config = rustls::ClientConfig::new();
+        configure_certs(&mut config);
+        Arc::new(config)
+    });
 
     let port = unit.url.port().unwrap_or(443);
 
@@ -386,7 +384,8 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
     } else {
         unit.deadline
     };
-    let netloc = match unit.req.proxy {
+    let proxy: Option<Proxy> = unit.req.proxy();
+    let netloc = match proxy {
         Some(ref proxy) => format!("{}:{}", proxy.server, proxy.port),
         None => format!("{}:{}", hostname, port),
     };
@@ -401,7 +400,7 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         return Err(Error::DnsFailed(format!("No ip address for {}", hostname)));
     }
 
-    let proto = if let Some(ref proxy) = unit.req.proxy {
+    let proto = if let Some(ref proxy) = proxy {
         Some(proxy.proto)
     } else {
         None
@@ -422,7 +421,7 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         let stream = if Some(Proto::SOCKS5) == proto {
             connect_socks5(
                 &unit,
-                unit.req.proxy.to_owned().unwrap(),
+                proxy.clone().unwrap(),
                 deadline,
                 sock_addr,
                 hostname,
@@ -476,7 +475,7 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
     }
 
     if proto == Some(Proto::HTTPConnect) {
-        if let Some(ref proxy) = unit.req.proxy {
+        if let Some(ref proxy) = proxy {
             write!(stream, "{}", proxy.connect(hostname, port)).unwrap();
             stream.flush()?;
 

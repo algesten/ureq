@@ -1,3 +1,9 @@
+use std::{
+    io::{self, Write},
+    net::TcpStream,
+};
+use test::testserver::{self, TestServer};
+
 use crate::test;
 
 use super::super::*;
@@ -74,6 +80,21 @@ fn redirect_get() {
     assert_eq!(resp.get_url(), "test://host/redirect_get2");
     assert!(resp.has("x-foo"));
     assert_eq!(resp.header("x-foo").unwrap(), "bar");
+}
+
+#[test]
+fn redirect_host() {
+    // Set up a redirect to a host that doesn't exist; it should fail.
+    let srv = TestServer::new(|mut stream: TcpStream| -> io::Result<()> {
+        testserver::read_headers(&stream);
+        write!(stream, "HTTP/1.1 302 Found\r\n")?;
+        write!(stream, "Location: http://example.invalid/\r\n")?;
+        write!(stream, "\r\n")?;
+        Ok(())
+    });
+    let url = format!("http://localhost:{}/", srv.port);
+    let resp = crate::get(&url).call();
+    assert!(matches!(resp.err(), Some(Error::DnsFailed(_))));
 }
 
 #[test]

@@ -1,7 +1,7 @@
 use crate::error::Error;
 use crate::stream::Stream;
 use crate::unit::Unit;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::io::{Cursor, Write};
 use std::sync::{Arc, Mutex};
@@ -19,10 +19,8 @@ mod timeout;
 
 type RequestHandler = dyn Fn(&Unit) -> Result<Stream, Error> + Send + 'static;
 
-lazy_static! {
-    pub(crate) static ref TEST_HANDLERS: Arc<Mutex<HashMap<String, Box<RequestHandler>>>> =
-        Arc::new(Mutex::new(HashMap::new()));
-}
+pub(crate) static TEST_HANDLERS: Lazy<Arc<Mutex<HashMap<String, Box<RequestHandler>>>>> =
+    Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
 
 pub(crate) fn set_handler<H>(path: &str, handler: H)
 where
