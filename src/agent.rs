@@ -27,7 +27,7 @@ use crate::resolve::ArcResolver;
 ///     .auth("martin", "rubbermashgum")
 ///     .call(); // blocks. puts auth cookies in agent.
 ///
-/// if !auth.ok() {
+/// if auth.is_err() {
 ///     println!("Noes!");
 /// }
 ///
@@ -35,11 +35,11 @@ use crate::resolve::ArcResolver;
 ///     .get("/my-protected-page")
 ///     .call(); // blocks and waits for request.
 ///
-/// if !secret.ok() {
+/// if secret.is_err() {
 ///     println!("Wot?!");
+/// } else {
+///   println!("Secret is: {}", secret.unwrap().into_string().unwrap());
 /// }
-///
-/// println!("Secret is: {}", secret.into_string().unwrap());
 /// ```
 #[derive(Debug, Default, Clone)]
 pub struct Agent {
@@ -110,8 +110,8 @@ impl Agent {
     ///     .get("/my-page")
     ///     .call();
     ///
-    ///  if r.ok() {
-    ///      println!("yay got {}", r.into_string().unwrap());
+    ///  if let Ok(resp) = r {
+    ///      println!("yay got {}", resp.into_string().unwrap());
     ///  } else {
     ///      println!("Oh no error!");
     ///  }
@@ -376,8 +376,7 @@ mod tests {
         let agent = crate::agent();
         let url = "https://ureq.s3.eu-central-1.amazonaws.com/sherlock.txt";
         // req 1
-        let resp = agent.get(url).call();
-        assert!(resp.ok());
+        let resp = agent.get(url).call().unwrap();
         let mut reader = resp.into_reader();
         let mut buf = vec![];
         // reading the entire content will return the connection to the pool
@@ -390,8 +389,7 @@ mod tests {
         assert_eq!(poolsize(&agent), 1);
 
         // req 2 should be done with a reused connection
-        let resp = agent.get(url).call();
-        assert!(resp.ok());
+        let resp = agent.get(url).call().unwrap();
         assert_eq!(poolsize(&agent), 0);
         let mut reader = resp.into_reader();
         let mut buf = vec![];

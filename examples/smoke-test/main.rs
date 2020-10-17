@@ -17,8 +17,8 @@ impl From<io::Error> for Oops {
     }
 }
 
-impl From<&ureq::Error> for Oops {
-    fn from(e: &ureq::Error) -> Oops {
+impl From<ureq::Error> for Oops {
+    fn from(e: ureq::Error) -> Oops {
         Oops(e.to_string())
     }
 }
@@ -44,10 +44,7 @@ fn get(agent: &ureq::Agent, url: &String) -> Result<Vec<u8>> {
         .get(url)
         .timeout_connect(std::time::Duration::from_secs(5))
         .timeout(Duration::from_secs(20))
-        .call();
-    if let Some(err) = response.synthetic_error() {
-        return Err(err.into());
-    }
+        .call()?;
     let mut reader = response.into_reader();
     let mut bytes = vec![];
     reader.read_to_end(&mut bytes)?;

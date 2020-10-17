@@ -10,7 +10,7 @@ fn header_passing() {
         assert_eq!(unit.header("X-Foo").unwrap(), "bar");
         test::make_response(200, "OK", vec!["X-Bar: foo"], vec![])
     });
-    let resp = get("test://host/header_passing").set("X-Foo", "bar").call();
+    let resp = get("test://host/header_passing").set("X-Foo", "bar").call().unwrap();
     assert_eq!(resp.status(), 200);
     assert!(resp.has("X-Bar"));
     assert_eq!(resp.header("X-Bar").unwrap(), "foo");
@@ -26,7 +26,7 @@ fn repeat_non_x_header() {
     let resp = get("test://host/repeat_non_x_header")
         .set("Accept", "bar")
         .set("Accept", "baz")
-        .call();
+        .call().unwrap();
     assert_eq!(resp.status(), 200);
 }
 
@@ -44,7 +44,7 @@ fn repeat_x_header() {
     let resp = get("test://host/repeat_x_header")
         .set("X-Forwarded-For", "130.240.19.2")
         .set("X-Forwarded-For", "130.240.19.3")
-        .call();
+        .call().unwrap();
     assert_eq!(resp.status(), 200);
 }
 
@@ -53,7 +53,7 @@ fn body_as_text() {
     test::set_handler("/body_as_text", |_unit| {
         test::make_response(200, "OK", vec![], "Hello World!".to_string().into_bytes())
     });
-    let resp = get("test://host/body_as_text").call();
+    let resp = get("test://host/body_as_text").call().unwrap();
     let text = resp.into_string().unwrap();
     assert_eq!(text, "Hello World!");
 }
@@ -69,7 +69,7 @@ fn body_as_json() {
             "{\"hello\":\"world\"}".to_string().into_bytes(),
         )
     });
-    let resp = get("test://host/body_as_json").call();
+    let resp = get("test://host/body_as_json").call().unwrap();
     let json = resp.into_json().unwrap();
     assert_eq!(json["hello"], "world");
 }
@@ -92,7 +92,7 @@ fn body_as_json_deserialize() {
             "{\"hello\":\"world\"}".to_string().into_bytes(),
         )
     });
-    let resp = get("test://host/body_as_json_deserialize").call();
+    let resp = get("test://host/body_as_json_deserialize").call().unwrap();
     let json = resp.into_json_deserialize::<Hello>().unwrap();
     assert_eq!(json.hello, "world");
 }
@@ -102,7 +102,7 @@ fn body_as_reader() {
     test::set_handler("/body_as_reader", |_unit| {
         test::make_response(200, "OK", vec![], "abcdefgh".to_string().into_bytes())
     });
-    let resp = get("test://host/body_as_reader").call();
+    let resp = get("test://host/body_as_reader").call().unwrap();
     let mut reader = resp.into_reader();
     let mut text = String::new();
     reader.read_to_string(&mut text).unwrap();
@@ -114,7 +114,7 @@ fn escape_path() {
     test::set_handler("/escape_path%20here", |_unit| {
         test::make_response(200, "OK", vec![], vec![])
     });
-    let resp = get("test://host/escape_path here").call();
+    let resp = get("test://host/escape_path here").call().unwrap();
     let vec = resp.to_write_vec();
     let s = String::from_utf8_lossy(&vec);
     assert!(s.contains("GET /escape_path%20here HTTP/1.1"))
@@ -156,7 +156,7 @@ fn non_ascii_header() {
     });
     let resp = get("test://host/non_ascii_header")
         .set("Bäd", "Headör")
-        .call();
+        .call().unwrap();
     // surprisingly, this is ok, because this lib is not about enforcing standards.
     assert!(resp.ok());
     assert_eq!(resp.status(), 200);
@@ -170,7 +170,7 @@ pub fn no_status_text() {
     test::set_handler("/no_status_text", |_unit| {
         test::make_response(200, "", vec![], vec![])
     });
-    let resp = get("test://host/no_status_text").call();
+    let resp = get("test://host/no_status_text").call().unwrap();
     assert!(resp.ok());
     assert_eq!(resp.status(), 200);
 }
@@ -184,7 +184,7 @@ pub fn header_with_spaces_before_value() {
     });
     let resp = get("test://host/space_before_value")
         .set("X-Test", "     value")
-        .call();
+        .call().unwrap();
     assert_eq!(resp.status(), 200);
 }
 
@@ -193,7 +193,7 @@ pub fn host_no_port() {
     test::set_handler("/host_no_port", |_| {
         test::make_response(200, "OK", vec![], vec![])
     });
-    let resp = get("test://myhost/host_no_port").call();
+    let resp = get("test://myhost/host_no_port").call().unwrap();
     let vec = resp.to_write_vec();
     let s = String::from_utf8_lossy(&vec);
     assert!(s.contains("\r\nHost: myhost\r\n"));
@@ -204,7 +204,7 @@ pub fn host_with_port() {
     test::set_handler("/host_with_port", |_| {
         test::make_response(200, "OK", vec![], vec![])
     });
-    let resp = get("test://myhost:234/host_with_port").call();
+    let resp = get("test://myhost:234/host_with_port").call().unwrap();
     let vec = resp.to_write_vec();
     let s = String::from_utf8_lossy(&vec);
     assert!(s.contains("\r\nHost: myhost:234\r\n"));

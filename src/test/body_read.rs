@@ -17,7 +17,7 @@ fn transfer_encoding_bogus() {
                 .into_bytes(),
         )
     });
-    let resp = get("test://host/transfer_encoding_bogus").call();
+    let resp = get("test://host/transfer_encoding_bogus").call().unwrap();
     let mut reader = resp.into_reader();
     let mut text = String::new();
     reader.read_to_string(&mut text).unwrap();
@@ -34,7 +34,7 @@ fn content_length_limited() {
             "abcdefgh".to_string().into_bytes(),
         )
     });
-    let resp = get("test://host/content_length_limited").call();
+    let resp = get("test://host/content_length_limited").call().unwrap();
     let mut reader = resp.into_reader();
     let mut text = String::new();
     reader.read_to_string(&mut text).unwrap();
@@ -54,7 +54,9 @@ fn ignore_content_length_when_chunked() {
                 .into_bytes(),
         )
     });
-    let resp = get("test://host/ignore_content_length_when_chunked").call();
+    let resp = get("test://host/ignore_content_length_when_chunked")
+        .call()
+        .unwrap();
     let mut reader = resp.into_reader();
     let mut text = String::new();
     reader.read_to_string(&mut text).unwrap();
@@ -74,7 +76,7 @@ fn no_reader_on_head() {
                 .into_bytes(),
         )
     });
-    let resp = head("test://host/no_reader_on_head").call();
+    let resp = head("test://host/no_reader_on_head").call().unwrap();
     let mut reader = resp.into_reader();
     let mut text = String::new();
     reader.read_to_string(&mut text).unwrap();

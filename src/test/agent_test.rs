@@ -18,7 +18,7 @@ fn agent_reuse_headers() {
         test::make_response(200, "OK", vec!["X-Call: 1"], vec![])
     });
 
-    let resp = agent.get("test://host/agent_reuse_headers").call();
+    let resp = agent.get("test://host/agent_reuse_headers").call().unwrap();
     assert_eq!(resp.header("X-Call").unwrap(), "1");
 
     test::set_handler("/agent_reuse_headers", |unit| {
@@ -27,7 +27,7 @@ fn agent_reuse_headers() {
         test::make_response(200, "OK", vec!["X-Call: 2"], vec![])
     });
 
-    let resp = agent.get("test://host/agent_reuse_headers").call();
+    let resp = agent.get("test://host/agent_reuse_headers").call().unwrap();
     assert_eq!(resp.header("X-Call").unwrap(), "2");
 }
 
@@ -45,7 +45,7 @@ fn connection_reuse() {
     let testserver = TestServer::new(idle_timeout_handler);
     let url = format!("http://localhost:{}", testserver.port);
     let agent = Agent::default().build();
-    let resp = agent.get(&url).call();
+    let resp = agent.get(&url).call().unwrap();
 
     // use up the connection so it gets returned to the pool
     assert_eq!(resp.status(), 200);
@@ -66,10 +66,7 @@ fn connection_reuse() {
     // pulls from the pool. If for some reason the timed-out
     // connection wasn't in the pool, we won't be testing what
     // we thought we were testing.
-    let resp = agent.get(&url).call();
-    if let Some(err) = resp.synthetic_error() {
-        panic!("Pooled connection failed! {:?}", err);
-    }
+    let resp = agent.get(&url).call().unwrap();
     assert_eq!(resp.status(), 200);
 }
 
@@ -93,7 +90,8 @@ fn custom_resolver() {
     crate::agent()
         .set_resolver(move |_: &str| Ok(vec![local_addr]))
         .get("http://cool.server/")
-        .call();
+        .call()
+        .ok();
 
     assert_eq!(&server.join().unwrap(), b"GET / HTTP/1.1\r\n");
 }
@@ -143,21 +141,19 @@ fn cookie_and_redirect(mut stream: TcpStream) -> io::Result<()> {
 
 #[cfg(feature = "cookie")]
 #[test]
-fn test_cookies_on_redirect() {
+fn test_cookies_on_redirect() -> Result<(), Error> {
     let testserver = TestServer::new(cookie_and_redirect);
     let url = format!("http://localhost:{}/first", testserver.port);
     let agent = Agent::default().build();
-    let resp = agent.post(&url).call();
-    if resp.error() {
-        panic!("error: {} {}", resp.status(), resp.into_string().unwrap());
-    }
+    agent.post(&url).call()?;
     assert!(agent.cookie("first").is_some());
     assert!(agent.cookie("second").is_some());
     assert!(agent.cookie("third").is_some());
+    Ok(())
 }
 
 #[test]
-fn dirty_streams_not_returned() -> io::Result<()> {
+fn dirty_streams_not_returned() -> Result<(), Error> {
     let testserver = TestServer::new(|mut stream: TcpStream| -> io::Result<()> {
         read_headers(&stream);
         stream.write_all(b"HTTP/1.1 200 OK\r\n")?;
@@ -173,18 +169,12 @@ fn dirty_streams_not_returned() -> io::Result<()> {
     });
     let url = format!("http://localhost:{}/", testserver.port);
     let agent = Agent::default().build();
-    let resp = agent.get(&url).call();
-    if let Some(err) = resp.synthetic_error() {
-        panic!("resp failed: {:?}", err);
-    }
+    let resp = agent.get(&url).call()?;
     let resp_str = resp.into_string()?;
     assert_eq!(resp_str, "corgidachsund");
 
     // Now fetch it again, but only read part of the body.
-    let resp_to_be_dropped = agent.get(&url).call();
-    if let Some(err) = resp_to_be_dropped.synthetic_error() {
-        panic!("resp_to_be_dropped failed: {:?}", err);
-    }
+    let resp_to_be_dropped = agent.get(&url).call()?;
     let mut reader = resp_to_be_dropped.into_reader();
 
     // Read 9 bytes of the response and then drop the reader.
@@ -194,10 +184,6 @@ fn dirty_streams_not_returned() -> io::Result<()> {
     assert_eq!(&buf, b"corg");
     drop(reader);
 
-    let resp_to_succeed = agent.get(&url).call();
-    if let Some(err) = resp_to_succeed.synthetic_error() {
-        panic!("resp_to_succeed failed: {:?}", err);
-    }
-
+    let _resp_to_succeed = agent.get(&url).call()?;
     Ok(())
 }
