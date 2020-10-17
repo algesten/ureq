@@ -63,6 +63,13 @@ impl Header {
     pub fn is_name(&self, other: &str) -> bool {
         self.name().eq_ignore_ascii_case(other)
     }
+
+    pub(crate) fn validate(&self) -> Result<(), Error> {
+        if !valid_name(self.name()) || !valid_value(&self.line.as_str()[self.index + 1..]) {
+            return Err(Error::BadHeader);
+        }
+        Ok(())
+    }
 }
 
 pub fn get_header<'a, 'b>(headers: &'b [Header], name: &'a str) -> Option<&'b str> {
@@ -89,7 +96,7 @@ pub fn add_header(headers: &mut Vec<Header>, header: Header) {
     headers.push(header);
 }
 
-// https://tools.ietf.org/html/rfc7230#section-3.2.3
+// https://tools.ietf.org/html/rfc7230#section-3.2
 // Each header field consists of a case-insensitive field name followed
 // by a colon (":"), optional leading whitespace, the field value, and
 // optional trailing whitespace.
@@ -112,6 +119,31 @@ fn is_tchar(b: u8) -> bool {
     }
 }
 
+// Note that field-content has an errata:
+// https://www.rfc-editor.org/errata/eid4189
+// field-value    = *( field-content / obs-fold )
+// field-content  = field-vchar [ 1*( SP / HTAB ) field-vchar ]
+// field-vchar    = VCHAR / obs-text
+//
+// obs-fold       = CRLF 1*( SP / HTAB )
+//               ; obsolete line folding
+//               ; see Section 3.2.4
+// https://tools.ietf.org/html/rfc5234#appendix-B.1
+// VCHAR          =  %x21-7E
+//                        ; visible (printing) characters
+fn valid_value(value: &str) -> bool {
+    value.bytes().all(is_field_vchar_or_obs_fold)
+}
+
+#[inline]
+fn is_field_vchar_or_obs_fold(b: u8) -> bool {
+    match b {
+        b' ' | b'\t' => true,
+        0x21..=0x7E => true,
+        _ => false,
+    }
+}
+
 impl FromStr for Header {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -124,11 +156,9 @@ impl FromStr for Header {
             return Err(Error::BadHeader);
         }
 
-        if !valid_name(&line[0..index]) {
-            return Err(Error::BadHeader);
-        }
-
-        Ok(Header { line, index })
+        let header = Header { line, index };
+        header.validate()?;
+        Ok(header)
     }
 }
 
@@ -145,11 +175,38 @@ fn test_valid_name() {
 }
 
 #[test]
+fn test_valid_value() {
+    assert!(valid_value("example"));
+    assert!(valid_value("foo bar"));
+    assert!(valid_value(" foobar "));
+    assert!(valid_value(" foo\tbar "));
+    assert!(valid_value(" foo~"));
+    assert!(valid_value(" !bar"));
+    assert!(valid_value(" "));
+    assert!(!valid_value(" \nfoo"));
+    assert!(!valid_value("foo\x7F"));
+}
+
+#[test]
 fn test_parse_invalid_name() {
-    let h = "Content-Type   :".parse::<Header>();
-    match h {
-        Err(Error::BadHeader) => {}
-        h => assert!(false, "expected BadHeader error, got {:?}", h),
+    let cases = vec![
+        "Content-Type  :",
+        " Content-Type: foo",
+        "Content-Type foo",
+        "\"some-header\": foo",
+        "Gödel: Escher, Bach",
+        "Foo: \n",
+        "Foo: \nbar",
+        "Foo: \x7F bar",
+    ];
+    for c in cases {
+        let result = c.parse::<Header>();
+        assert!(
+            matches!(result, Err(Error::BadHeader)),
+            "'{}'.parse(): expected BadHeader, got {:?}",
+            c,
+            result
+        );
     }
 }
 
