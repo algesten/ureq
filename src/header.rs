@@ -119,6 +119,7 @@ fn is_tchar(b: u8) -> bool {
     }
 }
 
+// https://tools.ietf.org/html/rfc7230#section-3.2
 // Note that field-content has an errata:
 // https://www.rfc-editor.org/errata/eid4189
 // field-value    = *( field-content / obs-fold )
