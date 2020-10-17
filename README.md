@@ -85,21 +85,6 @@ tree and an obvious API. It is inspired by libraries like
 [superagent](http://visionmedia.github.io/superagent/) and
 [fetch API](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API).
 
-This library does not try to enforce web standards correctness. It uses HTTP/1.1,
-but whether the request is _perfect_ HTTP/1.1 compatible is up to the user of the
-library. For example:
-
-```rust
-    let resp = ureq::post("https://myapi.acme.com/blah")
-        .set("Jättegött", "Vegankörv")
-        .call();
-```
-
-The header name and value would be encoded in utf-8 and sent, but that is actually not
-correct according to spec cause an HTTP header name should be ascii. The absolutely
-correct way would be to have `.set(header, value)` return a `Result`. This library opts
-for convenience over correctness, so the decision is left to the user.
-
 ### Sync forever
 
 This library uses blocking socket reads and writes. When it was
