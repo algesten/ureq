@@ -109,6 +109,12 @@ impl Request {
     }
 
     fn do_call(&mut self, payload: Payload) -> Response {
+        for h in &self.headers {
+            match h.validate() {
+                Ok(_) => {}
+                Err(e) => return e.into(),
+            }
+        }
         self.to_url()
             .and_then(|url| {
                 let reader = payload.into_read();

@@ -157,10 +157,12 @@ fn non_ascii_header() {
     let resp = get("test://host/non_ascii_header")
         .set("Bäd", "Headör")
         .call();
-    // surprisingly, this is ok, because this lib is not about enforcing standards.
-    assert!(resp.ok());
-    assert_eq!(resp.status(), 200);
-    assert_eq!(resp.status_text(), "OK");
+    let err = resp.synthetic_error();
+    assert!(
+        matches!(err, Some(Error::BadHeader)),
+        "expected Some(&BadHeader), got {:?}",
+        err
+    );
 }
 
 #[test]
