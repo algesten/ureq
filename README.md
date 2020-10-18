@@ -17,15 +17,12 @@ let resp = ureq::post("https://myapi.example.com/ingest")
     .send_json(serde_json::json!({
         "name": "martin",
         "rust": true
-    }));
+    }))?;
 
 // .ok() tells if response is 200-299.
 if resp.ok() {
   println!("success: {}", resp.into_string()?);
 } else {
-  // This can include errors like failure to parse URL or
-  // connect timeout. They are treated as synthetic
-  // HTTP-level error statuses.
   println!("error {}: {}", resp.status(), resp.into_string()?);
 }
 ```

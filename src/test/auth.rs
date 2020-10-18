@@ -13,7 +13,8 @@ fn basic_auth() {
     });
     let resp = get("test://host/basic_auth")
         .auth("martin", "rubbermashgum")
-        .call();
+        .call()
+        .unwrap();
     assert_eq!(resp.status(), 200);
 }
 
@@ -25,7 +26,8 @@ fn kind_auth() {
     });
     let resp = get("test://host/kind_auth")
         .auth_kind("Digest", "abcdefgh123")
-        .call();
+        .call()
+        .unwrap();
     assert_eq!(resp.status(), 200);
 }
 
@@ -38,7 +40,9 @@ fn url_auth() {
         );
         test::make_response(200, "OK", vec![], vec![])
     });
-    let resp = get("test://Aladdin:OpenSesame@host/url_auth").call();
+    let resp = get("test://Aladdin:OpenSesame@host/url_auth")
+        .call()
+        .unwrap();
     assert_eq!(resp.status(), 200);
 }
 
@@ -54,6 +58,7 @@ fn url_auth_overridden() {
     let agent = agent().auth("martin", "rubbermashgum").build();
     let resp = agent
         .get("test://Aladdin:OpenSesame@host/url_auth_overridden")
-        .call();
+        .call()
+        .unwrap();
     assert_eq!(resp.status(), 200);
 }

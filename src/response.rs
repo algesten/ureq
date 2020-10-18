@@ -30,16 +30,8 @@ pub const DEFAULT_CHARACTER_SET: &str = "utf-8";
 /// [`into_json_deserialize()`](#method.into_json_deserialize) or
 /// [`into_string()`](#method.into_string) consumes the response.
 ///
-/// All error handling, including URL parse errors and connection errors, is done by mapping onto
-/// [synthetic errors](#method.synthetic). Callers must check response.synthetic_error(),
-/// response.is_ok(), or response.error() before relying on the contents of the reader.
-///
 /// ```
-/// let response = ureq::get("https://www.google.com").call();
-/// if let Some(error) = response.synthetic_error() {
-///     eprintln!("{}", error);
-///     return;
-/// }
+/// let response = ureq::get("http://example.com/").call().unwrap();
 ///
 /// // socket is still open and the response body has not been read.
 ///
@@ -49,7 +41,6 @@ pub const DEFAULT_CHARACTER_SET: &str = "utf-8";
 /// ```
 pub struct Response {
     url: Option<String>,
-    error: Option<Error>,
     status_line: String,
     index: ResponseStatusIndex,
     status: u16,
@@ -85,15 +76,13 @@ impl Response {
     /// Example:
     ///
     /// ```
-    /// let resp = ureq::Response::new(401, "Authorization Required", "Please log in");
+    /// let resp = ureq::Response::new(401, "Authorization Required", "Please log in").unwrap();
     ///
     /// assert_eq!(resp.status(), 401);
     /// ```
-    pub fn new(status: u16, status_text: &str, body: &str) -> Self {
+    pub fn new(status: u16, status_text: &str, body: &str) -> Result<Response, Error> {
         let r = format!("HTTP/1.1 {} {}\r\n\r\n{}\n", status, status_text, body);
-        (r.as_ref() as &str)
-            .parse::<Response>()
-            .unwrap_or_else(|e| e.into())
+        (r.as_ref() as &str).parse()
     }
 
     /// The URL we ended up at. This can differ from the request url when
@@ -177,50 +166,6 @@ impl Response {
         self.client_error() || self.server_error()
     }
 
-    /// Tells if this response is "synthetic".
-    ///
-    /// The [methods](struct.Request.html#method.call) [firing](struct.Request.html#method.send)
-    /// [off](struct.Request.html#method.send_string)
-    /// [requests](struct.Request.html#method.send_json)
-    /// all return a `Response`; there is no rust style `Result`.
-    ///
-    /// Rather than exposing a custom error type through results, this library has opted
-    /// for representing potential connection/TLS/etc errors as HTTP response codes.
-    /// These invented codes are called "synthetic".
-    ///
-    /// The idea is that from a library user's point of view the distinction
-    /// of whether a failure originated in the remote server (500, 502) etc, or some transient
-    /// network failure, the code path of handling that would most often be the same.
-    ///
-    /// The specific mapping of error to code can be seen in the [`Error`](enum.Error.html) doc.
-    ///
-    /// However if the distinction is important, this method can be used to tell. Also see
-    /// [synthetic_error()](struct.Response.html#method.synthetic_error)
-    /// to see the actual underlying error.
-    ///
-    /// ```
-    /// // scheme that this library doesn't understand
-    /// let resp = ureq::get("borkedscheme://www.google.com").call();
-    ///
-    /// // it's an error
-    /// assert!(resp.error());
-    ///
-    /// // synthetic error code 400
-    /// assert_eq!(resp.status(), 400);
-    ///
-    /// // tell that it's synthetic.
-    /// assert!(resp.synthetic());
-    /// ```
-    pub fn synthetic(&self) -> bool {
-        self.error.is_some()
-    }
-
-    /// Get the actual underlying error when the response is
-    /// ["synthetic"](struct.Response.html#method.synthetic).
-    pub fn synthetic_error(&self) -> &Option<Error> {
-        &self.error
-    }
-
     /// The content type part of the "Content-Type" header without
     /// the charset.
     ///
@@ -228,7 +173,7 @@ impl Response {
     ///
     /// ```
     /// # #[cfg(feature = "tls")] {
-    /// let resp = ureq::get("https://www.google.com/").call();
+    /// let resp = ureq::get("https://www.google.com/").call().unwrap();
     /// assert_eq!("text/html; charset=ISO-8859-1", resp.header("content-type").unwrap());
     /// assert_eq!("text/html", resp.content_type());
     /// # }
@@ -250,7 +195,7 @@ impl Response {
     ///
     /// ```
     /// # #[cfg(feature = "tls")] {
-    /// let resp = ureq::get("https://www.google.com/").call();
+    /// let resp = ureq::get("https://www.google.com/").call().unwrap();
     /// assert_eq!("text/html; charset=ISO-8859-1", resp.header("content-type").unwrap());
     /// assert_eq!("ISO-8859-1", resp.charset());
     /// # }
@@ -275,7 +220,7 @@ impl Response {
     ///
     /// let resp =
     ///     ureq::get("https://ureq.s3.eu-central-1.amazonaws.com/hello_world.json")
-    ///         .call();
+    ///         .call().unwrap();
     ///
     /// assert!(resp.has("Content-Length"));
     /// let len = resp.header("Content-Length")
@@ -348,7 +293,7 @@ impl Response {
     /// # #[cfg(feature = "tls")] {
     /// let resp =
     ///     ureq::get("https://ureq.s3.eu-central-1.amazonaws.com/hello_world.json")
-    ///         .call();
+    ///         .call().unwrap();
     ///
     /// let text = resp.into_string().unwrap();
     ///
@@ -392,7 +337,7 @@ impl Response {
     /// ```
     /// let resp =
     ///     ureq::get("http://ureq.s3.eu-central-1.amazonaws.com/hello_world.json")
-    ///         .call();
+    ///         .call().unwrap();
     ///
     /// let json = resp.into_json().unwrap();
     ///
@@ -437,7 +382,7 @@ impl Response {
     ///
     /// let resp =
     ///     ureq::get("http://ureq.s3.eu-central-1.amazonaws.com/hello_world.json")
-    ///         .call();
+    ///         .call().unwrap();
     ///
     /// let json = resp.into_json_deserialize::<Hello>().unwrap();
     ///
@@ -460,20 +405,14 @@ impl Response {
     ///
     /// Example:
     ///
-    /// ```
     /// use std::io::Cursor;
     ///
     /// let text = "HTTP/1.1 401 Authorization Required\r\n\r\nPlease log in\n";
     /// let read = Cursor::new(text.to_string().into_bytes());
-    /// let resp = ureq::Response::from_read(read);
+    /// let resp = ureq::Response::do_from_read(read);
     ///
     /// assert_eq!(resp.status(), 401);
-    /// ```
-    pub fn from_read(reader: impl Read) -> Self {
-        Self::do_from_read(reader).unwrap_or_else(|e| e.into())
-    }
-
-    fn do_from_read(mut reader: impl Read) -> Result<Response, Error> {
+    pub(crate) fn do_from_read(mut reader: impl Read) -> Result<Response, Error> {
         //
         // HTTP/1.1 200 OK\r\n
         let status_line = read_next_line(&mut reader)?;
@@ -493,7 +432,6 @@ impl Response {
 
         Ok(Response {
             url: None,
-            error: None,
             status_line,
             index,
             status,
@@ -561,17 +499,6 @@ impl FromStr for Response {
         let mut resp = Self::do_from_read(&mut cursor)?;
         set_stream(&mut resp, "".into(), None, Stream::Cursor(cursor));
         Ok(resp)
-    }
-}
-
-impl Into<Response> for Error {
-    fn into(self) -> Response {
-        let status = self.status();
-        let status_text = self.status_text().to_string();
-        let body_text = self.body_text();
-        let mut resp = Response::new(status, &status_text, &body_text);
-        resp.error = Some(self);
-        resp
     }
 }
 
@@ -799,12 +726,7 @@ mod tests {
     #[test]
     fn parse_borked_header() {
         let s = "HTTP/1.1 BORKED\r\n".to_string();
-        let resp: Response = s.parse::<Response>().unwrap_err().into();
-        assert_eq!(resp.http_version(), "HTTP/1.1");
-        assert_eq!(resp.status(), 500);
-        assert_eq!(resp.status_text(), "Bad Status");
-        assert_eq!(resp.content_type(), "text/plain");
-        let v = resp.into_string().unwrap();
-        assert_eq!(v, "Bad Status\n");
+        let err = s.parse::<Response>().unwrap_err();
+        assert!(matches!(err, Error::BadStatus));
     }
 }

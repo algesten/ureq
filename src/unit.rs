@@ -180,7 +180,7 @@ pub(crate) fn connect(
 
     // start reading the response to process cookies and redirects.
     let mut stream = stream::DeadlineStream::new(stream, unit.deadline);
-    let mut resp = Response::from_read(&mut stream);
+    let result = Response::do_from_read(&mut stream);
 
     // https://tools.ietf.org/html/rfc7230#section-6.3.1
     // When an inbound connection is closed prematurely, a client MAY
@@ -192,13 +192,15 @@ pub(crate) fn connect(
     // from the ConnectionPool, since those are most likely to have
     // reached a server-side timeout. Note that this means we may do
     // up to N+1 total tries, where N is max_idle_connections_per_host.
-    if let Some(err) = resp.synthetic_error() {
-        if err.connection_closed() && retryable && is_recycled {
+    let mut resp = match result {
+        Err(err) if err.connection_closed() && retryable && is_recycled => {
             debug!("retrying request {} {}", method, url);
             let empty = Payload::Empty.into_read();
             return connect(req, unit, false, redirect_count, empty, redir);
         }
-    }
+        Err(e) => return Err(e),
+        Ok(resp) => resp,
+    };
 
     // squirrel away cookies
     #[cfg(feature = "cookie")]

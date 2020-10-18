@@ -1,24 +1,24 @@
+use crate::response::Response;
 use std::fmt;
 use std::io::{self, ErrorKind};
 
-/// Errors that are translated to ["synthetic" responses](struct.Response.html#method.synthetic).
 #[derive(Debug)]
 pub enum Error {
-    /// The url could not be understood. Synthetic error `400`.
+    /// The url could not be understood.
     BadUrl(String),
-    /// The url scheme could not be understood. Synthetic error `400`.
+    /// The url scheme could not be understood.
     UnknownScheme(String),
-    /// DNS lookup failed. Synthetic error `400`.
+    /// DNS lookup failed.
     DnsFailed(String),
-    /// Connection to server failed. Synthetic error `500`.
+    /// Connection to server failed.
     ConnectionFailed(String),
-    /// Too many redirects. Synthetic error `500`.
+    /// Too many redirects.
     TooManyRedirects,
-    /// A status line we don't understand `HTTP/1.1 200 OK`. Synthetic error `500`.
+    /// A status line we don't understand `HTTP/1.1 200 OK`.
     BadStatus,
-    /// A header line that couldn't be parsed. Synthetic error `500`.
+    /// A header line that couldn't be parsed.
     BadHeader,
-    /// Some unspecified `std::io::Error`. Synthetic error `500`.
+    /// Some unspecified `std::io::Error`.
     Io(io::Error),
     /// Proxy information was not properly formatted
     BadProxy,
@@ -28,6 +28,10 @@ pub enum Error {
     ProxyConnect,
     /// Incorrect credentials for proxy
     InvalidProxyCreds,
+    /// HTTP status code indicating an error (e.g. 4xx, 5xx)
+    /// Read the inner response body for details and to return
+    /// the connection to the pool.
+    HTTP(Box<Response>),
     /// TLS Error
     #[cfg(feature = "native-tls")]
     TlsError(native_tls::Error),
@@ -42,66 +46,6 @@ impl Error {
             _ => false,
         }
     }
-
-    /// For synthetic responses, this is the error code.
-    pub fn status(&self) -> u16 {
-        match self {
-            Error::BadUrl(_) => 400,
-            Error::UnknownScheme(_) => 400,
-            Error::DnsFailed(_) => 400,
-            Error::ConnectionFailed(_) => 500,
-            Error::TooManyRedirects => 500,
-            Error::BadStatus => 500,
-            Error::BadHeader => 500,
-            Error::Io(_) => 500,
-            Error::BadProxy => 500,
-            Error::BadProxyCreds => 500,
-            Error::ProxyConnect => 500,
-            Error::InvalidProxyCreds => 500,
-            #[cfg(feature = "native-tls")]
-            Error::TlsError(_) => 500,
-        }
-    }
-
-    /// For synthetic responses, this is the status text.
-    pub fn status_text(&self) -> &str {
-        match self {
-            Error::BadUrl(_) => "Bad URL",
-            Error::UnknownScheme(_) => "Unknown Scheme",
-            Error::DnsFailed(_) => "Dns Failed",
-            Error::ConnectionFailed(_) => "Connection Failed",
-            Error::TooManyRedirects => "Too Many Redirects",
-            Error::BadStatus => "Bad Status",
-            Error::BadHeader => "Bad Header",
-            Error::Io(_) => "Network Error",
-            Error::BadProxy => "Malformed proxy",
-            Error::BadProxyCreds => "Failed to parse proxy credentials",
-            Error::ProxyConnect => "Proxy failed to connect",
-            Error::InvalidProxyCreds => "Provided proxy credentials are incorrect",
-            #[cfg(feature = "native-tls")]
-            Error::TlsError(_) => "TLS Error",
-        }
-    }
-
-    /// For synthetic responses, this is the body text.
-    pub fn body_text(&self) -> String {
-        match self {
-            Error::BadUrl(url) => format!("Bad URL: {}", url),
-            Error::UnknownScheme(scheme) => format!("Unknown Scheme: {}", scheme),
-            Error::DnsFailed(err) => format!("Dns Failed: {}", err),
-            Error::ConnectionFailed(err) => format!("Connection Failed: {}", err),
-            Error::TooManyRedirects => "Too Many Redirects".to_string(),
-            Error::BadStatus => "Bad Status".to_string(),
-            Error::BadHeader => "Bad Header".to_string(),
-            Error::Io(ioe) => format!("Network Error: {}", ioe),
-            Error::BadProxy => "Malformed proxy".to_string(),
-            Error::BadProxyCreds => "Failed to parse proxy credentials".to_string(),
-            Error::ProxyConnect => "Proxy failed to connect".to_string(),
-            Error::InvalidProxyCreds => "Provided proxy credentials are incorrect".to_string(),
-            #[cfg(feature = "native-tls")]
-            Error::TlsError(err) => format!("TLS Error: {}", err),
-        }
-    }
 }
 
 impl From<io::Error> for Error {
@@ -112,7 +56,23 @@ impl From<io::Error> for Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.body_text())
+        match self {
+            Error::BadUrl(url) => write!(f, "Bad URL: {}", url),
+            Error::UnknownScheme(scheme) => write!(f, "Unknown Scheme: {}", scheme),
+            Error::DnsFailed(err) => write!(f, "Dns Failed: {}", err),
+            Error::ConnectionFailed(err) => write!(f, "Connection Failed: {}", err),
+            Error::TooManyRedirects => write!(f, "Too Many Redirects"),
+            Error::BadStatus => write!(f, "Bad Status"),
+            Error::BadHeader => write!(f, "Bad Header"),
+            Error::Io(ioe) => write!(f, "Network Error: {}", ioe),
+            Error::BadProxy => write!(f, "Malformed proxy"),
+            Error::BadProxyCreds => write!(f, "Failed to parse proxy credentials"),
+            Error::ProxyConnect => write!(f, "Proxy failed to connect"),
+            Error::InvalidProxyCreds => write!(f, "Provided proxy credentials are incorrect"),
+            Error::HTTP(response) => write!(f, "HTTP status {}", response.status()),
+            #[cfg(feature = "native-tls")]
+            Error::TlsError(err) => write!(f, "TLS Error: {}", err),
+        }
     }
 }
 

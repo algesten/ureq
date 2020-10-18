@@ -7,7 +7,9 @@ fn content_length_on_str() {
     test::set_handler("/content_length_on_str", |_unit| {
         test::make_response(200, "OK", vec![], vec![])
     });
-    let resp = post("test://host/content_length_on_str").send_string("Hello World!!!");
+    let resp = post("test://host/content_length_on_str")
+        .send_string("Hello World!!!")
+        .unwrap();
     let vec = resp.to_write_vec();
     let s = String::from_utf8_lossy(&vec);
     assert!(s.contains("\r\nContent-Length: 14\r\n"));
@@ -20,7 +22,8 @@ fn user_set_content_length_on_str() {
     });
     let resp = post("test://host/user_set_content_length_on_str")
         .set("Content-Length", "12345")
-        .send_string("Hello World!!!");
+        .send_string("Hello World!!!")
+        .unwrap();
     let vec = resp.to_write_vec();
     let s = String::from_utf8_lossy(&vec);
     assert!(s.contains("\r\nContent-Length: 12345\r\n"));
@@ -37,7 +40,9 @@ fn content_length_on_json() {
         "Hello".to_string(),
         SerdeValue::String("World!!!".to_string()),
     );
-    let resp = post("test://host/content_length_on_json").send_json(SerdeValue::Object(json));
+    let resp = post("test://host/content_length_on_json")
+        .send_json(SerdeValue::Object(json))
+        .unwrap();
     let vec = resp.to_write_vec();
     let s = String::from_utf8_lossy(&vec);
     assert!(s.contains("\r\nContent-Length: 20\r\n"));
@@ -50,7 +55,8 @@ fn content_length_and_chunked() {
     });
     let resp = post("test://host/content_length_and_chunked")
         .set("Transfer-Encoding", "chunked")
-        .send_string("Hello World!!!");
+        .send_string("Hello World!!!")
+        .unwrap();
     let vec = resp.to_write_vec();
     let s = String::from_utf8_lossy(&vec);
     assert!(s.contains("Transfer-Encoding: chunked\r\n"));
@@ -65,7 +71,8 @@ fn str_with_encoding() {
     });
     let resp = post("test://host/str_with_encoding")
         .set("Content-Type", "text/plain; charset=iso-8859-1")
-        .send_string("Hällo Wörld!!!");
+        .send_string("Hällo Wörld!!!")
+        .unwrap();
     let vec = resp.to_write_vec();
     assert_eq!(
         &vec[vec.len() - 14..],
@@ -85,7 +92,9 @@ fn content_type_on_json() {
         "Hello".to_string(),
         SerdeValue::String("World!!!".to_string()),
     );
-    let resp = post("test://host/content_type_on_json").send_json(SerdeValue::Object(json));
+    let resp = post("test://host/content_type_on_json")
+        .send_json(SerdeValue::Object(json))
+        .unwrap();
     let vec = resp.to_write_vec();
     let s = String::from_utf8_lossy(&vec);
     assert!(s.contains("\r\nContent-Type: application/json\r\n"));
@@ -104,7 +113,8 @@ fn content_type_not_overriden_on_json() {
     );
     let resp = post("test://host/content_type_not_overriden_on_json")
         .set("content-type", "text/plain")
-        .send_json(SerdeValue::Object(json));
+        .send_json(SerdeValue::Object(json))
+        .unwrap();
     let vec = resp.to_write_vec();
     let s = String::from_utf8_lossy(&vec);
     assert!(s.contains("\r\ncontent-type: text/plain\r\n"));

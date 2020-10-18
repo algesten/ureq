@@ -16,8 +16,7 @@ fn redirect_on() {
     test::set_handler("/redirect_on2", |_| {
         test::make_response(200, "OK", vec!["x-foo: bar"], vec![])
     });
-    let resp = get("test://host/redirect_on1").call();
-    assert_eq!(resp.status(), 200);
+    let resp = get("test://host/redirect_on1").call().unwrap();
     assert!(resp.has("x-foo"));
     assert_eq!(resp.header("x-foo").unwrap(), "bar");
 }
@@ -30,20 +29,20 @@ fn redirect_many() {
     test::set_handler("/redirect_many2", |_| {
         test::make_response(302, "Go here", vec!["Location: /redirect_many3"], vec![])
     });
-    let resp = get("test://host/redirect_many1").redirects(1).call();
-    assert_eq!(resp.status(), 500);
-    assert_eq!(resp.status_text(), "Too Many Redirects");
+    let result = get("test://host/redirect_many1").redirects(1).call();
+    assert!(matches!(result, Err(Error::TooManyRedirects)));
 }
 
 #[test]
-fn redirect_off() {
+fn redirect_off() -> Result<(), Error> {
     test::set_handler("/redirect_off", |_| {
         test::make_response(302, "Go here", vec!["Location: somewhere.else"], vec![])
     });
-    let resp = get("test://host/redirect_off").redirects(0).call();
+    let resp = get("test://host/redirect_off").redirects(0).call()?;
     assert_eq!(resp.status(), 302);
     assert!(resp.has("Location"));
     assert_eq!(resp.header("Location").unwrap(), "somewhere.else");
+    Ok(())
 }
 
 #[test]
@@ -55,7 +54,7 @@ fn redirect_head() {
         assert_eq!(unit.req.method, "HEAD");
         test::make_response(200, "OK", vec!["x-foo: bar"], vec![])
     });
-    let resp = head("test://host/redirect_head1").call();
+    let resp = head("test://host/redirect_head1").call().unwrap();
     assert_eq!(resp.status(), 200);
     assert_eq!(resp.get_url(), "test://host/redirect_head2");
     assert!(resp.has("x-foo"));
@@ -75,7 +74,8 @@ fn redirect_get() {
     });
     let resp = get("test://host/redirect_get1")
         .set("Range", "bytes=10-50")
-        .call();
+        .call()
+        .unwrap();
     assert_eq!(resp.status(), 200);
     assert_eq!(resp.get_url(), "test://host/redirect_get2");
     assert!(resp.has("x-foo"));
@@ -94,11 +94,7 @@ fn redirect_host() {
     });
     let url = format!("http://localhost:{}/", srv.port);
     let resp = crate::get(&url).call();
-    assert!(
-        matches!(resp.synthetic_error(), Some(Error::DnsFailed(_))),
-        "{:?}",
-        resp.synthetic_error()
-    );
+    assert!(matches!(resp.err(), Some(Error::DnsFailed(_))));
 }
 
 #[test]
@@ -110,7 +106,7 @@ fn redirect_post() {
         assert_eq!(unit.req.method, "GET");
         test::make_response(200, "OK", vec!["x-foo: bar"], vec![])
     });
-    let resp = post("test://host/redirect_post1").call();
+    let resp = post("test://host/redirect_post1").call().unwrap();
     assert_eq!(resp.status(), 200);
     assert_eq!(resp.get_url(), "test://host/redirect_post2");
     assert!(resp.has("x-foo"));
