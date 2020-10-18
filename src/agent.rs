@@ -247,6 +247,7 @@ impl AgentBuilder {
         let value = format!("{} {}", kind, pass);
         self.set("Authorization", &value)
     }
+
     /// Sets the maximum number of connections allowed in the connection pool.
     /// By default, this is set to 100. Setting this to zero would disable
     /// connection pooling.
