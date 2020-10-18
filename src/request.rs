@@ -112,6 +112,9 @@ impl Request {
     }
 
     fn do_call(&self, payload: Payload) -> Result<Response> {
+        for h in &self.headers {
+            h.validate()?;
+        }
         let response = self.to_url().and_then(|url| {
             let reader = payload.into_read();
             let unit = Unit::new(&self, &url, true, &reader);

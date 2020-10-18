@@ -7,7 +7,6 @@
 //! * Minimal dependency tree
 //! * Obvious API
 //! * Blocking API
-//! * Convenience over correctness
 //! * No use of unsafe
 //!
 //! ```

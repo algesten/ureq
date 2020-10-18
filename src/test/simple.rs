@@ -10,7 +10,10 @@ fn header_passing() {
         assert_eq!(unit.header("X-Foo").unwrap(), "bar");
         test::make_response(200, "OK", vec!["X-Bar: foo"], vec![])
     });
-    let resp = get("test://host/header_passing").set("X-Foo", "bar").call().unwrap();
+    let resp = get("test://host/header_passing")
+        .set("X-Foo", "bar")
+        .call()
+        .unwrap();
     assert_eq!(resp.status(), 200);
     assert!(resp.has("X-Bar"));
     assert_eq!(resp.header("X-Bar").unwrap(), "foo");
@@ -26,7 +29,8 @@ fn repeat_non_x_header() {
     let resp = get("test://host/repeat_non_x_header")
         .set("Accept", "bar")
         .set("Accept", "baz")
-        .call().unwrap();
+        .call()
+        .unwrap();
     assert_eq!(resp.status(), 200);
 }
 
@@ -44,7 +48,8 @@ fn repeat_x_header() {
     let resp = get("test://host/repeat_x_header")
         .set("X-Forwarded-For", "130.240.19.2")
         .set("X-Forwarded-For", "130.240.19.3")
-        .call().unwrap();
+        .call()
+        .unwrap();
     assert_eq!(resp.status(), 200);
 }
 
@@ -156,11 +161,12 @@ fn non_ascii_header() {
     });
     let resp = get("test://host/non_ascii_header")
         .set("Bäd", "Headör")
-        .call().unwrap();
-    // surprisingly, this is ok, because this lib is not about enforcing standards.
-    assert!(resp.ok());
-    assert_eq!(resp.status(), 200);
-    assert_eq!(resp.status_text(), "OK");
+        .call();
+    assert!(
+        matches!(resp, Err(Error::BadHeader)),
+        "expected Some(&BadHeader), got {:?}",
+        resp
+    );
 }
 
 #[test]
@@ -184,7 +190,8 @@ pub fn header_with_spaces_before_value() {
     });
     let resp = get("test://host/space_before_value")
         .set("X-Test", "     value")
-        .call().unwrap();
+        .call()
+        .unwrap();
     assert_eq!(resp.status(), 200);
 }
 
