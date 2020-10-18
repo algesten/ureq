@@ -53,10 +53,7 @@ fn connection_reuse() {
     assert_eq!(resp.status(), 200);
     resp.into_string().unwrap();
 
-    {
-        let mut state = agent.state.lock().unwrap();
-        assert!(state.pool().len() > 0);
-    }
+    assert!(agent.state.pool.len() > 0);
 
     // wait for the server to close the connection.
     std::thread::sleep(Duration::from_secs(3));
@@ -149,9 +146,14 @@ fn test_cookies_on_redirect() -> Result<(), Error> {
     let url = format!("http://localhost:{}/first", testserver.port);
     let agent = Agent::default();
     agent.post(&url).call()?;
-    assert!(agent.cookie("first").is_some());
-    assert!(agent.cookie("second").is_some());
-    assert!(agent.cookie("third").is_some());
+    let cookies = agent.state.jar.get_request_cookies(
+        &format!("https://localhost:{}/", testserver.port)
+            .parse()
+            .unwrap(),
+    );
+    let mut cookie_names: Vec<String> = cookies.iter().map(|c| c.name().to_string()).collect();
+    cookie_names.sort();
+    assert_eq!(cookie_names, vec!["first", "second", "third"]);
     Ok(())
 }
 

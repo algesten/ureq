@@ -103,6 +103,7 @@
 
 mod agent;
 mod body;
+mod cookies;
 mod error;
 mod header;
 mod pool;
