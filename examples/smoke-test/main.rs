@@ -61,7 +61,7 @@ fn get_and_write(agent: &ureq::Agent, url: &String) -> Result<()> {
 }
 
 fn get_many(urls: Vec<String>, simultaneous_fetches: usize) -> Result<()> {
-    let agent = ureq::Agent::default().build();
+    let agent = ureq::Agent::default();
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(simultaneous_fetches)
         .build()?;

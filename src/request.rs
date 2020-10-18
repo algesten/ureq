@@ -690,3 +690,17 @@ fn no_hostname() {
     );
     assert!(req.get_host().is_err());
 }
+
+#[test]
+fn request_implements_send_and_sync() {
+    let _request: Box<dyn Send> = Box::new(Request::new(
+        &Agent::default(),
+        "GET".to_string(),
+        "https://example.com/".to_string(),
+    ));
+    let _request: Box<dyn Sync> = Box::new(Request::new(
+        &Agent::default(),
+        "GET".to_string(),
+        "https://example.com/".to_string(),
+    ));
+}

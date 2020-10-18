@@ -55,7 +55,7 @@ fn url_auth_overridden() {
         );
         test::make_response(200, "OK", vec![], vec![])
     });
-    let agent = agent().auth("martin", "rubbermashgum").build();
+    let agent = AgentBuilder::new().auth("martin", "rubbermashgum").build();
     let resp = agent
         .get("test://Aladdin:OpenSesame@host/url_auth_overridden")
         .call()

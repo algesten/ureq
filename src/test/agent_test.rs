@@ -10,7 +10,9 @@ use super::super::*;
 
 #[test]
 fn agent_reuse_headers() {
-    let agent = agent().set("Authorization", "Foo 12345").build();
+    let agent = AgentBuilder::new()
+        .set("Authorization", "Foo 12345")
+        .build();
 
     test::set_handler("/agent_reuse_headers", |unit| {
         assert!(unit.has("Authorization"));
@@ -44,7 +46,7 @@ fn idle_timeout_handler(mut stream: TcpStream) -> io::Result<()> {
 fn connection_reuse() {
     let testserver = TestServer::new(idle_timeout_handler);
     let url = format!("http://localhost:{}", testserver.port);
-    let agent = Agent::default().build();
+    let agent = Agent::default();
     let resp = agent.get(&url).call().unwrap();
 
     // use up the connection so it gets returned to the pool
@@ -87,8 +89,9 @@ fn custom_resolver() {
         buf
     });
 
-    crate::agent()
-        .set_resolver(move |_: &str| Ok(vec![local_addr]))
+    AgentBuilder::new()
+        .resolver(move |_: &str| Ok(vec![local_addr]))
+        .build()
         .get("http://cool.server/")
         .call()
         .ok();
@@ -144,7 +147,7 @@ fn cookie_and_redirect(mut stream: TcpStream) -> io::Result<()> {
 fn test_cookies_on_redirect() -> Result<(), Error> {
     let testserver = TestServer::new(cookie_and_redirect);
     let url = format!("http://localhost:{}/first", testserver.port);
-    let agent = Agent::default().build();
+    let agent = Agent::default();
     agent.post(&url).call()?;
     assert!(agent.cookie("first").is_some());
     assert!(agent.cookie("second").is_some());
@@ -168,7 +171,7 @@ fn dirty_streams_not_returned() -> Result<(), Error> {
         Ok(())
     });
     let url = format!("http://localhost:{}/", testserver.port);
-    let agent = Agent::default().build();
+    let agent = Agent::default();
     let resp = agent.get(&url).call()?;
     let resp_str = resp.into_string()?;
     assert_eq!(resp_str, "corgidachsund");

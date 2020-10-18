@@ -120,6 +120,7 @@ mod serde_macros;
 mod test;
 
 pub use crate::agent::Agent;
+pub use crate::agent::AgentBuilder;
 pub use crate::error::Error;
 pub use crate::header::Header;
 pub use crate::proxy::Proxy;
@@ -135,7 +136,7 @@ pub use serde_json::{to_value as serde_to_value, Map as SerdeMap, Value as Serde
 
 /// Agents are used to keep state between requests.
 pub fn agent() -> Agent {
-    Agent::new().build()
+    Agent::default()
 }
 
 /// Make a request setting the HTTP method via a string.
@@ -144,7 +145,7 @@ pub fn agent() -> Agent {
 /// ureq::request("GET", "http://example.com").call().unwrap();
 /// ```
 pub fn request(method: &str, path: &str) -> Request {
-    Agent::new().request(method, path)
+    agent().request(method, path)
 }
 
 /// Make a GET request.
