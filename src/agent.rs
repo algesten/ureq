@@ -13,6 +13,25 @@ use crate::proxy::Proxy;
 use crate::request::Request;
 use crate::resolve::ArcResolver;
 
+#[derive(Debug, Default)]
+pub struct AgentBuilder {
+    headers: Vec<Header>,
+    proxy: Option<Proxy>,
+    max_idle_connections: usize,
+    max_idle_connections_per_host: usize,
+    /// Cookies saved between requests.
+    /// Invariant: All cookies must have a nonempty domain and path.
+    #[cfg(feature = "cookie")]
+    jar: CookieStore,
+    resolver: ArcResolver,
+}
+
+impl Default for Agent {
+    fn default() -> Self {
+        AgentBuilder::new().build()
+    }
+}
+
 /// Agents keep state between requests.
 ///
 /// By default, no state, such as cookies, is kept between requests.
@@ -41,7 +60,7 @@ use crate::resolve::ArcResolver;
 ///   println!("Secret is: {}", secret.unwrap().into_string().unwrap());
 /// }
 /// ```
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct Agent {
     /// Copied into each request of this agent.
     pub(crate) headers: Vec<Header>,
@@ -65,98 +84,12 @@ pub(crate) struct AgentState {
 }
 
 impl AgentState {
-    fn new() -> Self {
-        Self::default()
-    }
-    pub fn pool(&mut self) -> &mut ConnectionPool {
+    pub(crate) fn pool(&mut self) -> &mut ConnectionPool {
         &mut self.pool
     }
 }
 
 impl Agent {
-    /// Creates a new agent. Typically you'd use [`ureq::agent()`](fn.agent.html) to
-    /// do this.
-    ///
-    /// ```
-    /// let agent = ureq::Agent::new()
-    ///     .set("X-My-Header", "Foo") // present on all requests from this agent
-    ///     .build();
-    ///
-    /// agent.get("/foo");
-    /// ```
-    pub fn new() -> Agent {
-        Default::default()
-    }
-
-    /// Create a new agent after treating it as a builder.
-    /// This actually clones the internal state to a new one and instantiates
-    /// a new connection pool that is reused between connects.
-    pub fn build(&self) -> Self {
-        Agent {
-            headers: self.headers.clone(),
-            state: Arc::new(Mutex::new(AgentState::new())),
-        }
-    }
-
-    /// Set a header field that will be present in all requests using the agent.
-    ///
-    /// ```
-    /// let agent = ureq::agent()
-    ///     .set("X-API-Key", "foobar")
-    ///     .set("Accept", "text/plain")
-    ///     .build();
-    ///
-    /// let r = agent
-    ///     .get("/my-page")
-    ///     .call();
-    ///
-    ///  if let Ok(resp) = r {
-    ///      println!("yay got {}", resp.into_string().unwrap());
-    ///  } else {
-    ///      println!("Oh no error!");
-    ///  }
-    /// ```
-    pub fn set(&mut self, header: &str, value: &str) -> &mut Agent {
-        header::add_header(&mut self.headers, Header::new(header, value));
-        self
-    }
-
-    /// Basic auth that will be present in all requests using the agent.
-    ///
-    /// ```
-    /// let agent = ureq::agent()
-    ///     .auth("martin", "rubbermashgum")
-    ///     .build();
-    ///
-    /// let r = agent
-    ///     .get("/my_page")
-    ///     .call();
-    /// println!("{:?}", r);
-    /// ```
-    pub fn auth(&mut self, user: &str, pass: &str) -> &mut Agent {
-        let pass = basic_auth(user, pass);
-        self.auth_kind("Basic", &pass)
-    }
-
-    /// Auth of other kinds such as `Digest`, `Token` etc, that will be present
-    /// in all requests using the agent.
-    ///
-    /// ```
-    /// // sets a header "Authorization: token secret"
-    /// let agent = ureq::agent()
-    ///     .auth_kind("token", "secret")
-    ///     .build();
-    ///
-    /// let r = agent
-    ///     .get("/my_page")
-    ///     .call();
-    /// ```
-    pub fn auth_kind(&mut self, kind: &str, pass: &str) -> &mut Agent {
-        let value = format!("{} {}", kind, pass);
-        self.set("Authorization", &value);
-        self
-    }
-
     /// Request by providing the HTTP verb such as `GET`, `POST`...
     ///
     /// ```
@@ -169,73 +102,6 @@ impl Agent {
     /// ```
     pub fn request(&self, method: &str, path: &str) -> Request {
         Request::new(&self, method.into(), path.into())
-    }
-
-    /// Sets the maximum number of connections allowed in the connection pool.
-    /// By default, this is set to 100. Setting this to zero would disable
-    /// connection pooling.
-    ///
-    /// ```
-    /// let agent = ureq::agent();
-    /// agent.set_max_pool_connections(200);
-    /// ```
-    pub fn set_max_pool_connections(&self, max_connections: usize) {
-        let mut state = self.state.lock().unwrap();
-        state.pool.set_max_idle_connections(max_connections);
-    }
-
-    /// Sets the maximum number of connections per host to keep in the
-    /// connection pool. By default, this is set to 1. Setting this to zero
-    /// would disable connection pooling.
-    ///
-    /// ```
-    /// let agent = ureq::agent();
-    /// agent.set_max_pool_connections_per_host(10);
-    /// ```
-    pub fn set_max_pool_connections_per_host(&self, max_connections: usize) {
-        let mut state = self.state.lock().unwrap();
-        state
-            .pool
-            .set_max_idle_connections_per_host(max_connections);
-    }
-
-    /// Configures a custom resolver to be used by this agent. By default,
-    /// address-resolution is done by std::net::ToSocketAddrs. This allows you
-    /// to override that resolution with your own alternative. Useful for
-    /// testing and special-cases like DNS-based load balancing.
-    ///
-    /// A `Fn(&str) -> io::Result<Vec<SocketAddr>>` is a valid resolver,
-    /// passing a closure is a simple way to override. Note that you might need
-    /// explicit type `&str` on the closure argument for type inference to
-    /// succeed.
-    /// ```
-    /// use std::net::ToSocketAddrs;
-    ///
-    /// let mut agent = ureq::agent();
-    /// agent.set_resolver(|addr: &str| match addr {
-    ///    "example.com" => Ok(vec![([127,0,0,1], 8096).into()]),
-    ///    addr => addr.to_socket_addrs().map(Iterator::collect),
-    /// });
-    /// ```
-    pub fn set_resolver(&mut self, resolver: impl crate::Resolver + 'static) -> &mut Self {
-        self.state.lock().unwrap().resolver = resolver.into();
-        self
-    }
-
-    /// Set the proxy server to use for all connections from this Agent.
-    ///
-    /// Example:
-    /// ```
-    /// let proxy = ureq::Proxy::new("user:password@cool.proxy:9090").unwrap();
-    /// let agent = ureq::agent()
-    ///     .set_proxy(proxy)
-    ///     .build();
-    /// ```
-    pub fn set_proxy(&mut self, proxy: Proxy) -> &mut Agent {
-        let mut state = self.state.lock().unwrap();
-        state.proxy = Some(proxy);
-        drop(state);
-        self
     }
 
     /// Gets a cookie in this agent by name. Cookies are available
@@ -345,6 +211,156 @@ impl Agent {
     }
 }
 
+impl AgentBuilder {
+    pub fn new() -> AgentBuilder {
+        AgentBuilder {
+            max_idle_connections: 100,
+            max_idle_connections_per_host: 1,
+            ..Default::default()
+        }
+    }
+
+    /// Create a new agent.
+    // Note: This could take &self as the first argument, allowing one
+    // AgentBuilder to be used multiple times, except CookieStore does
+    // not implement clone, so we have to give ownership to the newly
+    // built Agent.
+    pub fn build(self) -> Agent {
+        Agent {
+            headers: self.headers.clone(),
+            state: Arc::new(Mutex::new(AgentState {
+                pool: ConnectionPool::new(
+                    self.max_idle_connections,
+                    self.max_idle_connections_per_host,
+                ),
+                proxy: self.proxy.clone(),
+                #[cfg(feature = "cookie")]
+                jar: self.jar,
+                resolver: self.resolver,
+            })),
+        }
+    }
+
+    /// Set a header field that will be present in all requests using the agent.
+    ///
+    /// ```
+    /// let agent = ureq::AgentBuilder::new()
+    ///     .set("X-API-Key", "foobar")
+    ///     .set("Accept", "text/plain")
+    ///     .build();
+    ///
+    /// let r = agent
+    ///     .get("/my-page")
+    ///     .call();
+    ///
+    ///  if let Ok(resp) = r {
+    ///      println!("yay got {}", resp.into_string().unwrap());
+    ///  } else {
+    ///      println!("Oh no error!");
+    ///  }
+    /// ```
+    pub fn set(mut self, header: &str, value: &str) -> Self {
+        header::add_header(&mut self.headers, Header::new(header, value));
+        self
+    }
+
+    /// Basic auth that will be present in all requests using the agent.
+    ///
+    /// ```
+    /// let agent = ureq::AgentBuilder::new()
+    ///     .auth("martin", "rubbermashgum")
+    ///     .build();
+    ///
+    /// let r = agent
+    ///     .get("/my_page")
+    ///     .call();
+    /// println!("{:?}", r);
+    /// ```
+    pub fn auth(self, user: &str, pass: &str) -> Self {
+        let pass = basic_auth(user, pass);
+        self.auth_kind("Basic", &pass)
+    }
+
+    /// Auth of other kinds such as `Digest`, `Token` etc, that will be present
+    /// in all requests using the agent.
+    ///
+    /// ```
+    /// // sets a header "Authorization: token secret"
+    /// let agent = ureq::AgentBuilder::new()
+    ///     .auth_kind("token", "secret")
+    ///     .build();
+    ///
+    /// let r = agent
+    ///     .get("/my_page")
+    ///     .call();
+    /// ```
+    pub fn auth_kind(self, kind: &str, pass: &str) -> Self {
+        let value = format!("{} {}", kind, pass);
+        self.set("Authorization", &value)
+    }
+    /// Sets the maximum number of connections allowed in the connection pool.
+    /// By default, this is set to 100. Setting this to zero would disable
+    /// connection pooling.
+    ///
+    /// ```
+    /// let agent = ureq::AgentBuilder::new().max_pool_connections(200).build();
+    /// ```
+    pub fn max_pool_connections(mut self, max: usize) -> Self {
+        self.max_idle_connections = max;
+        self
+    }
+
+    /// Sets the maximum number of connections per host to keep in the
+    /// connection pool. By default, this is set to 1. Setting this to zero
+    /// would disable connection pooling.
+    ///
+    /// ```
+    /// let agent = ureq::AgentBuilder::new().max_pool_connections_per_host(200).build();
+    /// ```
+    pub fn max_pool_connections_per_host(mut self, max: usize) -> Self {
+        self.max_idle_connections_per_host = max;
+        self
+    }
+
+    /// Configures a custom resolver to be used by this agent. By default,
+    /// address-resolution is done by std::net::ToSocketAddrs. This allows you
+    /// to override that resolution with your own alternative. Useful for
+    /// testing and special-cases like DNS-based load balancing.
+    ///
+    /// A `Fn(&str) -> io::Result<Vec<SocketAddr>>` is a valid resolver,
+    /// passing a closure is a simple way to override. Note that you might need
+    /// explicit type `&str` on the closure argument for type inference to
+    /// succeed.
+    /// ```
+    /// use std::net::ToSocketAddrs;
+    ///
+    /// let mut agent = ureq::AgentBuilder::new()
+    ///    .resolver(|addr: &str| match addr {
+    ///       "example.com" => Ok(vec![([127,0,0,1], 8096).into()]),
+    ///       addr => addr.to_socket_addrs().map(Iterator::collect),
+    ///    })
+    ///    .build();
+    /// ```
+    pub fn resolver(mut self, resolver: impl crate::Resolver + 'static) -> Self {
+        self.resolver = resolver.into();
+        self
+    }
+
+    /// Set the proxy server to use for all connections from this Agent.
+    ///
+    /// Example:
+    /// ```
+    /// let proxy = ureq::Proxy::new("user:password@cool.proxy:9090").unwrap();
+    /// let agent = ureq::AgentBuilder::new()
+    ///     .proxy(proxy)
+    ///     .build();
+    /// ```
+    pub fn proxy(mut self, proxy: Proxy) -> Self {
+        self.proxy = Some(proxy);
+        self
+    }
+}
+
 pub(crate) fn basic_auth(user: &str, pass: &str) -> String {
     let safe = match user.find(':') {
         Some(idx) => &user[..idx],
@@ -356,16 +372,13 @@ pub(crate) fn basic_auth(user: &str, pass: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::thread;
 
     ///////////////////// AGENT TESTS //////////////////////////////
 
     #[test]
-    fn agent_implements_send() {
-        let mut agent = Agent::new();
-        thread::spawn(move || {
-            agent.set("Foo", "Bar");
-        });
+    fn agent_implements_send_and_sync() {
+        let _agent: Box<dyn Send> = Box::new(AgentBuilder::new().build());
+        let _agent: Box<dyn Sync> = Box::new(AgentBuilder::new().build());
     }
 
     #[test]
@@ -394,16 +407,5 @@ mod tests {
         let mut reader = resp.into_reader();
         let mut buf = vec![];
         reader.read_to_end(&mut buf).unwrap();
-    }
-
-    //////////////////// REQUEST TESTS /////////////////////////////
-
-    #[test]
-    fn request_implements_send() {
-        let agent = Agent::new();
-        let mut request = Request::new(&agent, "GET".to_string(), "/foo".to_string());
-        thread::spawn(move || {
-            request.set("Foo", "Bar");
-        });
     }
 }

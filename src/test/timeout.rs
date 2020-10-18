@@ -25,7 +25,7 @@ fn dribble_body_respond(mut stream: TcpStream, contents: &[u8]) -> io::Result<()
 }
 
 fn get_and_expect_timeout(url: String) {
-    let agent = Agent::default().build();
+    let agent = Agent::default();
     let timeout = Duration::from_millis(500);
     let resp = agent.get(&url).timeout(timeout).call().unwrap();
 
@@ -86,7 +86,7 @@ fn overall_timeout_reading_json() {
     });
     let url = format!("http://localhost:{}/", server.port);
 
-    let agent = Agent::default().build();
+    let agent = Agent::default();
     let timeout = Duration::from_millis(500);
     let resp = agent.get(&url).timeout(timeout).call().unwrap();
 

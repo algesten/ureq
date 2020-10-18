@@ -102,7 +102,7 @@ m0Wqhhi8/24Sy934t5Txgkfoltg8ahkx934WjP6WWRnSAu+cf+vW
 #[cfg(feature = "tls")]
 #[test]
 fn tls_client_certificate() {
-    let agent = ureq::Agent::default().build();
+    let agent = ureq::Agent::default();
 
     let mut tls_config = rustls::ClientConfig::new();
 
