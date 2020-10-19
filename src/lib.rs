@@ -143,7 +143,7 @@ pub fn agent() -> Agent {
 /// Make a request setting the HTTP method via a string.
 ///
 /// ```
-/// ureq::request("GET", "http://example.com").call().unwrap();
+/// ureq::request("GET", "http://google.com").call().unwrap();
 /// ```
 pub fn request(method: &str, path: &str) -> Request {
     agent().request(method, path)
