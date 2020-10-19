@@ -7,7 +7,7 @@ use std::sync::Arc;
 use url::Url;
 
 #[cfg(feature = "cookie")]
-use crate::cookies::CookieStoreLocked;
+use crate::cookies::CookieTin;
 use crate::header::{self, Header};
 use crate::pool::ConnectionPool;
 use crate::proxy::Proxy;
@@ -83,7 +83,7 @@ pub(crate) struct AgentState {
     /// Cookies saved between requests.
     /// Invariant: All cookies must have a nonempty domain and path.
     #[cfg(feature = "cookie")]
-    pub(crate) jar: CookieStoreLocked,
+    pub(crate) jar: CookieTin,
     pub(crate) resolver: ArcResolver,
 }
 
@@ -184,7 +184,7 @@ impl AgentBuilder {
                 ),
                 proxy: self.proxy.clone(),
                 #[cfg(feature = "cookie")]
-                jar: CookieStoreLocked::new(self.jar),
+                jar: CookieTin::new(self.jar),
                 resolver: self.resolver,
             }),
         }

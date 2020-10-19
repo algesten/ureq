@@ -8,14 +8,14 @@ use url::Url;
 
 #[cfg(feature = "cookie")]
 #[derive(Default, Debug)]
-pub(crate) struct CookieStoreLocked {
+pub(crate) struct CookieTin {
     inner: RwLock<CookieStore>,
 }
 
 #[cfg(feature = "cookie")]
-impl CookieStoreLocked {
+impl CookieTin {
     pub(crate) fn new(store: CookieStore) -> Self {
-        CookieStoreLocked {
+        CookieTin {
             inner: RwLock::new(store),
         }
     }
