@@ -31,7 +31,7 @@ pub const DEFAULT_CHARACTER_SET: &str = "utf-8";
 /// [`into_string()`](#method.into_string) consumes the response.
 ///
 /// ```
-/// let response = ureq::get("http://google.com/").call().unwrap();
+/// let response = ureq::get("http://example.com/").call().unwrap();
 ///
 /// // socket is still open and the response body has not been read.
 ///
