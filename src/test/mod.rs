@@ -1,10 +1,10 @@
-use crate::error::Error;
-use crate::stream::Stream;
 use crate::unit::Unit;
+use crate::{error::Error, Agent};
+use crate::{stream::Stream, AgentBuilder};
 use once_cell::sync::Lazy;
-use std::collections::HashMap;
 use std::io::{Cursor, Write};
 use std::sync::{Arc, Mutex};
+use std::{collections::HashMap, net::ToSocketAddrs};
 
 mod agent_test;
 mod auth;
@@ -14,8 +14,43 @@ mod query_string;
 mod range;
 mod redirect;
 mod simple;
-mod testserver;
+pub(crate) mod testserver;
 mod timeout;
+
+// An agent to be installed by default for tests and doctests, such
+// that all hostnames resolve to a TestServer on localhost.
+pub(crate) fn test_agent() -> Agent {
+    use std::io;
+    use std::net::{SocketAddr, TcpStream};
+    let testserver = testserver::TestServer::new(|mut stream: TcpStream| -> io::Result<()> {
+        testserver::read_headers(&stream);
+        stream.write_all(b"HTTP/1.1 200 OK\r\n")?;
+        stream.write_all(b"Transfer-Encoding: chunked\r\n")?;
+        stream.write_all(b"Content-Type: text/html; charset=ISO-8859-1\r\n")?;
+        stream.write_all(b"\r\n")?;
+        stream.write_all(b"7\r\n")?;
+        stream.write_all(b"success\r\n")?;
+        stream.write_all(b"0\r\n")?;
+        stream.write_all(b"\r\n")?;
+        Ok(())
+    });
+    // Slightly tricky thing here: we want to make sure the TestServer lives
+    // as long as the agent. This is accomplished by `move`ing it into the
+    // closure, which becomes owned by the agent.
+    AgentBuilder::new()
+        .resolver(move |h: &str| -> io::Result<Vec<SocketAddr>> {
+            // Don't override resolution for HTTPS requests yet, since we
+            // don't have a setup for an HTTPS testserver. Also, skip localhost
+            // resolutions since those may come from a unittest that set up
+            // its own, specific testserver.
+            if h.ends_with(":443") || h.starts_with("localhost:") {
+                return Ok(h.to_socket_addrs()?.collect::<Vec<_>>());
+            }
+            let addr: SocketAddr = format!("127.0.0.1:{}", testserver.port).parse().unwrap();
+            Ok(vec![addr])
+        })
+        .build()
+}
 
 type RequestHandler = dyn Fn(&Unit) -> Result<Stream, Error> + Send + 'static;
 

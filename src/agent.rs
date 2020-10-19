@@ -387,7 +387,7 @@ mod tests {
         use std::io::Read;
 
         let agent = crate::agent();
-        let url = "https://ureq.s3.eu-central-1.amazonaws.com/sherlock.txt";
+        let url = "http://example.com";
         // req 1
         let resp = agent.get(url).call().unwrap();
         let mut reader = resp.into_reader();

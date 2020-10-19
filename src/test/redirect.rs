@@ -85,6 +85,9 @@ fn redirect_get() {
 #[test]
 fn redirect_host() {
     // Set up a redirect to a host that doesn't exist; it should fail.
+    // TODO: This actually relies on the network for the DNS lookup
+    // of example.invalid. We can probably do better by, e.g.
+    // overriding the resolver.
     let srv = TestServer::new(|mut stream: TcpStream| -> io::Result<()> {
         testserver::read_headers(&stream);
         write!(stream, "HTTP/1.1 302 Found\r\n")?;
@@ -93,8 +96,13 @@ fn redirect_host() {
         Ok(())
     });
     let url = format!("http://localhost:{}/", srv.port);
-    let resp = crate::get(&url).call();
-    assert!(matches!(resp.err(), Some(Error::DnsFailed(_))));
+    let resp = crate::Agent::default().get(&url).call();
+    let err = resp.err();
+    assert!(
+        matches!(err, Some(Error::DnsFailed(_))),
+        "expected DnsFailed, got: {:?}",
+        err
+    );
 }
 
 #[test]
