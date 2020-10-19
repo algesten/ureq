@@ -34,7 +34,10 @@ pub fn read_headers(stream: &TcpStream) -> TestHeaders {
     let mut results = vec![];
     for line in BufReader::new(stream).lines() {
         match line {
-            Err(e) => panic!(e),
+            Err(e) => {
+                eprintln!("testserver: in read_headers: {}", e);
+                break;
+            }
             Ok(line) if line == "" => break,
             Ok(line) => results.push(line),
         };
@@ -50,6 +53,10 @@ impl TestServer {
         let done_clone = done.clone();
         thread::spawn(move || {
             for stream in listener.incoming() {
+                if let Err(e) = stream {
+                    eprintln!("testserver: handling just-accepted stream: {}", e);
+                    break;
+                }
                 thread::spawn(move || handler(stream.unwrap()));
                 if done.load(Ordering::Relaxed) {
                     break;
