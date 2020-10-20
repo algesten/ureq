@@ -1,12 +1,13 @@
 use std::fmt;
 use std::io::Read;
-use std::sync::{Arc, Mutex};
+#[cfg(any(feature = "native-tls", feature = "tls"))]
+use std::sync::Arc;
 use std::time;
 
 use qstring::QString;
 use url::{form_urlencoded, Url};
 
-use crate::agent::{self, Agent, AgentState};
+use crate::agent::{self, Agent};
 use crate::body::BodySize;
 use crate::body::{Payload, SizedReader};
 use crate::error::Error;
@@ -31,7 +32,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// ```
 #[derive(Clone, Default)]
 pub struct Request {
-    pub(crate) agent: Arc<Mutex<AgentState>>,
+    pub(crate) agent: Agent,
 
     // via agent
     pub(crate) method: String,
@@ -73,7 +74,7 @@ impl fmt::Debug for Request {
 impl Request {
     pub(crate) fn new(agent: &Agent, method: String, url: String) -> Request {
         Request {
-            agent: Arc::clone(&agent.state),
+            agent: agent.clone(),
             method,
             url,
             headers: agent.headers.clone(),
@@ -596,7 +597,7 @@ impl Request {
     pub(crate) fn proxy(&self) -> Option<Proxy> {
         if let Some(proxy) = &self.proxy {
             Some(proxy.clone())
-        } else if let Some(proxy) = &self.agent.lock().unwrap().proxy {
+        } else if let Some(proxy) = &self.agent.state.proxy {
             Some(proxy.clone())
         } else {
             None

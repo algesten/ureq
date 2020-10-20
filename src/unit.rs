@@ -8,12 +8,12 @@ use url::Url;
 #[cfg(feature = "cookie")]
 use cookie::Cookie;
 
-#[cfg(feature = "cookie")]
-use crate::agent::AgentState;
 use crate::body::{self, BodySize, Payload, SizedReader};
 use crate::header;
 use crate::resolve::ArcResolver;
 use crate::stream::{self, connect_test, Stream};
+#[cfg(feature = "cookie")]
+use crate::Agent;
 use crate::{Error, Header, Request, Response};
 
 /// It's a "unit of work". Maybe a bad name for it?
@@ -117,7 +117,7 @@ impl Unit {
     }
 
     pub fn resolver(&self) -> ArcResolver {
-        self.req.agent.lock().unwrap().resolver.clone()
+        self.req.agent.state.resolver.clone()
     }
 
     #[cfg(test)]
@@ -256,12 +256,13 @@ pub(crate) fn connect(
 }
 
 #[cfg(feature = "cookie")]
-fn extract_cookies(state: &std::sync::Mutex<AgentState>, url: &Url) -> Option<Header> {
-    let state = state.lock().unwrap();
-    let header_value = state
+fn extract_cookies(agent: &Agent, url: &Url) -> Option<Header> {
+    let header_value = agent
+        .state
         .jar
         .get_request_cookies(url)
-        .map(|c| Cookie::new(c.name(), c.value()).encoded().to_string())
+        .iter()
+        .map(|c| c.encoded().to_string())
         .collect::<Vec<_>>()
         .join(";");
     match header_value.as_str() {
@@ -287,11 +288,15 @@ fn connect_socket(unit: &Unit, hostname: &str, use_pooled: bool) -> Result<(Stre
         _ => return Err(Error::UnknownScheme(unit.url.scheme().to_string())),
     };
     if use_pooled {
-        let state = &mut unit.req.agent.lock().unwrap();
+        let agent = &unit.req.agent;
         // The connection may have been closed by the server
         // due to idle timeout while it was sitting in the pool.
         // Loop until we find one that is still good or run out of connections.
-        while let Some(stream) = state.pool.try_get_connection(&unit.url, &unit.req.proxy) {
+        while let Some(stream) = agent
+            .state
+            .pool
+            .try_get_connection(&unit.url, &unit.req.proxy)
+        {
             let server_closed = stream.server_closed()?;
             if !server_closed {
                 return Ok((stream, true));
@@ -389,8 +394,11 @@ fn save_cookies(unit: &Unit, resp: &Response) {
             Ok(c) => Some(c),
         }
     });
-    let state = &mut unit.req.agent.lock().unwrap();
-    state.jar.store_response_cookies(cookies, &unit.url.clone());
+    unit.req
+        .agent
+        .state
+        .jar
+        .store_response_cookies(cookies, &unit.url.clone());
 }
 
 #[cfg(test)]
@@ -409,14 +417,12 @@ mod tests {
         let cookie2: Cookie = "cookie2=value2; Domain=crates.io; Path=/".parse().unwrap();
         agent
             .state
-            .lock()
-            .unwrap()
             .jar
             .store_response_cookies(vec![cookie1, cookie2].into_iter(), &url);
 
         // There's no guarantee to the order in which cookies are defined.
         // Ensure that they're either in one order or the other.
-        let result = extract_cookies(&agent.state, &url);
+        let result = extract_cookies(&agent, &url);
         let order1 = "cookie1=value1;cookie2=value2";
         let order2 = "cookie2=value2;cookie1=value1";
 

@@ -3,10 +3,11 @@ use cookie::Cookie;
 #[cfg(feature = "cookie")]
 use cookie_store::CookieStore;
 use std::sync::Arc;
-use std::sync::Mutex;
 #[cfg(feature = "cookie")]
 use url::Url;
 
+#[cfg(feature = "cookie")]
+use crate::cookies::CookieTin;
 use crate::header::{self, Header};
 use crate::pool::ConnectionPool;
 use crate::proxy::Proxy;
@@ -60,12 +61,15 @@ impl Default for Agent {
 ///   println!("Secret is: {}", secret.unwrap().into_string().unwrap());
 /// }
 /// ```
+///
+/// Agent uses an inner Arc, so cloning an Agent results in an instance
+/// that shares the same underlying connection pool and other state.
 #[derive(Debug, Clone)]
 pub struct Agent {
     /// Copied into each request of this agent.
     pub(crate) headers: Vec<Header>,
     /// Reused agent state for repeated requests from this agent.
-    pub(crate) state: Arc<Mutex<AgentState>>,
+    pub(crate) state: Arc<AgentState>,
 }
 
 /// Container of the state
@@ -79,14 +83,8 @@ pub(crate) struct AgentState {
     /// Cookies saved between requests.
     /// Invariant: All cookies must have a nonempty domain and path.
     #[cfg(feature = "cookie")]
-    pub(crate) jar: CookieStore,
+    pub(crate) jar: CookieTin,
     pub(crate) resolver: ArcResolver,
-}
-
-impl AgentState {
-    pub(crate) fn pool(&mut self) -> &mut ConnectionPool {
-        &mut self.pool
-    }
 }
 
 impl Agent {
@@ -104,70 +102,21 @@ impl Agent {
         Request::new(&self, method.into(), path.into())
     }
 
-    /// Gets a cookie in this agent by name. Cookies are available
-    /// either by setting it in the agent, or by making requests
-    /// that `Set-Cookie` in the agent.
-    ///
-    /// Note that this will return any cookie for the given name,
-    /// regardless of which host and path that cookie was set on.
-    ///
-    /// ```
-    /// let agent = ureq::agent();
-    ///
-    /// agent.get("http://www.google.com").call();
-    ///
-    /// assert!(agent.cookie("NID").is_some());
-    /// ```
-    #[cfg(feature = "cookie")]
-    pub fn cookie(&self, name: &str) -> Option<Cookie<'static>> {
-        let state = self.state.lock().unwrap();
-        let first_found = state.jar.iter_any().find(|c| c.name() == name);
-        if let Some(first_found) = first_found {
-            let c: &Cookie = &*first_found;
-            Some(c.clone())
-        } else {
-            None
-        }
-    }
-
-    /// Set a cookie in this agent.
-    ///
-    /// Cookies without a domain, or with a malformed domain or path,
-    /// will be silently ignored.
+    /// Store a cookie in this agent.
     ///
     /// ```
     /// let agent = ureq::agent();
     ///
     /// let cookie = ureq::Cookie::build("name", "value")
-    ///   .domain("example.com")
-    ///   .path("/")
     ///   .secure(true)
     ///   .finish();
-    /// agent.set_cookie(cookie);
+    /// agent.set_cookie(cookie, &"https://example.com/".parse().unwrap());
     /// ```
     #[cfg(feature = "cookie")]
-    pub fn set_cookie(&self, cookie: Cookie<'static>) {
-        let mut cookie = cookie.clone();
-        if cookie.domain().is_none() {
-            return;
-        }
-
-        if cookie.path().is_none() {
-            cookie.set_path("/");
-        }
-        let path = cookie.path().unwrap();
-        let domain = cookie.domain().unwrap();
-
-        let fake_url: Url = match format!("http://{}{}", domain, path).parse() {
-            Ok(u) => u,
-            Err(_) => return,
-        };
-        let mut state = self.state.lock().unwrap();
-        let cs_cookie = match cookie_store::Cookie::try_from_raw_cookie(&cookie, &fake_url) {
-            Ok(c) => c,
-            Err(_) => return,
-        };
-        state.jar.insert(cs_cookie, &fake_url).ok();
+    pub fn set_cookie(&self, cookie: Cookie<'static>, url: &Url) {
+        self.state
+            .jar
+            .store_response_cookies(Some(cookie).into_iter(), url);
     }
 
     /// Make a GET request from this agent.
@@ -228,16 +177,16 @@ impl AgentBuilder {
     pub fn build(self) -> Agent {
         Agent {
             headers: self.headers.clone(),
-            state: Arc::new(Mutex::new(AgentState {
+            state: Arc::new(AgentState {
                 pool: ConnectionPool::new(
                     self.max_idle_connections,
                     self.max_idle_connections_per_host,
                 ),
                 proxy: self.proxy.clone(),
                 #[cfg(feature = "cookie")]
-                jar: self.jar,
+                jar: CookieTin::new(self.jar),
                 resolver: self.resolver,
-            })),
+            }),
         }
     }
 
@@ -298,6 +247,7 @@ impl AgentBuilder {
         let value = format!("{} {}", kind, pass);
         self.set("Authorization", &value)
     }
+
     /// Sets the maximum number of connections allowed in the connection pool.
     /// By default, this is set to 100. Setting this to zero would disable
     /// connection pooling.
@@ -396,8 +346,7 @@ mod tests {
         reader.read_to_end(&mut buf).unwrap();
 
         fn poolsize(agent: &Agent) -> usize {
-            let mut state = agent.state.lock().unwrap();
-            state.pool().len()
+            agent.state.pool.len()
         }
         assert_eq!(poolsize(&agent), 1);
 
