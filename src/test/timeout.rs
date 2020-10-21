@@ -28,15 +28,15 @@ fn get_and_expect_timeout(url: String) {
     let agent = Agent::default().build();
     let timeout = Duration::from_millis(500);
     let resp = agent.get(&url).timeout(timeout).call();
-    assert!(
-        matches!(resp.synthetic_error(), Some(Error::Io(_))),
-        "expected timeout error, got {:?}",
-        resp.synthetic_error()
-    );
-    assert_eq!(
-        resp.synthetic_error().as_ref().unwrap().body_text(),
-        "Network Error: timed out reading response"
-    );
+
+    match resp.into_string() {
+        Err(io_error) => match io_error.kind() {
+            io::ErrorKind::TimedOut => Ok(()),
+            _ => Err(format!("{:?}", io_error)),
+        },
+        Ok(_) => Err("successful response".to_string()),
+    }
+    .expect("expected timeout but got something else");
 }
 
 #[test]
@@ -50,7 +50,6 @@ fn overall_timeout_during_body() {
 // Send HTTP headers on the TcpStream at a rate of one header every 100
 // milliseconds, for a total of 30 headers.
 fn dribble_headers_respond(mut stream: TcpStream) -> io::Result<()> {
-    stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n")?;
     for _ in 0..30 {
         stream.write_all(b"a: b\n")?;
         stream.flush()?;
@@ -76,7 +75,18 @@ fn overall_timeout_during_headers() {
     // Start a test server on an available port, that dribbles out a response at 1 write per 10ms.
     let server = TestServer::new(dribble_headers_respond);
     let url = format!("http://localhost:{}/", server.port);
-    get_and_expect_timeout(url);
+    let agent = Agent::default().build();
+    let timeout = Duration::from_millis(500);
+    let resp = agent.get(&url).timeout(timeout).call();
+    assert!(
+        matches!(resp.synthetic_error(), Some(Error::Io(_))),
+        "expected timeout error, got {:?}",
+        resp.synthetic_error()
+    );
+    assert_eq!(
+        resp.synthetic_error().as_ref().unwrap().body_text(),
+        "Network Error: timed out reading response"
+    );
 }
 
 #[test]

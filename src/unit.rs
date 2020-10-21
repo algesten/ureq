@@ -181,9 +181,6 @@ pub(crate) fn connect(
     // start reading the response to process cookies and redirects.
     let mut stream = stream::DeadlineStream::new(stream, unit.deadline);
     let mut resp = Response::from_read(&mut stream);
-    if resp.synthetic_error().is_some() {
-        return Err(resp.into_error().unwrap());
-    }
 
     // https://tools.ietf.org/html/rfc7230#section-6.3.1
     // When an inbound connection is closed prematurely, a client MAY
@@ -201,6 +198,8 @@ pub(crate) fn connect(
             let empty = Payload::Empty.into_read();
             return connect(req, unit, false, redirect_count, empty, redir);
         }
+        // Non-retryable errors return early.
+        return Err(resp.into_error().unwrap());
     }
 
     // squirrel away cookies
