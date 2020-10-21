@@ -28,15 +28,15 @@ fn get_and_expect_timeout(url: String) {
     let agent = Agent::default().build();
     let timeout = Duration::from_millis(500);
     let resp = agent.get(&url).timeout(timeout).call();
-
-    match resp.into_string() {
-        Err(io_error) => match io_error.kind() {
-            io::ErrorKind::TimedOut => Ok(()),
-            _ => Err(format!("{:?}", io_error)),
-        },
-        Ok(_) => Err("successful response".to_string()),
-    }
-    .expect("expected timeout but got something else");
+    assert!(
+        matches!(resp.synthetic_error(), Some(Error::Io(_))),
+        "expected timeout error, got {:?}",
+        resp.synthetic_error()
+    );
+    assert_eq!(
+        resp.synthetic_error().as_ref().unwrap().body_text(),
+        "Network Error: timed out reading response"
+    );
 }
 
 #[test]
