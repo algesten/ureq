@@ -221,6 +221,11 @@ impl Response {
         &self.error
     }
 
+    // Internal-only API, to allow unit::connect to return early on errors.
+    pub(crate) fn into_error(self) -> Option<Error> {
+        self.error
+    }
+
     /// The content type part of the "Content-Type" header without
     /// the charset.
     ///
