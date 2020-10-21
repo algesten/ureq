@@ -60,6 +60,18 @@ fn dribble_headers_respond(mut stream: TcpStream) -> io::Result<()> {
 }
 
 #[test]
+fn read_timeout_during_headers() {
+    let server = TestServer::new(dribble_headers_respond);
+    let url = format!("http://localhost:{}/", server.port);
+    let resp = crate::get(&url).timeout_read(10).call();
+    assert!(!resp.ok());
+    assert_eq!(
+        resp.into_string().unwrap(),
+        "Network Error: timed out reading response\n"
+    );
+}
+
+#[test]
 fn overall_timeout_during_headers() {
     // Start a test server on an available port, that dribbles out a response at 1 write per 10ms.
     let server = TestServer::new(dribble_headers_respond);
