@@ -455,20 +455,14 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         return Err(err);
     };
 
-    // rust's absurd api returns Err if we set 0.
-    // Setting it to None will disable the native system timeout
     if let Some(deadline) = deadline {
-        stream
-            .set_read_timeout(Some(time_until_deadline(deadline)?))
-            .ok();
+        stream.set_read_timeout(Some(time_until_deadline(deadline)?))?;
     } else {
         stream.set_read_timeout(unit.req.timeout_read)?;
     }
 
     if let Some(deadline) = deadline {
-        stream
-            .set_write_timeout(Some(time_until_deadline(deadline)?))
-            .ok();
+        stream.set_write_timeout(Some(time_until_deadline(deadline)?))?;
     } else {
         stream.set_read_timeout(unit.req.timeout_read)?;
     }
