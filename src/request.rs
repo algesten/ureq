@@ -1,8 +1,8 @@
-use std::fmt;
 use std::io::Read;
 use std::result::Result;
 use std::sync::{Arc, Mutex};
 use std::time;
+use std::{fmt, time::Duration};
 
 use qstring::QString;
 use url::{form_urlencoded, Url};
@@ -40,8 +40,8 @@ pub struct Request {
     pub(crate) headers: Vec<Header>,
     pub(crate) query: QString,
     pub(crate) timeout_connect: u64,
-    pub(crate) timeout_read: u64,
-    pub(crate) timeout_write: u64,
+    pub(crate) timeout_read: Option<time::Duration>,
+    pub(crate) timeout_write: Option<time::Duration>,
     pub(crate) timeout: Option<time::Duration>,
     pub(crate) redirects: u32,
     pub(crate) proxy: Option<Proxy>,
@@ -368,7 +368,10 @@ impl Request {
     /// println!("{:?}", r);
     /// ```
     pub fn timeout_read(&mut self, millis: u64) -> &mut Request {
-        self.timeout_read = millis;
+        match millis {
+            0 => self.timeout_read = None,
+            m => self.timeout_read = Some(Duration::from_millis(m)),
+        }
         self
     }
 
@@ -385,7 +388,10 @@ impl Request {
     /// println!("{:?}", r);
     /// ```
     pub fn timeout_write(&mut self, millis: u64) -> &mut Request {
-        self.timeout_write = millis;
+        match millis {
+            0 => self.timeout_write = None,
+            m => self.timeout_write = Some(Duration::from_millis(m)),
+        }
         self
     }
 

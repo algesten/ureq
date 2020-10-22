@@ -172,6 +172,14 @@ impl Stream {
         }
     }
 
+    pub(crate) fn set_read_timeout(&self, timeout: Option<Duration>) -> io::Result<()> {
+        if let Some(socket) = self.socket() {
+            socket.set_read_timeout(timeout)
+        } else {
+            Ok(())
+        }
+    }
+
     #[cfg(test)]
     pub fn to_write_vec(&self) -> Vec<u8> {
         match self {
@@ -453,24 +461,16 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         stream
             .set_read_timeout(Some(time_until_deadline(deadline)?))
             .ok();
-    } else if unit.req.timeout_read > 0 {
-        stream
-            .set_read_timeout(Some(Duration::from_millis(unit.req.timeout_read as u64)))
-            .ok();
     } else {
-        stream.set_read_timeout(None).ok();
+        stream.set_read_timeout(unit.req.timeout_read)?;
     }
 
     if let Some(deadline) = deadline {
         stream
             .set_write_timeout(Some(time_until_deadline(deadline)?))
             .ok();
-    } else if unit.req.timeout_write > 0 {
-        stream
-            .set_write_timeout(Some(Duration::from_millis(unit.req.timeout_write as u64)))
-            .ok();
     } else {
-        stream.set_write_timeout(None).ok();
+        stream.set_read_timeout(unit.req.timeout_read)?;
     }
 
     if proto == Some(Proto::HTTPConnect) {
