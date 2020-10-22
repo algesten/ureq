@@ -19,7 +19,7 @@ fn dribble_body_respond(mut stream: TcpStream, contents: &[u8]) -> io::Result<()
         stream.write_all(&contents[i..i + 1])?;
         stream.write_all(&[b'\n'; 1])?;
         stream.flush()?;
-        thread::sleep(Duration::from_millis(10));
+        thread::sleep(Duration::from_millis(100));
     }
     Ok(())
 }
@@ -45,6 +45,22 @@ fn overall_timeout_during_body() {
     let server = TestServer::new(|stream| dribble_body_respond(stream, &[b'a'; 300]));
     let url = format!("http://localhost:{}/", server.port);
     get_and_expect_timeout(url);
+}
+
+#[test]
+fn read_timeout_during_body() {
+    let server = TestServer::new(|stream| dribble_body_respond(stream, &[b'a'; 300]));
+    let url = format!("http://localhost:{}/", server.port);
+    let agent = Agent::default().build();
+    let resp = agent.get(&url).timeout_read(5).call();
+    match resp.into_string() {
+        Err(io_error) => match io_error.kind() {
+            io::ErrorKind::TimedOut => Ok(()),
+            _ => Err(format!("{:?}", io_error)),
+        },
+        Ok(_) => Err("successful response".to_string()),
+    }
+    .expect("expected timeout but got something else");
 }
 
 // Send HTTP headers on the TcpStream at a rate of one header every 100
