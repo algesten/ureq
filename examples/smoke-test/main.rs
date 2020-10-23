@@ -1,11 +1,10 @@
-use chrono::Local;
-use rayon::prelude::*;
-
 use std::io::{self, BufRead, BufReader, Read};
-use std::iter::Iterator;
+use std::sync::{Arc, Mutex};
+use std::thread::{self, JoinHandle};
 use std::time::Duration;
 use std::{env, error, fmt, result};
 
+use log::{error, info};
 use ureq;
 
 #[derive(Debug)]
@@ -23,12 +22,6 @@ impl From<ureq::Error> for Oops {
     }
 }
 
-impl From<rayon_core::ThreadPoolBuildError> for Oops {
-    fn from(e: rayon_core::ThreadPoolBuildError) -> Oops {
-        Oops(e.to_string())
-    }
-}
-
 impl error::Error for Oops {}
 
 impl fmt::Display for Oops {
@@ -39,7 +32,7 @@ impl fmt::Display for Oops {
 
 type Result<T> = result::Result<T, Oops>;
 
-fn get(agent: &ureq::Agent, url: &String) -> Result<Vec<u8>> {
+fn get(agent: &ureq::Agent, url: &str) -> Result<Vec<u8>> {
     let response = agent
         .get(url)
         .timeout_connect(std::time::Duration::from_secs(5))
@@ -51,23 +44,36 @@ fn get(agent: &ureq::Agent, url: &String) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
-fn get_and_write(agent: &ureq::Agent, url: &String) -> Result<()> {
-    println!("🕷️ {} {}", Local::now(), url);
+fn get_and_write(agent: &ureq::Agent, url: &str) {
+    info!("🕷️ {}", url);
     match get(agent, url) {
-        Ok(_) => println!("✔️ {} {}", Local::now(), url),
-        Err(e) => println!("⚠️ {} {} {}", Local::now(), url, e),
+        Ok(_) => info!("✔️ {}", url),
+        Err(e) => error!("⚠️ {} {}", url, e),
     }
-    Ok(())
 }
 
 fn get_many(urls: Vec<String>, simultaneous_fetches: usize) -> Result<()> {
     let agent = ureq::Agent::default();
-    let pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(simultaneous_fetches)
-        .build()?;
-    pool.scope(|_| {
-        urls.par_iter().map(|u| get_and_write(&agent, u)).count();
-    });
+    let mutex = Arc::new(Mutex::new(urls));
+    let mut join_handles: Vec<JoinHandle<()>> = vec![];
+    for _ in 0..simultaneous_fetches {
+        let mutex = mutex.clone();
+        let agent = agent.clone();
+        join_handles.push(thread::spawn(move || loop {
+            let mut guard = mutex.lock().unwrap();
+            let u = match guard.pop() {
+                Some(u) => u,
+                None => return,
+            };
+
+            drop(guard);
+
+            get_and_write(&agent, &u);
+        }));
+    }
+    for h in join_handles {
+        h.join().map_err(|e| Oops(format!("{:?}", e)))?;
+    }
     Ok(())
 }
 
