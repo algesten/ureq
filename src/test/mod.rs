@@ -7,7 +7,6 @@ use std::sync::{Arc, Mutex};
 use std::{collections::HashMap, net::ToSocketAddrs};
 
 mod agent_test;
-mod auth;
 mod body_read;
 mod body_send;
 mod query_string;

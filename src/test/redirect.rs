@@ -29,7 +29,11 @@ fn redirect_many() {
     test::set_handler("/redirect_many2", |_| {
         test::make_response(302, "Go here", vec!["Location: /redirect_many3"], vec![])
     });
-    let result = get("test://host/redirect_many1").redirects(1).call();
+    let result = builder()
+        .redirects(1)
+        .build()
+        .get("test://host/redirect_many1")
+        .call();
     assert!(matches!(result, Err(Error::TooManyRedirects)));
 }
 
@@ -38,7 +42,11 @@ fn redirect_off() -> Result<(), Error> {
     test::set_handler("/redirect_off", |_| {
         test::make_response(302, "Go here", vec!["Location: somewhere.else"], vec![])
     });
-    let resp = get("test://host/redirect_off").redirects(0).call()?;
+    let resp = builder()
+        .redirects(0)
+        .build()
+        .get("test://host/redirect_off")
+        .call()?;
     assert_eq!(resp.status(), 302);
     assert!(resp.has("Location"));
     assert_eq!(resp.header("Location").unwrap(), "somewhere.else");
@@ -96,7 +104,7 @@ fn redirect_host() {
         Ok(())
     });
     let url = format!("http://localhost:{}/", srv.port);
-    let resp = crate::Agent::default().get(&url).call();
+    let resp = crate::Agent::new().get(&url).call();
     let err = resp.err();
     assert!(
         matches!(err, Some(Error::DnsFailed(_))),

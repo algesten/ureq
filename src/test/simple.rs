@@ -130,8 +130,7 @@ fn request_debug() {
     let req = get("http://localhost/my/page")
         .set("Authorization", "abcdef")
         .set("Content-Length", "1234")
-        .set("Content-Type", "application/json")
-        .build();
+        .set("Content-Type", "application/json");
 
     let s = format!("{:?}", req);
 
@@ -143,8 +142,7 @@ fn request_debug() {
 
     let req = get("http://localhost/my/page?q=z")
         .query("foo", "bar baz")
-        .set("Authorization", "abcdef")
-        .build();
+        .set("Authorization", "abcdef");
 
     let s = format!("{:?}", req);
 

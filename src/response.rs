@@ -189,7 +189,7 @@ impl Response {
             .unwrap_or(DEFAULT_CONTENT_TYPE)
     }
 
-    /// The character set part of the "Content-Type" header.native_tls
+    /// The character set part of the "Content-Type".
     ///
     /// Example:
     ///

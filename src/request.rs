@@ -1,13 +1,10 @@
 use std::fmt;
 use std::io::Read;
-#[cfg(any(feature = "native-tls", feature = "tls"))]
-use std::sync::Arc;
-use std::time;
 
 use qstring::QString;
 use url::{form_urlencoded, Url};
 
-use crate::agent::{self, Agent};
+use crate::agent::Agent;
 use crate::body::BodySize;
 use crate::body::{Payload, SizedReader};
 use crate::error::Error;
@@ -30,28 +27,14 @@ pub type Result<T> = std::result::Result<T, Error>;
 ///     .query("foo", "bar baz") // add ?foo=bar%20baz
 ///     .call();                 // run the request
 /// ```
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct Request {
     pub(crate) agent: Agent,
-
-    // via agent
     pub(crate) method: String,
     url: String,
-
-    // from request itself
     return_error_for_status: bool,
     pub(crate) headers: Vec<Header>,
     pub(crate) query: QString,
-    pub(crate) timeout_connect: Option<time::Duration>,
-    pub(crate) timeout_read: Option<time::Duration>,
-    pub(crate) timeout_write: Option<time::Duration>,
-    pub(crate) timeout: Option<time::Duration>,
-    pub(crate) redirects: u32,
-    pub(crate) proxy: Option<Proxy>,
-    #[cfg(feature = "tls")]
-    pub(crate) tls_config: Option<TLSClientConfig>,
-    #[cfg(all(feature = "native-tls", not(feature = "tls")))]
-    pub(crate) tls_connector: Option<TLSConnector>,
 }
 
 impl fmt::Debug for Request {
@@ -72,29 +55,16 @@ impl fmt::Debug for Request {
 }
 
 impl Request {
-    pub(crate) fn new(agent: &Agent, method: String, url: String) -> Request {
+    pub(crate) fn new(agent: Agent, method: String, url: String) -> Request {
+        let headers = agent.headers.clone();
         Request {
-            agent: agent.clone(),
+            agent,
             method,
             url,
-            headers: agent.headers.clone(),
-            redirects: 5,
+            headers,
             return_error_for_status: true,
-            ..Default::default()
+            query: QString::default(),
         }
-    }
-
-    /// "Builds" this request which is effectively the same as cloning.
-    /// This is needed when we use a chain of request builders, but
-    /// don't want to send the request at the end of the chain.
-    ///
-    /// ```
-    /// let r = ureq::get("/my_page")
-    ///     .set("X-Foo-Bar", "Baz")
-    ///     .build();
-    /// ```
-    pub fn build(&self) -> Request {
-        self.clone()
     }
 
     /// Executes the request and blocks the caller until done.
@@ -102,13 +72,15 @@ impl Request {
     /// Use `.timeout_connect()` and `.timeout_read()` to avoid blocking forever.
     ///
     /// ```
-    /// let r = ureq::get("/my_page")
+    /// let r = ureq::builder()
     ///     .timeout_connect(std::time::Duration::from_secs(10)) // max 10 seconds
+    ///     .build()
+    ///     .get("/my_page")
     ///     .call();
     ///
     /// println!("{:?}", r);
     /// ```
-    pub fn call(&mut self) -> Result<Response> {
+    pub fn call(self) -> Result<Response> {
         self.do_call(Payload::Empty)
     }
 
@@ -146,11 +118,12 @@ impl Request {
     /// }
     /// ```
     #[cfg(feature = "json")]
-    pub fn send_json(&mut self, data: SerdeValue) -> Result<Response> {
-        if self.header("Content-Type").is_none() {
-            self.set("Content-Type", "application/json");
+    pub fn send_json(self, data: SerdeValue) -> Result<Response> {
+        let mut this = self;
+        if this.header("Content-Type").is_none() {
+            this = this.set("Content-Type", "application/json");
         }
-        self.do_call(Payload::JSON(data))
+        this.do_call(Payload::JSON(data))
     }
 
     /// Send data as bytes.
@@ -163,7 +136,7 @@ impl Request {
     ///     .send_bytes(body);
     /// println!("{:?}", r);
     /// ```
-    pub fn send_bytes(&mut self, data: &[u8]) -> Result<Response> {
+    pub fn send_bytes(self, data: &[u8]) -> Result<Response> {
         self.do_call(Payload::Bytes(data.to_owned()))
     }
 
@@ -188,7 +161,7 @@ impl Request {
     ///     .send_string("Hällo Wörld!");
     /// println!("{:?}", r);
     /// ```
-    pub fn send_string(&mut self, data: &str) -> Result<Response> {
+    pub fn send_string(self, data: &str) -> Result<Response> {
         let text = data.into();
         let charset =
             crate::response::charset_from_content_type(self.header("content-type")).to_string();
@@ -210,14 +183,15 @@ impl Request {
     /// println!("{:?}", r);
     /// }
     /// ```
-    pub fn send_form(&mut self, data: &[(&str, &str)]) -> Result<Response> {
-        if self.header("Content-Type").is_none() {
-            self.set("Content-Type", "application/x-www-form-urlencoded");
+    pub fn send_form(self, data: &[(&str, &str)]) -> Result<Response> {
+        let mut this = self;
+        if this.header("Content-Type").is_none() {
+            this = this.set("Content-Type", "application/x-www-form-urlencoded");
         }
         let encoded = form_urlencoded::Serializer::new(String::new())
             .extend_pairs(data)
             .finish();
-        self.do_call(Payload::Bytes(encoded.into_bytes()))
+        this.do_call(Payload::Bytes(encoded.into_bytes()))
     }
 
     /// Send data from a reader.
@@ -238,7 +212,7 @@ impl Request {
     ///     .set("Content-Type", "text/plain")
     ///     .send(read);
     /// ```
-    pub fn send(&mut self, reader: impl Read + 'static) -> Result<Response> {
+    pub fn send(self, reader: impl Read + 'static) -> Result<Response> {
         self.do_call(Payload::Reader(Box::new(reader)))
     }
 
@@ -256,7 +230,7 @@ impl Request {
     ///      println!("Oh no error!");
     ///  }
     /// ```
-    pub fn set(&mut self, header: &str, value: &str) -> &mut Request {
+    pub fn set(mut self, header: &str, value: &str) -> Self {
         header::add_header(&mut self.headers, Header::new(header, value));
         self
     }
@@ -265,8 +239,7 @@ impl Request {
     ///
     /// ```
     /// let req = ureq::get("/my_page")
-    ///     .set("X-API-Key", "foobar")
-    ///     .build();
+    ///     .set("X-API-Key", "foobar");
     /// assert_eq!("foobar", req.header("x-api-Key").unwrap());
     /// ```
     pub fn header(&self, name: &str) -> Option<&str> {
@@ -278,8 +251,7 @@ impl Request {
     /// ```
     /// let req = ureq::get("/my_page")
     ///     .set("X-API-Key", "foobar")
-    ///     .set("Content-Type", "application/json")
-    ///     .build();
+    ///     .set("Content-Type", "application/json");
     /// assert_eq!(req.header_names(), vec!["x-api-key", "content-type"]);
     /// ```
     pub fn header_names(&self) -> Vec<String> {
@@ -293,8 +265,7 @@ impl Request {
     ///
     /// ```
     /// let req = ureq::get("/my_page")
-    ///     .set("X-API-Key", "foobar")
-    ///     .build();
+    ///     .set("X-API-Key", "foobar");
     /// assert_eq!(true, req.has("x-api-Key"));
     /// ```
     pub fn has(&self, name: &str) -> bool {
@@ -306,8 +277,8 @@ impl Request {
     /// ```
     /// let req = ureq::get("/my_page")
     ///     .set("X-Forwarded-For", "1.2.3.4")
-    ///     .set("X-Forwarded-For", "2.3.4.5")
-    ///     .build();
+    ///     .set("X-Forwarded-For", "2.3.4.5");
+    ///
     /// assert_eq!(req.all("x-forwarded-for"), vec![
     ///     "1.2.3.4",
     ///     "2.3.4.5",
@@ -329,7 +300,7 @@ impl Request {
     ///
     /// println!("{:?}", r);
     /// ```
-    pub fn query(&mut self, param: &str, value: &str) -> &mut Request {
+    pub fn query(mut self, param: &str, value: &str) -> Self {
         self.query.add_pair((param, value));
         self
     }
@@ -344,129 +315,8 @@ impl Request {
     ///     .call();
     /// println!("{:?}", r);
     /// ```
-    pub fn query_str(&mut self, query: &str) -> &mut Request {
+    pub fn query_str(mut self, query: &str) -> Self {
         self.query.add_str(query);
-        self
-    }
-
-    /// Timeout for the socket connection to be successful.
-    /// If both this and .timeout() are both set, .timeout_connect()
-    /// takes precedence.
-    ///
-    /// The default is `0`, which means a request can block forever.
-    ///
-    /// ```
-    /// let r = ureq::get("/my_page")
-    ///     .timeout(std::time::Duration::from_secs(1))
-    ///     .call();
-    /// println!("{:?}", r);
-    /// ```
-    pub fn timeout_connect(&mut self, timeout: time::Duration) -> &mut Request {
-        self.timeout_connect = Some(timeout);
-        self
-    }
-
-    /// Timeout for the individual reads of the socket.
-    /// If both this and .timeout() are both set, .timeout()
-    /// takes precedence.
-    ///
-    /// The default is `0`, which means it can block forever.
-    ///
-    /// ```
-    /// let r = ureq::get("/my_page")
-    ///     .timeout(std::time::Duration::from_secs(1))
-    ///     .call();
-    /// println!("{:?}", r);
-    /// ```
-    pub fn timeout_read(&mut self, timeout: time::Duration) -> &mut Request {
-        self.timeout_read = Some(timeout);
-        self
-    }
-
-    /// Timeout for the individual writes to the socket.
-    /// If both this and .timeout() are both set, .timeout()
-    /// takes precedence.
-    ///
-    /// The default is `0`, which means it can block forever.
-    ///
-    /// ```
-    /// let r = ureq::get("/my_page")
-    ///     .timeout(std::time::Duration::from_secs(1))
-    ///     .call();
-    /// println!("{:?}", r);
-    /// ```
-    pub fn timeout_write(&mut self, timeout: time::Duration) -> &mut Request {
-        self.timeout_write = Some(timeout);
-        self
-    }
-
-    /// Timeout for the overall request, including DNS resolution, connection
-    /// time, redirects, and reading the response body. Slow DNS resolution
-    /// may cause a request to exceed the timeout, because the DNS request
-    /// cannot be interrupted with the available APIs.
-    ///
-    /// This takes precedence over .timeout_read() and .timeout_write(), but
-    /// not .timeout_connect().
-    ///
-    /// ```
-    /// // wait max 1 second for whole request to complete.
-    /// let r = ureq::get("/my_page")
-    ///     .timeout(std::time::Duration::from_secs(1))
-    ///     .call();
-    /// println!("{:?}", r);
-    /// ```
-    pub fn timeout(&mut self, timeout: time::Duration) -> &mut Request {
-        self.timeout = Some(timeout);
-        self
-    }
-
-    /// Basic auth.
-    ///
-    /// These are the same
-    ///
-    /// ```
-    /// let r1 = ureq::get("http://localhost/my_page")
-    ///     .auth("martin", "rubbermashgum")
-    ///     .call();
-    ///  println!("{:?}", r1);
-    ///
-    /// let r2 = ureq::get("http://martin:rubbermashgum@localhost/my_page").call();
-    /// println!("{:?}", r2);
-    /// ```
-    pub fn auth(&mut self, user: &str, pass: &str) -> &mut Request {
-        let pass = agent::basic_auth(user, pass);
-        self.auth_kind("Basic", &pass)
-    }
-
-    /// Auth of other kinds such as `Digest`, `Token` etc.
-    ///
-    /// ```
-    /// let r = ureq::get("http://localhost/my_page")
-    ///     .auth_kind("token", "secret")
-    ///     .call();
-    /// println!("{:?}", r);
-    /// ```
-    pub fn auth_kind(&mut self, kind: &str, pass: &str) -> &mut Request {
-        let value = format!("{} {}", kind, pass);
-        self.set("Authorization", &value);
-        self
-    }
-
-    /// How many redirects to follow.
-    ///
-    /// Defaults to `5`. Set to `0` to avoid redirects and instead
-    /// get a response object with the 3xx status code.
-    ///
-    /// If the redirect count hits this limit (and it's > 0), TooManyRedirects is returned.
-    ///
-    /// ```
-    /// let r = ureq::get("/my_page")
-    ///     .redirects(10)
-    ///     .call();
-    /// println!("{:?}", r);
-    /// ```
-    pub fn redirects(&mut self, n: u32) -> &mut Request {
-        self.redirects = n;
         self
     }
 
@@ -484,7 +334,7 @@ impl Request {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn error_for_status(&mut self, value: bool) -> &mut Request {
+    pub fn error_for_status(mut self, value: bool) -> Self {
         self.return_error_for_status = value;
         self
     }
@@ -493,8 +343,7 @@ impl Request {
     ///
     /// Example:
     /// ```
-    /// let req = ureq::post("/somewhere")
-    ///     .build();
+    /// let req = ureq::post("/somewhere");
     /// assert_eq!(req.get_method(), "POST");
     /// ```
     pub fn get_method(&self) -> &str {
@@ -508,8 +357,7 @@ impl Request {
     ///
     /// Example:
     /// ```
-    /// let req = ureq::post("https://cool.server/innit")
-    ///     .build();
+    /// let req = ureq::post("https://cool.server/innit");
     /// assert_eq!(req.get_url(), "https://cool.server/innit");
     /// ```
     pub fn get_url(&self) -> &str {
@@ -520,12 +368,10 @@ impl Request {
     ///
     /// Example:
     /// ```
-    /// let req1 = ureq::post("https://cool.server/innit")
-    ///     .build();
+    /// let req1 = ureq::post("https://cool.server/innit");
     /// assert_eq!(req1.get_host().unwrap(), "cool.server");
     ///
-    /// let req2 = ureq::post("http://localhost/some/path")
-    ///     .build();
+    /// let req2 = ureq::post("http://localhost/some/path");
     /// assert_eq!(req2.get_host().unwrap(), "localhost");
     /// ```
     pub fn get_host(&self) -> Result<String> {
@@ -542,8 +388,7 @@ impl Request {
     ///
     /// Example:
     /// ```
-    /// let req = ureq::post("https://cool.server/innit")
-    ///     .build();
+    /// let req = ureq::post("https://cool.server/innit");
     /// assert_eq!(req.get_scheme().unwrap(), "https");
     /// ```
     pub fn get_scheme(&self) -> Result<String> {
@@ -555,8 +400,7 @@ impl Request {
     /// Example:
     /// ```
     /// let req = ureq::post("https://cool.server/innit?foo=bar")
-    ///     .query("format", "json")
-    ///     .build();
+    ///     .query("format", "json");
     /// assert_eq!(req.get_query().unwrap(), "?foo=bar&format=json");
     /// ```
     pub fn get_query(&self) -> Result<String> {
@@ -568,8 +412,7 @@ impl Request {
     ///
     /// Example:
     /// ```
-    /// let req = ureq::post("https://cool.server/innit")
-    ///     .build();
+    /// let req = ureq::post("https://cool.server/innit");
     /// assert_eq!(req.get_path().unwrap(), "/innit");
     /// ```
     pub fn get_path(&self) -> Result<String> {
@@ -580,61 +423,12 @@ impl Request {
         Url::parse(&self.url).map_err(|e| Error::BadUrl(format!("{}", e)))
     }
 
-    /// Set the proxy server to use for the connection.
-    ///
-    /// Example:
-    /// ```
-    /// let proxy = ureq::Proxy::new("user:password@cool.proxy:9090").unwrap();
-    /// let req = ureq::post("https://cool.server")
-    ///     .set_proxy(proxy)
-    ///     .build();
-    /// ```
-    pub fn set_proxy(&mut self, proxy: Proxy) -> &mut Request {
-        self.proxy = Some(proxy);
-        self
-    }
-
     pub(crate) fn proxy(&self) -> Option<Proxy> {
-        if let Some(proxy) = &self.proxy {
-            Some(proxy.clone())
-        } else if let Some(proxy) = &self.agent.state.proxy {
+        if let Some(proxy) = &self.agent.state.proxy {
             Some(proxy.clone())
         } else {
             None
         }
-    }
-
-    /// Set the TLS client config to use for the connection. See [`ClientConfig`](https://docs.rs/rustls/latest/rustls/struct.ClientConfig.html).
-    ///
-    /// See [`ClientConfig`](https://docs.rs/rustls/latest/rustls/struct.ClientConfig.html).
-    ///
-    /// Example:
-    /// ```
-    /// let tls_config = std::sync::Arc::new(rustls::ClientConfig::new());
-    /// let req = ureq::post("https://cool.server")
-    ///     .set_tls_config(tls_config.clone());
-    /// ```
-    #[cfg(feature = "tls")]
-    pub fn set_tls_config(&mut self, tls_config: Arc<rustls::ClientConfig>) -> &mut Request {
-        self.tls_config = Some(TLSClientConfig(tls_config));
-        self
-    }
-
-    /// Sets the TLS connector that will be used for the connection.
-    ///
-    /// Example:
-    /// ```
-    /// let tls_connector = std::sync::Arc::new(native_tls::TlsConnector::new().unwrap());
-    /// let req = ureq::post("https://cool.server")
-    ///     .set_tls_connector(tls_connector.clone());
-    /// ```
-    #[cfg(all(feature = "native-tls", not(feature = "tls")))]
-    pub fn set_tls_connector(
-        &mut self,
-        tls_connector: Arc<native_tls::TlsConnector>,
-    ) -> &mut Request {
-        self.tls_connector = Some(TLSConnector(tls_connector));
-        self
     }
 
     // Returns true if this request, with the provided body, is retryable.
@@ -660,32 +454,10 @@ impl Request {
     }
 }
 
-#[cfg(feature = "tls")]
-#[derive(Clone)]
-pub(crate) struct TLSClientConfig(pub(crate) Arc<rustls::ClientConfig>);
-
-#[cfg(feature = "tls")]
-impl fmt::Debug for TLSClientConfig {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("TLSClientConfig").finish()
-    }
-}
-
-#[cfg(all(feature = "native-tls", not(feature = "tls")))]
-#[derive(Clone)]
-pub(crate) struct TLSConnector(pub(crate) Arc<native_tls::TlsConnector>);
-
-#[cfg(all(feature = "native-tls", not(feature = "tls")))]
-impl fmt::Debug for TLSConnector {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("TLSConnector").finish()
-    }
-}
-
 #[test]
 fn no_hostname() {
     let req = Request::new(
-        &Agent::default(),
+        Agent::new(),
         "GET".to_string(),
         "unix:/run/foo.socket".to_string(),
     );
@@ -695,12 +467,12 @@ fn no_hostname() {
 #[test]
 fn request_implements_send_and_sync() {
     let _request: Box<dyn Send> = Box::new(Request::new(
-        &Agent::default(),
+        Agent::new(),
         "GET".to_string(),
         "https://example.com/".to_string(),
     ));
     let _request: Box<dyn Sync> = Box::new(Request::new(
-        &Agent::default(),
+        Agent::new(),
         "GET".to_string(),
         "https://example.com/".to_string(),
     ));

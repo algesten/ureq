@@ -11,12 +11,12 @@ fn agent_set_cookie() {
         headers: HashMap<String, String>,
     }
 
-    let agent = ureq::Agent::default().build();
+    let agent = ureq::Agent::new();
     let cookie = ureq::Cookie::build("name", "value")
         .domain("httpbin.org")
         .secure(true)
         .finish();
-    agent.set_cookie(cookie);
+    agent.set_cookie(cookie, &"https://httpbin.org/".parse().unwrap());
     let resp = agent
         .get("https://httpbin.org/get")
         .set("Connection", "close")
@@ -102,8 +102,6 @@ m0Wqhhi8/24Sy934t5Txgkfoltg8ahkx934WjP6WWRnSAu+cf+vW
 #[cfg(feature = "tls")]
 #[test]
 fn tls_client_certificate() {
-    let agent = ureq::Agent::default();
-
     let mut tls_config = rustls::ClientConfig::new();
 
     let certs = rustls::internal::pemfile::certs(&mut BADSSL_CLIENT_CERT_PEM.as_bytes()).unwrap();
@@ -116,11 +114,11 @@ fn tls_client_certificate() {
         .root_store
         .add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
 
-    let resp = agent
-        .get("https://client.badssl.com/")
+    let agent = ureq::builder()
         .set_tls_config(std::sync::Arc::new(tls_config))
-        .call()
-        .unwrap();
+        .build();
+
+    let resp = agent.get("https://client.badssl.com/").call().unwrap();
 
     assert_eq!(resp.status(), 200);
 }
