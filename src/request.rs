@@ -153,7 +153,7 @@ impl Request {
     /// println!("{:?}", r);
     /// ```
     pub fn send_bytes(&mut self, data: &[u8]) -> Response {
-        self.do_call(Payload::Bytes(data.to_owned()))
+        self.do_call(Payload::Bytes(data))
     }
 
     /// Send data as a string.
@@ -178,10 +178,9 @@ impl Request {
     /// println!("{:?}", r);
     /// ```
     pub fn send_string(&mut self, data: &str) -> Response {
-        let text = data.into();
         let charset =
             crate::response::charset_from_content_type(self.header("content-type")).to_string();
-        self.do_call(Payload::Text(text, charset))
+        self.do_call(Payload::Text(data, charset))
     }
 
     /// Send a sequence of (key, value) pairs as form-urlencoded data.
@@ -206,7 +205,7 @@ impl Request {
         let encoded = form_urlencoded::Serializer::new(String::new())
             .extend_pairs(data)
             .finish();
-        self.do_call(Payload::Bytes(encoded.into_bytes()))
+        self.do_call(Payload::Bytes(&encoded.into_bytes()))
     }
 
     /// Send data from a reader.
@@ -227,7 +226,7 @@ impl Request {
     ///     .set("Content-Type", "text/plain")
     ///     .send(read);
     /// ```
-    pub fn send(&mut self, reader: impl Read + 'static) -> Response {
+    pub fn send(&mut self, reader: impl Read) -> Response {
         self.do_call(Payload::Reader(Box::new(reader)))
     }
 
@@ -667,4 +666,10 @@ fn no_hostname() {
         "unix:/run/foo.socket".to_string(),
     );
     assert!(req.get_host().is_err());
+}
+
+#[test]
+fn send_byte_slice() {
+    let bytes = vec![1, 2, 3];
+    crate::agent().post("http://example.com").send(&bytes[1..2]);
 }
