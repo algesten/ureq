@@ -5,16 +5,10 @@ use crate::pool::ConnectionPool;
 use crate::proxy::Proxy;
 use crate::request::Request;
 use crate::resolve::{ArcResolver, StdResolver};
-use std::time;
+use std::time::Duration;
 
 #[cfg(feature = "cookies")]
-use crate::cookies::CookieTin;
-#[cfg(feature = "cookies")]
-use cookie::Cookie;
-#[cfg(feature = "cookies")]
-use cookie_store::CookieStore;
-#[cfg(feature = "cookies")]
-use url::Url;
+use {crate::cookies::CookieTin, cookie::Cookie, cookie_store::CookieStore, url::Url};
 
 #[derive(Debug)]
 pub struct AgentBuilder {
@@ -33,10 +27,10 @@ pub(crate) struct AgentConfig {
     pub max_idle_connections: usize,
     pub max_idle_connections_per_host: usize,
     pub proxy: Option<Proxy>,
-    pub timeout_connect: Option<time::Duration>,
-    pub timeout_read: Option<time::Duration>,
-    pub timeout_write: Option<time::Duration>,
-    pub timeout: Option<time::Duration>,
+    pub timeout_connect: Option<Duration>,
+    pub timeout_read: Option<Duration>,
+    pub timeout_write: Option<Duration>,
+    pub timeout: Option<Duration>,
     pub redirects: u32,
     #[cfg(feature = "tls")]
     pub tls_config: Option<TLSClientConfig>,
@@ -207,7 +201,7 @@ impl AgentBuilder {
                 max_idle_connections: crate::pool::DEFAULT_MAX_IDLE_CONNECTIONS,
                 max_idle_connections_per_host: crate::pool::DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST,
                 proxy: None,
-                timeout_connect: Some(time::Duration::from_secs(30)),
+                timeout_connect: Some(Duration::from_secs(30)),
                 timeout_read: None,
                 timeout_write: None,
                 timeout: None,
@@ -343,7 +337,7 @@ impl AgentBuilder {
     ///     .build();
     /// let r = agent.get("/my_page").call();
     /// ```
-    pub fn timeout_connect(mut self, timeout: time::Duration) -> Self {
+    pub fn timeout_connect(mut self, timeout: Duration) -> Self {
         self.config.timeout_connect = Some(timeout);
         self
     }
@@ -360,7 +354,7 @@ impl AgentBuilder {
     ///     .build();
     /// let r = agent.get("/my_page").call();
     /// ```
-    pub fn timeout_read(mut self, timeout: time::Duration) -> Self {
+    pub fn timeout_read(mut self, timeout: Duration) -> Self {
         self.config.timeout_read = Some(timeout);
         self
     }
@@ -377,7 +371,7 @@ impl AgentBuilder {
     ///     .build();
     /// let r = agent.get("/my_page").call();
     /// ```
-    pub fn timeout_write(mut self, timeout: time::Duration) -> Self {
+    pub fn timeout_write(mut self, timeout: Duration) -> Self {
         self.config.timeout_write = Some(timeout);
         self
     }
@@ -397,7 +391,7 @@ impl AgentBuilder {
     ///     .build();
     /// let r = agent.get("/my_page").call();
     /// ```
-    pub fn timeout(mut self, timeout: time::Duration) -> Self {
+    pub fn timeout(mut self, timeout: Duration) -> Self {
         self.config.timeout = Some(timeout);
         self
     }
@@ -423,8 +417,6 @@ impl AgentBuilder {
     }
 
     /// Set the TLS client config to use for the connection. See [`ClientConfig`](https://docs.rs/rustls/latest/rustls/struct.ClientConfig.html).
-    ///
-    /// See [`ClientConfig`](https://docs.rs/rustls/latest/rustls/struct.ClientConfig.html).
     ///
     /// Example:
     /// ```
