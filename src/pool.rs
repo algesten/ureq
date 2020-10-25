@@ -9,8 +9,8 @@ use crate::Proxy;
 
 use url::Url;
 
-const DEFAULT_MAX_IDLE_CONNECTIONS: usize = 100;
-const DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST: usize = 1;
+pub const DEFAULT_MAX_IDLE_CONNECTIONS: usize = 100;
+pub const DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST: usize = 1;
 
 /// Holder of recycled connections.
 ///
@@ -74,25 +74,23 @@ fn remove_last_match(list: &mut VecDeque<PoolKey>, key: &PoolKey) -> Option<Pool
     }
 }
 
-impl Default for ConnectionPool {
-    fn default() -> Self {
-        Self {
-            max_idle_connections: DEFAULT_MAX_IDLE_CONNECTIONS,
-            max_idle_connections_per_host: DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST,
-            inner: Mutex::new(Inner {
-                recycle: HashMap::default(),
-                lru: VecDeque::default(),
-            }),
-        }
-    }
-}
-
 impl ConnectionPool {
-    pub(crate) fn new(max_idle_connections: usize, max_idle_connections_per_host: usize) -> Self {
+    #[cfg(test)]
+    pub(crate) fn new() -> Self {
+        Self::new_with_limits(
+            DEFAULT_MAX_IDLE_CONNECTIONS,
+            DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST,
+        )
+    }
+
+    pub(crate) fn new_with_limits(
+        max_idle_connections: usize,
+        max_idle_connections_per_host: usize,
+    ) -> Self {
         ConnectionPool {
             inner: Mutex::new(Inner {
-                recycle: HashMap::default(),
-                lru: VecDeque::default(),
+                recycle: HashMap::new(),
+                lru: VecDeque::new(),
             }),
             max_idle_connections,
             max_idle_connections_per_host,
@@ -105,7 +103,7 @@ impl ConnectionPool {
     }
 
     /// How the unit::connect tries to get a pooled connection.
-    pub fn try_get_connection(&self, url: &Url, proxy: &Option<Proxy>) -> Option<Stream> {
+    pub fn try_get_connection(&self, url: &Url, proxy: Option<Proxy>) -> Option<Stream> {
         let key = PoolKey::new(url, proxy);
         self.remove(&key)
     }
@@ -211,13 +209,13 @@ impl fmt::Debug for PoolKey {
 }
 
 impl PoolKey {
-    fn new(url: &Url, proxy: &Option<Proxy>) -> Self {
+    fn new(url: &Url, proxy: Option<Proxy>) -> Self {
         let port = url.port_or_known_default();
         PoolKey {
             scheme: url.scheme().to_string(),
             hostname: url.host_str().unwrap_or("").to_string(),
             port,
-            proxy: proxy.clone(),
+            proxy: proxy,
         }
     }
 }
@@ -225,7 +223,7 @@ impl PoolKey {
 #[test]
 fn poolkey_new() {
     // Test that PoolKey::new() does not panic on unrecognized schemes.
-    PoolKey::new(&Url::parse("zzz:///example.com").unwrap(), &None);
+    PoolKey::new(&Url::parse("zzz:///example.com").unwrap(), None);
 }
 
 #[test]
@@ -233,7 +231,7 @@ fn pool_connections_limit() {
     // Test inserting connections with different keys into the pool,
     // filling and draining it. The pool should evict earlier connections
     // when the connection limit is reached.
-    let pool = ConnectionPool::default();
+    let pool = ConnectionPool::new();
     let hostnames = (0..DEFAULT_MAX_IDLE_CONNECTIONS * 2).map(|i| format!("{}.example", i));
     let poolkeys = hostnames.map(|hostname| PoolKey {
         scheme: "https".to_string(),
@@ -258,7 +256,7 @@ fn pool_per_host_connections_limit() {
     // Test inserting connections with the same key into the pool,
     // filling and draining it. The pool should evict earlier connections
     // when the per-host connection limit is reached.
-    let pool = ConnectionPool::default();
+    let pool = ConnectionPool::new();
     let poolkey = PoolKey {
         scheme: "https".to_string(),
         hostname: "example.com".to_string(),
@@ -285,17 +283,17 @@ fn pool_per_host_connections_limit() {
 fn pool_checks_proxy() {
     // Test inserting different poolkeys with same address but different proxies.
     // Each insertion should result in an additional entry in the pool.
-    let pool = ConnectionPool::default();
+    let pool = ConnectionPool::new();
     let url = Url::parse("zzz:///example.com").unwrap();
 
     pool.add(
-        PoolKey::new(&url, &None),
+        PoolKey::new(&url, None),
         Stream::Cursor(std::io::Cursor::new(vec![])),
     );
     assert_eq!(pool.len(), 1);
 
     pool.add(
-        PoolKey::new(&url, &Some(Proxy::new("localhost:9999").unwrap())),
+        PoolKey::new(&url, Some(Proxy::new("localhost:9999").unwrap())),
         Stream::Cursor(std::io::Cursor::new(vec![])),
     );
     assert_eq!(pool.len(), 2);
@@ -303,7 +301,7 @@ fn pool_checks_proxy() {
     pool.add(
         PoolKey::new(
             &url,
-            &Some(Proxy::new("user:password@localhost:9999").unwrap()),
+            Some(Proxy::new("user:password@localhost:9999").unwrap()),
         ),
         Stream::Cursor(std::io::Cursor::new(vec![])),
     );
@@ -343,7 +341,7 @@ impl<R: Read + Sized + Into<Stream>> PoolReturnRead<R> {
             stream.reset()?;
 
             // insert back into pool
-            let key = PoolKey::new(&unit.url, &unit.req.proxy);
+            let key = PoolKey::new(&unit.url, unit.req.proxy());
             unit.req.agent.state.pool.add(key, stream);
         }
 

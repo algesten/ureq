@@ -10,9 +10,7 @@ use super::super::*;
 
 #[test]
 fn agent_reuse_headers() {
-    let agent = AgentBuilder::new()
-        .set("Authorization", "Foo 12345")
-        .build();
+    let agent = builder().set("Authorization", "Foo 12345").build();
 
     test::set_handler("/agent_reuse_headers", |unit| {
         assert!(unit.has("Authorization"));
@@ -46,7 +44,7 @@ fn idle_timeout_handler(mut stream: TcpStream) -> io::Result<()> {
 fn connection_reuse() {
     let testserver = TestServer::new(idle_timeout_handler);
     let url = format!("http://localhost:{}", testserver.port);
-    let agent = Agent::default();
+    let agent = Agent::new();
     let resp = agent.get(&url).call().unwrap();
 
     // use up the connection so it gets returned to the pool
@@ -96,7 +94,7 @@ fn custom_resolver() {
     assert_eq!(&server.join().unwrap(), b"GET / HTTP/1.1\r\n");
 }
 
-#[cfg(feature = "cookie")]
+#[cfg(feature = "cookies")]
 #[cfg(test)]
 fn cookie_and_redirect(mut stream: TcpStream) -> io::Result<()> {
     let headers = read_headers(&stream);
@@ -139,14 +137,14 @@ fn cookie_and_redirect(mut stream: TcpStream) -> io::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "cookie")]
+#[cfg(feature = "cookies")]
 #[test]
 fn test_cookies_on_redirect() -> Result<(), Error> {
     let testserver = TestServer::new(cookie_and_redirect);
     let url = format!("http://localhost:{}/first", testserver.port);
-    let agent = Agent::default();
+    let agent = Agent::new();
     agent.post(&url).call()?;
-    let cookies = agent.state.jar.get_request_cookies(
+    let cookies = agent.state.cookie_tin.get_request_cookies(
         &format!("https://localhost:{}/", testserver.port)
             .parse()
             .unwrap(),
@@ -166,17 +164,17 @@ fn dirty_streams_not_returned() -> Result<(), Error> {
         stream.write_all(b"\r\n")?;
         stream.write_all(b"5\r\n")?;
         stream.write_all(b"corgi\r\n")?;
-        stream.write_all(b"8\r\n")?;
-        stream.write_all(b"dachsund\r\n")?;
+        stream.write_all(b"9\r\n")?;
+        stream.write_all(b"dachshund\r\n")?;
         stream.write_all(b"0\r\n")?;
         stream.write_all(b"\r\n")?;
         Ok(())
     });
     let url = format!("http://localhost:{}/", testserver.port);
-    let agent = Agent::default();
+    let agent = Agent::new();
     let resp = agent.get(&url).call()?;
     let resp_str = resp.into_string()?;
-    assert_eq!(resp_str, "corgidachsund");
+    assert_eq!(resp_str, "corgidachshund");
 
     // Now fetch it again, but only read part of the body.
     let resp_to_be_dropped = agent.get(&url).call()?;

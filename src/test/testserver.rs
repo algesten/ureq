@@ -13,7 +13,7 @@ pub struct TestHeaders(Vec<String>);
 
 impl TestHeaders {
     // Return the path for a request, e.g. /foo from "GET /foo HTTP/1.1"
-    #[cfg(feature = "cookie")]
+    #[cfg(feature = "cookies")]
     pub fn path(&self) -> &str {
         if self.0.len() == 0 {
             ""
@@ -22,7 +22,7 @@ impl TestHeaders {
         }
     }
 
-    #[cfg(feature = "cookie")]
+    #[cfg(feature = "cookies")]
     pub fn headers(&self) -> &[String] {
         &self.0[1..]
     }
@@ -57,12 +57,12 @@ impl TestServer {
                     eprintln!("testserver: handling just-accepted stream: {}", e);
                     break;
                 }
-                thread::spawn(move || handler(stream.unwrap()));
-                if done.load(Ordering::Relaxed) {
+                if done.load(Ordering::SeqCst) {
                     break;
+                } else {
+                    thread::spawn(move || handler(stream.unwrap()));
                 }
             }
-            println!("testserver on {} exiting", port);
         });
         TestServer {
             port,
@@ -73,7 +73,7 @@ impl TestServer {
 
 impl Drop for TestServer {
     fn drop(&mut self) {
-        self.done.store(true, Ordering::Relaxed);
+        self.done.store(true, Ordering::SeqCst);
         // Connect once to unblock the listen loop.
         TcpStream::connect(format!("localhost:{}", self.port)).unwrap();
     }
