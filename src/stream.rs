@@ -162,6 +162,14 @@ impl Stream {
         }
     }
 
+    pub(crate) fn set_read_timeout(&self, timeout: Option<Duration>) -> io::Result<()> {
+        if let Some(socket) = self.socket() {
+            socket.set_read_timeout(timeout)
+        } else {
+            Ok(())
+        }
+    }
+
     #[cfg(test)]
     pub fn to_write_vec(&self) -> Vec<u8> {
         match self {
@@ -324,7 +332,7 @@ pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error
 }
 
 pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<TcpStream, Error> {
-    let deadline: Option<Instant> =
+    let connect_deadline: Option<Instant> =
         if let Some(timeout_connect) = unit.req.agent.config.timeout_connect {
             Instant::now().checked_add(timeout_connect)
         } else {
@@ -357,7 +365,7 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
     // Find the first sock_addr that accepts a connection
     for sock_addr in sock_addrs {
         // ensure connect timeout or overall timeout aren't yet hit.
-        let timeout = match deadline {
+        let timeout = match connect_deadline {
             Some(deadline) => Some(time_until_deadline(deadline)?),
             None => None,
         };
@@ -368,7 +376,7 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
             connect_socks5(
                 &unit,
                 proxy.clone().unwrap(),
-                deadline,
+                connect_deadline,
                 sock_addr,
                 hostname,
                 port,
@@ -394,20 +402,16 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         return Err(err);
     };
 
-    if let Some(deadline) = deadline {
+    if let Some(deadline) = unit.deadline {
         stream.set_read_timeout(Some(time_until_deadline(deadline)?))?;
-    } else if let Some(timeout_read) = unit.req.agent.config.timeout_read {
-        stream.set_read_timeout(Some(timeout_read))?;
     } else {
-        stream.set_read_timeout(None)?;
+        stream.set_read_timeout(unit.req.agent.config.timeout_read)?;
     }
 
-    if let Some(deadline) = deadline {
+    if let Some(deadline) = unit.deadline {
         stream.set_write_timeout(Some(time_until_deadline(deadline)?))?;
-    } else if let Some(timeout_write) = unit.req.agent.config.timeout_write {
-        stream.set_write_timeout(Some(timeout_write)).ok();
     } else {
-        stream.set_write_timeout(None)?;
+        stream.set_write_timeout(unit.req.agent.config.timeout_write)?;
     }
 
     if proto == Some(Proto::HTTPConnect) {
