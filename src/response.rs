@@ -1,7 +1,6 @@
 use std::fmt;
 use std::io::{self, Cursor, ErrorKind, Read};
 use std::str::FromStr;
-use std::time::Instant;
 
 use chunked_transfer::Decoder as ChunkDecoder;
 
@@ -47,7 +46,6 @@ pub struct Response {
     headers: Vec<Header>,
     unit: Option<Unit>,
     stream: Option<Stream>,
-    deadline: Option<Instant>,
 }
 
 /// index into status_line where we split: HTTP/1.1 200 OK
@@ -267,12 +265,17 @@ impl Response {
 
         let stream = self.stream.expect("No reader in response?!");
         let unit = self.unit;
+        if let Some(unit) = &unit {
+            let result = stream.set_read_timeout(unit.req.agent.config.timeout_read);
+            if let Err(e) = result {
+                return Box::new(ErrorReader(e)) as Box<dyn Read + Send>;
+            }
+        }
         let deadline = unit.as_ref().and_then(|u| u.deadline);
         let stream = DeadlineStream::new(stream, deadline);
 
         match (use_chunked, limit_bytes) {
-            (true, _) => Box::new(PoolReturnRead::new(unit, ChunkDecoder::new(stream)))
-                as Box<dyn Read + Send>,
+            (true, _) => Box::new(PoolReturnRead::new(unit, ChunkDecoder::new(stream))),
             (false, Some(len)) => {
                 Box::new(PoolReturnRead::new(unit, LimitedRead::new(stream, len)))
             }
@@ -438,7 +441,6 @@ impl Response {
             headers,
             unit: None,
             stream: None,
-            deadline: None,
         })
     }
 
@@ -507,9 +509,6 @@ impl FromStr for Response {
 /// *Internal API*
 pub(crate) fn set_stream(resp: &mut Response, url: String, unit: Option<Unit>, stream: Stream) {
     resp.url = Some(url);
-    if let Some(unit) = &unit {
-        resp.deadline = unit.deadline;
-    }
     resp.unit = unit;
     resp.stream = Some(stream);
 }
@@ -728,5 +727,16 @@ mod tests {
         let s = "HTTP/1.1 BORKED\r\n".to_string();
         let err = s.parse::<Response>().unwrap_err();
         assert!(matches!(err, Error::BadStatus));
+    }
+}
+
+// ErrorReader returns an error for every read.
+// The error is as close to a clone of the underlying
+// io::Error as we can get.
+struct ErrorReader(io::Error);
+
+impl Read for ErrorReader {
+    fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
+        Err(io::Error::new(self.0.kind(), self.0.to_string()))
     }
 }
