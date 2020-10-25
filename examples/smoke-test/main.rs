@@ -58,7 +58,7 @@ fn get_and_write(agent: &ureq::Agent, url: &String) -> Result<()> {
 
 fn get_many(urls: Vec<String>, simultaneous_fetches: usize) -> Result<()> {
     let agent = ureq::builder()
-        .timeout_connect(std::time::Duration::from_secs(5))
+        .timeout_connect(Duration::from_secs(5))
         .timeout(Duration::from_secs(20))
         .build();
     let pool = rayon::ThreadPoolBuilder::new()
