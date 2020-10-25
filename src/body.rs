@@ -15,16 +15,16 @@ use super::SerdeValue;
 /// The different kinds of bodies to send.
 ///
 /// *Internal API*
-pub(crate) enum Payload {
+pub(crate) enum Payload<'a> {
     Empty,
     Text(String, String),
     #[cfg(feature = "json")]
     JSON(SerdeValue),
-    Reader(Box<dyn Read + 'static>),
+    Reader(Box<dyn Read + 'a>),
     Bytes(Vec<u8>),
 }
 
-impl fmt::Debug for Payload {
+impl fmt::Debug for Payload<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Payload::Empty => write!(f, "Empty"),
@@ -37,8 +37,8 @@ impl fmt::Debug for Payload {
     }
 }
 
-impl Default for Payload {
-    fn default() -> Payload {
+impl Default for Payload<'_> {
+    fn default() -> Self {
         Payload::Empty
     }
 }
@@ -56,25 +56,25 @@ pub(crate) enum BodySize {
 /// Payloads are turned into this type where we can hold both a size and the reader.
 ///
 /// *Internal API*
-pub(crate) struct SizedReader {
+pub(crate) struct SizedReader<'a> {
     pub size: BodySize,
-    pub reader: Box<dyn Read + 'static>,
+    pub reader: Box<dyn Read + 'a>,
 }
 
-impl fmt::Debug for SizedReader {
+impl fmt::Debug for SizedReader<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "SizedReader[size={:?},reader]", self.size)
     }
 }
 
-impl SizedReader {
-    fn new(size: BodySize, reader: Box<dyn Read + 'static>) -> Self {
+impl<'a> SizedReader<'a> {
+    fn new(size: BodySize, reader: Box<dyn Read + 'a>) -> Self {
         SizedReader { size, reader }
     }
 }
 
-impl Payload {
-    pub fn into_read(self) -> SizedReader {
+impl<'a> Payload<'a> {
+    pub fn into_read(self) -> SizedReader<'a> {
         match self {
             Payload::Empty => SizedReader::new(BodySize::Empty, Box::new(empty())),
             Payload::Text(text, _charset) => {
