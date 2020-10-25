@@ -17,11 +17,11 @@ use super::SerdeValue;
 /// *Internal API*
 pub(crate) enum Payload<'a> {
     Empty,
-    Text(String, String),
+    Text(&'a str, String),
     #[cfg(feature = "json")]
     JSON(SerdeValue),
     Reader(Box<dyn Read + 'a>),
-    Bytes(Vec<u8>),
+    Bytes(&'a [u8]),
 }
 
 impl fmt::Debug for Payload<'_> {
@@ -86,7 +86,7 @@ impl<'a> Payload<'a> {
                     encoding.encode(&text, EncoderTrap::Replace).unwrap()
                 };
                 #[cfg(not(feature = "charset"))]
-                let bytes = text.into_bytes();
+                let bytes = text.as_bytes();
                 let len = bytes.len();
                 let cursor = Cursor::new(bytes);
                 SizedReader::new(BodySize::Known(len as u64), Box::new(cursor))
