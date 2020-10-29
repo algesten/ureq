@@ -137,7 +137,7 @@ impl Request {
     /// println!("{:?}", r);
     /// ```
     pub fn send_bytes(self, data: &[u8]) -> Result<Response> {
-        self.do_call(Payload::Bytes(data.to_owned()))
+        self.do_call(Payload::Bytes(data))
     }
 
     /// Send data as a string.
@@ -162,10 +162,9 @@ impl Request {
     /// println!("{:?}", r);
     /// ```
     pub fn send_string(self, data: &str) -> Result<Response> {
-        let text = data.into();
         let charset =
             crate::response::charset_from_content_type(self.header("content-type")).to_string();
-        self.do_call(Payload::Text(text, charset))
+        self.do_call(Payload::Text(data, charset))
     }
 
     /// Send a sequence of (key, value) pairs as form-urlencoded data.
@@ -191,7 +190,7 @@ impl Request {
         let encoded = form_urlencoded::Serializer::new(String::new())
             .extend_pairs(data)
             .finish();
-        this.do_call(Payload::Bytes(encoded.into_bytes()))
+        this.do_call(Payload::Bytes(&encoded.into_bytes()))
     }
 
     /// Send data from a reader.
@@ -212,7 +211,7 @@ impl Request {
     ///     .set("Content-Type", "text/plain")
     ///     .send(read);
     /// ```
-    pub fn send(self, reader: impl Read + 'static) -> Result<Response> {
+    pub fn send(self, reader: impl Read) -> Result<Response> {
         self.do_call(Payload::Reader(Box::new(reader)))
     }
 
@@ -476,4 +475,13 @@ fn request_implements_send_and_sync() {
         "GET".to_string(),
         "https://example.com/".to_string(),
     ));
+}
+
+#[test]
+fn send_byte_slice() {
+    let bytes = vec![1, 2, 3];
+    crate::agent()
+        .post("http://example.com")
+        .send(&bytes[1..2])
+        .ok();
 }
