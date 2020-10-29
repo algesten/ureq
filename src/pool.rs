@@ -9,9 +9,6 @@ use crate::Proxy;
 
 use url::Url;
 
-pub const DEFAULT_MAX_IDLE_CONNECTIONS: usize = 100;
-pub const DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST: usize = 1;
-
 /// Holder of recycled connections.
 ///
 /// For each PoolKey (approximately hostname and port), there may be
@@ -75,14 +72,6 @@ fn remove_last_match(list: &mut VecDeque<PoolKey>, key: &PoolKey) -> Option<Pool
 }
 
 impl ConnectionPool {
-    #[cfg(test)]
-    pub(crate) fn new() -> Self {
-        Self::new_with_limits(
-            DEFAULT_MAX_IDLE_CONNECTIONS,
-            DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST,
-        )
-    }
-
     pub(crate) fn new_with_limits(
         max_idle_connections: usize,
         max_idle_connections_per_host: usize,
@@ -231,8 +220,8 @@ fn pool_connections_limit() {
     // Test inserting connections with different keys into the pool,
     // filling and draining it. The pool should evict earlier connections
     // when the connection limit is reached.
-    let pool = ConnectionPool::new();
-    let hostnames = (0..DEFAULT_MAX_IDLE_CONNECTIONS * 2).map(|i| format!("{}.example", i));
+    let pool = ConnectionPool::new_with_limits(10, 1);
+    let hostnames = (0..pool.max_idle_connections * 2).map(|i| format!("{}.example", i));
     let poolkeys = hostnames.map(|hostname| PoolKey {
         scheme: "https".to_string(),
         hostname,
@@ -242,9 +231,9 @@ fn pool_connections_limit() {
     for key in poolkeys.clone() {
         pool.add(key, Stream::Cursor(std::io::Cursor::new(vec![])));
     }
-    assert_eq!(pool.len(), DEFAULT_MAX_IDLE_CONNECTIONS);
+    assert_eq!(pool.len(), pool.max_idle_connections);
 
-    for key in poolkeys.skip(DEFAULT_MAX_IDLE_CONNECTIONS) {
+    for key in poolkeys.skip(pool.max_idle_connections) {
         let result = pool.remove(&key);
         assert!(result.is_some(), "expected key was not in pool");
     }
@@ -256,7 +245,7 @@ fn pool_per_host_connections_limit() {
     // Test inserting connections with the same key into the pool,
     // filling and draining it. The pool should evict earlier connections
     // when the per-host connection limit is reached.
-    let pool = ConnectionPool::new();
+    let pool = ConnectionPool::new_with_limits(10, 2);
     let poolkey = PoolKey {
         scheme: "https".to_string(),
         hostname: "example.com".to_string(),
@@ -270,9 +259,9 @@ fn pool_per_host_connections_limit() {
             Stream::Cursor(std::io::Cursor::new(vec![])),
         );
     }
-    assert_eq!(pool.len(), DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST);
+    assert_eq!(pool.len(), pool.max_idle_connections_per_host);
 
-    for _ in 0..DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST {
+    for _ in 0..pool.max_idle_connections_per_host {
         let result = pool.remove(&poolkey);
         assert!(result.is_some(), "expected key was not in pool");
     }
@@ -283,7 +272,7 @@ fn pool_per_host_connections_limit() {
 fn pool_checks_proxy() {
     // Test inserting different poolkeys with same address but different proxies.
     // Each insertion should result in an additional entry in the pool.
-    let pool = ConnectionPool::new();
+    let pool = ConnectionPool::new_with_limits(10, 1);
     let url = Url::parse("zzz:///example.com").unwrap();
 
     pool.add(

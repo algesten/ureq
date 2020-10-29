@@ -118,12 +118,11 @@ impl Request {
     /// }
     /// ```
     #[cfg(feature = "json")]
-    pub fn send_json(self, data: SerdeValue) -> Result<Response> {
-        let mut this = self;
-        if this.header("Content-Type").is_none() {
-            this = this.set("Content-Type", "application/json");
+    pub fn send_json(mut self, data: SerdeValue) -> Result<Response> {
+        if self.header("Content-Type").is_none() {
+            self = self.set("Content-Type", "application/json");
         }
-        this.do_call(Payload::JSON(data))
+        self.do_call(Payload::JSON(data))
     }
 
     /// Send data as bytes.
@@ -182,15 +181,14 @@ impl Request {
     /// println!("{:?}", r);
     /// }
     /// ```
-    pub fn send_form(self, data: &[(&str, &str)]) -> Result<Response> {
-        let mut this = self;
-        if this.header("Content-Type").is_none() {
-            this = this.set("Content-Type", "application/x-www-form-urlencoded");
+    pub fn send_form(mut self, data: &[(&str, &str)]) -> Result<Response> {
+        if self.header("Content-Type").is_none() {
+            self = self.set("Content-Type", "application/x-www-form-urlencoded");
         }
         let encoded = form_urlencoded::Serializer::new(String::new())
             .extend_pairs(data)
             .finish();
-        this.do_call(Payload::Bytes(&encoded.into_bytes()))
+        self.do_call(Payload::Bytes(&encoded.into_bytes()))
     }
 
     /// Send data from a reader.
@@ -423,7 +421,7 @@ impl Request {
     }
 
     pub(crate) fn proxy(&self) -> Option<Proxy> {
-        if let Some(proxy) = &self.agent.state.proxy {
+        if let Some(proxy) = &self.agent.config.proxy {
             Some(proxy.clone())
         } else {
             None

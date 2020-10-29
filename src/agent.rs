@@ -14,6 +14,8 @@ use {crate::cookies::CookieTin, cookie::Cookie, cookie_store::CookieStore, url::
 pub struct AgentBuilder {
     headers: Vec<Header>,
     config: AgentConfig,
+    max_idle_connections: usize,
+    max_idle_connections_per_host: usize,
     /// Cookies saved between requests.
     /// Invariant: All cookies must have a nonempty domain and path.
     #[cfg(feature = "cookies")]
@@ -24,8 +26,6 @@ pub struct AgentBuilder {
 /// Config as built by AgentBuilder and then static for the lifetime of the Agent.
 #[derive(Debug, Clone)]
 pub(crate) struct AgentConfig {
-    pub max_idle_connections: usize,
-    pub max_idle_connections_per_host: usize,
     pub proxy: Option<Proxy>,
     pub timeout_connect: Option<Duration>,
     pub timeout_read: Option<Duration>,
@@ -44,8 +44,6 @@ pub(crate) struct AgentConfig {
 ///
 /// ```
 /// let mut agent = ureq::agent();
-///
-/// agent.set("x-my-secret-header", "very secret");
 ///
 /// let auth = agent
 ///     .post("/login")
@@ -84,7 +82,6 @@ pub struct Agent {
 pub(crate) struct AgentState {
     /// Reused connections between requests.
     pub(crate) pool: ConnectionPool,
-    pub(crate) proxy: Option<Proxy>,
     /// Cookies saved between requests.
     /// Invariant: All cookies must have a nonempty domain and path.
     #[cfg(feature = "cookies")]
@@ -98,27 +95,6 @@ impl Agent {
     /// Same as `AgentBuilder::new().build()`.
     pub fn new() -> Self {
         AgentBuilder::new().build()
-    }
-
-    /// Set a extra header field that will be present in all following requests using the agent.
-    ///
-    /// This is useful for cases like auth, where we do a number of requests before getting
-    /// some credential that later must be presented in a header.
-    ///
-    /// Notice that fixed headers can also be set in the `AgentBuilder`.
-    ///
-    /// ```
-    /// let mut agent = ureq::agent();
-    ///
-    /// agent.set("X-API-Key", "foobar");
-    /// agent.set("Accept", "text/plain");
-    ///
-    /// let r = agent
-    ///     .get("/my-page")
-    ///     .call();
-    /// ```
-    pub fn set(&mut self, header: &str, value: &str) {
-        header::add_header(&mut self.headers, Header::new(header, value));
     }
 
     /// Request by providing the HTTP verb such as `GET`, `POST`...
@@ -157,11 +133,6 @@ impl Agent {
         self.request("GET", path)
     }
 
-    /// Make a HEAD request from this agent.
-    pub fn head(&self, path: &str) -> Request {
-        self.request("HEAD", path)
-    }
-
     /// Make a POST request from this agent.
     pub fn post(&self, path: &str) -> Request {
         self.request("POST", path)
@@ -171,35 +142,16 @@ impl Agent {
     pub fn put(&self, path: &str) -> Request {
         self.request("PUT", path)
     }
-
-    /// Make a DELETE request from this agent.
-    pub fn delete(&self, path: &str) -> Request {
-        self.request("DELETE", path)
-    }
-
-    /// Make a TRACE request from this agent.
-    pub fn trace(&self, path: &str) -> Request {
-        self.request("TRACE", path)
-    }
-
-    /// Make a OPTIONS request from this agent.
-    pub fn options(&self, path: &str) -> Request {
-        self.request("OPTIONS", path)
-    }
-
-    /// Make a PATCH request from this agent.
-    pub fn patch(&self, path: &str) -> Request {
-        self.request("PATCH", path)
-    }
 }
+
+const DEFAULT_MAX_IDLE_CONNECTIONS: usize = 100;
+const DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST: usize = 1;
 
 impl AgentBuilder {
     pub fn new() -> Self {
         AgentBuilder {
             headers: vec![],
             config: AgentConfig {
-                max_idle_connections: crate::pool::DEFAULT_MAX_IDLE_CONNECTIONS,
-                max_idle_connections_per_host: crate::pool::DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST,
                 proxy: None,
                 timeout_connect: Some(Duration::from_secs(30)),
                 timeout_read: None,
@@ -209,6 +161,8 @@ impl AgentBuilder {
                 #[cfg(feature = "tls")]
                 tls_config: None,
             },
+            max_idle_connections: DEFAULT_MAX_IDLE_CONNECTIONS,
+            max_idle_connections_per_host: DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST,
             resolver: StdResolver.into(),
             #[cfg(feature = "cookies")]
             cookie_store: None,
@@ -221,22 +175,20 @@ impl AgentBuilder {
     // not implement clone, so we have to give ownership to the newly
     // built Agent.
     pub fn build(self) -> Agent {
-        let config = Arc::new(self.config);
         Agent {
             headers: self.headers,
+            config: Arc::new(self.config),
             state: Arc::new(AgentState {
                 pool: ConnectionPool::new_with_limits(
-                    config.max_idle_connections,
-                    config.max_idle_connections_per_host,
+                    self.max_idle_connections,
+                    self.max_idle_connections_per_host,
                 ),
-                proxy: config.proxy.clone(),
                 #[cfg(feature = "cookies")]
                 cookie_tin: CookieTin::new(
                     self.cookie_store.unwrap_or_else(|| CookieStore::default()),
                 ),
                 resolver: self.resolver,
             }),
-            config,
         }
     }
 
@@ -285,7 +237,7 @@ impl AgentBuilder {
     /// let agent = ureq::AgentBuilder::new().max_idle_connections(200).build();
     /// ```
     pub fn max_idle_connections(mut self, max: usize) -> Self {
-        self.config.max_idle_connections = max;
+        self.max_idle_connections = max;
         self
     }
 
@@ -297,7 +249,7 @@ impl AgentBuilder {
     /// let agent = ureq::AgentBuilder::new().max_idle_connections_per_host(200).build();
     /// ```
     pub fn max_idle_connections_per_host(mut self, max: usize) -> Self {
-        self.config.max_idle_connections_per_host = max;
+        self.max_idle_connections_per_host = max;
         self
     }
 
