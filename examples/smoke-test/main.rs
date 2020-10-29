@@ -33,11 +33,7 @@ impl fmt::Display for Oops {
 type Result<T> = result::Result<T, Oops>;
 
 fn get(agent: &ureq::Agent, url: &str) -> Result<Vec<u8>> {
-    let response = agent
-        .get(url)
-        .timeout_connect(std::time::Duration::from_secs(5))
-        .timeout(Duration::from_secs(20))
-        .call()?;
+    let response = agent.get(url).call()?;
     let mut reader = response.into_reader();
     let mut bytes = vec![];
     reader.read_to_end(&mut bytes)?;
@@ -53,7 +49,10 @@ fn get_and_write(agent: &ureq::Agent, url: &str) {
 }
 
 fn get_many(urls: Vec<String>, simultaneous_fetches: usize) -> Result<()> {
-    let agent = ureq::Agent::default();
+    let agent = ureq::builder()
+        .timeout_connect(Duration::from_secs(5))
+        .timeout(Duration::from_secs(20))
+        .build();
     let mutex = Arc::new(Mutex::new(urls));
     let mut join_handles: Vec<JoinHandle<()>> = vec![];
     for _ in 0..simultaneous_fetches {

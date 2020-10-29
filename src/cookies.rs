@@ -1,18 +1,18 @@
-#[cfg(feature = "cookie")]
+#[cfg(feature = "cookies")]
 use std::sync::RwLock;
 
-#[cfg(feature = "cookie")]
+#[cfg(feature = "cookies")]
 use cookie_store::CookieStore;
-#[cfg(feature = "cookie")]
+#[cfg(feature = "cookies")]
 use url::Url;
 
-#[cfg(feature = "cookie")]
-#[derive(Default, Debug)]
+#[cfg(feature = "cookies")]
+#[derive(Debug)]
 pub(crate) struct CookieTin {
     inner: RwLock<CookieStore>,
 }
 
-#[cfg(feature = "cookie")]
+#[cfg(feature = "cookies")]
 impl CookieTin {
     pub(crate) fn new(store: CookieStore) -> Self {
         CookieTin {

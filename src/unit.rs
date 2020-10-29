@@ -5,14 +5,14 @@ use log::{debug, info};
 use qstring::QString;
 use url::Url;
 
-#[cfg(feature = "cookie")]
+#[cfg(feature = "cookies")]
 use cookie::Cookie;
 
 use crate::body::{self, BodySize, Payload, SizedReader};
 use crate::header;
 use crate::resolve::ArcResolver;
 use crate::stream::{self, connect_test, Stream};
-#[cfg(feature = "cookie")]
+#[cfg(feature = "cookies")]
 use crate::Agent;
 use crate::{Error, Header, Request, Response};
 
@@ -81,7 +81,7 @@ impl Unit {
                 extra.push(Header::new("Authorization", &format!("Basic {}", encoded)));
             }
 
-            #[cfg(feature = "cookie")]
+            #[cfg(feature = "cookies")]
             extra.extend(extract_cookies(&req.agent, &url).into_iter());
 
             extra
@@ -94,7 +94,7 @@ impl Unit {
             .cloned()
             .collect();
 
-        let deadline = match req.timeout {
+        let deadline = match req.agent.config.timeout {
             None => None,
             Some(timeout) => {
                 let now = time::Instant::now();
@@ -203,12 +203,12 @@ pub(crate) fn connect(
     };
 
     // squirrel away cookies
-    #[cfg(feature = "cookie")]
+    #[cfg(feature = "cookies")]
     save_cookies(&unit, &resp);
 
     // handle redirects
-    if resp.redirect() && req.redirects > 0 {
-        if redirect_count == req.redirects {
+    if resp.redirect() && req.agent.config.redirects > 0 {
+        if redirect_count == req.agent.config.redirects {
             return Err(Error::TooManyRedirects);
         }
 
@@ -255,11 +255,11 @@ pub(crate) fn connect(
     Ok(resp)
 }
 
-#[cfg(feature = "cookie")]
+#[cfg(feature = "cookies")]
 fn extract_cookies(agent: &Agent, url: &Url) -> Option<Header> {
     let header_value = agent
         .state
-        .jar
+        .cookie_tin
         .get_request_cookies(url)
         .iter()
         .map(|c| c.encoded().to_string())
@@ -295,7 +295,7 @@ fn connect_socket(unit: &Unit, hostname: &str, use_pooled: bool) -> Result<(Stre
         while let Some(stream) = agent
             .state
             .pool
-            .try_get_connection(&unit.url, &unit.req.proxy)
+            .try_get_connection(&unit.url, unit.req.agent.config.proxy.clone())
         {
             let server_closed = stream.server_closed()?;
             if !server_closed {
@@ -379,7 +379,7 @@ fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> io::Result<()>
 }
 
 /// Investigate a response for "Set-Cookie" headers.
-#[cfg(feature = "cookie")]
+#[cfg(feature = "cookies")]
 fn save_cookies(unit: &Unit, resp: &Response) {
     //
 
@@ -397,7 +397,7 @@ fn save_cookies(unit: &Unit, resp: &Response) {
     unit.req
         .agent
         .state
-        .jar
+        .cookie_tin
         .store_response_cookies(cookies, &unit.url.clone());
 }
 
@@ -411,13 +411,13 @@ mod tests {
 
     #[test]
     fn match_cookies_returns_one_header() {
-        let agent = Agent::default();
+        let agent = Agent::new();
         let url: Url = "https://crates.io/".parse().unwrap();
         let cookie1: Cookie = "cookie1=value1; Domain=crates.io; Path=/".parse().unwrap();
         let cookie2: Cookie = "cookie2=value2; Domain=crates.io; Path=/".parse().unwrap();
         agent
             .state
-            .jar
+            .cookie_tin
             .store_response_cookies(vec![cookie1, cookie2].into_iter(), &url);
 
         // There's no guarantee to the order in which cookies are defined.

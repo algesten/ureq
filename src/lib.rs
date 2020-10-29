@@ -130,15 +130,20 @@ pub use crate::resolve::Resolver;
 pub use crate::response::Response;
 
 // re-export
-#[cfg(feature = "cookie")]
+#[cfg(feature = "cookies")]
 pub use cookie::Cookie;
 #[cfg(feature = "json")]
 pub use serde_json::{to_value as serde_to_value, Map as SerdeMap, Value as SerdeValue};
 
+/// Creates an agent builder.
+pub fn builder() -> AgentBuilder {
+    AgentBuilder::new()
+}
+
 /// Agents are used to keep state between requests.
 pub fn agent() -> Agent {
     #[cfg(not(test))]
-    return Agent::default();
+    return AgentBuilder::new().build();
     #[cfg(test)]
     return test::test_agent();
 }
@@ -198,7 +203,9 @@ mod tests {
 
     #[test]
     fn connect_http_google() {
-        let resp = get("http://www.google.com/").call().unwrap();
+        let agent = Agent::new();
+
+        let resp = agent.get("http://www.google.com/").call().unwrap();
         assert_eq!(
             "text/html; charset=ISO-8859-1",
             resp.header("content-type").unwrap()
@@ -207,9 +214,11 @@ mod tests {
     }
 
     #[test]
-    #[cfg(any(feature = "tls", feature = "native-tls"))]
+    #[cfg(feature = "tls")]
     fn connect_https_google() {
-        let resp = get("https://www.google.com/").call().unwrap();
+        let agent = Agent::new();
+
+        let resp = agent.get("https://www.google.com/").call().unwrap();
         assert_eq!(
             "text/html; charset=ISO-8859-1",
             resp.header("content-type").unwrap()
@@ -218,7 +227,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(any(feature = "tls", feature = "native-tls"))]
+    #[cfg(feature = "tls")]
     fn connect_https_invalid_name() {
         let result = get("https://example.com{REQUEST_URI}/").call();
         assert!(matches!(result.unwrap_err(), Error::DnsFailed(_)));

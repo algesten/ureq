@@ -27,7 +27,6 @@ jobs:
         tls:
           - ""
           - tls
-          - native-tls
         feature:
           - ""
           - json

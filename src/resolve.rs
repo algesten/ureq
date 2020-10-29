@@ -51,9 +51,3 @@ impl std::ops::Deref for ArcResolver {
         self.0.as_ref()
     }
 }
-
-impl Default for ArcResolver {
-    fn default() -> Self {
-        StdResolver.into()
-    }
-}

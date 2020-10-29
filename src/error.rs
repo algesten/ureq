@@ -32,9 +32,6 @@ pub enum Error {
     /// Read the inner response body for details and to return
     /// the connection to the pool.
     HTTP(Box<Response>),
-    /// TLS Error
-    #[cfg(feature = "native-tls")]
-    TlsError(native_tls::Error),
 }
 
 impl Error {
@@ -70,8 +67,6 @@ impl fmt::Display for Error {
             Error::ProxyConnect => write!(f, "Proxy failed to connect"),
             Error::InvalidProxyCreds => write!(f, "Provided proxy credentials are incorrect"),
             Error::HTTP(response) => write!(f, "HTTP status {}", response.status()),
-            #[cfg(feature = "native-tls")]
-            Error::TlsError(err) => write!(f, "TLS Error: {}", err),
         }
     }
 }
