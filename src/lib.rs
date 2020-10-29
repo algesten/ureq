@@ -115,7 +115,7 @@ mod stream;
 mod unit;
 
 #[cfg(feature = "json")]
-mod serde_macros;
+pub use serde_json::json;
 
 #[cfg(test)]
 mod test;
