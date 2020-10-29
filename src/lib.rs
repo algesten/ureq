@@ -182,21 +182,6 @@ pub fn delete(path: &str) -> Request {
     request("DELETE", path)
 }
 
-/// Make a TRACE request.
-pub fn trace(path: &str) -> Request {
-    request("TRACE", path)
-}
-
-/// Make an OPTIONS request.
-pub fn options(path: &str) -> Request {
-    request("OPTIONS", path)
-}
-
-/// Make an PATCH request.
-pub fn patch(path: &str) -> Request {
-    request("PATCH", path)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

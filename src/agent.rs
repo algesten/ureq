@@ -133,6 +133,11 @@ impl Agent {
         self.request("GET", path)
     }
 
+    /// Make a HEAD request from this agent.
+    pub fn head(&self, path: &str) -> Request {
+        self.request("HEAD", path)
+    }
+
     /// Make a POST request from this agent.
     pub fn post(&self, path: &str) -> Request {
         self.request("POST", path)
@@ -141,6 +146,11 @@ impl Agent {
     /// Make a PUT request from this agent.
     pub fn put(&self, path: &str) -> Request {
         self.request("PUT", path)
+    }
+
+    /// Make a DELETE request from this agent.
+    pub fn delete(&self, path: &str) -> Request {
+        self.request("DELETE", path)
     }
 }
 
