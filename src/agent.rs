@@ -7,7 +7,7 @@ use crate::resolve::{ArcResolver, StdResolver};
 use std::time::Duration;
 
 #[cfg(feature = "cookies")]
-use {crate::cookies::CookieTin, cookie::Cookie, cookie_store::CookieStore, url::Url};
+use {crate::cookies::CookieTin, cookie_store::CookieStore};
 
 #[derive(Debug)]
 pub struct AgentBuilder {
@@ -105,23 +105,6 @@ impl Agent {
     /// ```
     pub fn request(&self, method: &str, path: &str) -> Request {
         Request::new(self.clone(), method.into(), path.into())
-    }
-
-    /// Store a cookie in this agent.
-    ///
-    /// ```
-    /// let agent = ureq::agent();
-    ///
-    /// let cookie = ureq::Cookie::build("name", "value")
-    ///   .secure(true)
-    ///   .finish();
-    /// agent.set_cookie(cookie, &"https://example.com/".parse().unwrap());
-    /// ```
-    #[cfg(feature = "cookies")]
-    pub fn set_cookie(&self, cookie: Cookie<'static>, url: &Url) {
-        self.state
-            .cookie_tin
-            .store_response_cookies(Some(cookie).into_iter(), url);
     }
 
     /// Make a GET request from this agent.

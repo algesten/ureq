@@ -1,36 +1,26 @@
 #[cfg(feature = "tls")]
-#[cfg(feature = "cookies")]
 #[cfg(feature = "json")]
 #[test]
-fn agent_set_cookie() {
+fn agent_set_header() {
     use serde::Deserialize;
     use std::collections::HashMap;
 
-    #[derive(Deserialize)]
+    #[derive(Deserialize, Debug)]
     struct HttpBin {
         headers: HashMap<String, String>,
     }
 
     let agent = ureq::Agent::new();
-    let cookie = ureq::Cookie::build("name", "value")
-        .domain("httpbin.org")
-        .secure(true)
-        .finish();
-    agent.set_cookie(cookie, &"https://httpbin.org/".parse().unwrap());
     let resp = agent
         .get("https://httpbin.org/get")
+        .set("header", "value")
         .set("Connection", "close")
         .call()
         .unwrap();
     assert_eq!(resp.status(), 200);
-    assert_eq!(
-        "name=value",
-        resp.into_json_deserialize::<HttpBin>()
-            .unwrap()
-            .headers
-            .get("Cookie")
-            .unwrap()
-    );
+    let json = resp.into_json_deserialize::<HttpBin>().unwrap();
+    // println!("{:?}", json);
+    assert_eq!("value", json.headers.get("Header").unwrap());
 }
 
 #[cfg(feature = "tls")]
