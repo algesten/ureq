@@ -56,12 +56,11 @@ impl fmt::Debug for Request {
 
 impl Request {
     pub(crate) fn new(agent: Agent, method: String, url: String) -> Request {
-        let headers = agent.headers.clone();
         Request {
             agent,
             method,
             url,
-            headers,
+            headers: vec![],
             return_error_for_status: true,
             query: QString::default(),
         }

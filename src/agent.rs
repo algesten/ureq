@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use crate::header::{self, Header};
 use crate::pool::ConnectionPool;
 use crate::proxy::Proxy;
 use crate::request::Request;
@@ -12,7 +11,6 @@ use {crate::cookies::CookieTin, cookie::Cookie, cookie_store::CookieStore, url::
 
 #[derive(Debug)]
 pub struct AgentBuilder {
-    headers: Vec<Header>,
     config: AgentConfig,
     max_idle_connections: usize,
     max_idle_connections_per_host: usize,
@@ -69,8 +67,6 @@ pub(crate) struct AgentConfig {
 #[derive(Debug, Clone)]
 pub struct Agent {
     pub(crate) config: Arc<AgentConfig>,
-    /// Copied into each request of this agent.
-    pub(crate) headers: Vec<Header>,
     /// Reused agent state for repeated requests from this agent.
     pub(crate) state: Arc<AgentState>,
 }
@@ -160,7 +156,6 @@ const DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST: usize = 1;
 impl AgentBuilder {
     pub fn new() -> Self {
         AgentBuilder {
-            headers: vec![],
             config: AgentConfig {
                 proxy: None,
                 timeout_connect: Some(Duration::from_secs(30)),
@@ -186,7 +181,6 @@ impl AgentBuilder {
     // built Agent.
     pub fn build(self) -> Agent {
         Agent {
-            headers: self.headers,
             config: Arc::new(self.config),
             state: Arc::new(AgentState {
                 pool: ConnectionPool::new_with_limits(
@@ -200,29 +194,6 @@ impl AgentBuilder {
                 resolver: self.resolver,
             }),
         }
-    }
-
-    /// Set a header field that will be present in all requests using the agent.
-    ///
-    /// ```
-    /// let agent = ureq::builder()
-    ///     .set("X-API-Key", "foobar")
-    ///     .set("Accept", "text/plain")
-    ///     .build();
-    ///
-    /// let r = agent
-    ///     .get("/my-page")
-    ///     .call();
-    ///
-    ///  if let Ok(resp) = r {
-    ///      println!("yay got {}", resp.into_string().unwrap());
-    ///  } else {
-    ///      println!("Oh no error!");
-    ///  }
-    /// ```
-    pub fn set(mut self, header: &str, value: &str) -> Self {
-        header::add_header(&mut self.headers, Header::new(header, value));
-        self
     }
 
     /// Set the proxy server to use for all connections from this Agent.
