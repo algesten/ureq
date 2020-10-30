@@ -373,6 +373,36 @@ impl AgentBuilder {
         self.config.tls_config = Some(TLSClientConfig(tls_config));
         self
     }
+
+    /// Provide the cookie store to be used for all requests using this agent.
+    ///
+    /// This is useful in two cases. First when there is a need to persist cookies
+    /// to some backing store, and second when there's a need to prepare the agent
+    /// with some pre-existing cookies.
+    ///
+    /// Example
+    /// ```no_run
+    /// use cookie_store::CookieStore;
+    /// use std::fs::File;
+    /// use std::io::BufReader;
+    ///
+    /// let file = File::open("cookies.json").unwrap();
+    /// let read = BufReader::new(file);
+    ///
+    /// // Read persisted cookies from cookies.json
+    /// let my_store = CookieStore::load_json(read).unwrap();
+    ///
+    /// // Cookies will be used for requests done through agent.
+    /// let agent = ureq::builder()
+    ///     .cookie_store(my_store)
+    ///     .build();
+    ///;
+    /// ```
+    #[cfg(feature = "cookies")]
+    pub fn cookie_store(mut self, cookie_store: CookieStore) -> Self {
+        self.cookie_store = Some(cookie_store);
+        self
+    }
 }
 
 #[cfg(feature = "tls")]
