@@ -7,7 +7,10 @@ use crate::resolve::{ArcResolver, StdResolver};
 use std::time::Duration;
 
 #[cfg(feature = "cookies")]
-use {crate::cookies::CookieTin, cookie_store::CookieStore};
+use {
+    crate::cookies::{CookieStoreGuard, CookieTin},
+    cookie_store::CookieStore,
+};
 
 #[derive(Debug)]
 pub struct AgentBuilder {
@@ -130,6 +133,29 @@ impl Agent {
     /// Make a DELETE request from this agent.
     pub fn delete(&self, path: &str) -> Request {
         self.request("DELETE", path)
+    }
+
+    /// Read access to the cookie store.
+    ///
+    /// Used to persist the cookies to an external writer.
+    ///
+    /// ```no_run
+    /// use std::io::Write;
+    /// use std::fs::File;
+    ///
+    /// let mut file = File::create("cookies.json").unwrap();
+    ///
+    /// let agent = ureq::agent();
+    ///
+    /// // Cookies set by www.google.com are stored in agent.
+    /// agent.get("https://www.google.com/").call().unwrap();
+    ///
+    /// // Saves (persistent) cookies
+    /// agent.cookie_store().save_json(&mut file).unwrap();
+    /// ```
+    #[cfg(feature = "cookies")]
+    pub fn cookie_store(&self) -> CookieStoreGuard<'_> {
+        self.state.cookie_tin.read_lock()
     }
 }
 
