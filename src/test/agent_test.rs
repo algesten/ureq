@@ -1,35 +1,11 @@
 #![allow(dead_code)]
 
-use crate::test;
 use crate::test::testserver::{read_headers, TestServer};
 use std::io::{self, Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
 
 use super::super::*;
-
-#[test]
-fn agent_reuse_headers() {
-    let agent = builder().set("Authorization", "Foo 12345").build();
-
-    test::set_handler("/agent_reuse_headers", |unit| {
-        assert!(unit.has("Authorization"));
-        assert_eq!(unit.header("Authorization").unwrap(), "Foo 12345");
-        test::make_response(200, "OK", vec!["X-Call: 1"], vec![])
-    });
-
-    let resp = agent.get("test://host/agent_reuse_headers").call().unwrap();
-    assert_eq!(resp.header("X-Call").unwrap(), "1");
-
-    test::set_handler("/agent_reuse_headers", |unit| {
-        assert!(unit.has("Authorization"));
-        assert_eq!(unit.header("Authorization").unwrap(), "Foo 12345");
-        test::make_response(200, "OK", vec!["X-Call: 2"], vec![])
-    });
-
-    let resp = agent.get("test://host/agent_reuse_headers").call().unwrap();
-    assert_eq!(resp.header("X-Call").unwrap(), "2");
-}
 
 // Handler that answers with a simple HTTP response, and times
 // out idle connections after 2 seconds.
