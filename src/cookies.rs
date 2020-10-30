@@ -1,15 +1,8 @@
-#[cfg(feature = "cookies")]
-use {
-    std::ops::Deref,
-    std::sync::{RwLock, RwLockReadGuard},
-};
-
-#[cfg(feature = "cookies")]
 use cookie_store::CookieStore;
-#[cfg(feature = "cookies")]
+use std::ops::Deref;
+use std::sync::{RwLock, RwLockReadGuard};
 use url::Url;
 
-#[cfg(feature = "cookies")]
 #[derive(Debug)]
 pub(crate) struct CookieTin {
     inner: RwLock<CookieStore>,
@@ -25,7 +18,6 @@ impl<'a> Deref for CookieStoreGuard<'a> {
     }
 }
 
-#[cfg(feature = "cookies")]
 impl CookieTin {
     pub(crate) fn new(store: CookieStore) -> Self {
         CookieTin {

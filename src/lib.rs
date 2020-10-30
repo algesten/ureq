@@ -103,7 +103,6 @@
 
 mod agent;
 mod body;
-mod cookies;
 mod error;
 mod header;
 mod pool;
@@ -113,6 +112,9 @@ mod resolve;
 mod response;
 mod stream;
 mod unit;
+
+#[cfg(feature = "cookies")]
+mod cookies;
 
 #[cfg(feature = "json")]
 pub use serde_json::json;
