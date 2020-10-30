@@ -105,7 +105,7 @@ fn tls_client_certificate() {
         .add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
 
     let agent = ureq::builder()
-        .set_tls_config(std::sync::Arc::new(tls_config))
+        .tls_config(std::sync::Arc::new(tls_config))
         .build();
 
     let resp = agent.get("https://client.badssl.com/").call().unwrap();

@@ -364,12 +364,12 @@ impl AgentBuilder {
     /// ```
     /// let tls_config = std::sync::Arc::new(rustls::ClientConfig::new());
     /// let agent = ureq::builder()
-    ///     .set_tls_config(tls_config.clone())
+    ///     .tls_config(tls_config.clone())
     ///     .build();
     /// let req = agent.post("https://cool.server");
     /// ```
     #[cfg(feature = "tls")]
-    pub fn set_tls_config(mut self, tls_config: Arc<rustls::ClientConfig>) -> Self {
+    pub fn tls_config(mut self, tls_config: Arc<rustls::ClientConfig>) -> Self {
         self.config.tls_config = Some(TLSClientConfig(tls_config));
         self
     }
