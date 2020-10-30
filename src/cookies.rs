@@ -1,5 +1,8 @@
 #[cfg(feature = "cookies")]
-use std::sync::RwLock;
+use {
+    std::ops::Deref,
+    std::sync::{RwLock, RwLockReadGuard},
+};
 
 #[cfg(feature = "cookies")]
 use cookie_store::CookieStore;
@@ -12,6 +15,16 @@ pub(crate) struct CookieTin {
     inner: RwLock<CookieStore>,
 }
 
+/// RAII guard for read access to the CookieStore.
+pub struct CookieStoreGuard<'a>(RwLockReadGuard<'a, CookieStore>);
+
+impl<'a> Deref for CookieStoreGuard<'a> {
+    type Target = CookieStore;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 #[cfg(feature = "cookies")]
 impl CookieTin {
     pub(crate) fn new(store: CookieStore) -> Self {
@@ -19,6 +32,12 @@ impl CookieTin {
             inner: RwLock::new(store),
         }
     }
+
+    pub(crate) fn read_lock(&self) -> CookieStoreGuard<'_> {
+        let lock = self.inner.read().unwrap();
+        CookieStoreGuard(lock)
+    }
+
     pub(crate) fn get_request_cookies(&self, url: &Url) -> Vec<cookie::Cookie> {
         let store = self.inner.read().unwrap();
         store
