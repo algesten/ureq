@@ -213,14 +213,34 @@ impl Response {
         self.error.is_some()
     }
 
-    /// Get the actual underlying error when the response is
+    /// Get a reference to the actual underlying error when the response is
     /// ["synthetic"](struct.Response.html#method.synthetic).
     pub fn synthetic_error(&self) -> &Option<Error> {
         &self.error
     }
 
-    // Internal-only API, to allow unit::connect to return early on errors.
-    pub(crate) fn into_error(self) -> Option<Error> {
+    /// Get the actual underlying error when the response is
+    /// ["synthetic"](struct.Response.html#method.synthetic).
+    ///
+    /// This consumes the Response and it cannot be used again.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// // hold onto the error even after dropping the response
+    /// let err = {
+    ///     // scheme that this library doesn't understand
+    ///     let resp = ureq::get("borkedscheme://www.example.com").call();
+    ///
+    ///     // it's a synthetic error
+    ///     assert!(resp.error() && resp.synthetic());
+    ///
+    ///     // resp is dropped here, but the error lives on
+    ///     resp.into_synthetic_error()
+    /// };
+    /// println!("{}", err.unwrap());
+    /// ```
+    pub fn into_synthetic_error(self) -> Option<Error> {
         self.error
     }
 

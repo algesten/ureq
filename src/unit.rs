@@ -199,7 +199,7 @@ pub(crate) fn connect(
             return connect(req, unit, false, redirect_count, empty, redir);
         }
         // Non-retryable errors return early.
-        return Err(resp.into_error().unwrap());
+        return Err(resp.into_synthetic_error().unwrap());
     }
 
     // squirrel away cookies
