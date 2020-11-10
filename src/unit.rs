@@ -2,18 +2,20 @@ use std::io::{self, Write};
 use std::time;
 
 use log::{debug, info};
-use qstring::QString;
 use url::Url;
 
 #[cfg(feature = "cookies")]
 use cookie::Cookie;
 
-use crate::body::{self, BodySize, Payload, SizedReader};
 use crate::header;
 use crate::resolve::ArcResolver;
 use crate::stream::{self, connect_test, Stream};
 #[cfg(feature = "cookies")]
 use crate::Agent;
+use crate::{
+    body::{self, BodySize, Payload, SizedReader},
+    request::RequestBuilder,
+};
 use crate::{Error, Header, Request, Response};
 
 /// It's a "unit of work". Maybe a bad name for it?
@@ -23,7 +25,6 @@ pub(crate) struct Unit {
     pub req: Request,
     pub url: Url,
     pub is_chunked: bool,
-    pub query_string: String,
     pub headers: Vec<Header>,
     pub deadline: Option<time::Instant>,
 }
@@ -31,9 +32,9 @@ pub(crate) struct Unit {
 impl Unit {
     //
 
-    pub(crate) fn new(req: &Request, url: &Url, mix_queries: bool, body: &SizedReader) -> Self {
+    pub(crate) fn new(req: &Request, body: &SizedReader) -> Self {
         //
-
+        let url = &req.url;
         let (is_transfer_encoding_set, mut is_chunked) = req
             .header("transfer-encoding")
             // if the user has set an encoding header, obey that.
@@ -47,8 +48,6 @@ impl Unit {
             })
             // otherwise, no chunking.
             .unwrap_or((false, false));
-
-        let query_string = combine_query(&url, &req.query, mix_queries);
 
         let extra_headers = {
             let mut extra = vec![];
@@ -106,7 +105,6 @@ impl Unit {
             req: req.clone(),
             url: url.clone(),
             is_chunked,
-            query_string,
             headers,
             deadline,
         }
@@ -224,15 +222,23 @@ pub(crate) fn connect(
             match resp.status() {
                 301 | 302 | 303 => {
                     let empty = Payload::Empty.into_read();
-                    // recreate the unit to get a new hostname and cookies for the new host.
-                    let mut new_unit = Unit::new(req, &new_url, false, &empty);
                     // this is to follow how curl does it. POST, PUT etc change
                     // to GET on a redirect.
-                    new_unit.req.method = match &method[..] {
-                        "GET" | "HEAD" => method.to_string(),
-                        _ => "GET".into(),
+                    let new_method = match &method[..] {
+                        "GET" | "HEAD" => method,
+                        _ => "GET",
                     };
                     debug!("redirect {} {} -> {}", resp.status(), url, new_url);
+                    // recreate the unit to get a new hostname and cookies for the new host.
+                    let mut new_req = RequestBuilder::new()
+                        .agent(req.agent.clone())
+                        .method(new_method)
+                        .url(new_url);
+                    // TODO: Some (all?) headers shouldn't be automatically copied. For instance Authorization and Cookie.
+                    for header in &req.headers {
+                        new_req = new_req.set(header.name(), header.value());
+                    }
+                    let new_unit = Unit::new(&new_req.build()?, &empty);
                     return connect(req, new_unit, use_pooled, redirect_count + 1, empty, true);
                 }
                 _ => (),
@@ -268,16 +274,6 @@ fn extract_cookies(agent: &Agent, url: &Url) -> Option<Header> {
     match header_value.as_str() {
         "" => None,
         val => Some(Header::new("Cookie", val)),
-    }
-}
-
-/// Combine the query of the url and the query options set on the request object.
-pub(crate) fn combine_query(url: &Url, query: &QString, mix_queries: bool) -> String {
-    match (url.query(), !query.is_empty() && mix_queries) {
-        (Some(urlq), true) => format!("?{}&{}", urlq, query),
-        (Some(urlq), false) => format!("?{}", urlq),
-        (None, true) => format!("?{}", query),
-        (None, false) => "".to_string(),
     }
 }
 
@@ -323,10 +319,11 @@ fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> io::Result<()>
     // request line
     write!(
         prelude,
-        "{} {}{} HTTP/1.1\r\n",
+        "{} {}{}{} HTTP/1.1\r\n",
         unit.req.method,
-        unit.url.path(),
-        &unit.query_string
+        &unit.url.path(),
+        if unit.url.query().is_some() { "?" } else { "" },
+        unit.url.query().unwrap_or_default(),
     )?;
 
     // host header if not set by user.

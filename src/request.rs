@@ -1,7 +1,6 @@
 use std::fmt;
-use std::io::Read;
+use std::io::{self, Read};
 
-use qstring::QString;
 use url::{form_urlencoded, Url};
 
 use crate::agent::Agent;
@@ -9,16 +8,36 @@ use crate::body::BodySize;
 use crate::body::{Payload, SizedReader};
 use crate::error::Error;
 use crate::header::{self, Header};
-use crate::proxy::Proxy;
 use crate::unit::{self, Unit};
 use crate::Response;
 
 #[cfg(feature = "json")]
 use super::SerdeValue;
 
+#[derive(Debug, Clone)]
+enum Urlish {
+    Url(Url),
+    Str(String),
+}
+
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// Request instances are builders that creates a request.
+/// RequestBuilder accumulates up the fields that make a [Request](struct.Request.html).
+///
+/// At least the method and URL must be set before calling `.build()`.
+/// RequestBuilder has convenience methods `call()` and `send*()`, which
+/// build a Request and then immediately perform the Request.
+#[derive(Debug, Clone)]
+pub struct RequestBuilder {
+    agent: Option<Agent>,
+    method: Option<String>,
+    url: Option<Urlish>,
+    return_error_for_status: bool,
+    headers: Vec<Header>,
+    query_params: Vec<(String, String)>,
+}
+
+/// A Request ready to be sent.
 ///
 /// ```
 /// let mut request = ureq::get("https://www.google.com/");
@@ -31,39 +50,261 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub struct Request {
     pub(crate) agent: Agent,
     pub(crate) method: String,
-    url: String,
-    return_error_for_status: bool,
+    pub(crate) url: Url,
+    pub(crate) return_error_for_status: bool,
     pub(crate) headers: Vec<Header>,
-    pub(crate) query: QString,
+}
+
+impl RequestBuilder {
+    /// Create a new RequestBuilder, with all fields empty.
+    pub(crate) fn new() -> Self {
+        RequestBuilder {
+            agent: None,
+            method: None,
+            url: None,
+            return_error_for_status: false,
+            headers: vec![],
+            query_params: vec![],
+        }
+    }
+
+    /// Set the agent to be used by the Request built from this object.
+    pub fn agent(mut self, agent: Agent) -> Self {
+        self.agent = Some(agent);
+        self
+    }
+
+    /// Set the method to be used by the Request built from this object.
+    pub fn method(mut self, method: &str) -> Self {
+        self.method = Some(method.to_string());
+        self
+    }
+
+    /// Set the URL to send this request to. If you have an unparsed `String`
+    /// or `&str` containing a URL, use `.url_str()` instead.
+    pub fn url(mut self, url: Url) -> Self {
+        self.url = Some(Urlish::Url(url));
+        self
+    }
+
+    /// Set the URL to send this request to. If you have an already-parsed Url
+    /// object, use `.url()` instead.
+    pub fn url_str(mut self, url: &str) -> Self {
+        self.url = Some(Urlish::Str(url.to_string()));
+        self
+    }
+
+    /// By default, if a response's status is anything but a 2xx or 3xx,
+    /// send() and related methods will return an Error. If you want
+    /// to handle such responses as non-errors, set this to false.
+    ///
+    /// Example:
+    /// ```
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// let result = ureq::get("http://httpbin.org/status/500")
+    ///     .error_for_status(false)
+    ///     .call();
+    /// assert!(result.is_ok());
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn error_for_status(mut self, value: bool) -> Self {
+        self.return_error_for_status = value;
+        self
+    }
+
+    /// Set a header field.
+    ///
+    /// ```
+    /// let r = ureq::get("/my_page")
+    ///     .set("X-API-Key", "foobar")
+    ///     .set("Accept", "text/plain")
+    ///     .call();
+    ///
+    ///  if r.is_ok() {
+    ///      println!("yay got {}", r.unwrap().into_string().unwrap());
+    ///  } else {
+    ///      println!("Oh no error!");
+    ///  }
+    /// ```
+    pub fn set(mut self, header: &str, value: &str) -> Self {
+        header::add_header(&mut self.headers, Header::new(header, value));
+        self
+    }
+
+    /// Set a query parameter.
+    ///
+    /// This will be added to any query parameters already present in the URL.
+    ///
+    /// For example, to set `?format=json&dest=/login`
+    ///
+    /// ```
+    /// let r = ureq::get("/my_page")
+    ///     .query("format", "json")
+    ///     .query("dest", "/login")
+    ///     .call();
+    ///
+    /// println!("{:?}", r);
+    /// ```
+    pub fn query(mut self, param: &str, value: &str) -> Self {
+        self.query_params
+            .push((param.to_string(), value.to_string()));
+        self
+    }
+
+    /// Consume this RequestBuilder and turn it into a Request. This may
+    /// return an error if a URL provided as a `&str` fails to parse,
+    /// headers were invalid, or the method or URL were unset.
+    pub fn build(self) -> Result<Request> {
+        let agent = self.agent.unwrap_or_else(|| crate::agent());
+        let method = if let Some(method) = self.method {
+            method
+        } else {
+            return Err(Error::Io(io::Error::new(
+                io::ErrorKind::Other,
+                "No method set",
+            )));
+        };
+        let mut url: Url = match self.url {
+            Some(Urlish::Url(u)) => u,
+            Some(Urlish::Str(s)) => s
+                .parse()
+                .map_err(|e: url::ParseError| Error::BadUrl(e.to_string()))?,
+            None => {
+                return Err(Error::Io(io::Error::new(
+                    io::ErrorKind::Other,
+                    "No URL set",
+                )))
+            }
+        };
+        for (name, value) in self.query_params {
+            url.query_pairs_mut().append_pair(&name, &value);
+        }
+        for h in &self.headers {
+            h.validate()?;
+        }
+        let req = Request {
+            agent,
+            method,
+            url,
+            return_error_for_status: self.return_error_for_status,
+            headers: self.headers,
+        };
+        Ok(req)
+    }
+
+    /// Build a Request and send it with no body. See [Request.call](struct.Request.html#method.call).
+    pub fn call(self) -> Result<Response> {
+        self.build()?.call()
+    }
+
+    /// Build a Request and send it with a JSON body. See [Request.send_json](struct.Request.html#method.send_json).
+    #[cfg(feature = "json")]
+    pub fn send_json(self, data: SerdeValue) -> Result<Response> {
+        self.build()?.send_json(data)
+    }
+
+    /// Build a Request and send it with bytes as the body. See [Request.send_bytes](struct.Request.html#method.send_bytes).
+    pub fn send_bytes(self, data: &[u8]) -> Result<Response> {
+        self.build()?.send_bytes(data)
+    }
+
+    /// Build a Request and send it with a string as the body. See [Request.send_string](struct.Request.html#method.send_string).
+    pub fn send_string(self, data: &str) -> Result<Response> {
+        self.build()?.send_string(data)
+    }
+
+    /// Build a Request and send it with a form as the body. See [Request.send_form](struct.Request.html#method.send_form).
+    pub fn send_form(self, data: &[(&str, &str)]) -> Result<Response> {
+        self.build()?.send_form(data)
+    }
+
+    /// Build a Request and send it with a body read from `reader`. See [Request.send](struct.Request.html#method.send).
+    pub fn send(self, reader: impl Read) -> Result<Response> {
+        self.build()?.send(reader)
+    }
 }
 
 impl fmt::Debug for Request {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let (path, query) = self
-            .to_url()
-            .map(|u| {
-                let query = unit::combine_query(&u, &self.query, true);
-                (u.path().to_string(), query)
-            })
-            .unwrap_or_else(|_| ("BAD_URL".to_string(), "BAD_URL".to_string()));
         write!(
             f,
-            "Request({} {}{}, {:?})",
-            self.method, path, query, self.headers
+            "Request({} {}, {:?})",
+            self.method, self.url, self.headers
         )
     }
 }
 
 impl Request {
-    pub(crate) fn new(agent: Agent, method: String, url: String) -> Request {
-        Request {
-            agent,
-            method,
-            url,
-            headers: vec![],
-            return_error_for_status: true,
-            query: QString::default(),
-        }
+    /// Returns the value for a set header.
+
+    ///
+    /// ```
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// let req = ureq::get("http://example.com")
+    ///     .set("X-API-Key", "foobar")
+    ///     .build()?;
+
+    /// assert_eq!("foobar", req.header("x-api-Key").unwrap());
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn header(&self, name: &str) -> Option<&str> {
+        header::get_header(&self.headers, name)
+    }
+
+    /// A list of the user-set header names in this request. Lowercased to be uniform.
+    ///
+    /// ```
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// let req = ureq::get("http://example.com/my_page")
+    ///     .set("X-API-Key", "foobar")
+    ///     .set("Content-Type", "application/json")
+    ///     .build()?;
+    /// assert_eq!(req.header_names(), vec!["x-api-key", "content-type"]);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn header_names(&self) -> Vec<String> {
+        self.headers
+            .iter()
+            .map(|h| h.name().to_ascii_lowercase())
+            .collect()
+    }
+
+    /// Tells if the header has been set.
+    ///
+    /// ```
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// let req = ureq::get("http://example.com/my_page")
+    ///     .set("X-API-Key", "foobar")
+    ///     .build()?;
+    /// assert_eq!(true, req.has("x-api-Key"));
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn has(&self, name: &str) -> bool {
+        header::has_header(&self.headers, name)
+    }
+
+    /// All headers corresponding values for the give name, or empty vector.
+    ///
+    /// ```
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// let req = ureq::get("http://example.com/my_page")
+    ///     .set("X-Forwarded-For", "1.2.3.4")
+    ///     .set("X-Forwarded-For", "2.3.4.5")
+    ///     .build()?;
+    ///
+    /// assert_eq!(req.all("x-forwarded-for"), vec![
+    ///     "1.2.3.4",
+    ///     "2.3.4.5",
+    /// ]);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn all(&self, name: &str) -> Vec<&str> {
+        header::get_all_headers(&self.headers, name)
     }
 
     /// Executes the request and blocks the caller until done.
@@ -71,27 +312,26 @@ impl Request {
     /// Use `.timeout_connect()` and `.timeout_read()` to avoid blocking forever.
     ///
     /// ```
+    /// # fn main() -> Result<(), ureq::Error> {
     /// let r = ureq::builder()
     ///     .timeout_connect(std::time::Duration::from_secs(10)) // max 10 seconds
     ///     .build()
-    ///     .get("/my_page")
+    ///     .get("http://example.com/my_page")
+    ///     .build()?
     ///     .call();
     ///
     /// println!("{:?}", r);
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn call(self) -> Result<Response> {
         self.do_call(Payload::Empty)
     }
 
     fn do_call(&self, payload: Payload) -> Result<Response> {
-        for h in &self.headers {
-            h.validate()?;
-        }
-        let response = self.to_url().and_then(|url| {
-            let reader = payload.into_read();
-            let unit = Unit::new(&self, &url, true, &reader);
-            unit::connect(&self, unit, true, 0, reader, false)
-        })?;
+        let reader = payload.into_read();
+        let unit = Unit::new(&self, &reader);
+        let response: Response = unit::connect(&self, unit, true, 0, reader, false)?;
 
         if response.error() && self.return_error_for_status {
             Err(Error::HTTP(response.into()))
@@ -119,7 +359,8 @@ impl Request {
     #[cfg(feature = "json")]
     pub fn send_json(mut self, data: SerdeValue) -> Result<Response> {
         if self.header("Content-Type").is_none() {
-            self = self.set("Content-Type", "application/json");
+            self.headers
+                .push(Header::new("Content-Type", "application/json"));
         }
         self.do_call(Payload::JSON(data))
     }
@@ -182,7 +423,10 @@ impl Request {
     /// ```
     pub fn send_form(mut self, data: &[(&str, &str)]) -> Result<Response> {
         if self.header("Content-Type").is_none() {
-            self = self.set("Content-Type", "application/x-www-form-urlencoded");
+            self.headers.push(Header::new(
+                "Content-Type",
+                "application/x-www-form-urlencoded",
+            ));
         }
         let encoded = form_urlencoded::Serializer::new(String::new())
             .extend_pairs(data)
@@ -212,221 +456,6 @@ impl Request {
         self.do_call(Payload::Reader(Box::new(reader)))
     }
 
-    /// Set a header field.
-    ///
-    /// ```
-    /// let r = ureq::get("/my_page")
-    ///     .set("X-API-Key", "foobar")
-    ///     .set("Accept", "text/plain")
-    ///     .call();
-    ///
-    ///  if r.is_ok() {
-    ///      println!("yay got {}", r.unwrap().into_string().unwrap());
-    ///  } else {
-    ///      println!("Oh no error!");
-    ///  }
-    /// ```
-    pub fn set(mut self, header: &str, value: &str) -> Self {
-        header::add_header(&mut self.headers, Header::new(header, value));
-        self
-    }
-
-    /// Returns the value for a set header.
-    ///
-    /// ```
-    /// let req = ureq::get("/my_page")
-    ///     .set("X-API-Key", "foobar");
-    /// assert_eq!("foobar", req.header("x-api-Key").unwrap());
-    /// ```
-    pub fn header(&self, name: &str) -> Option<&str> {
-        header::get_header(&self.headers, name)
-    }
-
-    /// A list of the set header names in this request. Lowercased to be uniform.
-    ///
-    /// ```
-    /// let req = ureq::get("/my_page")
-    ///     .set("X-API-Key", "foobar")
-    ///     .set("Content-Type", "application/json");
-    /// assert_eq!(req.header_names(), vec!["x-api-key", "content-type"]);
-    /// ```
-    pub fn header_names(&self) -> Vec<String> {
-        self.headers
-            .iter()
-            .map(|h| h.name().to_ascii_lowercase())
-            .collect()
-    }
-
-    /// Tells if the header has been set.
-    ///
-    /// ```
-    /// let req = ureq::get("/my_page")
-    ///     .set("X-API-Key", "foobar");
-    /// assert_eq!(true, req.has("x-api-Key"));
-    /// ```
-    pub fn has(&self, name: &str) -> bool {
-        header::has_header(&self.headers, name)
-    }
-
-    /// All headers corresponding values for the give name, or empty vector.
-    ///
-    /// ```
-    /// let req = ureq::get("/my_page")
-    ///     .set("X-Forwarded-For", "1.2.3.4")
-    ///     .set("X-Forwarded-For", "2.3.4.5");
-    ///
-    /// assert_eq!(req.all("x-forwarded-for"), vec![
-    ///     "1.2.3.4",
-    ///     "2.3.4.5",
-    /// ]);
-    /// ```
-    pub fn all(&self, name: &str) -> Vec<&str> {
-        header::get_all_headers(&self.headers, name)
-    }
-
-    /// Set a query parameter.
-    ///
-    /// For example, to set `?format=json&dest=/login`
-    ///
-    /// ```
-    /// let r = ureq::get("/my_page")
-    ///     .query("format", "json")
-    ///     .query("dest", "/login")
-    ///     .call();
-    ///
-    /// println!("{:?}", r);
-    /// ```
-    pub fn query(mut self, param: &str, value: &str) -> Self {
-        self.query.add_pair((param, value));
-        self
-    }
-
-    /// Set query parameters as a string.
-    ///
-    /// For example, to set `?format=json&dest=/login`
-    ///
-    /// ```
-    /// let r = ureq::get("/my_page")
-    ///     .query_str("?format=json&dest=/login")
-    ///     .call();
-    /// println!("{:?}", r);
-    /// ```
-    pub fn query_str(mut self, query: &str) -> Self {
-        self.query.add_str(query);
-        self
-    }
-
-    /// By default, if a response's status is anything but a 2xx or 3xx,
-    /// send() and related methods will return an Error. If you want
-    /// to handle such responses as non-errors, set this to false.
-    ///
-    /// Example:
-    /// ```
-    /// # fn main() -> Result<(), ureq::Error> {
-    /// let result = ureq::get("http://httpbin.org/status/500")
-    ///     .error_for_status(false)
-    ///     .call();
-    /// assert!(result.is_ok());
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub fn error_for_status(mut self, value: bool) -> Self {
-        self.return_error_for_status = value;
-        self
-    }
-
-    /// Get the method this request is using.
-    ///
-    /// Example:
-    /// ```
-    /// let req = ureq::post("/somewhere");
-    /// assert_eq!(req.get_method(), "POST");
-    /// ```
-    pub fn get_method(&self) -> &str {
-        &self.method
-    }
-
-    /// Get the url this request was created with.
-    ///
-    /// This value is not normalized, it is exactly as set.
-    /// It does not contain any added query parameters.
-    ///
-    /// Example:
-    /// ```
-    /// let req = ureq::post("https://cool.server/innit");
-    /// assert_eq!(req.get_url(), "https://cool.server/innit");
-    /// ```
-    pub fn get_url(&self) -> &str {
-        &self.url
-    }
-
-    /// Normalizes and returns the host that will be used for this request.
-    ///
-    /// Example:
-    /// ```
-    /// let req1 = ureq::post("https://cool.server/innit");
-    /// assert_eq!(req1.get_host().unwrap(), "cool.server");
-    ///
-    /// let req2 = ureq::post("http://localhost/some/path");
-    /// assert_eq!(req2.get_host().unwrap(), "localhost");
-    /// ```
-    pub fn get_host(&self) -> Result<String> {
-        match self.to_url() {
-            Ok(u) => match u.host_str() {
-                Some(host) => Ok(host.to_string()),
-                None => Err(Error::BadUrl("No hostname in URL".into())),
-            },
-            Err(e) => Err(e),
-        }
-    }
-
-    /// Returns the scheme for this request.
-    ///
-    /// Example:
-    /// ```
-    /// let req = ureq::post("https://cool.server/innit");
-    /// assert_eq!(req.get_scheme().unwrap(), "https");
-    /// ```
-    pub fn get_scheme(&self) -> Result<String> {
-        self.to_url().map(|u| u.scheme().to_string())
-    }
-
-    /// The complete query for this request.
-    ///
-    /// Example:
-    /// ```
-    /// let req = ureq::post("https://cool.server/innit?foo=bar")
-    ///     .query("format", "json");
-    /// assert_eq!(req.get_query().unwrap(), "?foo=bar&format=json");
-    /// ```
-    pub fn get_query(&self) -> Result<String> {
-        self.to_url()
-            .map(|u| unit::combine_query(&u, &self.query, true))
-    }
-
-    /// The normalized url of this request.
-    ///
-    /// Example:
-    /// ```
-    /// let req = ureq::post("https://cool.server/innit");
-    /// assert_eq!(req.get_path().unwrap(), "/innit");
-    /// ```
-    pub fn get_path(&self) -> Result<String> {
-        self.to_url().map(|u| u.path().to_string())
-    }
-
-    fn to_url(&self) -> Result<Url> {
-        Url::parse(&self.url).map_err(|e| Error::BadUrl(format!("{}", e)))
-    }
-
-    pub(crate) fn proxy(&self) -> Option<Proxy> {
-        if let Some(proxy) = &self.agent.config.proxy {
-            Some(proxy.clone())
-        } else {
-            None
-        }
-    }
-
     // Returns true if this request, with the provided body, is retryable.
     pub(crate) fn is_retryable(&self, body: &SizedReader) -> bool {
         // Per https://tools.ietf.org/html/rfc7231#section-8.1.3
@@ -451,27 +480,21 @@ impl Request {
 }
 
 #[test]
-fn no_hostname() {
-    let req = Request::new(
-        Agent::new(),
-        "GET".to_string(),
-        "unix:/run/foo.socket".to_string(),
-    );
-    assert!(req.get_host().is_err());
-}
-
-#[test]
 fn request_implements_send_and_sync() {
-    let _request: Box<dyn Send> = Box::new(Request::new(
-        Agent::new(),
-        "GET".to_string(),
-        "https://example.com/".to_string(),
-    ));
-    let _request: Box<dyn Sync> = Box::new(Request::new(
-        Agent::new(),
-        "GET".to_string(),
-        "https://example.com/".to_string(),
-    ));
+    let _request: Box<dyn Send> = Box::new(
+        RequestBuilder::new()
+            .method("GET")
+            .url_str("https://example.com/")
+            .build()
+            .unwrap(),
+    );
+    let _request: Box<dyn Sync> = Box::new(
+        RequestBuilder::new()
+            .method("GET")
+            .url_str("https://example.com/")
+            .build()
+            .unwrap(),
+    );
 }
 
 #[test]

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::pool::ConnectionPool;
 use crate::proxy::Proxy;
-use crate::request::Request;
+use crate::request::RequestBuilder;
 use crate::resolve::{ArcResolver, StdResolver};
 use std::time::Duration;
 
@@ -106,32 +106,35 @@ impl Agent {
     ///     .call();
     /// println!("{:?}", r);
     /// ```
-    pub fn request(&self, method: &str, path: &str) -> Request {
-        Request::new(self.clone(), method.into(), path.into())
+    pub fn request(&self, method: &str, url: &str) -> RequestBuilder {
+        RequestBuilder::new()
+            .agent(self.clone())
+            .method(method)
+            .url_str(url)
     }
 
     /// Make a GET request from this agent.
-    pub fn get(&self, path: &str) -> Request {
+    pub fn get(&self, path: &str) -> RequestBuilder {
         self.request("GET", path)
     }
 
     /// Make a HEAD request from this agent.
-    pub fn head(&self, path: &str) -> Request {
+    pub fn head(&self, path: &str) -> RequestBuilder {
         self.request("HEAD", path)
     }
 
     /// Make a POST request from this agent.
-    pub fn post(&self, path: &str) -> Request {
+    pub fn post(&self, path: &str) -> RequestBuilder {
         self.request("POST", path)
     }
 
     /// Make a PUT request from this agent.
-    pub fn put(&self, path: &str) -> Request {
+    pub fn put(&self, path: &str) -> RequestBuilder {
         self.request("PUT", path)
     }
 
     /// Make a DELETE request from this agent.
-    pub fn delete(&self, path: &str) -> Request {
+    pub fn delete(&self, path: &str) -> RequestBuilder {
         self.request("DELETE", path)
     }
 

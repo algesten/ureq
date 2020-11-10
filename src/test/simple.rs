@@ -130,25 +130,29 @@ fn request_debug() {
     let req = get("http://localhost/my/page")
         .set("Authorization", "abcdef")
         .set("Content-Length", "1234")
-        .set("Content-Type", "application/json");
+        .set("Content-Type", "application/json")
+        .build()
+        .unwrap();
 
     let s = format!("{:?}", req);
 
     assert_eq!(
         s,
-        "Request(GET /my/page, [Authorization: abcdef, \
+        "Request(GET http://localhost/my/page, [Authorization: abcdef, \
          Content-Length: 1234, Content-Type: application/json])"
     );
 
     let req = get("http://localhost/my/page?q=z")
         .query("foo", "bar baz")
-        .set("Authorization", "abcdef");
+        .set("Authorization", "abcdef")
+        .build()
+        .unwrap();
 
     let s = format!("{:?}", req);
 
     assert_eq!(
         s,
-        "Request(GET /my/page?q=z&foo=bar%20baz, [Authorization: abcdef])"
+        "Request(GET http://localhost/my/page?q=z&foo=bar+baz, [Authorization: abcdef])"
     );
 }
 

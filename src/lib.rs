@@ -128,6 +128,7 @@ pub use crate::error::Error;
 pub use crate::header::Header;
 pub use crate::proxy::Proxy;
 pub use crate::request::Request;
+pub use crate::request::RequestBuilder;
 pub use crate::resolve::Resolver;
 pub use crate::response::Response;
 
@@ -155,32 +156,32 @@ pub fn agent() -> Agent {
 /// ```
 /// ureq::request("GET", "http://example.com").call().unwrap();
 /// ```
-pub fn request(method: &str, path: &str) -> Request {
+pub fn request(method: &str, path: &str) -> RequestBuilder {
     agent().request(method, path)
 }
 
 /// Make a GET request.
-pub fn get(path: &str) -> Request {
+pub fn get(path: &str) -> RequestBuilder {
     request("GET", path)
 }
 
 /// Make a HEAD request.
-pub fn head(path: &str) -> Request {
+pub fn head(path: &str) -> RequestBuilder {
     request("HEAD", path)
 }
 
 /// Make a POST request.
-pub fn post(path: &str) -> Request {
+pub fn post(path: &str) -> RequestBuilder {
     request("POST", path)
 }
 
 /// Make a PUT request.
-pub fn put(path: &str) -> Request {
+pub fn put(path: &str) -> RequestBuilder {
     request("PUT", path)
 }
 
 /// Make a DELETE request.
-pub fn delete(path: &str) -> Request {
+pub fn delete(path: &str) -> RequestBuilder {
     request("DELETE", path)
 }
 
