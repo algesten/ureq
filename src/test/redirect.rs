@@ -2,7 +2,7 @@ use std::{
     io::{self, Write},
     net::TcpStream,
 };
-use test::testserver::{self, TestServer};
+use testserver::{self, TestServer};
 
 use crate::test;
 

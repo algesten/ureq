@@ -1,4 +1,4 @@
-use crate::test::testserver::*;
+use crate::testserver::*;
 use std::io::{self, Write};
 use std::net::TcpStream;
 use std::thread;
