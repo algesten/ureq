@@ -87,7 +87,7 @@ pub fn read_headers(stream: &TcpStream) -> TestHeaders {
 
 impl TestServer {
     pub fn new(handler: fn(TcpStream) -> io::Result<()>) -> Self {
-        let listener = TcpListener::bind("localhost:0").unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         let done = Arc::new(AtomicBool::new(false));
         let done_clone = done.clone();
@@ -106,7 +106,7 @@ impl TestServer {
         });
         // before returning from new(), ensure the server is ready to accept connections
         loop {
-            if let Err(e) = TcpStream::connect(format!("localhost:{}", port)) {
+            if let Err(e) = TcpStream::connect(format!("127.0.0.1:{}", port)) {
                 match e.kind() {
                     io::ErrorKind::ConnectionRefused => {
                         std::thread::sleep(Duration::from_millis(100));
