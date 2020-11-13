@@ -9,7 +9,6 @@ use crate::body::BodySize;
 use crate::body::{Payload, SizedReader};
 use crate::error::Error;
 use crate::header::{self, Header};
-use crate::proxy::Proxy;
 use crate::unit::{self, Unit};
 use crate::Response;
 
@@ -417,14 +416,6 @@ impl Request {
 
     fn to_url(&self) -> Result<Url> {
         Url::parse(&self.url).map_err(|e| Error::BadUrl(format!("{}", e)))
-    }
-
-    pub(crate) fn proxy(&self) -> Option<Proxy> {
-        if let Some(proxy) = &self.agent.config.proxy {
-            Some(proxy.clone())
-        } else {
-            None
-        }
     }
 
     // Returns true if this request, with the provided body, is retryable.
