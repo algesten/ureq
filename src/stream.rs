@@ -338,7 +338,7 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         } else {
             unit.deadline
         };
-    let proxy: Option<Proxy> = unit.req.proxy();
+    let proxy: Option<Proxy> = unit.req.agent.config.proxy.clone();
     let netloc = match proxy {
         Some(ref proxy) => format!("{}:{}", proxy.server, proxy.port),
         None => format!("{}:{}", hostname, port),

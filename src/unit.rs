@@ -2,7 +2,6 @@ use std::io::{self, Write};
 use std::time;
 
 use log::{debug, info};
-use qstring::QString;
 use url::Url;
 
 #[cfg(feature = "cookies")]
@@ -23,7 +22,6 @@ pub(crate) struct Unit {
     pub req: Request,
     pub url: Url,
     pub is_chunked: bool,
-    pub query_string: String,
     pub headers: Vec<Header>,
     pub deadline: Option<time::Instant>,
 }
@@ -31,7 +29,7 @@ pub(crate) struct Unit {
 impl Unit {
     //
 
-    pub(crate) fn new(req: &Request, url: &Url, mix_queries: bool, body: &SizedReader) -> Self {
+    pub(crate) fn new(req: &Request, url: &Url, body: &SizedReader) -> Self {
         //
 
         let (is_transfer_encoding_set, mut is_chunked) = req
@@ -47,8 +45,6 @@ impl Unit {
             })
             // otherwise, no chunking.
             .unwrap_or((false, false));
-
-        let query_string = combine_query(&url, &req.query, mix_queries);
 
         let extra_headers = {
             let mut extra = vec![];
@@ -106,7 +102,6 @@ impl Unit {
             req: req.clone(),
             url: url.clone(),
             is_chunked,
-            query_string,
             headers,
             deadline,
         }
@@ -225,7 +220,7 @@ pub(crate) fn connect(
                 301 | 302 | 303 => {
                     let empty = Payload::Empty.into_read();
                     // recreate the unit to get a new hostname and cookies for the new host.
-                    let mut new_unit = Unit::new(req, &new_url, false, &empty);
+                    let mut new_unit = Unit::new(req, &new_url, &empty);
                     // this is to follow how curl does it. POST, PUT etc change
                     // to GET on a redirect.
                     new_unit.req.method = match &method[..] {
@@ -271,16 +266,6 @@ fn extract_cookies(agent: &Agent, url: &Url) -> Option<Header> {
     }
 }
 
-/// Combine the query of the url and the query options set on the request object.
-pub(crate) fn combine_query(url: &Url, query: &QString, mix_queries: bool) -> String {
-    match (url.query(), !query.is_empty() && mix_queries) {
-        (Some(urlq), true) => format!("?{}&{}", urlq, query),
-        (Some(urlq), false) => format!("?{}", urlq),
-        (None, true) => format!("?{}", query),
-        (None, false) => "".to_string(),
-    }
-}
-
 /// Connect the socket, either by using the pool or grab a new one.
 fn connect_socket(unit: &Unit, hostname: &str, use_pooled: bool) -> Result<(Stream, bool), Error> {
     match unit.url.scheme() {
@@ -323,10 +308,11 @@ fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> io::Result<()>
     // request line
     write!(
         prelude,
-        "{} {}{} HTTP/1.1\r\n",
+        "{} {}{}{} HTTP/1.1\r\n",
         unit.req.method,
         unit.url.path(),
-        &unit.query_string
+        if unit.url.query().is_some() { "?" } else { "" },
+        unit.url.query().unwrap_or_default(),
     )?;
 
     // host header if not set by user.

@@ -1,7 +1,6 @@
 use std::fmt;
 use std::io::Read;
 
-use qstring::QString;
 use url::{form_urlencoded, Url};
 
 use crate::agent::Agent;
@@ -9,7 +8,6 @@ use crate::body::BodySize;
 use crate::body::{Payload, SizedReader};
 use crate::error::Error;
 use crate::header::{self, Header};
-use crate::proxy::Proxy;
 use crate::unit::{self, Unit};
 use crate::Response;
 
@@ -34,22 +32,15 @@ pub struct Request {
     url: String,
     return_error_for_status: bool,
     pub(crate) headers: Vec<Header>,
-    pub(crate) query: QString,
+    query_params: Vec<(String, String)>,
 }
 
 impl fmt::Debug for Request {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let (path, query) = self
-            .to_url()
-            .map(|u| {
-                let query = unit::combine_query(&u, &self.query, true);
-                (u.path().to_string(), query)
-            })
-            .unwrap_or_else(|_| ("BAD_URL".to_string(), "BAD_URL".to_string()));
         write!(
             f,
-            "Request({} {}{}, {:?})",
-            self.method, path, query, self.headers
+            "Request({} {} {:?}, {:?})",
+            self.method, self.url, self.query_params, self.headers
         )
     }
 }
@@ -62,7 +53,7 @@ impl Request {
             url,
             headers: vec![],
             return_error_for_status: true,
-            query: QString::default(),
+            query_params: vec![],
         }
     }
 
@@ -87,11 +78,16 @@ impl Request {
         for h in &self.headers {
             h.validate()?;
         }
-        let response = self.to_url().and_then(|url| {
-            let reader = payload.into_read();
-            let unit = Unit::new(&self, &url, true, &reader);
-            unit::connect(&self, unit, true, 0, reader, false)
-        })?;
+        let mut url: Url = self
+            .url
+            .parse()
+            .map_err(|e: url::ParseError| Error::BadUrl(e.to_string()))?;
+        for (name, value) in self.query_params.clone() {
+            url.query_pairs_mut().append_pair(&name, &value);
+        }
+        let reader = payload.into_read();
+        let unit = Unit::new(&self, &url, &reader);
+        let response = unit::connect(&self, unit, true, 0, reader, false)?;
 
         if response.error() && self.return_error_for_status {
             Err(Error::HTTP(response.into()))
@@ -295,22 +291,8 @@ impl Request {
     /// println!("{:?}", r);
     /// ```
     pub fn query(mut self, param: &str, value: &str) -> Self {
-        self.query.add_pair((param, value));
-        self
-    }
-
-    /// Set query parameters as a string.
-    ///
-    /// For example, to set `?format=json&dest=/login`
-    ///
-    /// ```
-    /// let r = ureq::get("/my_page")
-    ///     .query_str("?format=json&dest=/login")
-    ///     .call();
-    /// println!("{:?}", r);
-    /// ```
-    pub fn query_str(mut self, query: &str) -> Self {
-        self.query.add_str(query);
+        self.query_params
+            .push((param.to_string(), value.to_string()));
         self
     }
 
@@ -331,98 +313,6 @@ impl Request {
     pub fn error_for_status(mut self, value: bool) -> Self {
         self.return_error_for_status = value;
         self
-    }
-
-    /// Get the method this request is using.
-    ///
-    /// Example:
-    /// ```
-    /// let req = ureq::post("/somewhere");
-    /// assert_eq!(req.get_method(), "POST");
-    /// ```
-    pub fn get_method(&self) -> &str {
-        &self.method
-    }
-
-    /// Get the url this request was created with.
-    ///
-    /// This value is not normalized, it is exactly as set.
-    /// It does not contain any added query parameters.
-    ///
-    /// Example:
-    /// ```
-    /// let req = ureq::post("https://cool.server/innit");
-    /// assert_eq!(req.get_url(), "https://cool.server/innit");
-    /// ```
-    pub fn get_url(&self) -> &str {
-        &self.url
-    }
-
-    /// Normalizes and returns the host that will be used for this request.
-    ///
-    /// Example:
-    /// ```
-    /// let req1 = ureq::post("https://cool.server/innit");
-    /// assert_eq!(req1.get_host().unwrap(), "cool.server");
-    ///
-    /// let req2 = ureq::post("http://localhost/some/path");
-    /// assert_eq!(req2.get_host().unwrap(), "localhost");
-    /// ```
-    pub fn get_host(&self) -> Result<String> {
-        match self.to_url() {
-            Ok(u) => match u.host_str() {
-                Some(host) => Ok(host.to_string()),
-                None => Err(Error::BadUrl("No hostname in URL".into())),
-            },
-            Err(e) => Err(e),
-        }
-    }
-
-    /// Returns the scheme for this request.
-    ///
-    /// Example:
-    /// ```
-    /// let req = ureq::post("https://cool.server/innit");
-    /// assert_eq!(req.get_scheme().unwrap(), "https");
-    /// ```
-    pub fn get_scheme(&self) -> Result<String> {
-        self.to_url().map(|u| u.scheme().to_string())
-    }
-
-    /// The complete query for this request.
-    ///
-    /// Example:
-    /// ```
-    /// let req = ureq::post("https://cool.server/innit?foo=bar")
-    ///     .query("format", "json");
-    /// assert_eq!(req.get_query().unwrap(), "?foo=bar&format=json");
-    /// ```
-    pub fn get_query(&self) -> Result<String> {
-        self.to_url()
-            .map(|u| unit::combine_query(&u, &self.query, true))
-    }
-
-    /// The normalized url of this request.
-    ///
-    /// Example:
-    /// ```
-    /// let req = ureq::post("https://cool.server/innit");
-    /// assert_eq!(req.get_path().unwrap(), "/innit");
-    /// ```
-    pub fn get_path(&self) -> Result<String> {
-        self.to_url().map(|u| u.path().to_string())
-    }
-
-    fn to_url(&self) -> Result<Url> {
-        Url::parse(&self.url).map_err(|e| Error::BadUrl(format!("{}", e)))
-    }
-
-    pub(crate) fn proxy(&self) -> Option<Proxy> {
-        if let Some(proxy) = &self.agent.config.proxy {
-            Some(proxy.clone())
-        } else {
-            None
-        }
     }
 
     // Returns true if this request, with the provided body, is retryable.
@@ -446,16 +336,6 @@ impl Request {
 
         idempotent && retryable_body
     }
-}
-
-#[test]
-fn no_hostname() {
-    let req = Request::new(
-        Agent::new(),
-        "GET".to_string(),
-        "unix:/run/foo.socket".to_string(),
-    );
-    assert!(req.get_host().is_err());
 }
 
 #[test]
