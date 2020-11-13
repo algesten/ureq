@@ -2,6 +2,7 @@ use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
+use std::time::Duration;
 use std::{
     io::{self, BufRead, BufReader, Write},
     net::ToSocketAddrs,
@@ -91,7 +92,13 @@ impl TestServer {
         let done = Arc::new(AtomicBool::new(false));
         let done_clone = done.clone();
         thread::spawn(move || {
+            let mut conn_count = -1;
             for stream in listener.incoming() {
+                conn_count += 1;
+                // first connect is always the test for checking that server is ready.
+                if conn_count == 0 {
+                    break;
+                }
                 if let Err(e) = stream {
                     eprintln!("testserver: handling just-accepted stream: {}", e);
                     break;
@@ -103,6 +110,20 @@ impl TestServer {
                 }
             }
         });
+        // before returning from new(), ensure the server is ready to accept connections
+        loop {
+            if let Err(e) = TcpStream::connect(format!("localhost:{}", port)) {
+                match e.kind() {
+                    io::ErrorKind::ConnectionRefused => {
+                        std::thread::sleep(Duration::from_millis(100));
+                        continue;
+                    }
+                    _ => panic!("testserver: pre-connect with error {}", e),
+                }
+            } else {
+                break;
+            }
+        }
         TestServer {
             port,
             done: done_clone,
