@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::test::testserver::{read_headers, TestServer};
+use crate::testserver::{read_headers, TestServer};
 use std::io::{self, Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;

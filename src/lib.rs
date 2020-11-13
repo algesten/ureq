@@ -121,6 +121,8 @@ pub use serde_json::json;
 
 #[cfg(test)]
 mod test;
+#[doc(hidden)]
+mod testserver;
 
 pub use crate::agent::Agent;
 pub use crate::agent::AgentBuilder;
@@ -137,17 +139,41 @@ pub use cookie::Cookie;
 #[cfg(feature = "json")]
 pub use serde_json::{to_value as serde_to_value, Map as SerdeMap, Value as SerdeValue};
 
+use once_cell::sync::Lazy;
+use std::sync::atomic::{AtomicBool, Ordering};
+
 /// Creates an agent builder.
 pub fn builder() -> AgentBuilder {
     AgentBuilder::new()
 }
 
+// is_test returns false so long as it has only ever been called with false.
+// If it has ever been called with true, it will always return true after that.
+// This is a public but hidden function used to allow doctests to use the test_agent.
+// Note that we use this approach for doctests rather the #[cfg(test)], because
+// doctests are run against a copy of the crate build without cfg(test) set.
+// We also can't use #[cfg(doctest)] to do this, because cfg(doctest) is only set
+// when collecting doctests, not when building the crate.
+#[doc(hidden)]
+pub fn is_test(is: bool) -> bool {
+    static IS_TEST: Lazy<AtomicBool> = Lazy::new(|| AtomicBool::new(false));
+    if is {
+        IS_TEST.store(true, Ordering::SeqCst);
+    }
+    let x = IS_TEST.load(Ordering::SeqCst);
+    return x;
+}
+
 /// Agents are used to keep state between requests.
 pub fn agent() -> Agent {
     #[cfg(not(test))]
-    return AgentBuilder::new().build();
+    if is_test(false) {
+        return testserver::test_agent();
+    } else {
+        return AgentBuilder::new().build();
+    }
     #[cfg(test)]
-    return test::test_agent();
+    return testserver::test_agent();
 }
 
 /// Make a request setting the HTTP method via a string.

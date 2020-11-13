@@ -103,14 +103,12 @@ impl Request {
     /// The `Content-Length` header is implicitly set to the length of the serialized value.
     ///
     /// ```
-    /// #[macro_use]
-    /// extern crate ureq;
-    ///
-    /// fn main() {
-    /// let r = ureq::post("/my_page")
-    ///     .send_json(json!({ "name": "martin", "rust": true }));
-    /// println!("{:?}", r);
-    /// }
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// let r = ureq::post("http://example.com/form")
+    ///     .send_json(ureq::json!({ "name": "martin", "rust": true }))?;
+    /// # Ok(())
+    /// # }
     /// ```
     #[cfg(feature = "json")]
     pub fn send_json(mut self, data: SerdeValue) -> Result<Response> {
