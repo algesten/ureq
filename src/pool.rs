@@ -330,7 +330,7 @@ impl<R: Read + Sized + Into<Stream>> PoolReturnRead<R> {
             stream.reset()?;
 
             // insert back into pool
-            let key = PoolKey::new(&unit.url, unit.req.proxy());
+            let key = PoolKey::new(&unit.url, unit.req.agent.config.proxy.clone());
             unit.req.agent.state.pool.add(key, stream);
         }
 
