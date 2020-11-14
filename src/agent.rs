@@ -304,6 +304,8 @@ impl AgentBuilder {
     /// If both this and `.timeout()` are both set, `.timeout()`
     /// takes precedence.
     ///
+    /// The default is no timeout. In other words, requests may block forever on reads by default.
+    ///
     /// ```
     /// use std::time::Duration;
     /// # fn main() -> Result<(), ureq::Error> {
@@ -323,6 +325,8 @@ impl AgentBuilder {
     /// Timeout for the individual writes to the socket.
     /// If both this and `.timeout()` are both set, `.timeout()`
     /// takes precedence.
+    ///
+    /// The default is no timeout. In other words, requests may block forever on writes by default.
     ///
     /// ```
     /// use std::time::Duration;
