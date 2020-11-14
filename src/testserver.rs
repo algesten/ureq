@@ -14,15 +14,28 @@ use crate::{Agent, AgentBuilder};
 // that all hostnames resolve to a TestServer on localhost.
 pub(crate) fn test_agent() -> Agent {
     let testserver = TestServer::new(|mut stream: TcpStream| -> io::Result<()> {
-        read_headers(&stream);
-        stream.write_all(b"HTTP/1.1 200 OK\r\n")?;
-        stream.write_all(b"Transfer-Encoding: chunked\r\n")?;
-        stream.write_all(b"Content-Type: text/html; charset=ISO-8859-1\r\n")?;
-        stream.write_all(b"\r\n")?;
-        stream.write_all(b"7\r\n")?;
-        stream.write_all(b"success\r\n")?;
-        stream.write_all(b"0\r\n")?;
-        stream.write_all(b"\r\n")?;
+        let headers = read_headers(&stream);
+        if headers.path() == "/status/500" {
+            stream.write_all(b"HTTP/1.1 500 Server Internal Error\r\n\r\n")?;
+        } else if headers.path() == "/bytes/100" {
+            stream.write_all(b"HTTP/1.1 200 OK\r\n")?;
+            stream.write_all(b"Content-Length: 100\r\n")?;
+            stream.write_all(b"\r\n")?;
+            stream.write_all(&[0; 100])?;
+        } else if headers.path() == "/redirect/3" {
+            stream.write_all(b"HTTP/1.1 302 Found\r\n")?;
+            stream.write_all(b"Location: /redirect/3\r\n")?;
+            stream.write_all(b"\r\n")?;
+        } else {
+            stream.write_all(b"HTTP/1.1 200 OK\r\n")?;
+            stream.write_all(b"Transfer-Encoding: chunked\r\n")?;
+            stream.write_all(b"Content-Type: text/html; charset=ISO-8859-1\r\n")?;
+            stream.write_all(b"\r\n")?;
+            stream.write_all(b"7\r\n")?;
+            stream.write_all(b"success\r\n")?;
+            stream.write_all(b"0\r\n")?;
+            stream.write_all(b"\r\n")?;
+        }
         Ok(())
     });
     // Slightly tricky thing here: we want to make sure the TestServer lives
@@ -53,7 +66,6 @@ pub struct TestHeaders(Vec<String>);
 #[allow(dead_code)]
 impl TestHeaders {
     // Return the path for a request, e.g. /foo from "GET /foo HTTP/1.1"
-    #[cfg(feature = "cookies")]
     pub fn path(&self) -> &str {
         if self.0.len() == 0 {
             ""
