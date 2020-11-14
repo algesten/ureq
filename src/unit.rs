@@ -412,8 +412,7 @@ fn save_cookies(unit: &Unit, resp: &Response) {
             Ok(c) => Some(c),
         }
     });
-    unit.req
-        .agent
+    unit.agent
         .state
         .cookie_tin
         .store_response_cookies(cookies, &unit.url.clone());
