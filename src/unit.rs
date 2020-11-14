@@ -7,15 +7,13 @@ use url::Url;
 #[cfg(feature = "cookies")]
 use cookie::Cookie;
 
+use crate::body::{self, BodySize, Payload, SizedReader};
 use crate::header;
+use crate::header::{get_header, Header};
 use crate::resolve::ArcResolver;
 use crate::stream::{self, connect_test, Stream};
 use crate::Agent;
-use crate::{
-    body::{self, BodySize, Payload, SizedReader},
-    header::get_header,
-};
-use crate::{Error, Header, Response};
+use crate::{Error, Response};
 
 /// A Unit is fully-built Request, ready to execute.
 ///

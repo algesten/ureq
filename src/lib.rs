@@ -127,7 +127,6 @@ mod testserver;
 pub use crate::agent::Agent;
 pub use crate::agent::AgentBuilder;
 pub use crate::error::Error;
-pub use crate::header::Header;
 pub use crate::proxy::Proxy;
 pub use crate::request::Request;
 pub use crate::resolve::Resolver;
