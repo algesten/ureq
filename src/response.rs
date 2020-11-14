@@ -178,7 +178,6 @@ impl Response {
     /// Example:
     ///
     /// ```
-    /// # #[cfg(feature = "tls")]
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
     /// let resp = ureq::get("http://example.com/").call()?;
@@ -203,7 +202,6 @@ impl Response {
     /// Example:
     ///
     /// ```
-    /// # #[cfg(feature = "tls")]
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
     /// let resp = ureq::get("http://example.com/").call()?;
@@ -228,7 +226,6 @@ impl Response {
     ///
     /// ```
     /// # use std::io::Read;
-    /// # #[cfg(feature = "tls")]
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
     /// let resp = ureq::get("http://httpbin.org/bytes/100")
@@ -308,7 +305,6 @@ impl Response {
     /// Example:
     ///
     /// ```
-    /// # #[cfg(feature = "tls")]
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
     /// let text = ureq::get("http://httpbin.org/get/success")
