@@ -64,7 +64,7 @@ impl Request {
     /// Use `.timeout_connect()` and `.timeout_read()` to avoid blocking forever.
     ///
     /// ```
-    /// # use std::time::Duration;
+    /// use std::time::Duration;
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
     /// let resp = ureq::builder()
@@ -208,7 +208,7 @@ impl Request {
     /// The input from the reader is buffered into chunks of size 16,384, the max size of a TLS fragment.
     ///
     /// ```
-    /// # use std::io::Cursor;
+    /// use std::io::Cursor;
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
     /// let read = Cursor::new(vec![0x20; 100]);

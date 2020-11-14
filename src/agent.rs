@@ -285,7 +285,7 @@ impl AgentBuilder {
     /// The default is 30 seconds.
     ///
     /// ```
-    /// # use std::time::Duration;
+    /// use std::time::Duration;
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
     /// let agent = ureq::builder()
@@ -305,7 +305,7 @@ impl AgentBuilder {
     /// takes precedence.
     ///
     /// ```
-    /// # use std::time::Duration;
+    /// use std::time::Duration;
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
     /// let agent = ureq::builder()
@@ -325,7 +325,7 @@ impl AgentBuilder {
     /// takes precedence.
     ///
     /// ```
-    /// # use std::time::Duration;
+    /// use std::time::Duration;
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
     /// let agent = ureq::builder()
@@ -393,7 +393,7 @@ impl AgentBuilder {
     /// ```
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
-    /// # use std::sync::Arc;
+    /// use std::sync::Arc;
     /// let tls_config = Arc::new(rustls::ClientConfig::new());
     /// let agent = ureq::builder()
     ///     .tls_config(tls_config.clone())
@@ -417,9 +417,9 @@ impl AgentBuilder {
     /// ```
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
-    /// # use cookie_store::CookieStore;
-    /// # use std::fs::File;
-    /// # use std::io::BufReader;
+    /// use cookie_store::CookieStore;
+    /// use std::fs::File;
+    /// use std::io::BufReader;
     /// let file = File::open("cookies.json")?;
     /// let read = BufReader::new(file);
     ///

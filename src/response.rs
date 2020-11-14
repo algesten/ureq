@@ -225,7 +225,7 @@ impl Response {
     /// Example:
     ///
     /// ```
-    /// # use std::io::Read;
+    /// use std::io::Read;
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
     /// let resp = ureq::get("http://httpbin.org/bytes/100")
@@ -388,7 +388,7 @@ impl Response {
     /// Example:
     ///
     /// ```
-    /// # use serde::Deserialize;
+    /// use serde::Deserialize;
     ///
     /// #[derive(Deserialize)]
     /// struct Hello {
