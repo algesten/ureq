@@ -3,6 +3,7 @@ use std::io::Result as IoResult;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::Arc;
 
+/// A custom resolver to override the default DNS behavior.
 pub trait Resolver: Send + Sync {
     fn resolve(&self, netloc: &str) -> IoResult<Vec<SocketAddr>>;
 }

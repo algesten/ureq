@@ -2,6 +2,7 @@ use crate::response::Response;
 use std::fmt;
 use std::io::{self, ErrorKind};
 
+/// Errors that may be emitted when performing a [Request][crate::Request].
 #[derive(Debug)]
 pub enum Error {
     /// The url could not be understood.
