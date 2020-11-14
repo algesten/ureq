@@ -266,7 +266,7 @@ impl Response {
         let stream = self.stream.expect("No reader in response?!");
         let unit = self.unit;
         if let Some(unit) = &unit {
-            let result = stream.set_read_timeout(unit.req.agent.config.timeout_read);
+            let result = stream.set_read_timeout(unit.agent.config.timeout_read);
             if let Err(e) = result {
                 return Box::new(ErrorReader(e)) as Box<dyn Read + Send>;
             }

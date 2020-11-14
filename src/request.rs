@@ -4,8 +4,7 @@ use std::io::Read;
 use url::{form_urlencoded, Url};
 
 use crate::agent::Agent;
-use crate::body::BodySize;
-use crate::body::{Payload, SizedReader};
+use crate::body::Payload;
 use crate::error::Error;
 use crate::header::{self, Header};
 use crate::unit::{self, Unit};
@@ -27,11 +26,11 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// ```
 #[derive(Clone)]
 pub struct Request {
-    pub(crate) agent: Agent,
-    pub(crate) method: String,
+    agent: Agent,
+    method: String,
     url: String,
     return_error_for_status: bool,
-    pub(crate) headers: Vec<Header>,
+    headers: Vec<Header>,
     query_params: Vec<(String, String)>,
 }
 
@@ -86,8 +85,8 @@ impl Request {
             url.query_pairs_mut().append_pair(&name, &value);
         }
         let reader = payload.into_read();
-        let unit = Unit::new(&self, &url, &reader);
-        let response = unit::connect(&self, unit, true, 0, reader, false)?;
+        let unit = Unit::new(&self.agent, &self.method, &url, &self.headers, &reader);
+        let response = unit::connect(unit, true, 0, reader, false)?;
 
         if response.error() && self.return_error_for_status {
             Err(Error::HTTP(response.into()))
@@ -313,28 +312,6 @@ impl Request {
     pub fn error_for_status(mut self, value: bool) -> Self {
         self.return_error_for_status = value;
         self
-    }
-
-    // Returns true if this request, with the provided body, is retryable.
-    pub(crate) fn is_retryable(&self, body: &SizedReader) -> bool {
-        // Per https://tools.ietf.org/html/rfc7231#section-8.1.3
-        // these methods are idempotent.
-        let idempotent = match self.method.as_str() {
-            "DELETE" | "GET" | "HEAD" | "OPTIONS" | "PUT" | "TRACE" => true,
-            _ => false,
-        };
-        // Unsized bodies aren't retryable because we can't rewind the reader.
-        // Sized bodies are retryable only if they are zero-length because of
-        // coincidences of the current implementation - the function responsible
-        // for retries doesn't have a way to replay a Payload.
-        let retryable_body = match body.size {
-            BodySize::Unknown => false,
-            BodySize::Known(0) => true,
-            BodySize::Known(_) => false,
-            BodySize::Empty => true,
-        };
-
-        idempotent && retryable_body
     }
 }
 
