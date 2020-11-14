@@ -7,33 +7,41 @@ use url::Url;
 #[cfg(feature = "cookies")]
 use cookie::Cookie;
 
-use crate::body::{self, BodySize, Payload, SizedReader};
 use crate::header;
 use crate::resolve::ArcResolver;
 use crate::stream::{self, connect_test, Stream};
-#[cfg(feature = "cookies")]
 use crate::Agent;
-use crate::{Error, Header, Request, Response};
+use crate::{
+    body::{self, BodySize, Payload, SizedReader},
+    header::get_header,
+};
+use crate::{Error, Header, Response};
 
-/// It's a "unit of work". Maybe a bad name for it?
+/// A Unit is fully-built Request, ready to execute.
 ///
 /// *Internal API*
 pub(crate) struct Unit {
-    pub req: Request,
+    pub agent: Agent,
+    pub method: String,
     pub url: Url,
-    pub is_chunked: bool,
-    pub headers: Vec<Header>,
+    is_chunked: bool,
+    headers: Vec<Header>,
     pub deadline: Option<time::Instant>,
 }
 
 impl Unit {
     //
 
-    pub(crate) fn new(req: &Request, url: &Url, body: &SizedReader) -> Self {
+    pub(crate) fn new(
+        agent: &Agent,
+        method: &str,
+        url: &Url,
+        headers: &Vec<Header>,
+        body: &SizedReader,
+    ) -> Self {
         //
 
-        let (is_transfer_encoding_set, mut is_chunked) = req
-            .header("transfer-encoding")
+        let (is_transfer_encoding_set, mut is_chunked) = get_header(&headers, "transfer-encoding")
             // if the user has set an encoding header, obey that.
             .map(|enc| {
                 let is_transfer_encoding_set = !enc.is_empty();
@@ -51,7 +59,7 @@ impl Unit {
 
             // chunking and Content-Length headers are mutually exclusive
             // also don't write this if the user has set it themselves
-            if !is_chunked && !req.has("content-length") {
+            if !is_chunked && get_header(&headers, "content-length").is_none() {
                 // if the payload is of known size (everything beside an unsized reader), set
                 // Content-Length,
                 // otherwise, use the chunked Transfer-Encoding (only if no other Transfer-Encoding
@@ -72,25 +80,25 @@ impl Unit {
 
             let username = url.username();
             let password = url.password().unwrap_or("");
-            if (username != "" || password != "") && !req.has("authorization") {
+            if (username != "" || password != "") && get_header(&headers, "authorization").is_none()
+            {
                 let encoded = base64::encode(&format!("{}:{}", username, password));
                 extra.push(Header::new("Authorization", &format!("Basic {}", encoded)));
             }
 
             #[cfg(feature = "cookies")]
-            extra.extend(extract_cookies(&req.agent, &url).into_iter());
+            extra.extend(extract_cookies(agent, &url).into_iter());
 
             extra
         };
 
-        let headers: Vec<_> = req
-            .headers
+        let headers: Vec<_> = headers
             .iter()
             .chain(extra_headers.iter())
             .cloned()
             .collect();
 
-        let deadline = match req.agent.config.timeout {
+        let deadline = match agent.config.timeout {
             None => None,
             Some(timeout) => {
                 let now = time::Instant::now();
@@ -99,7 +107,8 @@ impl Unit {
         };
 
         Unit {
-            req: req.clone(),
+            agent: agent.clone(),
+            method: method.to_string(),
             url: url.clone(),
             is_chunked,
             headers,
@@ -108,11 +117,11 @@ impl Unit {
     }
 
     pub fn is_head(&self) -> bool {
-        self.req.method.eq_ignore_ascii_case("head")
+        self.method.eq_ignore_ascii_case("head")
     }
 
     pub fn resolver(&self) -> ArcResolver {
-        self.req.agent.state.resolver.clone()
+        self.agent.state.resolver.clone()
     }
 
     #[cfg(test)]
@@ -127,11 +136,32 @@ impl Unit {
     pub fn all(&self, name: &str) -> Vec<&str> {
         header::get_all_headers(&self.headers, name)
     }
+
+    // Returns true if this request, with the provided body, is retryable.
+    pub(crate) fn is_retryable(&self, body: &SizedReader) -> bool {
+        // Per https://tools.ietf.org/html/rfc7231#section-8.1.3
+        // these methods are idempotent.
+        let idempotent = match self.method.as_str() {
+            "DELETE" | "GET" | "HEAD" | "OPTIONS" | "PUT" | "TRACE" => true,
+            _ => false,
+        };
+        // Unsized bodies aren't retryable because we can't rewind the reader.
+        // Sized bodies are retryable only if they are zero-length because of
+        // coincidences of the current implementation - the function responsible
+        // for retries doesn't have a way to replay a Payload.
+        let retryable_body = match body.size {
+            BodySize::Unknown => false,
+            BodySize::Known(0) => true,
+            BodySize::Known(_) => false,
+            BodySize::Empty => true,
+        };
+
+        idempotent && retryable_body
+    }
 }
 
 /// Perform a connection. Used recursively for redirects.
 pub(crate) fn connect(
-    req: &Request,
     unit: Unit,
     use_pooled: bool,
     redirect_count: u32,
@@ -145,7 +175,7 @@ pub(crate) fn connect(
         .host_str()
         .ok_or(Error::BadUrl("no host".to_string()))?;
     let url = &unit.url;
-    let method = &unit.req.method;
+    let method = &unit.method;
     // open socket
     let (mut stream, is_recycled) = connect_socket(&unit, &host, use_pooled)?;
 
@@ -162,13 +192,13 @@ pub(crate) fn connect(
             debug!("retrying request early {} {}", method, url);
             // we try open a new connection, this time there will be
             // no connection in the pool. don't use it.
-            return connect(req, unit, false, redirect_count, body, redir);
+            return connect(unit, false, redirect_count, body, redir);
         } else {
             // not a pooled connection, propagate the error.
             return Err(err.into());
         }
     }
-    let retryable = req.is_retryable(&body);
+    let retryable = unit.is_retryable(&body);
 
     // send the body (which can be empty now depending on redirects)
     body::send_body(body, unit.is_chunked, &mut stream)?;
@@ -191,7 +221,7 @@ pub(crate) fn connect(
         Err(err) if err.connection_closed() && retryable && is_recycled => {
             debug!("retrying request {} {}", method, url);
             let empty = Payload::Empty.into_read();
-            return connect(req, unit, false, redirect_count, empty, redir);
+            return connect(unit, false, redirect_count, empty, redir);
         }
         Err(e) => return Err(e),
         Ok(resp) => resp,
@@ -202,8 +232,8 @@ pub(crate) fn connect(
     save_cookies(&unit, &resp);
 
     // handle redirects
-    if resp.redirect() && req.agent.config.redirects > 0 {
-        if redirect_count == req.agent.config.redirects {
+    if resp.redirect() && unit.agent.config.redirects > 0 {
+        if redirect_count == unit.agent.config.redirects {
             return Err(Error::TooManyRedirects);
         }
 
@@ -219,16 +249,18 @@ pub(crate) fn connect(
             match resp.status() {
                 301 | 302 | 303 => {
                     let empty = Payload::Empty.into_read();
-                    // recreate the unit to get a new hostname and cookies for the new host.
-                    let mut new_unit = Unit::new(req, &new_url, &empty);
                     // this is to follow how curl does it. POST, PUT etc change
                     // to GET on a redirect.
-                    new_unit.req.method = match &method[..] {
+                    let new_method = match &method[..] {
                         "GET" | "HEAD" => method.to_string(),
                         _ => "GET".into(),
                     };
+                    // recreate the unit to get a new hostname and cookies for the new host.
+                    let new_unit =
+                        Unit::new(&unit.agent, &new_method, &new_url, &unit.headers, &empty);
+
                     debug!("redirect {} {} -> {}", resp.status(), url, new_url);
-                    return connect(req, new_unit, use_pooled, redirect_count + 1, empty, true);
+                    return connect(new_unit, use_pooled, redirect_count + 1, empty, true);
                 }
                 _ => (),
                 // reinstate this with expect-100
@@ -273,14 +305,14 @@ fn connect_socket(unit: &Unit, hostname: &str, use_pooled: bool) -> Result<(Stre
         _ => return Err(Error::UnknownScheme(unit.url.scheme().to_string())),
     };
     if use_pooled {
-        let agent = &unit.req.agent;
+        let agent = &unit.agent;
         // The connection may have been closed by the server
         // due to idle timeout while it was sitting in the pool.
         // Loop until we find one that is still good or run out of connections.
         while let Some(stream) = agent
             .state
             .pool
-            .try_get_connection(&unit.url, unit.req.agent.config.proxy.clone())
+            .try_get_connection(&unit.url, unit.agent.config.proxy.clone())
         {
             let server_closed = stream.server_closed()?;
             if !server_closed {
@@ -309,7 +341,7 @@ fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> io::Result<()>
     write!(
         prelude,
         "{} {}{}{} HTTP/1.1\r\n",
-        unit.req.method,
+        unit.method,
         unit.url.path(),
         if unit.url.query().is_some() { "?" } else { "" },
         unit.url.query().unwrap_or_default(),

@@ -315,7 +315,6 @@ pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error
     let sni = webpki::DNSNameRef::try_from_ascii_str(hostname)
         .map_err(|err| Error::DnsFailed(err.to_string()))?;
     let tls_conf: &Arc<rustls::ClientConfig> = unit
-        .req
         .agent
         .config
         .tls_config
@@ -333,12 +332,12 @@ pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error
 
 pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<TcpStream, Error> {
     let connect_deadline: Option<Instant> =
-        if let Some(timeout_connect) = unit.req.agent.config.timeout_connect {
+        if let Some(timeout_connect) = unit.agent.config.timeout_connect {
             Instant::now().checked_add(timeout_connect)
         } else {
             unit.deadline
         };
-    let proxy: Option<Proxy> = unit.req.agent.config.proxy.clone();
+    let proxy: Option<Proxy> = unit.agent.config.proxy.clone();
     let netloc = match proxy {
         Some(ref proxy) => format!("{}:{}", proxy.server, proxy.port),
         None => format!("{}:{}", hostname, port),
@@ -405,13 +404,13 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
     if let Some(deadline) = unit.deadline {
         stream.set_read_timeout(Some(time_until_deadline(deadline)?))?;
     } else {
-        stream.set_read_timeout(unit.req.agent.config.timeout_read)?;
+        stream.set_read_timeout(unit.agent.config.timeout_read)?;
     }
 
     if let Some(deadline) = unit.deadline {
         stream.set_write_timeout(Some(time_until_deadline(deadline)?))?;
     } else {
-        stream.set_write_timeout(unit.req.agent.config.timeout_write)?;
+        stream.set_write_timeout(unit.agent.config.timeout_write)?;
     }
 
     if proto == Some(Proto::HTTPConnect) {
