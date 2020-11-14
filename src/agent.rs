@@ -44,25 +44,22 @@ pub(crate) struct AgentConfig {
 /// can keep a state.
 ///
 /// ```
+/// # fn main() -> Result<(), ureq::Error> {
+/// # ureq::is_test(true);
 /// let mut agent = ureq::agent();
 ///
-/// let auth = agent
-///     .post("/login")
-///     .call(); // blocks.
-///
-/// if auth.is_err() {
-///     println!("Noes!");
-/// }
+/// agent
+///     .post("http://example.com/login")
+///     .call()?;
 ///
 /// let secret = agent
-///     .get("/my-protected-page")
-///     .call(); // blocks and waits for request.
+///     .get("http://example.com/my-protected-page")
+///     .call()?
+///     .into_string()?;
 ///
-/// if secret.is_err() {
-///     println!("Wot?!");
-/// } else {
-///   println!("Secret is: {}", secret.unwrap().into_string().unwrap());
-/// }
+///   println!("Secret is: {}", secret);
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// Agent uses an inner Arc, so cloning an Agent results in an instance
@@ -99,12 +96,15 @@ impl Agent {
     /// Request by providing the HTTP verb such as `GET`, `POST`...
     ///
     /// ```
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
     /// let agent = ureq::agent();
     ///
-    /// let r = agent
-    ///     .request("GET", "/my_page")
-    ///     .call();
-    /// println!("{:?}", r);
+    /// let resp = agent
+    ///     .request("GET", "http://httpbin.org/status/200")
+    ///     .call()?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn request(&self, method: &str, path: &str) -> Request {
         Request::new(self.clone(), method.into(), path.into())
@@ -143,15 +143,18 @@ impl Agent {
     /// use std::io::Write;
     /// use std::fs::File;
     ///
-    /// let mut file = File::create("cookies.json").unwrap();
-    ///
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
     /// let agent = ureq::agent();
     ///
     /// // Cookies set by www.google.com are stored in agent.
-    /// agent.get("https://www.google.com/").call().unwrap();
+    /// agent.get("https://www.google.com/").call()?;
     ///
     /// // Saves (persistent) cookies
+    /// let mut file = File::create("cookies.json")?;
     /// agent.cookie_store().save_json(&mut file).unwrap();
+    /// # Ok(())
+    /// # }
     /// ```
     #[cfg(feature = "cookies")]
     pub fn cookie_store(&self) -> CookieStoreGuard<'_> {
@@ -209,10 +212,14 @@ impl AgentBuilder {
     ///
     /// Example:
     /// ```
-    /// let proxy = ureq::Proxy::new("user:password@cool.proxy:9090").unwrap();
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// let proxy = ureq::Proxy::new("user:password@cool.proxy:9090")?;
     /// let agent = ureq::AgentBuilder::new()
     ///     .proxy(proxy)
     ///     .build();
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn proxy(mut self, proxy: Proxy) -> Self {
         self.config.proxy = Some(proxy);
@@ -224,7 +231,9 @@ impl AgentBuilder {
     /// connection pooling.
     ///
     /// ```
-    /// let agent = ureq::AgentBuilder::new().max_idle_connections(200).build();
+    /// let agent = ureq::AgentBuilder::new()
+    ///     .max_idle_connections(200)
+    ///     .build();
     /// ```
     pub fn max_idle_connections(mut self, max: usize) -> Self {
         self.max_idle_connections = max;
@@ -236,7 +245,9 @@ impl AgentBuilder {
     /// would disable connection pooling.
     ///
     /// ```
-    /// let agent = ureq::AgentBuilder::new().max_idle_connections_per_host(200).build();
+    /// let agent = ureq::AgentBuilder::new()
+    ///     .max_idle_connections_per_host(200)
+    ///     .build();
     /// ```
     pub fn max_idle_connections_per_host(mut self, max: usize) -> Self {
         self.max_idle_connections_per_host = max;
@@ -274,10 +285,15 @@ impl AgentBuilder {
     /// The default is 30 seconds.
     ///
     /// ```
+    /// use std::time::Duration;
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
     /// let agent = ureq::builder()
-    ///     .timeout_connect(std::time::Duration::from_secs(1))
+    ///     .timeout_connect(Duration::from_secs(1))
     ///     .build();
-    /// let r = agent.get("/my_page").call();
+    /// let result = agent.get("http://httpbin.org/delay/20").call();
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn timeout_connect(mut self, timeout: Duration) -> Self {
         self.config.timeout_connect = Some(timeout);
@@ -288,13 +304,18 @@ impl AgentBuilder {
     /// If both this and `.timeout()` are both set, `.timeout()`
     /// takes precedence.
     ///
-    /// The default is `0`, which means it can block forever.
+    /// The default is no timeout. In other words, requests may block forever on reads by default.
     ///
     /// ```
+    /// use std::time::Duration;
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
     /// let agent = ureq::builder()
-    ///     .timeout_read(std::time::Duration::from_secs(1))
+    ///     .timeout_read(Duration::from_secs(1))
     ///     .build();
-    /// let r = agent.get("/my_page").call();
+    /// let result = agent.get("http://httpbin.org/delay/20").call();
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn timeout_read(mut self, timeout: Duration) -> Self {
         self.config.timeout_read = Some(timeout);
@@ -305,13 +326,18 @@ impl AgentBuilder {
     /// If both this and `.timeout()` are both set, `.timeout()`
     /// takes precedence.
     ///
-    /// The default is `0`, which means it can block forever.
+    /// The default is no timeout. In other words, requests may block forever on writes by default.
     ///
     /// ```
+    /// use std::time::Duration;
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
     /// let agent = ureq::builder()
-    ///     .timeout_write(std::time::Duration::from_secs(1))
+    ///     .timeout_read(Duration::from_secs(1))
     ///     .build();
-    /// let r = agent.get("/my_page").call();
+    /// let result = agent.get("http://httpbin.org/delay/20").call();
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn timeout_write(mut self, timeout: Duration) -> Self {
         self.config.timeout_write = Some(timeout);
@@ -327,11 +353,15 @@ impl AgentBuilder {
     /// not `.timeout_connect()`.
     ///
     /// ```
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
     /// // wait max 1 second for whole request to complete.
     /// let agent = ureq::builder()
     ///     .timeout(std::time::Duration::from_secs(1))
     ///     .build();
-    /// let r = agent.get("/my_page").call();
+    /// let result = agent.get("http://httpbin.org/delay/20").call();
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn timeout(mut self, timeout: Duration) -> Self {
         self.config.timeout = Some(timeout);
@@ -346,12 +376,15 @@ impl AgentBuilder {
     /// If the redirect count hits this limit (and it's > 0), TooManyRedirects is returned.
     ///
     /// ```
-    /// let r = ureq::builder()
-    ///     .redirects(10)
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// let result = ureq::builder()
+    ///     .redirects(1)
     ///     .build()
-    ///     .get("/my_page")
+    ///     .get("http://httpbin.org/redirect/3")
     ///     .call();
-    /// println!("{:?}", r);
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn redirects(mut self, n: u32) -> Self {
         self.config.redirects = n;
@@ -362,11 +395,15 @@ impl AgentBuilder {
     ///
     /// Example:
     /// ```
-    /// let tls_config = std::sync::Arc::new(rustls::ClientConfig::new());
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// use std::sync::Arc;
+    /// let tls_config = Arc::new(rustls::ClientConfig::new());
     /// let agent = ureq::builder()
     ///     .tls_config(tls_config.clone())
     ///     .build();
-    /// let req = agent.post("https://cool.server");
+    /// # Ok(())
+    /// # }
     /// ```
     #[cfg(feature = "tls")]
     pub fn tls_config(mut self, tls_config: Arc<rustls::ClientConfig>) -> Self {
@@ -382,11 +419,12 @@ impl AgentBuilder {
     ///
     /// Example
     /// ```no_run
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
     /// use cookie_store::CookieStore;
     /// use std::fs::File;
     /// use std::io::BufReader;
-    ///
-    /// let file = File::open("cookies.json").unwrap();
+    /// let file = File::open("cookies.json")?;
     /// let read = BufReader::new(file);
     ///
     /// // Read persisted cookies from cookies.json
@@ -396,7 +434,8 @@ impl AgentBuilder {
     /// let agent = ureq::builder()
     ///     .cookie_store(my_store)
     ///     .build();
-    ///;
+    /// # Ok(())
+    /// # }
     /// ```
     #[cfg(feature = "cookies")]
     pub fn cookie_store(mut self, cookie_store: CookieStore) -> Self {

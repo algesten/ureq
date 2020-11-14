@@ -30,13 +30,17 @@ pub const DEFAULT_CHARACTER_SET: &str = "utf-8";
 /// [`into_string()`](#method.into_string) consumes the response.
 ///
 /// ```
-/// let response = ureq::get("http://example.com/").call().unwrap();
+/// # fn main() -> Result<(), ureq::Error> {
+/// # ureq::is_test(true);
+/// let response = ureq::get("http://example.com/").call()?;
 ///
 /// // socket is still open and the response body has not been read.
 ///
-/// let text = response.into_string().unwrap();
+/// let text = response.into_string()?;
 ///
 /// // response is consumed, and body has been read.
+/// # Ok(())
+/// # }
 /// ```
 pub struct Response {
     url: Option<String>,
@@ -74,9 +78,13 @@ impl Response {
     /// Example:
     ///
     /// ```
-    /// let resp = ureq::Response::new(401, "Authorization Required", "Please log in").unwrap();
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// let resp = ureq::Response::new(401, "Authorization Required", "Please log in")?;
     ///
     /// assert_eq!(resp.status(), 401);
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn new(status: u16, status_text: &str, body: &str) -> Result<Response, Error> {
         let r = format!("HTTP/1.1 {} {}\r\n\r\n{}\n", status, status_text, body);
@@ -170,10 +178,12 @@ impl Response {
     /// Example:
     ///
     /// ```
-    /// # #[cfg(feature = "tls")] {
-    /// let resp = ureq::get("https://www.google.com/").call().unwrap();
-    /// assert_eq!("text/html; charset=ISO-8859-1", resp.header("content-type").unwrap());
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// let resp = ureq::get("http://example.com/").call()?;
+    /// assert!(matches!(resp.header("content-type"), Some("text/html; charset=ISO-8859-1")));
     /// assert_eq!("text/html", resp.content_type());
+    /// # Ok(())
     /// # }
     /// ```
     pub fn content_type(&self) -> &str {
@@ -192,10 +202,12 @@ impl Response {
     /// Example:
     ///
     /// ```
-    /// # #[cfg(feature = "tls")] {
-    /// let resp = ureq::get("https://www.google.com/").call().unwrap();
-    /// assert_eq!("text/html; charset=ISO-8859-1", resp.header("content-type").unwrap());
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// let resp = ureq::get("http://example.com/").call()?;
+    /// assert!(matches!(resp.header("content-type"), Some("text/html; charset=ISO-8859-1")));
     /// assert_eq!("ISO-8859-1", resp.charset());
+    /// # Ok(())
     /// # }
     /// ```
     pub fn charset(&self) -> &str {
@@ -213,22 +225,22 @@ impl Response {
     /// Example:
     ///
     /// ```
-    /// # #[cfg(feature = "tls")] {
     /// use std::io::Read;
-    ///
-    /// let resp =
-    ///     ureq::get("https://ureq.s3.eu-central-1.amazonaws.com/hello_world.json")
-    ///         .call().unwrap();
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// let resp = ureq::get("http://httpbin.org/bytes/100")
+    ///     .call()?;
     ///
     /// assert!(resp.has("Content-Length"));
     /// let len = resp.header("Content-Length")
     ///     .and_then(|s| s.parse::<usize>().ok()).unwrap();
     ///
-    /// let mut reader = resp.into_reader();
-    /// let mut bytes = vec![];
-    /// reader.read_to_end(&mut bytes);
+    /// let mut bytes: Vec<u8> = Vec::with_capacity(len);
+    /// resp.into_reader()
+    ///     .read_to_end(&mut bytes)?;
     ///
     /// assert_eq!(bytes.len(), len);
+    /// # Ok(())
     /// # }
     /// ```
     pub fn into_reader(self) -> impl Read + Send {
@@ -293,14 +305,14 @@ impl Response {
     /// Example:
     ///
     /// ```
-    /// # #[cfg(feature = "tls")] {
-    /// let resp =
-    ///     ureq::get("https://ureq.s3.eu-central-1.amazonaws.com/hello_world.json")
-    ///         .call().unwrap();
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// let text = ureq::get("http://httpbin.org/get/success")
+    ///     .call()?
+    ///     .into_string()?;
     ///
-    /// let text = resp.into_string().unwrap();
-    ///
-    /// assert!(text.contains("hello"));
+    /// assert!(text.contains("success"));
+    /// # Ok(())
     /// # }
     /// ```
     ///
@@ -376,7 +388,7 @@ impl Response {
     /// Example:
     ///
     /// ```
-    /// # use serde::Deserialize;
+    /// use serde::Deserialize;
     ///
     /// #[derive(Deserialize)]
     /// struct Hello {

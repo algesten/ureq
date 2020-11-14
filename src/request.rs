@@ -18,11 +18,13 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// Request instances are builders that creates a request.
 ///
 /// ```
-/// let mut request = ureq::get("https://www.google.com/");
-///
-/// let response = request
-///     .query("foo", "bar baz") // add ?foo=bar%20baz
-///     .call();                 // run the request
+/// # fn main() -> Result<(), ureq::Error> {
+/// # ureq::is_test(true);
+/// let response = ureq::get("http://example.com/form")
+///     .query("foo", "bar baz")  // add ?foo=bar+baz
+///     .call()?;                 // run the request
+/// # Ok(())
+/// # }
 /// ```
 #[derive(Clone)]
 pub struct Request {
@@ -61,13 +63,16 @@ impl Request {
     /// Use `.timeout_connect()` and `.timeout_read()` to avoid blocking forever.
     ///
     /// ```
-    /// let r = ureq::builder()
-    ///     .timeout_connect(std::time::Duration::from_secs(10)) // max 10 seconds
+    /// use std::time::Duration;
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// let resp = ureq::builder()
+    ///     .timeout_connect(Duration::from_secs(10))
     ///     .build()
-    ///     .get("/my_page")
-    ///     .call();
-    ///
-    /// println!("{:?}", r);
+    ///     .get("http://example.com/")
+    ///     .call()?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn call(self) -> Result<Response> {
         self.do_call(Payload::Empty)
@@ -104,8 +109,11 @@ impl Request {
     /// ```
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
-    /// let r = ureq::post("http://example.com/form")
-    ///     .send_json(ureq::json!({ "name": "martin", "rust": true }))?;
+    /// let resp = ureq::post("http://httpbin.org/post")
+    ///     .send_json(ureq::json!({
+    ///       "name": "martin",
+    ///       "rust": true,
+    ///     }))?;
     /// # Ok(())
     /// # }
     /// ```
@@ -122,10 +130,12 @@ impl Request {
     /// The `Content-Length` header is implicitly set to the length of the serialized value.
     ///
     /// ```
-    /// let body = b"Hello world!";
-    /// let r = ureq::post("/my_page")
-    ///     .send_bytes(body);
-    /// println!("{:?}", r);
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// let resp = ureq::put("http://httpbin.org/put")
+    ///     .send_bytes(&[0; 1000])?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn send_bytes(self, data: &[u8]) -> Result<Response> {
         self.do_call(Payload::Bytes(data))
@@ -147,10 +157,13 @@ impl Request {
     /// ```
     /// // this example requires features = ["charset"]
     ///
-    /// let r = ureq::post("/my_page")
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// let resp = ureq::post("http://httpbin.org/post")
     ///     .set("Content-Type", "text/plain; charset=iso-8859-1")
-    ///     .send_string("Hällo Wörld!");
-    /// println!("{:?}", r);
+    ///     .send_string("Hällo Wörld!")?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn send_string(self, data: &str) -> Result<Response> {
         let charset =
@@ -164,14 +177,15 @@ impl Request {
     /// The `Content-Length` header is implicitly set to the length of the serialized value.
     ///
     /// ```
-    /// #[macro_use]
-    /// extern crate ureq;
-    ///
-    /// fn main() {
-    /// let r = ureq::post("/my_page")
-    ///     .send_form(&[("foo", "bar"),("foo2", "bar2")]);
-    /// println!("{:?}", r);
-    /// }
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// let resp = ureq::post("http://httpbin.org/post")
+    ///     .send_form(&[
+    ///       ("foo", "bar"),
+    ///       ("foo2", "bar2"),
+    ///     ])?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn send_form(mut self, data: &[(&str, &str)]) -> Result<Response> {
         if self.header("Content-Type").is_none() {
@@ -194,12 +208,13 @@ impl Request {
     ///
     /// ```
     /// use std::io::Cursor;
-    ///
-    /// let read = Cursor::new(vec![0x20; 100_000]);
-    ///
-    /// let resp = ureq::post("http://localhost/example-upload")
-    ///     .set("Content-Type", "text/plain")
-    ///     .send(read);
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// let read = Cursor::new(vec![0x20; 100]);
+    /// let resp = ureq::post("http://httpbin.org/post")
+    ///     .send(read)?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn send(self, reader: impl Read) -> Result<Response> {
         self.do_call(Payload::Reader(Box::new(reader)))
@@ -208,16 +223,14 @@ impl Request {
     /// Set a header field.
     ///
     /// ```
-    /// let r = ureq::get("/my_page")
-    ///     .set("X-API-Key", "foobar")
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// let resp = ureq::get("http://httpbin.org/bytes/1000")
     ///     .set("Accept", "text/plain")
-    ///     .call();
-    ///
-    ///  if r.is_ok() {
-    ///      println!("yay got {}", r.unwrap().into_string().unwrap());
-    ///  } else {
-    ///      println!("Oh no error!");
-    ///  }
+    ///     .set("Range", "bytes=500-999")
+    ///     .call()?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn set(mut self, header: &str, value: &str) -> Self {
         header::add_header(&mut self.headers, Header::new(header, value));
@@ -282,12 +295,14 @@ impl Request {
     /// For example, to set `?format=json&dest=/login`
     ///
     /// ```
-    /// let r = ureq::get("/my_page")
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// let resp = ureq::get("http://httpbin.org/response-headers")
     ///     .query("format", "json")
     ///     .query("dest", "/login")
-    ///     .call();
-    ///
-    /// println!("{:?}", r);
+    ///     .call()?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn query(mut self, param: &str, value: &str) -> Self {
         self.query_params
@@ -302,10 +317,11 @@ impl Request {
     /// Example:
     /// ```
     /// # fn main() -> Result<(), ureq::Error> {
-    /// let result = ureq::get("http://httpbin.org/status/500")
+    /// # ureq::is_test(true);
+    /// let response = ureq::get("http://httpbin.org/status/500")
     ///     .error_for_status(false)
-    ///     .call();
-    /// assert!(result.is_ok());
+    ///     .call()?;
+    /// assert_eq!(response.status(), 500);
     /// # Ok(())
     /// # }
     /// ```
