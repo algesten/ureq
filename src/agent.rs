@@ -151,8 +151,8 @@ impl Agent {
     /// agent.get("https://www.google.com/").call()?;
     ///
     /// // Saves (persistent) cookies
-    /// let file = File::create("cookies.json")?;
-    /// agent.cookie_store().save_json(&mut file)?;
+    /// let mut file = File::create("cookies.json")?;
+    /// agent.cookie_store().save_json(&mut file).unwrap();
     /// # Ok(())
     /// # }
     /// ```
@@ -418,7 +418,7 @@ impl AgentBuilder {
     /// with some pre-existing cookies.
     ///
     /// Example
-    /// ```
+    /// ```no_run
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
     /// use cookie_store::CookieStore;
