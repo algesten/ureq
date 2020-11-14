@@ -428,7 +428,7 @@ impl AgentBuilder {
     /// let read = BufReader::new(file);
     ///
     /// // Read persisted cookies from cookies.json
-    /// let my_store = CookieStore::load_json(read)?;
+    /// let my_store = CookieStore::load_json(read).unwrap();
     ///
     /// // Cookies will be used for requests done through agent.
     /// let agent = ureq::builder()
