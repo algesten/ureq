@@ -60,16 +60,10 @@ impl Request {
 
     /// Executes the request and blocks the caller until done.
     ///
-    /// Use `.timeout_connect()` and `.timeout_read()` to avoid blocking forever.
-    ///
     /// ```
-    /// use std::time::Duration;
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
-    /// let resp = ureq::builder()
-    ///     .timeout_connect(Duration::from_secs(10))
-    ///     .build()
-    ///     .get("http://example.com/")
+    /// let resp = ureq::get("http://example.com/")
     ///     .call()?;
     /// # Ok(())
     /// # }
