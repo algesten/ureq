@@ -93,7 +93,7 @@ pub fn read_request(stream: &TcpStream) -> TestHeaders {
     for line in BufReader::new(stream).lines() {
         match line {
             Err(e) => {
-                eprintln!("testserver: in read_headers: {}", e);
+                eprintln!("testserver: in read_request: {}", e);
                 break;
             }
             Ok(line) if line == "" => break,
