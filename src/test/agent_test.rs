@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::testserver::{read_headers, TestServer};
+use crate::testserver::{read_request, TestServer};
 use std::io::{self, Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
@@ -10,7 +10,7 @@ use super::super::*;
 // Handler that answers with a simple HTTP response, and times
 // out idle connections after 2 seconds.
 fn idle_timeout_handler(mut stream: TcpStream) -> io::Result<()> {
-    read_headers(&stream);
+    read_request(&stream);
     stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 8\r\n\r\nresponse")?;
     stream.set_read_timeout(Some(Duration::from_secs(2)))?;
     Ok(())
@@ -134,7 +134,7 @@ fn test_cookies_on_redirect() -> Result<(), Error> {
 #[test]
 fn dirty_streams_not_returned() -> Result<(), Error> {
     let testserver = TestServer::new(|mut stream: TcpStream| -> io::Result<()> {
-        read_headers(&stream);
+        read_request(&stream);
         stream.write_all(b"HTTP/1.1 200 OK\r\n")?;
         stream.write_all(b"Transfer-Encoding: chunked\r\n")?;
         stream.write_all(b"\r\n")?;

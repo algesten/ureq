@@ -9,7 +9,7 @@ use super::super::*;
 // Send an HTTP response on the TcpStream at a rate of two bytes every 10
 // milliseconds, for a total of 600 bytes.
 fn dribble_body_respond(mut stream: TcpStream, contents: &[u8]) -> io::Result<()> {
-    read_headers(&stream);
+    read_request(&stream);
     let headers = format!(
         "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n",
         contents.len() * 2
