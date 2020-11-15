@@ -14,8 +14,10 @@ use crate::{Agent, AgentBuilder};
 // that all hostnames resolve to a TestServer on localhost.
 pub(crate) fn test_agent() -> Agent {
     let testserver = TestServer::new(|mut stream: TcpStream| -> io::Result<()> {
-        let headers = read_headers(&stream);
-        if headers.path() == "/status/500" {
+        let headers = read_request(&stream);
+        if headers.0.is_empty() {
+            // no headers probably means it's the initial request to check test server is up.
+        } else if headers.path() == "/status/500" {
             stream.write_all(b"HTTP/1.1 500 Server Internal Error\r\n\r\n")?;
         } else if headers.path() == "/bytes/100" {
             stream.write_all(b"HTTP/1.1 200 OK\r\n")?;
@@ -86,7 +88,7 @@ impl TestHeaders {
 
 // Read a stream until reaching a blank line, in order to consume
 // request headers.
-pub fn read_headers(stream: &TcpStream) -> TestHeaders {
+pub fn read_request(stream: &TcpStream) -> TestHeaders {
     let mut results = vec![];
     for line in BufReader::new(stream).lines() {
         match line {
@@ -97,6 +99,22 @@ pub fn read_headers(stream: &TcpStream) -> TestHeaders {
             Ok(line) if line == "" => break,
             Ok(line) => results.push(line),
         };
+    }
+    // Consume rest of body. TODO maybe capture the body for inspection in the test?
+    // There's a risk stream is ended here, and fill_buf() would block.
+    stream.set_nonblocking(true).ok();
+    let mut reader = BufReader::new(stream);
+    loop {
+        let amount = match reader.fill_buf() {
+            Ok(buf) => buf.len(),
+            Err(_) => {
+                break;
+            }
+        };
+        if amount == 0 {
+            break;
+        }
+        reader.consume(amount);
     }
     TestHeaders(results)
 }
