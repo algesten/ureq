@@ -31,7 +31,7 @@ pub struct Request {
     agent: Agent,
     method: String,
     url: String,
-    return_error_for_status: bool,
+    error_on_non_2xx: bool,
     headers: Vec<Header>,
     query_params: Vec<(String, String)>,
 }
@@ -53,7 +53,7 @@ impl Request {
             method,
             url,
             headers: vec![],
-            return_error_for_status: true,
+            error_on_non_2xx: true,
             query_params: vec![],
         }
     }
@@ -87,7 +87,7 @@ impl Request {
         let unit = Unit::new(&self.agent, &self.method, &url, &self.headers, &reader);
         let response = unit::connect(unit, true, 0, reader, false)?;
 
-        if response.error() && self.return_error_for_status {
+        if response.error() && self.error_on_non_2xx {
             Err(Error::HTTP(response.into()))
         } else {
             Ok(response)
@@ -305,22 +305,22 @@ impl Request {
     }
 
     /// By default, if a response's status is anything but a 2xx or 3xx,
-    /// send() and related methods will return an Error. If you want
-    /// to handle such responses as non-errors, set this to false.
+    /// call()/send() and related methods will return an Error. If you want
+    /// to handle such responses as non-errors, set this to `false`.
     ///
     /// Example:
     /// ```
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
     /// let response = ureq::get("http://httpbin.org/status/500")
-    ///     .error_for_status(false)
+    ///     .error_on_non_2xx(false)
     ///     .call()?;
     /// assert_eq!(response.status(), 500);
     /// # Ok(())
     /// # }
     /// ```
-    pub fn error_for_status(mut self, value: bool) -> Self {
-        self.return_error_for_status = value;
+    pub fn error_on_non_2xx(mut self, value: bool) -> Self {
+        self.error_on_non_2xx = value;
         self
     }
 }
