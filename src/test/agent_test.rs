@@ -73,7 +73,7 @@ fn custom_resolver() {
 #[cfg(feature = "cookies")]
 #[cfg(test)]
 fn cookie_and_redirect(mut stream: TcpStream) -> io::Result<()> {
-    let headers = read_headers(&stream);
+    let headers = read_request(&stream);
     match headers.path() {
         "/first" => {
             stream.write_all(b"HTTP/1.1 302 Found\r\n")?;
