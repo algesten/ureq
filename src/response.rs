@@ -318,10 +318,10 @@ impl Response {
     ///
     /// ## Charset support
     ///
-    /// Requires feature `ureq = { version = "*", features = ["charset"] }`
-    ///
-    /// Attempts to respect the character encoding of the `Content-Type` header and
-    /// falls back to `utf-8`.
+    /// If you enable feature `ureq = { version = "*", features = ["charset"] }`, into_string()
+    /// attempts to respect the character encoding of the `Content-Type` header. If there is no
+    /// Content-Type header, or the Content-Type header does not specify a charset, into_string()
+    /// uses `utf-8`.
     ///
     /// I.e. `Content-Length: text/plain; charset=iso-8859-1` would be decoded in latin-1.
     ///
@@ -350,13 +350,15 @@ impl Response {
     /// Example:
     ///
     /// ```
-    /// let resp =
-    ///     ureq::get("http://ureq.s3.eu-central-1.amazonaws.com/hello_world.json")
-    ///         .call().unwrap();
-    ///
-    /// let json = resp.into_json().unwrap();
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// let json: serde_json::Value = ureq::get("http://example.com/hello_world.json")
+    ///     .call()?
+    ///     .into_json()?;
     ///
     /// assert_eq!(json["hello"], "world");
+    /// # Ok(())
+    /// # }
     /// ```
     #[cfg(feature = "json")]
     pub fn into_json(self) -> io::Result<serde_json::Value> {
@@ -381,27 +383,30 @@ impl Response {
         })
     }
 
-    /// Turn the body of this response into a type implementing the (serde) Deserialize trait.
+    /// Turn the body of this response into a type that implements the [serde::Deserialize] trait.
     ///
     /// Requires feature `ureq = { version = "*", features = ["json"] }`
     ///
     /// Example:
     ///
     /// ```
-    /// use serde::Deserialize;
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// use serde::{Deserialize, de::DeserializeOwned};
     ///
     /// #[derive(Deserialize)]
-    /// struct Hello {
+    /// struct Message {
     ///     hello: String,
     /// }
     ///
-    /// let resp =
-    ///     ureq::get("http://ureq.s3.eu-central-1.amazonaws.com/hello_world.json")
-    ///         .call().unwrap();
+    /// let message: Message =
+    ///     ureq::get("http://example.com/hello_world.json")
+    ///         .call()?
+    ///         .into_json_deserialize()?;
     ///
-    /// let json = resp.into_json_deserialize::<Hello>().unwrap();
-    ///
-    /// assert_eq!(json.hello, "world");
+    /// assert_eq!(message.hello, "world");
+    /// # Ok(())
+    /// # }
     /// ```
     #[cfg(feature = "json")]
     pub fn into_json_deserialize<T: DeserializeOwned>(self) -> io::Result<T> {
