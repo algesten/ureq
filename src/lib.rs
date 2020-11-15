@@ -179,7 +179,11 @@ pub fn agent() -> Agent {
 /// Make a request setting the HTTP method via a string.
 ///
 /// ```
-/// ureq::request("GET", "http://example.com").call().unwrap();
+/// # fn main() -> Result<(), ureq::Error> {
+/// # ureq::is_test(true);
+/// ureq::request("GET", "http://example.com").call()?;
+/// # Ok(())
+/// # }
 /// ```
 pub fn request(method: &str, path: &str) -> Request {
     agent().request(method, path)
