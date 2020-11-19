@@ -1,8 +1,11 @@
 use crate::testserver::*;
-use std::io::{self, Write};
 use std::net::TcpStream;
 use std::thread;
 use std::time::Duration;
+use std::{
+    error::Error,
+    io::{self, Write},
+};
 
 use super::super::*;
 
@@ -96,10 +99,16 @@ fn read_timeout_during_headers() {
     let server = TestServer::new(dribble_headers_respond);
     let url = format!("http://localhost:{}/", server.port);
     let agent = builder().timeout_read(Duration::from_millis(10)).build();
-    let resp = agent.get(&url).call();
-    match resp {
+    let result = agent.get(&url).call();
+    match result {
         Ok(_) => Err("successful response".to_string()),
-        Err(Error::Io(e)) if e.kind() == io::ErrorKind::TimedOut => Ok(()),
+        Err(e) if e.kind() == ErrorKind::Io => {
+            let ioe: Option<&io::Error> = e.source().and_then(|s| s.downcast_ref());
+            match ioe {
+                Some(e) if e.kind() == io::ErrorKind::TimedOut => Ok(()),
+                _ => Err(format!("wrong error type {:?}", e)),
+            }
+        }
         Err(e) => Err(format!("Unexpected error type: {:?}", e)),
     }
     .expect("expected timeout but got something else");
@@ -111,10 +120,16 @@ fn overall_timeout_during_headers() {
     let server = TestServer::new(dribble_headers_respond);
     let url = format!("http://localhost:{}/", server.port);
     let agent = builder().timeout(Duration::from_millis(500)).build();
-    let resp = agent.get(&url).call();
-    match resp {
+    let result = agent.get(&url).call();
+    match result {
         Ok(_) => Err("successful response".to_string()),
-        Err(Error::Io(e)) if e.kind() == io::ErrorKind::TimedOut => Ok(()),
+        Err(e) if e.kind() == ErrorKind::Io => {
+            let ioe: Option<&io::Error> = e.source().and_then(|s| s.downcast_ref());
+            match ioe {
+                Some(e) if e.kind() == io::ErrorKind::TimedOut => Ok(()),
+                _ => Err(format!("wrong error type {:?}", e)),
+            }
+        }
         Err(e) => Err(format!("Unexpected error type: {:?}", e)),
     }
     .expect("expected timeout but got something else");

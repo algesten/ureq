@@ -1,6 +1,6 @@
 use log::debug;
 use std::fmt;
-use std::io::{self, BufRead, BufReader, Cursor, ErrorKind, Read, Write};
+use std::io::{self, BufRead, BufReader, Cursor, Read, Write};
 use std::net::SocketAddr;
 use std::net::TcpStream;
 use std::time::Duration;
@@ -15,10 +15,10 @@ use rustls::StreamOwned;
 #[cfg(feature = "socks-proxy")]
 use socks::{TargetAddr, ToTargetAddr};
 
-use crate::proxy::Proto;
 use crate::proxy::Proxy;
+use crate::{error::Error, proxy::Proto};
 
-use crate::error::Error;
+use crate::error::ErrorKind;
 use crate::unit::Unit;
 
 #[allow(clippy::large_enum_variant)]
@@ -67,7 +67,7 @@ impl Read for DeadlineStream {
             // causes ErrorKind::WouldBlock instead of ErrorKind::TimedOut.
             // Since the socket most definitely not set_nonblocking(true),
             // we can safely normalize WouldBlock to TimedOut
-            if e.kind() == ErrorKind::WouldBlock {
+            if e.kind() == io::ErrorKind::WouldBlock {
                 return io_err_timeout("timed out reading response".to_string());
             }
             e
@@ -86,7 +86,7 @@ fn time_until_deadline(deadline: Instant) -> io::Result<Duration> {
 }
 
 pub(crate) fn io_err_timeout(error: String) -> io::Error {
-    io::Error::new(ErrorKind::TimedOut, error)
+    io::Error::new(io::ErrorKind::TimedOut, error)
 }
 
 impl fmt::Debug for Stream {
@@ -119,7 +119,7 @@ impl Stream {
         let result = match stream.peek(&mut buf) {
             Ok(0) => Ok(true),
             Ok(_) => Ok(false), // TODO: Maybe this should produce an "unexpected response" error
-            Err(e) if e.kind() == ErrorKind::WouldBlock => Ok(false),
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock => Ok(false),
             Err(e) => Err(e),
         };
         stream.set_nonblocking(false)?;
@@ -241,7 +241,7 @@ fn read_https(
 #[allow(deprecated)]
 #[cfg(feature = "tls")]
 fn is_close_notify(e: &std::io::Error) -> bool {
-    if e.kind() != ErrorKind::ConnectionAborted {
+    if e.kind() != io::ErrorKind::ConnectionAborted {
         return false;
     }
 
@@ -313,7 +313,7 @@ pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error
     let port = unit.url.port().unwrap_or(443);
 
     let sni = webpki::DNSNameRef::try_from_ascii_str(hostname)
-        .map_err(|err| Error::DnsFailed(err.to_string()))?;
+        .map_err(|err| ErrorKind::DnsFailed.new().src(err))?;
     let tls_conf: &Arc<rustls::ClientConfig> = unit
         .agent
         .config
@@ -347,10 +347,10 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
     let sock_addrs = unit
         .resolver()
         .resolve(&netloc)
-        .map_err(|e| Error::DnsFailed(format!("{}", e)))?;
+        .map_err(|e| ErrorKind::DnsFailed.new().src(e))?;
 
     if sock_addrs.is_empty() {
-        return Err(Error::DnsFailed(format!("No ip address for {}", hostname)));
+        return Err(ErrorKind::DnsFailed.msg(&format!("No ip address for {}", hostname)));
     }
 
     let proto = if let Some(ref proxy) = proxy {
@@ -396,9 +396,10 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
 
     let mut stream = if let Some(stream) = any_stream {
         stream
+    } else if let Some(e) = any_err {
+        return Err(ErrorKind::ConnectionFailed.msg("Connect error").src(e));
     } else {
-        let err = Error::ConnectionFailed(format!("{}", any_err.expect("Connect error")));
-        return Err(err);
+        panic!("shouldn't happen: failed to connect to all IPs, but no error");
     };
 
     if let Some(deadline) = unit.deadline {
@@ -579,7 +580,7 @@ fn connect_socks5(
     _port: u16,
 ) -> Result<TcpStream, std::io::Error> {
     Err(std::io::Error::new(
-        ErrorKind::Other,
+        io::ErrorKind::Other,
         "SOCKS5 feature disabled.",
     ))
 }
@@ -592,7 +593,7 @@ pub(crate) fn connect_test(unit: &Unit) -> Result<Stream, Error> {
 
 #[cfg(not(test))]
 pub(crate) fn connect_test(unit: &Unit) -> Result<Stream, Error> {
-    Err(Error::UnknownScheme(unit.url.scheme().to_string()))
+    Err(ErrorKind::UnknownScheme.msg(&format!("unknown scheme '{}'", unit.url.scheme())))
 }
 
 #[cfg(not(feature = "tls"))]
