@@ -157,8 +157,8 @@ that price is usually not high: most HTTP clients make requests sequentially, or
 low concurrency.
 
 That's why ureq uses blocking I/O and plans to stay that way. Other HTTP clients offer both
-an async API and a blocking API, but we want to offer a client that offers a blocking API
-without pulling in all the dependencies required by an async API.
+an async API and a blocking API, but we want to offer a blocking API without pulling in all
+the dependencies required by an async API.
 
 [async]: https://rust-lang.github.io/async-book/01_getting_started/02_why_async.html
 [async-std]: https://github.com/async-rs/async-std#async-std
