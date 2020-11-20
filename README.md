@@ -10,9 +10,11 @@ very well with HTTP APIs. Its features include cookies, JSON, HTTP proxies,
 HTTPS, and charset decoding.
 
 Ureq is in pure Rust for safety and ease of understanding. It avoids using
-`unsafe` directly. It uses blocking I/O instead of async I/O, because that keeps
+`unsafe` directly. It [uses blocking I/O][blocking] instead of async I/O, because that keeps
 the API simple and and keeps dependencies to a minimum. For TLS, ureq uses
 [rustls].
+
+[blocking]: #blocking-i-o-for-simplicity
 
 ### Usage
 
@@ -136,6 +138,32 @@ to interpret the charset, we fall back on `utf-8`.
 Similarly when using [`request.send_string()`][Request::send_string()],
 we first check if the user has set a `; charset=<whatwg charset>` and attempt
 to encode the request body using that.
+
+## Blocking I/O for simplicity
+
+Rust supports [asynchronous (async) I/O][async], but ureq does not use it. Async I/O
+allows serving many concurrent requests without high costs in memory and OS threads. But
+it comes at a cost in complexity. Async programs need to pull in a runtime (usually
+[async-std] or [tokio]). They also need async variants of any method that might block, and of
+[any method that might call another method that might block][what-color]. That means async
+programs usually have a lot of dependencies - which adds to compile times, and increases
+risk.
+
+The costs of async are worth paying, if you're writing an HTTP server that must serve
+many many clients with minimal overhead. However, for HTTP _clients_, we believe that the
+cost is usually not worth paying. The low-cost alternative to async I/O is blocking I/O,
+which has a different price: it requires an OS thread per concurrent request. However,
+that price is usually not high: most HTTP clients make requests sequentially, or with
+low concurrency.
+
+That's why ureq uses blocking I/O and plans to stay that way. Other HTTP clients offer both
+an async API and a blocking API, but we want to offer a client that offers a blocking API
+without pulling in all the dependencies required by an async API.
+
+[async]: https://rust-lang.github.io/async-book/01_getting_started/02_why_async.html
+[async-std]: https://github.com/async-rs/async-std#async-std
+[tokio]: https://github.com/tokio-rs/tokio#tokio
+[what-color]: https://journal.stuffwithstuff.com/2015/02/01/what-color-is-your-function/
 
 ------------------------------------------------------------------------------
 
