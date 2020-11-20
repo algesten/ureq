@@ -600,5 +600,7 @@ pub(crate) fn connect_test(unit: &Unit) -> Result<Stream, Error> {
 
 #[cfg(not(feature = "tls"))]
 pub(crate) fn connect_https(unit: &Unit, _hostname: &str) -> Result<Stream, Error> {
-    Err(Error::UnknownScheme(unit.url.scheme().to_string()))
+    Err(ErrorKind::UnknownScheme
+        .msg("URL has 'https:' scheme but ureq was build without HTTP support")
+        .url(unit.url.clone()))
 }
