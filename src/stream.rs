@@ -446,11 +446,13 @@ fn socks5_local_nslookup(
     let addrs: Vec<SocketAddr> = unit
         .resolver()
         .resolve(&format!("{}:{}", hostname, port))
-        .map_err(|e| std::io::Error::new(ErrorKind::NotFound, format!("DNS failure: {}.", e)))?;
+        .map_err(|e| {
+            std::io::Error::new(io::ErrorKind::NotFound, format!("DNS failure: {}.", e))
+        })?;
 
     if addrs.is_empty() {
         return Err(std::io::Error::new(
-            ErrorKind::NotFound,
+            io::ErrorKind::NotFound,
             "DNS failure: no socket addrs found.",
         ));
     }
@@ -459,7 +461,7 @@ fn socks5_local_nslookup(
         Ok(addr) => Ok(addr),
         Err(err) => {
             return Err(std::io::Error::new(
-                ErrorKind::NotFound,
+                io::ErrorKind::NotFound,
                 format!("DNS failure: {}.", err),
             ))
         }
