@@ -6,10 +6,11 @@ use std::io::{self};
 
 use crate::Response;
 
+/// An error that may occur when processing a Request.
 #[derive(Debug)]
 pub struct Error {
     kind: ErrorKind,
-    message: String,
+    message: Option<String>,
     url: Option<Url>,
     source: Option<Box<dyn error::Error>>,
     response: Option<Box<Response>>,
@@ -23,7 +24,10 @@ impl Display for Error {
         if let Some(response) = &self.response {
             write!(f, "status code {}", response.status())?;
         } else {
-            write!(f, "{:?}: {}", self.kind, self.message)?;
+            write!(f, "{:?}", self.kind)?;
+        }
+        if let Some(message) = &self.message {
+            write!(f, ": {}", message)?;
         }
         if let Some(source) = &self.source {
             write!(f, ": {}", source)?;
@@ -39,7 +43,7 @@ impl error::Error for Error {
 }
 
 impl Error {
-    pub(crate) fn new(kind: ErrorKind, message: String) -> Self {
+    pub(crate) fn new(kind: ErrorKind, message: Option<String>) -> Self {
         Error {
             kind,
             message,
@@ -88,6 +92,7 @@ impl Error {
     }
 }
 
+/// One of the types of error the can occur when processing a Request.
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum ErrorKind {
     /// The url could not be understood.
@@ -122,11 +127,11 @@ pub enum ErrorKind {
 
 impl ErrorKind {
     pub(crate) fn new(self) -> Error {
-        Error::new(self, "".to_string())
+        Error::new(self, None)
     }
 
     pub(crate) fn msg(self, s: &str) -> Error {
-        Error::new(self, s.to_string())
+        Error::new(self, Some(s.to_string()))
     }
 }
 
@@ -158,7 +163,7 @@ impl fmt::Display for ErrorKind {
 
 #[test]
 fn status_code_error() {
-    let mut err = Error::new(ErrorKind::HTTP, "".to_string());
+    let mut err = Error::new(ErrorKind::HTTP, None);
     err = err.response(Response::new(500, "Internal Server Error", "too much going on").unwrap());
     assert_eq!(err.to_string(), "status code 500");
 
@@ -169,7 +174,7 @@ fn status_code_error() {
 #[test]
 fn io_error() {
     let ioe = io::Error::new(io::ErrorKind::TimedOut, "too slow");
-    let mut err = Error::new(ErrorKind::Io, "oops".to_string()).src(ioe);
+    let mut err = Error::new(ErrorKind::Io, Some("oops".to_string())).src(ioe);
 
     err = err.url("http://example.com/".parse().unwrap());
     assert_eq!(err.to_string(), "http://example.com/: Io: oops: too slow");
