@@ -75,7 +75,7 @@ fn body_as_json() {
         )
     });
     let resp = get("test://host/body_as_json").call().unwrap();
-    let json = resp.into_json().unwrap();
+    let json: serde_json::Value = resp.into_json().unwrap();
     assert_eq!(json["hello"], "world");
 }
 
@@ -98,7 +98,7 @@ fn body_as_json_deserialize() {
         )
     });
     let resp = get("test://host/body_as_json_deserialize").call().unwrap();
-    let json = resp.into_json_deserialize::<Hello>().unwrap();
+    let json: Hello = resp.into_json().unwrap();
     assert_eq!(json.hello, "world");
 }
 

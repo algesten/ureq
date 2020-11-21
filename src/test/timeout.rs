@@ -138,9 +138,9 @@ fn overall_timeout_reading_json() {
 
     let timeout = Duration::from_millis(500);
     let agent = builder().timeout(timeout).build();
-    let resp = agent.get(&url).call().unwrap();
+    let result: Result<serde_json::Value, io::Error> = agent.get(&url).call().unwrap().into_json();
 
-    match resp.into_json() {
+    match result {
         Ok(_) => Err("successful response".to_string()),
         Err(e) => match e.kind() {
             io::ErrorKind::TimedOut => Ok(()),
