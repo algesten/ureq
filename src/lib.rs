@@ -1,84 +1,136 @@
 #![forbid(unsafe_code)]
 #![warn(clippy::all)]
-//! ureq is a minimal request library.
+//! A simple, safe HTTP client.
 //!
-//! The goals of this library are:
+//! Ureq's first priority is being easy for you to use. It's great for
+//! anyone who wants a low-overhead HTTP client that just gets the job done. Works
+//! very well with HTTP APIs. Its features include cookies, JSON, HTTP proxies,
+//! HTTPS, and charset decoding.
 //!
-//! * Minimal dependency tree
-//! * Obvious API
-//! * Blocking API
-//! * No use of unsafe
+//! Ureq is in pure Rust for safety and ease of understanding. It avoids using
+//! `unsafe` directly. It [uses blocking I/O][blocking] instead of async I/O, because that keeps
+//! the API simple and and keeps dependencies to a minimum. For TLS, ureq uses
+//! [rustls].
 //!
-//! ```
-//! // requires feature: `ureq = { version = "*", features = ["json"] }`
-//! # #[cfg(feature = "json")] {
-//! use ureq::json;
+//! [blocking]: #blocking-i-o-for-simplicity
 //!
-//! fn main() -> std::io::Result<()> {
-//!   // sync post request of some json.
-//!   let resp = ureq::post("https://myapi.example.com/ingest")
-//!       .set("X-My-Header", "Secret")
-//!       .send_json(json!({
-//!           "name": "martin",
-//!           "rust": true
-//!       }));
+//! ## Usage
 //!
-//!   if let Ok(resp) = resp {
-//!     println!("success: {}", resp.into_string()?);
-//!   } else {
-//!     // This can include errors like failure to parse URL or connect timeout.
-//!     println!("error {}", resp.err().unwrap());
-//!   }
-//!   Ok(())
-//! }
+//! In its simplest form, ureq looks like this:
+//!
+//! ```rust
+//! # fn main() -> Result<(), ureq::Error> {
+//! # ureq::is_test(true);
+//! let body: String = ureq::get("http://example.com")
+//!     .set("Accept", "text/html")
+//!     .call()?
+//!     .into_string()?;
+//! # Ok(())
 //! # }
 //! ```
+//!
+//! For more involved tasks, you'll want to create an [Agent]. An Agent
+//! holds a connection pool for reuse, and a cookie store if you use the
+//! "cookies" feature. An Agent can be cheaply cloned due to an internal
+//! [Arc](std::sync::Arc) and all clones of an Agent share state among each other. Creating
+//! an Agent also allows setting options like the TLS configuration.
+//!
+//! ```no_run
+//! # fn main() -> std::result::Result<(), ureq::Error> {
+//! # ureq::is_test(true);
+//!   use ureq::{Agent, AgentBuilder};
+//!   use std::time::Duration;
+//!
+//!   let agent: Agent = ureq::AgentBuilder::new()
+//!       .timeout_read(Duration::from_secs(5))
+//!       .timeout_write(Duration::from_secs(5))
+//!       .build();
+//!   let body: String = agent.get("http://example.com/page")
+//!       .call()?
+//!       .into_string()?;
+//!
+//!   // Reuses the connection from previous request.
+//!   let response: String = agent.put("http://example.com/upload")
+//!       .set("Authorization", "example-token")
+//!       .call()?
+//!       .into_string()?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! Ureq supports sending and receiving json, if you enable the "json" feature:
+//!
+//! ```rust
+//! # #[cfg(feature = "json")]
+//! # fn main() -> std::result::Result<(), ureq::Error> {
+//! # ureq::is_test(true);
+//!   // Requires the `json` feature enabled.
+//!   let resp: String = ureq::post("http://myapi.example.com/ingest")
+//!       .set("X-My-Header", "Secret")
+//!       .send_json(ureq::json!({
+//!           "name": "martin",
+//!           "rust": true
+//!       }))?
+//!       .into_string()?;
+//! # Ok(())
+//! # }
+//! # #[cfg(not(feature = "json"))]
+//! # fn main() {}
+//! ```
+//!
+//! ## Features
+//!
+//! To enable a minimal dependency tree, some features are off by default.
+//! You can control them when including ureq as a dependency.
+//!
+//! `ureq = { version = "*", features = ["json", "charset"] }`
+//!
+//! * `tls` enables https. This is enabled by default.
+//! * `cookies` enables cookies.
+//! * `json` enables [Response::into_json()] and [Request::send_json()] via serde_json.
+//! * `charset` enables interpreting the charset part of the Content-Type header
+//!    (e.g.  `Content-Type: text/plain; charset=iso-8859-1`). Without this, the
+//!    library defaults to Rust's built in `utf-8`.
 //!
 //! # Plain requests
 //!
 //! Most standard methods (GET, POST, PUT etc), are supported as functions from the
-//! top of the library ([`ureq::get`](fn.get.html), [`ureq::post`](fn.post.html),
-//! [`ureq::put`](fn.put.html), etc).
+//! top of the library ([get()], [post()], [put()], etc).
 //!
-//! These top level http method functions create a [Request](struct.Request.html) instance
+//! These top level http method functions create a [Request] instance
 //! which follows a build pattern. The builders are finished using:
 //!
-//! * [`.call()`](struct.Request.html#method.call) without a request body.
-//! * [`.send()`](struct.Request.html#method.send) with a request body as `Read` (chunked encoding support for non-known sized readers).
-//! * [`.send_string()`](struct.Request.html#method.send_string) body as string.
-//! * [`.send_bytes()`](struct.Request.html#method.send_bytes) body as bytes.
-//! * [`.send_form()`](struct.Request.html#method.send_form) key-value pairs as application/x-www-form-urlencoded.
+//! * [`.call()`][Request::call()] without a request body.
+//! * [`.send()`][Request::send()] with a request body as [Read][std::io::Read] (chunked encoding support for non-known sized readers).
+//! * [`.send_string()`][Request::send_string()] body as string.
+//! * [`.send_bytes()`][Request::send_bytes()] body as bytes.
+//! * [`.send_form()`][Request::send_form()] key-value pairs as application/x-www-form-urlencoded.
 //!
 //! # JSON
 //!
 //! By enabling the `ureq = { version = "*", features = ["json"] }` feature,
 //! the library supports serde json.
 //!
-//! * [`request.send_json()`](struct.Request.html#method.send_json) send body as serde json.
-//! * [`response.into_json()`](struct.Response.html#method.into_json) transform response to json.
+//! * [`request.send_json()`][Request::send_json()] send body as serde json.
+//! * [`response.into_json()`][Response::into_json()] transform response to json.
 //!
-//! # Agents
+//! # Content-Length and Transfer-Encoding
 //!
-//! To maintain a state, cookies, between requests, you use an [agent](struct.Agent.html).
-//! Agents also follow the build pattern. Agents are created with
-//! [`ureq::agent()`](struct.Agent.html).
+//! The library will send a Content-Length header on requests with bodies of
+//! known size, in other words, those sent with
+//! [`.send_string()`][Request::send_string()],
+//! [`.send_bytes()`][Request::send_bytes()],
+//! [`.send_form()`][Request::send_form()], or
+//! [`.send_json()`][Request::send_json()]. If you send a
+//! request body with [`.send()`][Request::send()],
+//! which takes a [Read][std::io::Read] of unknown size, ureq will send Transfer-Encoding:
+//! chunked, and encode the body accordingly. Bodyless requests
+//! (GETs and HEADs) are sent with [`.call()`][Request::call()]
+//! and ureq adds neither a Content-Length nor a Transfer-Encoding header.
 //!
-//! # Content-Length
-//!
-//! The library will set the content length on the request when using
-//! [`.send_string()`](struct.Request.html#method.send_string) or
-//! [`.send_json()`](struct.Request.html#method.send_json). In other cases the user
-//! can optionally `request.set("Content-Length", 1234)`.
-//!
-//! For responses, if the `Content-Length` header is present, the methods that reads the
-//! body (as string, json or read trait) are all limited to the length specified in the header.
-//!
-//! # Transfer-Encoding: chunked
-//!
-//! Dechunking is a response body is done automatically if the response headers contains
-//! a `Transfer-Encoding` header.
-//!
-//! Sending a chunked request body is done by setting the header prior to sending a body.
+//! If you set your own Content-Length or Transfer-Encoding header before
+//! sending the body, ureq will respect that header by not overriding it,
+//! and by encoding the body or not, as indicated by the headers you set.
 //!
 //! ```
 //! let resp = ureq::post("http://my-server.com/ingest")
@@ -91,14 +143,51 @@
 //! By enabling the `ureq = { version = "*", features = ["charset"] }` feature,
 //! the library supports sending/receiving other character sets than `utf-8`.
 //!
-//! For [`response.into_string()`](struct.Response.html#method.into_string) we read the
+//! For [`response.into_string()`][Response::into_string()] we read the
 //! header `Content-Type: text/plain; charset=iso-8859-1` and if it contains a charset
 //! specification, we try to decode the body using that encoding. In the absence of, or failing
 //! to interpret the charset, we fall back on `utf-8`.
 //!
-//! Similarly when using [`request.send_string()`](struct.Request.html#method.send_string),
+//! Similarly when using [`request.send_string()`][Request::send_string()],
 //! we first check if the user has set a `; charset=<whatwg charset>` and attempt
 //! to encode the request body using that.
+//!
+//! # Blocking I/O for simplicity
+//!
+//! Rust supports [asynchronous (async) I/O][async], but ureq does not use it. Async I/O
+//! allows serving many concurrent requests without high costs in memory and OS threads. But
+//! it comes at a cost in complexity. Async programs need to pull in a runtime (usually
+//! [async-std] or [tokio]). They also need async variants of any method that might block, and of
+//! [any method that might call another method that might block][what-color]. That means async
+//! programs usually have a lot of dependencies - which adds to compile times, and increases
+//! risk.
+//!
+//! The costs of async are worth paying, if you're writing an HTTP server that must serve
+//! many many clients with minimal overhead. However, for HTTP _clients_, we believe that the
+//! cost is usually not worth paying. The low-cost alternative to async I/O is blocking I/O,
+//! which has a different price: it requires an OS thread per concurrent request. However,
+//! that price is usually not high: most HTTP clients make requests sequentially, or with
+//! low concurrency.
+//!
+//! That's why ureq uses blocking I/O and plans to stay that way. Other HTTP clients offer both
+//! an async API and a blocking API, but we want to offer a blocking API without pulling in all
+//! the dependencies required by an async API.
+//!
+//! [async]: https://rust-lang.github.io/async-book/01_getting_started/02_why_async.html
+//! [async-std]: https://github.com/async-rs/async-std#async-std
+//! [tokio]: https://github.com/tokio-rs/tokio#tokio
+//! [what-color]: https://journal.stuffwithstuff.com/2015/02/01/what-color-is-your-function/
+//!
+//! ------------------------------------------------------------------------------
+//!
+//! Ureq is inspired by other great HTTP clients like
+//! [superagent](http://visionmedia.github.io/superagent/) and
+//! [the fetch API](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API).
+//!
+//! If ureq is not what you're looking for, check out these other Rust HTTP clients:
+//! [surf](https://crates.io/crates/surf), [reqwest](https://crates.io/crates/reqwest),
+//! [isahc](https://crates.io/crates/isahc), [attohttpc](https://crates.io/crates/attohttpc),
+//! [actix-web](https://crates.io/crates/actix-web), and [hyper](https://crates.io/crates/hyper).
 //!
 
 mod agent;

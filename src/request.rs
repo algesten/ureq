@@ -58,7 +58,10 @@ impl Request {
         }
     }
 
-    /// Executes the request and blocks the caller until done.
+    /// Sends the request with no body and blocks the caller until done.
+    ///
+    /// Use this with GET, HEAD, or TRACE. It sends neither Content-Length
+    /// nor Transfer-Encoding.
     ///
     /// ```
     /// # fn main() -> Result<(), ureq::Error> {
