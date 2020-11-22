@@ -83,7 +83,7 @@ impl Error {
             Some(e) => e,
             None => return false,
         };
-        let ioe: &Box<io::Error> = match source.downcast_ref() {
+        let ioe: &io::Error = match source.downcast_ref() {
             Some(e) => e,
             None => return false,
         };
@@ -181,6 +181,17 @@ fn io_error() {
 
     err = err.url("http://example.com/".parse().unwrap());
     assert_eq!(err.to_string(), "http://example.com/: Io: oops: too slow");
+}
+
+#[test]
+fn connection_closed() {
+    let ioe = io::Error::new(io::ErrorKind::ConnectionReset, "connection reset");
+    let err = ErrorKind::Io.new().src(ioe);
+    assert!(err.connection_closed());
+
+    let ioe = io::Error::new(io::ErrorKind::ConnectionAborted, "connection aborted");
+    let err = ErrorKind::Io.new().src(ioe);
+    assert!(err.connection_closed());
 }
 
 #[test]
