@@ -80,7 +80,7 @@ impl Error {
             Some(e) => e,
             None => return false,
         };
-        let ioe: &Box<io::Error> = match source.downcast_ref() {
+        let ioe: &io::Error = match source.downcast_ref() {
             Some(e) => e,
             None => return false,
         };
