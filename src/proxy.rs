@@ -1,4 +1,4 @@
-use crate::error::Error;
+use crate::error::{Error, ErrorKind};
 
 /// Proxy protocol
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -30,7 +30,7 @@ impl Proxy {
                     .into_iter();
 
                 if parts.len() != 2 {
-                    Err(Error::BadProxyCreds)
+                    Err(ErrorKind::BadProxyCreds.new())
                 } else {
                     Ok((
                         parts.next().map(String::from),
@@ -46,14 +46,14 @@ impl Proxy {
         match host {
             Some(host) => {
                 let mut parts = host.as_ref().split(':').collect::<Vec<&str>>().into_iter();
-                let host = parts.next().ok_or(Error::BadProxy)?;
+                let host = parts.next().ok_or(ErrorKind::BadProxy.new())?;
                 let port = parts.next();
                 Ok((
                     String::from(host),
                     port.and_then(|port| port.parse::<u32>().ok()),
                 ))
             }
-            None => Err(Error::BadProxy),
+            None => Err(ErrorKind::BadProxy.new()),
         }
     }
 
@@ -84,7 +84,7 @@ impl Proxy {
                 Some("http") => Proto::HTTPConnect,
                 Some("socks") => Proto::SOCKS5,
                 Some("socks5") => Proto::SOCKS5,
-                _ => return Err(Error::BadProxy),
+                _ => return Err(ErrorKind::BadProxy.new()),
             }
         } else {
             Proto::HTTPConnect
@@ -92,7 +92,7 @@ impl Proxy {
 
         let remaining_parts = proxy_parts.next();
         if remaining_parts == None {
-            return Err(Error::BadProxy);
+            return Err(ErrorKind::BadProxy.new());
         }
 
         let mut creds_server_port_parts = remaining_parts
@@ -152,13 +152,19 @@ Proxy-Connection: Keep-Alive\r\n\
 
     pub(crate) fn verify_response(response: &[u8]) -> Result<(), Error> {
         let response_string = String::from_utf8_lossy(response);
-        let top_line = response_string.lines().next().ok_or(Error::ProxyConnect)?;
-        let status_code = top_line.split_whitespace().nth(1).ok_or(Error::BadProxy)?;
+        let top_line = response_string
+            .lines()
+            .next()
+            .ok_or(ErrorKind::ProxyConnect.new())?;
+        let status_code = top_line
+            .split_whitespace()
+            .nth(1)
+            .ok_or(ErrorKind::BadProxy.new())?;
 
         match status_code {
             "200" => Ok(()),
-            "401" | "407" => Err(Error::InvalidProxyCreds),
-            _ => Err(Error::BadProxy),
+            "401" | "407" => Err(ErrorKind::InvalidProxyCreds.new()),
+            _ => Err(ErrorKind::BadProxy.new()),
         }
     }
 }

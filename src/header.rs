@@ -1,4 +1,4 @@
-use crate::error::Error;
+use crate::error::{Error, ErrorKind};
 use std::fmt;
 use std::str::FromStr;
 
@@ -45,9 +45,10 @@ impl Header {
 
     pub(crate) fn validate(&self) -> Result<(), Error> {
         if !valid_name(self.name()) || !valid_value(&self.line.as_str()[self.index + 1..]) {
-            return Err(Error::BadHeader);
+            Err(ErrorKind::BadHeader.msg(&format!("invalid header '{}'", self.line)))
+        } else {
+            Ok(())
         }
-        Ok(())
     }
 }
 
@@ -129,11 +130,13 @@ impl FromStr for Header {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         //
         let line = s.to_string();
-        let index = s.find(':').ok_or_else(|| Error::BadHeader)?;
+        let index = s
+            .find(':')
+            .ok_or_else(|| ErrorKind::BadHeader.msg("no colon in header"))?;
 
         // no value?
         if index >= s.len() {
-            return Err(Error::BadHeader);
+            return Err(ErrorKind::BadHeader.msg("no value in header"));
         }
 
         let header = Header { line, index };
@@ -182,7 +185,7 @@ fn test_parse_invalid_name() {
     for c in cases {
         let result = c.parse::<Header>();
         assert!(
-            matches!(result, Err(Error::BadHeader)),
+            matches!(result, Err(ref e) if e.kind() == ErrorKind::BadHeader),
             "'{}'.parse(): expected BadHeader, got {:?}",
             c,
             result

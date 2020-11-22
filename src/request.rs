@@ -3,12 +3,12 @@ use std::io::Read;
 
 use url::{form_urlencoded, Url};
 
-use crate::agent::Agent;
 use crate::body::Payload;
-use crate::error::Error;
+use crate::error::ErrorKind;
 use crate::header::{self, Header};
 use crate::unit::{self, Unit};
 use crate::Response;
+use crate::{agent::Agent, error::Error};
 
 #[cfg(feature = "json")]
 use super::SerdeValue;
@@ -31,7 +31,7 @@ pub struct Request {
     agent: Agent,
     method: String,
     url: String,
-    return_error_for_status: bool,
+    error_on_non_2xx: bool,
     headers: Vec<Header>,
     query_params: Vec<(String, String)>,
 }
@@ -53,23 +53,20 @@ impl Request {
             method,
             url,
             headers: vec![],
-            return_error_for_status: true,
+            error_on_non_2xx: true,
             query_params: vec![],
         }
     }
 
-    /// Executes the request and blocks the caller until done.
+    /// Sends the request with no body and blocks the caller until done.
     ///
-    /// Use `.timeout_connect()` and `.timeout_read()` to avoid blocking forever.
+    /// Use this with GET, HEAD, or TRACE. It sends neither Content-Length
+    /// nor Transfer-Encoding.
     ///
     /// ```
-    /// use std::time::Duration;
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
-    /// let resp = ureq::builder()
-    ///     .timeout_connect(Duration::from_secs(10))
-    ///     .build()
-    ///     .get("http://example.com/")
+    /// let resp = ureq::get("http://example.com/")
     ///     .call()?;
     /// # Ok(())
     /// # }
@@ -82,19 +79,20 @@ impl Request {
         for h in &self.headers {
             h.validate()?;
         }
-        let mut url: Url = self
-            .url
-            .parse()
-            .map_err(|e: url::ParseError| Error::BadUrl(e.to_string()))?;
+        let mut url: Url = self.url.parse().map_err(|e: url::ParseError| {
+            ErrorKind::BadUrl
+                .msg(&format!("failed to parse URL '{}'", self.url))
+                .src(e)
+        })?;
         for (name, value) in self.query_params.clone() {
             url.query_pairs_mut().append_pair(&name, &value);
         }
         let reader = payload.into_read();
         let unit = Unit::new(&self.agent, &self.method, &url, &self.headers, &reader);
-        let response = unit::connect(unit, true, 0, reader, false)?;
+        let response = unit::connect(unit, true, 0, reader, false).map_err(|e| e.url(url))?;
 
-        if response.error() && self.return_error_for_status {
-            Err(Error::HTTP(response.into()))
+        if response.error() && self.error_on_non_2xx {
+            Err(ErrorKind::HTTP.new().response(response))
         } else {
             Ok(response)
         }
@@ -311,22 +309,22 @@ impl Request {
     }
 
     /// By default, if a response's status is anything but a 2xx or 3xx,
-    /// send() and related methods will return an Error. If you want
-    /// to handle such responses as non-errors, set this to false.
+    /// call()/send() and related methods will return an Error. If you want
+    /// to handle such responses as non-errors, set this to `false`.
     ///
     /// Example:
     /// ```
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
     /// let response = ureq::get("http://httpbin.org/status/500")
-    ///     .error_for_status(false)
+    ///     .error_on_non_2xx(false)
     ///     .call()?;
     /// assert_eq!(response.status(), 500);
     /// # Ok(())
     /// # }
     /// ```
-    pub fn error_for_status(mut self, value: bool) -> Self {
-        self.return_error_for_status = value;
+    pub fn error_on_non_2xx(mut self, value: bool) -> Self {
+        self.error_on_non_2xx = value;
         self
     }
 }
