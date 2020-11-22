@@ -157,13 +157,13 @@ fn non_ascii_header() {
     test::set_handler("/non_ascii_header", |_unit| {
         test::make_response(200, "OK", vec!["Wörse: Hädör"], vec![])
     });
-    let resp = get("test://host/non_ascii_header")
+    let result = get("test://host/non_ascii_header")
         .set("Bäd", "Headör")
         .call();
     assert!(
-        matches!(resp, Err(Error::BadHeader)),
-        "expected Some(&BadHeader), got {:?}",
-        resp
+        matches!(result, Err(ref e) if e.kind() == ErrorKind::BadHeader),
+        "expected Err(BadHeader), got {:?}",
+        result
     );
 }
 

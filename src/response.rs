@@ -1,10 +1,10 @@
 use std::fmt;
-use std::io::{self, Cursor, ErrorKind, Read};
+use std::io::{self, Cursor, Read};
 use std::str::FromStr;
 
 use chunked_transfer::Decoder as ChunkDecoder;
 
-use crate::error::Error;
+use crate::error::{Error, ErrorKind};
 use crate::header::Header;
 use crate::pool::PoolReturnRead;
 use crate::stream::{DeadlineStream, Stream};
@@ -400,13 +400,13 @@ impl Response {
             // We make a clone of the original error since serde_json::Error doesn't
             // let us get the wrapped error instance back.
             if let Some(ioe) = e.source().and_then(|s| s.downcast_ref::<io::Error>()) {
-                if ioe.kind() == ErrorKind::TimedOut {
+                if ioe.kind() == io::ErrorKind::TimedOut {
                     return io_err_timeout(ioe.to_string());
                 }
             }
 
             io::Error::new(
-                ErrorKind::InvalidData,
+                io::ErrorKind::InvalidData,
                 format!("Failed to read JSON: {}", e),
             )
         })
@@ -466,19 +466,21 @@ fn parse_status_line(line: &str) -> Result<(ResponseStatusIndex, u16), Error> {
 
     let mut split = line.splitn(3, ' ');
 
-    let http_version = split.next().ok_or_else(|| Error::BadStatus)?;
+    let http_version = split.next().ok_or_else(|| ErrorKind::BadStatus.new())?;
     if http_version.len() < 5 {
-        return Err(Error::BadStatus);
+        return Err(ErrorKind::BadStatus.new());
     }
     let index1 = http_version.len();
 
-    let status = split.next().ok_or_else(|| Error::BadStatus)?;
+    let status = split.next().ok_or_else(|| ErrorKind::BadStatus.new())?;
     if status.len() < 2 {
-        return Err(Error::BadStatus);
+        return Err(ErrorKind::BadStatus.new());
     }
     let index2 = index1 + status.len();
 
-    let status = status.parse::<u16>().map_err(|_| Error::BadStatus)?;
+    let status = status
+        .parse::<u16>()
+        .map_err(|_| ErrorKind::BadStatus.new())?;
 
     Ok((
         ResponseStatusIndex {
@@ -533,7 +535,7 @@ fn read_next_line<R: Read>(reader: &mut R) -> io::Result<String> {
 
         if amt == 0 {
             return Err(io::Error::new(
-                ErrorKind::ConnectionAborted,
+                io::ErrorKind::ConnectionAborted,
                 "Unexpected EOF",
             ));
         }
@@ -542,8 +544,9 @@ fn read_next_line<R: Read>(reader: &mut R) -> io::Result<String> {
 
         if byte == b'\n' && prev_byte_was_cr {
             buf.pop(); // removing the '\r'
-            return String::from_utf8(buf)
-                .map_err(|_| io::Error::new(ErrorKind::InvalidInput, "Header is not in ASCII"));
+            return String::from_utf8(buf).map_err(|_| {
+                io::Error::new(io::ErrorKind::InvalidInput, "Header is not in ASCII")
+            });
         }
 
         prev_byte_was_cr = byte == b'\r';
@@ -587,7 +590,7 @@ impl<R: Read> Read for LimitedRead<R> {
             // received, the recipient MUST consider the message to be
             // incomplete and close the connection.
             Ok(0) => Err(io::Error::new(
-                ErrorKind::InvalidData,
+                io::ErrorKind::InvalidData,
                 "response body closed before all bytes were read",
             )),
             Ok(amount) => {
@@ -736,7 +739,7 @@ mod tests {
     fn parse_borked_header() {
         let s = "HTTP/1.1 BORKED\r\n".to_string();
         let err = s.parse::<Response>().unwrap_err();
-        assert!(matches!(err, Error::BadStatus));
+        assert_eq!(err.kind(), ErrorKind::BadStatus);
     }
 }
 
