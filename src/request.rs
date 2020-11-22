@@ -15,6 +15,12 @@ use super::SerdeValue;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+#[derive(Debug, Clone)]
+enum Urlish {
+    Url(Url),
+    Str(String),
+}
+
 /// Request instances are builders that creates a request.
 ///
 /// ```
@@ -30,10 +36,19 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub struct Request {
     agent: Agent,
     method: String,
-    url: String,
+    url: Urlish,
     error_on_non_2xx: bool,
     headers: Vec<Header>,
     query_params: Vec<(String, String)>,
+}
+
+impl fmt::Display for Urlish {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Urlish::Url(u) => write!(f, "{}", u),
+            Urlish::Str(s) => write!(f, "{}", s),
+        }
+    }
 }
 
 impl fmt::Debug for Request {
@@ -51,7 +66,18 @@ impl Request {
         Request {
             agent,
             method,
-            url,
+            url: Urlish::Str(url),
+            headers: vec![],
+            error_on_non_2xx: true,
+            query_params: vec![],
+        }
+    }
+
+    pub(crate) fn with_url(agent: Agent, method: String, url: Url) -> Request {
+        Request {
+            agent,
+            method,
+            url: Urlish::Url(url),
             headers: vec![],
             error_on_non_2xx: true,
             query_params: vec![],
@@ -79,11 +105,14 @@ impl Request {
         for h in &self.headers {
             h.validate()?;
         }
-        let mut url: Url = self.url.parse().map_err(|e: url::ParseError| {
-            ErrorKind::BadUrl
-                .msg(&format!("failed to parse URL '{}'", self.url))
-                .src(e)
-        })?;
+        let mut url: Url = match self.url.clone() {
+            Urlish::Url(u) => u,
+            Urlish::Str(s) => s.parse().map_err(|e: url::ParseError| {
+                ErrorKind::BadUrl
+                    .msg(&format!("failed to parse URL '{}'", self.url))
+                    .src(e)
+            })?,
+        };
         for (name, value) in self.query_params.clone() {
             url.query_pairs_mut().append_pair(&name, &value);
         }

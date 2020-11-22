@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use url::Url;
+
 use crate::pool::ConnectionPool;
 use crate::proxy::Proxy;
 use crate::request::Request;
@@ -94,21 +96,51 @@ impl Agent {
         AgentBuilder::new().build()
     }
 
-    /// Request by providing the HTTP verb such as `GET`, `POST`...
+    /// Make a request with the HTTP verb as a parameter.
+    ///
+    /// This allows making requests with verbs that don't have a dedicated
+    /// method.
+    ///
+    /// If you've got an already-parsed [Url], try [request_url][Agent::request_url].
     ///
     /// ```
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
+    /// use ureq::Response;
     /// let agent = ureq::agent();
     ///
-    /// let resp = agent
-    ///     .request("GET", "http://httpbin.org/status/200")
+    /// let resp: Response = agent
+    ///     .request("OPTIONS", "http://example.com/")
     ///     .call()?;
     /// # Ok(())
     /// # }
     /// ```
     pub fn request(&self, method: &str, path: &str) -> Request {
         Request::new(self.clone(), method.into(), path.into())
+    }
+
+    /// Make a request using an already-parsed [Url].
+    ///
+    /// This is useful if you've got a parsed Url from some other source, or if
+    /// you want to parse the URL and then modify it before making the request.
+    /// If you'd just like to pass a String or a `&str`, try [request][Agent::request].
+    ///
+    /// ```
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// use {url::Url, ureq::Response};
+    /// let agent = ureq::agent();
+    ///
+    /// let mut url: Url = "http://example.com/some-page".parse().unwrap();
+    /// url.set_path("/robots.txt");
+    /// let resp: Response = agent
+    ///     .request_url("GET", &url)
+    ///     .call()?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn request_url(&self, method: &str, url: &Url) -> Request {
+        Request::with_url(self.clone(), method.into(), url.clone())
     }
 
     /// Make a GET request from this agent.
