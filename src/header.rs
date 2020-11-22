@@ -204,3 +204,13 @@ fn value_with_whitespace() {
     let h = "foo:      bar    ".parse::<Header>().unwrap();
     assert_eq!(h.value(), "bar");
 }
+
+#[test]
+fn name_and_value() {
+    let header: Header = "X-Forwarded-For: 127.0.0.1".parse().unwrap();
+    assert_eq!("X-Forwarded-For", header.name());
+    assert_eq!("127.0.0.1", header.value());
+    assert!(header.is_name("X-Forwarded-For"));
+    assert!(header.is_name("x-forwarded-for"));
+    assert!(header.is_name("X-FORWARDED-FOR"));
+}
