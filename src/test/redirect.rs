@@ -4,7 +4,7 @@ use std::{
 };
 use testserver::{self, TestServer};
 
-use crate::test;
+use crate::{error::Error, test};
 
 use super::super::*;
 
@@ -34,7 +34,7 @@ fn redirect_many() {
         .build()
         .get("test://host/redirect_many1")
         .call();
-    assert!(matches!(result, Err(Error::TooManyRedirects)));
+    assert!(matches!(result, Err(e) if e.kind() == ErrorKind::TooManyRedirects));
 }
 
 #[test]
@@ -97,19 +97,18 @@ fn redirect_host() {
     // of example.invalid. We can probably do better by, e.g.
     // overriding the resolver.
     let srv = TestServer::new(|mut stream: TcpStream| -> io::Result<()> {
-        testserver::read_headers(&stream);
+        testserver::read_request(&stream);
         write!(stream, "HTTP/1.1 302 Found\r\n")?;
         write!(stream, "Location: http://example.invalid/\r\n")?;
         write!(stream, "\r\n")?;
         Ok(())
     });
     let url = format!("http://localhost:{}/", srv.port);
-    let resp = crate::Agent::new().get(&url).call();
-    let err = resp.err();
+    let result = crate::Agent::new().get(&url).call();
     assert!(
-        matches!(err, Some(Error::DnsFailed(_))),
-        "expected DnsFailed, got: {:?}",
-        err
+        matches!(result, Err(ref e) if e.kind() == ErrorKind::DnsFailed),
+        "expected Err(DnsFailed), got: {:?}",
+        result
     );
 }
 

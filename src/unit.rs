@@ -7,6 +7,7 @@ use url::Url;
 #[cfg(feature = "cookies")]
 use cookie::Cookie;
 
+use crate::error::{Error, ErrorKind};
 use crate::header;
 use crate::resolve::ArcResolver;
 use crate::stream::{self, connect_test, Stream};
@@ -15,7 +16,7 @@ use crate::{
     body::{self, BodySize, Payload, SizedReader},
     header::get_header,
 };
-use crate::{Error, Header, Response};
+use crate::{Header, Response};
 
 /// A Unit is fully-built Request, ready to execute.
 ///
@@ -173,7 +174,7 @@ pub(crate) fn connect(
     let host = unit
         .url
         .host_str()
-        .ok_or(Error::BadUrl("no host".to_string()))?;
+        .ok_or(ErrorKind::BadUrl.msg("no host in URL"))?;
     let url = &unit.url;
     let method = &unit.method;
     // open socket
@@ -234,16 +235,18 @@ pub(crate) fn connect(
     // handle redirects
     if resp.redirect() && unit.agent.config.redirects > 0 {
         if redirect_count == unit.agent.config.redirects {
-            return Err(Error::TooManyRedirects);
+            return Err(ErrorKind::TooManyRedirects.new());
         }
 
         // the location header
         let location = resp.header("location");
         if let Some(location) = location {
             // join location header to current url in case it it relative
-            let new_url = url
-                .join(location)
-                .map_err(|_| Error::BadUrl(format!("Bad redirection: {}", location)))?;
+            let new_url = url.join(location).map_err(|e| {
+                ErrorKind::BadUrl
+                    .msg(&format!("Bad redirection: {}", location))
+                    .src(e)
+            })?;
 
             // perform the redirect differently depending on 3xx code.
             match resp.status() {
@@ -302,7 +305,7 @@ fn extract_cookies(agent: &Agent, url: &Url) -> Option<Header> {
 fn connect_socket(unit: &Unit, hostname: &str, use_pooled: bool) -> Result<(Stream, bool), Error> {
     match unit.url.scheme() {
         "http" | "https" | "test" => (),
-        _ => return Err(Error::UnknownScheme(unit.url.scheme().to_string())),
+        scheme => return Err(ErrorKind::UnknownScheme.msg(&format!("unknown scheme '{}'", scheme))),
     };
     if use_pooled {
         let agent = &unit.agent;
@@ -324,7 +327,7 @@ fn connect_socket(unit: &Unit, hostname: &str, use_pooled: bool) -> Result<(Stre
         "http" => stream::connect_http(&unit, hostname),
         "https" => stream::connect_https(&unit, hostname),
         "test" => connect_test(&unit),
-        _ => Err(Error::UnknownScheme(unit.url.scheme().to_string())),
+        scheme => Err(ErrorKind::UnknownScheme.msg(&format!("unknown scheme {}", scheme))),
     };
     Ok((stream?, false))
 }
