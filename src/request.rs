@@ -3,12 +3,12 @@ use std::io::Read;
 
 use url::{form_urlencoded, Url};
 
-use crate::agent::Agent;
 use crate::body::Payload;
-use crate::error::Error;
+use crate::error::ErrorKind;
 use crate::header::{self, Header};
 use crate::unit::{self, Unit};
 use crate::Response;
+use crate::{agent::Agent, error::Error};
 
 #[cfg(feature = "json")]
 use super::SerdeValue;
@@ -79,19 +79,20 @@ impl Request {
         for h in &self.headers {
             h.validate()?;
         }
-        let mut url: Url = self
-            .url
-            .parse()
-            .map_err(|e: url::ParseError| Error::BadUrl(e.to_string()))?;
+        let mut url: Url = self.url.parse().map_err(|e: url::ParseError| {
+            ErrorKind::BadUrl
+                .msg(&format!("failed to parse URL '{}'", self.url))
+                .src(e)
+        })?;
         for (name, value) in self.query_params.clone() {
             url.query_pairs_mut().append_pair(&name, &value);
         }
         let reader = payload.into_read();
         let unit = Unit::new(&self.agent, &self.method, &url, &self.headers, &reader);
-        let response = unit::connect(unit, true, 0, reader, false)?;
+        let response = unit::connect(unit, true, 0, reader, false).map_err(|e| e.url(url))?;
 
         if response.error() && self.error_on_non_2xx {
-            Err(Error::HTTP(response.into()))
+            Err(ErrorKind::HTTP.new().response(response))
         } else {
             Ok(response)
         }

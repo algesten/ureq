@@ -215,7 +215,7 @@ mod testserver;
 
 pub use crate::agent::Agent;
 pub use crate::agent::AgentBuilder;
-pub use crate::error::Error;
+pub use crate::error::{Error, ErrorKind};
 pub use crate::header::Header;
 pub use crate::proxy::Proxy;
 pub use crate::request::Request;
@@ -336,6 +336,7 @@ mod tests {
     #[cfg(feature = "tls")]
     fn connect_https_invalid_name() {
         let result = get("https://example.com{REQUEST_URI}/").call();
-        assert!(matches!(result.unwrap_err(), Error::DnsFailed(_)));
+        let e = ErrorKind::DnsFailed;
+        assert_eq!(result.unwrap_err().kind(), e);
     }
 }
