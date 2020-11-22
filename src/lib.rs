@@ -231,7 +231,7 @@ pub use serde_json::{to_value as serde_to_value, Map as SerdeMap, Value as Serde
 use once_cell::sync::Lazy;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-/// Creates an agent builder.
+/// Creates an [AgentBuilder].
 pub fn builder() -> AgentBuilder {
     AgentBuilder::new()
 }
@@ -253,7 +253,7 @@ pub fn is_test(is: bool) -> bool {
     return x;
 }
 
-/// Agents are used to keep state between requests.
+/// Agents are used to hold configuration and keep state between requests.
 pub fn agent() -> Agent {
     #[cfg(not(test))]
     if is_test(false) {

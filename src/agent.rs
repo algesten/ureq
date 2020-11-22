@@ -12,6 +12,7 @@ use {
     cookie_store::CookieStore,
 };
 
+/// Accumulates options towards building an [Agent].
 #[derive(Debug)]
 pub struct AgentBuilder {
     config: AgentConfig,
