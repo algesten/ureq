@@ -18,7 +18,7 @@ fn agent_set_header() {
         .call()
         .unwrap();
     assert_eq!(resp.status(), 200);
-    let json = resp.into_json_deserialize::<HttpBin>().unwrap();
+    let json: HttpBin = resp.into_json().unwrap();
     // println!("{:?}", json);
     assert_eq!("value", json.headers.get("Header").unwrap());
 }

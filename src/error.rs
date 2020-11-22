@@ -12,7 +12,7 @@ pub struct Error {
     kind: ErrorKind,
     message: Option<String>,
     url: Option<Url>,
-    source: Option<Box<dyn error::Error>>,
+    source: Option<Box<dyn error::Error + Send + Sync + 'static>>,
     response: Option<Box<Response>>,
 }
 
@@ -38,7 +38,10 @@ impl Display for Error {
 
 impl error::Error for Error {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        self.source.as_deref()
+        match &self.source {
+            Some(s) => Some(s.as_ref()),
+            None => None,
+        }
     }
 }
 
@@ -58,7 +61,7 @@ impl Error {
         self
     }
 
-    pub(crate) fn src(mut self, e: impl error::Error + 'static) -> Self {
+    pub(crate) fn src(mut self, e: impl error::Error + Send + Sync + 'static) -> Self {
         self.source = Some(Box::new(e));
         self
     }
@@ -189,4 +192,12 @@ fn connection_closed() {
     let ioe = io::Error::new(io::ErrorKind::ConnectionAborted, "connection aborted");
     let err = ErrorKind::Io.new().src(ioe);
     assert!(err.connection_closed());
+}
+
+#[test]
+fn error_is_send_and_sync() {
+    fn takes_send(_: impl Send) {}
+    fn takes_sync(_: impl Sync) {}
+    takes_send(crate::error::ErrorKind::BadUrl.new());
+    takes_sync(crate::error::ErrorKind::BadUrl.new());
 }
