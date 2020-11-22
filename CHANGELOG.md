@@ -1,9 +1,20 @@
+# 1.5.2
+
+ * Remove 'static constraint on Request.send(), allowing a wider variety of
+   types to be passed. Also eliminate some copying. (#205).
+ * Allow turning a Response into an Error (#214).
+ * Update env_logger to 0.8.1 (#195).
+ * Remove convenience method for CONNECT verb (#177).
+ * Fix bugs in handling of timeout_read (#197 and #198).
+
 # 1.5.1
+
  * Use cookie_store crate for correct cookie handling (#169).
  * Fix bug in picking wrong host for redirects introduced in 1.5.0 (#180).
  * Allow proxy settings on Agent (#178).
 
 # 1.5.0
+
  * Add pluggable name resolution. Users can now override the IP addresses for
    hostnames of their choice (#148).
  * bugfix: Don't re-pool streams on drop. This would occur if the user called
