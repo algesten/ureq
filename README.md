@@ -14,7 +14,11 @@ Ureq is in pure Rust for safety and ease of understanding. It avoids using
 the API simple and and keeps dependencies to a minimum. For TLS, ureq uses
 [rustls].
 
-[blocking]: #blocking-i-o-for-simplicity
+Version 2.0.0 was released recently and changed some APIs. See the [changelog] for details.
+
+[blocking]: #blocking-io-for-simplicity
+[changelog]: https://github.com/algesten/ureq/blob/master/CHANGELOG.md
+
 
 ### Usage
 
@@ -141,7 +145,7 @@ to encode the request body using that.
 
 ## Blocking I/O for simplicity
 
-Rust supports [asynchronous (async) I/O][async], but ureq does not use it. Async I/O
+Ureq uses blocking I/O rather than Rust's newer [asynchronous (async) I/O][async]. Async I/O
 allows serving many concurrent requests without high costs in memory and OS threads. But
 it comes at a cost in complexity. Async programs need to pull in a runtime (usually
 [async-std] or [tokio]). They also need async variants of any method that might block, and of

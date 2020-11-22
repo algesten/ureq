@@ -1,3 +1,28 @@
+# 2.0.0
+
+ * Remove the "synthetic error" concept. Methods that formerly returned
+   Response now return Result<Response, Error>.
+ * Rewrite Error type. Instead of an enum, it's now a struct with an
+   ErrorKind. This allows us to store the source error when appropriate,
+   as well as the URL that caused an error.
+ * Move more configuration to Agent. Timeouts, TLS config, and proxy config
+   now require building an Agent.
+ * Create AgentBuilder to separate the process of building an agent from using
+   the resulting agent.
+ * Rewrite README and top-level documentation.
+ * Add ureq::request_url and Agent::request_url, to send requests with
+   already-parsed URLs.
+ * Remove native_tls support.
+ * Remove convenience methods `options(url)`, `trace(url)`, and `patch(url)`.
+   To send requests with those verbs use `request(method, url)`.
+ * Remove Agent::set_cookie.
+ * Remove Header from the public API. The type wasn't used by any public
+   methods.
+ * Remove into_json_deserialize. Now into_json handles both serde_json::Value
+   and other types that implement serde::Deserialize. If you were using
+   serde_json before, you will probably have to explicitly annotate a type,
+   like: `let v: serde_json::Value = response.into_json();`.
+
 # 1.5.2
 
  * Remove 'static constraint on Request.send(), allowing a wider variety of
