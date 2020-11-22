@@ -25,8 +25,7 @@ pub const DEFAULT_CHARACTER_SET: &str = "utf-8";
 ///
 /// The `Response` is used to read response headers and decide what to do with the body.
 /// Note that the socket connection is open and the body not read until one of
-/// [`into_reader()`](#method.into_reader), [`into_json()`](#method.into_json),
-/// [`into_json_deserialize()`](#method.into_json_deserialize) or
+/// [`into_reader()`](#method.into_reader), [`into_json()`](#method.into_json), or
 /// [`into_string()`](#method.into_string) consumes the response.
 ///
 /// ```
@@ -343,47 +342,13 @@ impl Response {
         }
     }
 
-    /// Turn this response into a (serde) JSON value of the response body.
+    /// Read the body of this response into a serde_json::Value, or any other type that
+    // implements the [serde::Deserialize] trait.
     ///
-    /// Requires feature `ureq = { version = "*", features = ["json"] }`
+    /// You must use either a type annotation as shown below (`message: Message`), or the
+    /// [turbofish operator] (`::<Type>`) so Rust knows what type you are trying to read.
     ///
-    /// Example:
-    ///
-    /// ```
-    /// # fn main() -> Result<(), ureq::Error> {
-    /// # ureq::is_test(true);
-    /// let json: serde_json::Value = ureq::get("http://example.com/hello_world.json")
-    ///     .call()?
-    ///     .into_json()?;
-    ///
-    /// assert_eq!(json["hello"], "world");
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[cfg(feature = "json")]
-    pub fn into_json(self) -> io::Result<serde_json::Value> {
-        use crate::stream::io_err_timeout;
-        use std::error::Error;
-
-        let reader = self.into_reader();
-        serde_json::from_reader(reader).map_err(|e| {
-            // This is to unify TimedOut io::Error in the API.
-            // We make a clone of the original error since serde_json::Error doesn't
-            // let us get the wrapped error instance back.
-            if let Some(ioe) = e.source().and_then(|s| s.downcast_ref::<io::Error>()) {
-                if ioe.kind() == io::ErrorKind::TimedOut {
-                    return io_err_timeout(ioe.to_string());
-                }
-            }
-
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("Failed to read JSON: {}", e),
-            )
-        })
-    }
-
-    /// Turn the body of this response into a type that implements the [serde::Deserialize] trait.
+    /// [turbofish operator]: https://matematikaadit.github.io/posts/rust-turbofish.html
     ///
     /// Requires feature `ureq = { version = "*", features = ["json"] }`
     ///
@@ -402,16 +367,44 @@ impl Response {
     /// let message: Message =
     ///     ureq::get("http://example.com/hello_world.json")
     ///         .call()?
-    ///         .into_json_deserialize()?;
+    ///         .into_json()?;
     ///
     /// assert_eq!(message.hello, "world");
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// Or, if you don't want to define a struct to read your JSON into, you can
+    /// use the convenient `serde_json::Value` type to parse arbitrary or unknown
+    /// JSON.
+    ///
+    /// ```
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// let json: serde_json::Value = ureq::get("http://example.com/hello_world.json")
+    ///     .call()?
+    ///     .into_json()?;
+    ///
+    /// assert_eq!(json["hello"], "world");
+    /// # Ok(())
+    /// # }
+    /// ```
     #[cfg(feature = "json")]
-    pub fn into_json_deserialize<T: DeserializeOwned>(self) -> io::Result<T> {
+    pub fn into_json<T: DeserializeOwned>(self) -> io::Result<T> {
+        use crate::stream::io_err_timeout;
+        use std::error::Error;
+
         let reader = self.into_reader();
         serde_json::from_reader(reader).map_err(|e| {
+            // This is to unify TimedOut io::Error in the API.
+            // We make a clone of the original error since serde_json::Error doesn't
+            // let us get the wrapped error instance back.
+            if let Some(ioe) = e.source().and_then(|s| s.downcast_ref::<io::Error>()) {
+                if ioe.kind() == io::ErrorKind::TimedOut {
+                    return io_err_timeout(ioe.to_string());
+                }
+            }
+
             io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!("Failed to read JSON: {}", e),
@@ -717,7 +710,7 @@ mod tests {
              \r\n\
              {\"hello\":\"world\"}";
         let resp = s.parse::<Response>().unwrap();
-        let v = resp.into_json().unwrap();
+        let v: serde_json::Value = resp.into_json().unwrap();
         let compare = "{\"hello\":\"world\"}"
             .parse::<serde_json::Value>()
             .unwrap();
@@ -738,7 +731,7 @@ mod tests {
              \r\n\
              {\"hello\":\"world\"}";
         let resp = s.parse::<Response>().unwrap();
-        let v = resp.into_json_deserialize::<Hello>().unwrap();
+        let v: Hello = resp.into_json::<Hello>().unwrap();
         assert_eq!(v.hello, "world");
     }
 
