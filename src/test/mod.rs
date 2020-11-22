@@ -1,10 +1,10 @@
+use crate::error::Error;
+use crate::stream::Stream;
 use crate::unit::Unit;
-use crate::{error::Error};
-use crate::{stream::Stream};
 use once_cell::sync::Lazy;
+use std::collections::HashMap;
 use std::io::{Cursor, Write};
 use std::sync::{Arc, Mutex};
-use std::{collections::HashMap};
 
 mod agent_test;
 mod body_read;
