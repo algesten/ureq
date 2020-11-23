@@ -84,17 +84,6 @@ fn dribble_headers_respond(mut stream: TcpStream) -> io::Result<()> {
 }
 
 #[test]
-// TODO: Our current behavior is actually incorrect (we'll return BadHeader if a timeout occurs during headers).
-// However, the test failed to catch that fact, because get_and_expect_timeout only checks for error on into_string().
-// If someone was (correctly) checking for errors before calling into_string(), they would see BadHeader instead of Timeout.
-// This was surfaced by the switch to Result<Response>.
-//fn overall_timeout_during_headers() {
-//    // Start a test server on an available port, that dribbles out a response at 1 write per 10ms.
-//    let server = TestServer::new(dribble_headers_respond);
-//    let url = format!("http://localhost:{}/", server.port);
-//    get_and_expect_timeout(url);
-//}
-#[test]
 fn read_timeout_during_headers() {
     let server = TestServer::new(dribble_headers_respond);
     let url = format!("http://localhost:{}/", server.port);
