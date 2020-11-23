@@ -25,6 +25,8 @@
  * Remove Agent::set_cookie.
  * Remove Header from the public API. The type wasn't used by any public
    methods.
+ * Remove basic auth support. The API was incomplete. We may add back something
+   better in the future.
  * Remove into_json_deserialize. Now into_json handles both serde_json::Value
    and other types that implement serde::Deserialize. If you were using
    serde_json before, you will probably have to explicitly annotate a type,
