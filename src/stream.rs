@@ -1,6 +1,6 @@
 use log::debug;
 use std::fmt;
-use std::io::{self, BufRead, BufReader, Cursor, Read, Write};
+use std::io::{self, BufReader, Cursor, Read, Write};
 use std::net::SocketAddr;
 use std::net::TcpStream;
 use std::time::Duration;
@@ -28,7 +28,7 @@ pub enum Stream {
     Https(BufReader<rustls::StreamOwned<rustls::ClientSession, TcpStream>>),
     Cursor(Cursor<Vec<u8>>),
     #[cfg(test)]
-    Test(Box<dyn BufRead + Send + Sync>, Vec<u8>),
+    Test(Box<dyn std::io::BufRead + Send + Sync>, Vec<u8>),
 }
 
 // DeadlineStream wraps a stream such that read() will return an error
@@ -188,30 +188,6 @@ impl Read for Stream {
             Stream::Cursor(read) => read.read(buf),
             #[cfg(test)]
             Stream::Test(reader, _) => reader.read(buf),
-        }
-    }
-}
-
-impl BufRead for Stream {
-    fn fill_buf(&mut self) -> io::Result<&[u8]> {
-        match self {
-            Stream::Http(r) => r.fill_buf(),
-            #[cfg(feature = "tls")]
-            Stream::Https(r) => r.fill_buf(),
-            Stream::Cursor(r) => r.fill_buf(),
-            #[cfg(test)]
-            Stream::Test(r, _) => r.fill_buf(),
-        }
-    }
-
-    fn consume(&mut self, amt: usize) {
-        match self {
-            Stream::Http(r) => r.consume(amt),
-            #[cfg(feature = "tls")]
-            Stream::Https(r) => r.consume(amt),
-            Stream::Cursor(r) => r.consume(amt),
-            #[cfg(test)]
-            Stream::Test(r, _) => r.consume(amt),
         }
     }
 }

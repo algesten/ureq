@@ -24,7 +24,7 @@ impl Display for Error {
         if let Some(response) = &self.response {
             write!(f, "status code {}", response.status())?;
         } else {
-            write!(f, "{:?}", self.kind)?;
+            write!(f, "{}", self.kind)?;
         }
         if let Some(message) = &self.message {
             write!(f, ": {}", message)?;
@@ -165,6 +165,16 @@ impl fmt::Display for ErrorKind {
 }
 
 #[test]
+fn error_debug() {
+    let ioe = io::Error::new(io::ErrorKind::TimedOut, "too slow");
+    let err = Error::new(ErrorKind::Io, Some("oops".to_string()))
+        .src(ioe)
+        .url("http://example.com/".parse().unwrap());
+    let message = format!("{:?}", err);
+    assert_eq!(message, "Error { kind: Io, message: Some(\"oops\"), url: Some(\"http://example.com/\"), source: Some(Custom { kind: TimedOut, error: \"too slow\" }), response: None }");
+}
+
+#[test]
 fn status_code_error() {
     let mut err = Error::new(ErrorKind::HTTP, None);
     err = err.response(Response::new(500, "Internal Server Error", "too much going on").unwrap());
@@ -180,7 +190,10 @@ fn io_error() {
     let mut err = Error::new(ErrorKind::Io, Some("oops".to_string())).src(ioe);
 
     err = err.url("http://example.com/".parse().unwrap());
-    assert_eq!(err.to_string(), "http://example.com/: Io: oops: too slow");
+    assert_eq!(
+        err.to_string(),
+        "http://example.com/: Network Error: oops: too slow"
+    );
 }
 
 #[test]

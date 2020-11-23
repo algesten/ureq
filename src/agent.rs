@@ -366,7 +366,7 @@ impl AgentBuilder {
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
     /// let agent = ureq::builder()
-    ///     .timeout_read(Duration::from_secs(1))
+    ///     .timeout_write(Duration::from_secs(1))
     ///     .build();
     /// let result = agent.get("http://httpbin.org/delay/20").call();
     /// # Ok(())

@@ -24,25 +24,6 @@ pub(crate) enum Payload<'a> {
     Bytes(&'a [u8]),
 }
 
-impl fmt::Debug for Payload<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Payload::Empty => write!(f, "Empty"),
-            Payload::Text(t, _) => write!(f, "{}", t),
-            #[cfg(feature = "json")]
-            Payload::JSON(_) => write!(f, "JSON"),
-            Payload::Reader(_) => write!(f, "Reader"),
-            Payload::Bytes(v) => write!(f, "{:?}", v),
-        }
-    }
-}
-
-impl Default for Payload<'_> {
-    fn default() -> Self {
-        Payload::Empty
-    }
-}
-
 /// The size of the body.
 ///
 /// *Internal API*
