@@ -235,9 +235,13 @@ pub(crate) fn connect(
                     debug!("redirect {} {} -> {}", resp.status(), url, new_url);
                     return connect(req, new_unit, use_pooled, redirect_count + 1, empty, true);
                 }
+                // never change the method for 307/308
+                307 | 308 => {
+                    let empty = Payload::Empty.into_read();
+                    debug!("redirect {} {} -> {}", resp.status(), url, new_url);
+                    return connect(req, unit, use_pooled, redirect_count - 1, empty, true);
+                }
                 _ => (),
-                // reinstate this with expect-100
-                // 307 | 308 | _ => connect(unit, method, use_pooled, redirects - 1, body),
             };
         }
     }
