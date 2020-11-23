@@ -86,8 +86,8 @@ impl Request {
 
     /// Sends the request with no body and blocks the caller until done.
     ///
-    /// Use this with GET, HEAD, or TRACE. It sends neither Content-Length
-    /// nor Transfer-Encoding.
+    /// Use this with GET, HEAD, OPTIONS or TRACE. It sends neither
+    /// Content-Length nor Transfer-Encoding.
     ///
     /// ```
     /// # fn main() -> Result<(), ureq::Error> {
@@ -118,10 +118,11 @@ impl Request {
         }
         let reader = payload.into_read();
         let unit = Unit::new(&self.agent, &self.method, &url, &self.headers, &reader);
-        let response = unit::connect(unit, true, 0, reader, false).map_err(|e| e.url(url))?;
+        let response =
+            unit::connect(unit, true, 0, reader, false).map_err(|e| e.url(url.clone()))?;
 
         if response.error() && self.error_on_non_2xx {
-            Err(ErrorKind::HTTP.new().response(response))
+            Err(ErrorKind::HTTP.new().url(url.clone()).response(response))
         } else {
             Ok(response)
         }
