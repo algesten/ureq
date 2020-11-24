@@ -14,9 +14,7 @@ use crate::unit::Unit;
 use serde::de::DeserializeOwned;
 
 #[cfg(feature = "charset")]
-use encoding::label::encoding_from_whatwg_label;
-#[cfg(feature = "charset")]
-use encoding::DecoderTrap;
+use encoding_rs::Encoding;
 
 pub const DEFAULT_CONTENT_TYPE: &str = "text/plain";
 pub const DEFAULT_CHARACTER_SET: &str = "utf-8";
@@ -327,12 +325,13 @@ impl Response {
     pub fn into_string(self) -> io::Result<String> {
         #[cfg(feature = "charset")]
         {
-            let encoding = encoding_from_whatwg_label(self.charset())
-                .or_else(|| encoding_from_whatwg_label(DEFAULT_CHARACTER_SET))
+            let encoding = Encoding::for_label(self.charset().as_bytes())
+                .or_else(|| Encoding::for_label(DEFAULT_CHARACTER_SET.as_bytes()))
                 .unwrap();
             let mut buf: Vec<u8> = vec![];
             self.into_reader().read_to_end(&mut buf)?;
-            Ok(encoding.decode(&buf, DecoderTrap::Replace).unwrap())
+            let (text, _, _) = encoding.decode(&buf);
+            Ok(text.into_owned())
         }
         #[cfg(not(feature = "charset"))]
         {

@@ -17,7 +17,7 @@ features = [ "tls", "json", "charset", "cookies", "socks-proxy" ]
 [features]
 default = ["tls"]
 json = ["serde", "serde_json"]
-charset = ["encoding"]
+charset = ["encoding_rs"]
 tls = ["rustls", "webpki", "webpki-roots"]
 native-certs = ["rustls-native-certs"]
 cookies = ["cookie", "cookie_store"]
@@ -36,7 +36,7 @@ webpki-roots = { version = "0.21", optional = true }
 rustls-native-certs = { version = "0.5", optional = true }
 serde = { version = "1", optional = true }
 serde_json = { version = "1", optional = true }
-encoding = { version = "0.2", optional = true }
+encoding_rs = { version = "0.8", optional = true }
 cookie_store = { version = "0.12.0", optional = true }
 log = "0.4.11"
 
