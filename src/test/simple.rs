@@ -175,7 +175,6 @@ pub fn no_status_text() {
         test::make_response(200, "", vec![], vec![])
     });
     let resp = get("test://host/no_status_text").call().unwrap();
-    assert!(resp.ok());
     assert_eq!(resp.status(), 200);
 }
 
