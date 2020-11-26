@@ -27,10 +27,15 @@ use crate::Response;
 ///   let fetch = || ureq::get("http://httpbin.org/status/500").call();
 ///   let mut result = fetch();
 ///   for _ in 1..4 {
-///     match result {
-///       // Retry 500's after waiting for two seconds.
-///       Err(e) if e.status() == 500 => thread::sleep(Duration::from_secs(2)),
-///       r => return r,
+///     let err: ureq::Error = match result {
+///         Ok(r) => return Ok(r),
+///         Err(e) => e,
+///     };
+///     match err.http() {
+///       // Retry 500s after waiting for two seconds.
+///       Ok((500, _)) => thread::sleep(Duration::from_secs(2)),
+///       Ok((_, r)) => return Err(r.into()),
+///       Err(e) => return Err(e),
 ///     }
 ///     result = fetch();
 ///   }
@@ -114,35 +119,25 @@ impl Error {
         self.kind
     }
 
-    /// For Errors of type HTTP (i.e. those that result from an HTTP status code),
-    /// return the status code of the response. For all other Errors, return 0.
-    ///
-    /// ```
-    /// # ureq::is_test(true);
-    /// let err = ureq::get("http://httpbin.org/status/500")
-    ///     .call().unwrap_err();
-    /// assert_eq!(err.kind(), ureq::ErrorKind::HTTP);
-    /// assert_eq!(err.status(), 500);
-    /// ```
-    pub fn status(&self) -> u16 {
-        match &self.response {
-            Some(response) => response.status(),
-            None => 0,
-        }
-    }
-
     /// For an Error of type HTTP (i.e. those that result from an HTTP status code),
-    /// turn the error into the underlying Response. For other errors, return None.
+    /// turn the error into a tuple containing the status code and the underlying
+    /// Response, and return Ok. For other errors, return Err(self).
+    ///
+    /// This allows the caller to match on certain status codes, while retaining
+    /// ownership of non-HTTP errors. You'll need to use the `From<Response>` impl
+    /// to get back an Error for the status codes you want to treat as errors.
     ///
     /// ```
     /// # ureq::is_test(true);
     /// let err = ureq::get("http://httpbin.org/status/500")
     ///     .call().unwrap_err();
-    /// assert_eq!(err.kind(), ureq::ErrorKind::HTTP);
-    /// assert_eq!(err.into_response().unwrap().status(), 500);
+    /// assert!(matches!(err.http(), Ok((500, _))));
     /// ```
-    pub fn into_response(self) -> Option<Response> {
-        self.response
+    pub fn http(self) -> Result<(u16, Response), Self> {
+        match self.response {
+            Some(r) => Ok((r.status(), r)),
+            None => Err(self),
+        }
     }
 
     /// Return true iff the error was due to a connection closing.
@@ -206,6 +201,21 @@ impl ErrorKind {
 
     pub(crate) fn msg(self, s: &str) -> Error {
         Error::new(self, Some(s.to_string()))
+    }
+}
+
+impl From<Response> for Error {
+    fn from(resp: Response) -> Error {
+        Error {
+            kind: ErrorKind::HTTP,
+            message: None,
+            // Note: This will be the URL of the last response in a redirect chain,
+            // while the normal URL in an error corresponds to the first response in
+            // a redirect chain.
+            url: resp.get_url().parse().ok(),
+            source: None,
+            response: Some(resp),
+        }
     }
 }
 
