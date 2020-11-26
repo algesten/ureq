@@ -44,7 +44,7 @@ pub struct Error {
     message: Option<String>,
     url: Option<Url>,
     source: Option<Box<dyn error::Error + Send + Sync + 'static>>,
-    response: Option<Response>,
+    pub response: Option<Response>,
 }
 
 impl Display for Error {
