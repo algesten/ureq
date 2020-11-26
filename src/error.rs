@@ -6,14 +6,15 @@ use std::io::{self};
 
 use crate::Response;
 
-/// An error that may occur when processing a Request.
+/// An error that may occur when processing a [Request](crate::Request).
 ///
 /// This can represent connection-level errors (e.g. connection refused),
 /// protocol-level errors (malformed response), or status code errors
-/// (e.g. 404 Not Found). For status code errors, kind() will be
-/// ErrorKind::HTTP, status() will return the status code, and into_response()
-/// will return the underlying Response. You can use that Response to, for
-/// instance, read the full body (which may contain a useful error message).
+/// (e.g. 404 Not Found). For status code errors, [kind()](Error::kind()) will be
+/// [ErrorKind::HTTP], [status()](Error::status()) will return the status
+/// code, and [into_response()](Error::into_response()) will return the underlying
+/// [Response](crate::Response). You can use that Response to, for instance, read
+/// the full body (which may contain a useful error message).
 ///
 /// ```
 /// use std::{result::Result, time::Duration, thread};
@@ -188,7 +189,7 @@ pub enum ErrorKind {
     ProxyConnect,
     /// Incorrect credentials for proxy
     InvalidProxyCreds,
-    /// HTTP status code indicating an error (e.g. 4xx, 5xx)
+    /// HTTP status code indicating an error (e.g. 4xx, 5xx).
     /// Read the inner response body for details and to return
     /// the connection to the pool.
     HTTP,
