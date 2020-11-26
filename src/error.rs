@@ -7,6 +7,32 @@ use std::io::{self};
 use crate::Response;
 
 /// An error that may occur when processing a Request.
+///
+/// This can represent connection-level errors (e.g. connection refused),
+/// protocol-level errors (malformed response), or status code errors
+/// (e.g. 404 Not Found). For status code errors, kind() will be
+/// ErrorKind::HTTP, status() will return the status code, and into_response()
+/// will return the underlying Response. You can use that Response to, for
+/// instance, read the full body (which may contain a useful error message).
+///
+/// ```
+/// use std::{result::Result, time::Duration, thread};
+/// use ureq::{Response, Error};
+/// # fn main(){ ureq::is_test(true); get_response(); }
+///
+/// fn get_response() -> Result<Response, Error> {
+///   let mut result = ureq::get("http://httpbin.org/status/500").call();
+///   for _ in 1..4 {
+///     match result {
+///       Err(e) if e.status() == 500 => thread::sleep(Duration::from_secs(2)),
+///       r => return r,
+///     }
+///     result = ureq::get("http://httpbin.org/status/500").call();
+///   }
+///   println!("Failed after 5 tries: {:?}", &result);
+///   result
+/// }
+/// ```
 #[derive(Debug)]
 pub struct Error {
     kind: ErrorKind,
