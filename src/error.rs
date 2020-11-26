@@ -21,14 +21,18 @@ use crate::Response;
 /// use ureq::{Response, Error};
 /// # fn main(){ ureq::is_test(true); get_response(); }
 ///
+/// // An example of a function that handles HTTP 500 errors differently
+/// // than other errors.
 /// fn get_response() -> Result<Response, Error> {
-///   let mut result = ureq::get("http://httpbin.org/status/500").call();
+///   let fetch = || ureq::get("http://httpbin.org/status/500").call();
+///   let mut result = fetch();
 ///   for _ in 1..4 {
 ///     match result {
+///       // Retry 500's after waiting for two seconds.
 ///       Err(e) if e.status() == 500 => thread::sleep(Duration::from_secs(2)),
 ///       r => return r,
 ///     }
-///     result = ureq::get("http://httpbin.org/status/500").call();
+///     result = fetch();
 ///   }
 ///   println!("Failed after 5 tries: {:?}", &result);
 ///   result
