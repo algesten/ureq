@@ -13,7 +13,7 @@ pub struct Error {
     message: Option<String>,
     url: Option<Url>,
     source: Option<Box<dyn error::Error + Send + Sync + 'static>>,
-    response: Option<Box<Response>>,
+    response: Option<Response>,
 }
 
 impl Display for Error {
@@ -67,11 +67,51 @@ impl Error {
     }
 
     pub(crate) fn response(mut self, response: Response) -> Self {
-        self.response = Some(Box::new(response));
+        self.response = Some(response);
         self
     }
-    pub(crate) fn kind(&self) -> ErrorKind {
+
+    /// The type of this error.
+    ///
+    /// ```
+    /// # ureq::is_test(true);
+    /// let err = ureq::get("http://httpbin.org/status/500")
+    ///     .call().unwrap_err();
+    /// assert_eq!(err.kind(), ureq::ErrorKind::HTTP);
+    /// ```
+    pub fn kind(&self) -> ErrorKind {
         self.kind
+    }
+
+    /// For Errors of type HTTP (i.e. those that result from an HTTP status code),
+    /// return the status code of the response. For all other Errors, return 0.
+    ///
+    /// ```
+    /// # ureq::is_test(true);
+    /// let err = ureq::get("http://httpbin.org/status/500")
+    ///     .call().unwrap_err();
+    /// assert_eq!(err.kind(), ureq::ErrorKind::HTTP);
+    /// assert_eq!(err.status(), 500);
+    /// ```
+    pub fn status(&self) -> u16 {
+        match &self.response {
+            Some(response) => response.status(),
+            None => 0,
+        }
+    }
+
+    /// For an Error of type HTTP (i.e. those that result from an HTTP status code),
+    /// turn the error into the underlying Response. For other errors, return None.
+    ///
+    /// ```
+    /// # ureq::is_test(true);
+    /// let err = ureq::get("http://httpbin.org/status/500")
+    ///     .call().unwrap_err();
+    /// assert_eq!(err.kind(), ureq::ErrorKind::HTTP);
+    /// assert_eq!(err.into_response().unwrap().status(), 500);
+    /// ```
+    pub fn into_response(self) -> Option<Response> {
+        self.response
     }
 
     /// Return true iff the error was due to a connection closing.

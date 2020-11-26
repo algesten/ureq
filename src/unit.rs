@@ -231,7 +231,7 @@ pub(crate) fn connect(
     save_cookies(&unit, &resp);
 
     // handle redirects
-    if resp.redirect() && unit.agent.config.redirects > 0 {
+    if resp.status() >= 300 && resp.status() < 400 && unit.agent.config.redirects > 0 {
         if redirect_count == unit.agent.config.redirects {
             return Err(ErrorKind::TooManyRedirects.new());
         }
