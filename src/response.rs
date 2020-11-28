@@ -1,6 +1,6 @@
-use std::fmt;
-use std::io::{self, Cursor, Read};
+use std::io::{self, Read};
 use std::str::FromStr;
+use std::{fmt, io::BufRead};
 
 use chunked_transfer::Decoder as ChunkDecoder;
 
@@ -425,7 +425,7 @@ impl Response {
     /// let resp = ureq::Response::do_from_read(read);
     ///
     /// assert_eq!(resp.status(), 401);
-    pub(crate) fn do_from_read(mut reader: impl Read) -> Result<Response, Error> {
+    pub(crate) fn do_from_read(mut reader: impl BufRead) -> Result<Response, Error> {
         //
         // HTTP/1.1 200 OK\r\n
         let status_line = read_next_line(&mut reader)?;
@@ -455,8 +455,8 @@ impl Response {
     }
 
     #[cfg(test)]
-    pub fn to_write_vec(&self) -> Vec<u8> {
-        self.stream.as_ref().unwrap().to_write_vec()
+    pub fn to_write_vec(self) -> Vec<u8> {
+        self.stream.unwrap().to_write_vec()
     }
 }
 
@@ -508,10 +508,9 @@ impl FromStr for Response {
     /// assert_eq!(body, "Hello World!!!");
     /// ```
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let bytes = s.as_bytes().to_owned();
-        let mut cursor = Cursor::new(bytes);
-        let mut resp = Self::do_from_read(&mut cursor)?;
-        set_stream(&mut resp, "".into(), None, Stream::Cursor(cursor));
+        let mut stream = Stream::from_vec(s.as_bytes().to_owned());
+        let mut resp = Self::do_from_read(&mut stream)?;
+        set_stream(&mut resp, "".into(), None, stream);
         Ok(resp)
     }
 }
