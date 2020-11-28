@@ -121,7 +121,7 @@ impl Request {
         let response =
             unit::connect(unit, true, 0, reader, false).map_err(|e| e.url(url.clone()))?;
 
-        if response.error() && self.error_on_non_2xx {
+        if self.error_on_non_2xx && response.status() >= 400 {
             Err(ErrorKind::HTTP.new().url(url.clone()).response(response))
         } else {
             Ok(response)
