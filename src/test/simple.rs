@@ -161,7 +161,7 @@ fn non_ascii_header() {
         .set("Bäd", "Headör")
         .call();
     assert!(
-        matches!(result, Err(ref e) if e.kind() == ErrorKind::BadHeader),
+        matches!(result, Err(ref e) if e.kind() == ErrorKind::Header),
         "expected Err(BadHeader), got {:?}",
         result
     );

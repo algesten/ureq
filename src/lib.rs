@@ -369,7 +369,7 @@ mod tests {
     #[cfg(feature = "tls")]
     fn connect_https_invalid_name() {
         let result = get("https://example.com{REQUEST_URI}/").call();
-        let e = ErrorKind::DnsFailed;
+        let e = ErrorKind::Dns;
         assert_eq!(result.unwrap_err().kind(), e);
     }
 }

@@ -30,7 +30,7 @@ impl Proxy {
                     .into_iter();
 
                 if parts.len() != 2 {
-                    Err(ErrorKind::BadProxyCreds.new())
+                    Err(ErrorKind::ProxyUrl.new())
                 } else {
                     Ok((
                         parts.next().map(String::from),
@@ -46,14 +46,14 @@ impl Proxy {
         match host {
             Some(host) => {
                 let mut parts = host.as_ref().split(':').collect::<Vec<&str>>().into_iter();
-                let host = parts.next().ok_or(ErrorKind::BadProxy.new())?;
+                let host = parts.next().ok_or(ErrorKind::ProxyUrl.new())?;
                 let port = parts.next();
                 Ok((
                     String::from(host),
                     port.and_then(|port| port.parse::<u32>().ok()),
                 ))
             }
-            None => Err(ErrorKind::BadProxy.new()),
+            None => Err(ErrorKind::ProxyUrl.new()),
         }
     }
 
@@ -84,7 +84,7 @@ impl Proxy {
                 Some("http") => Proto::HTTPConnect,
                 Some("socks") => Proto::SOCKS5,
                 Some("socks5") => Proto::SOCKS5,
-                _ => return Err(ErrorKind::BadProxy.new()),
+                _ => return Err(ErrorKind::ProxyUrl.new()),
             }
         } else {
             Proto::HTTPConnect
@@ -92,7 +92,7 @@ impl Proxy {
 
         let remaining_parts = proxy_parts.next();
         if remaining_parts == None {
-            return Err(ErrorKind::BadProxy.new());
+            return Err(ErrorKind::ProxyUrl.new());
         }
 
         let mut creds_server_port_parts = remaining_parts
@@ -159,12 +159,12 @@ Proxy-Connection: Keep-Alive\r\n\
         let status_code = top_line
             .split_whitespace()
             .nth(1)
-            .ok_or(ErrorKind::BadProxy.new())?;
+            .ok_or(ErrorKind::ProxyUrl.new())?;
 
         match status_code {
             "200" => Ok(()),
-            "401" | "407" => Err(ErrorKind::InvalidProxyCreds.new()),
-            _ => Err(ErrorKind::BadProxy.new()),
+            "401" | "407" => Err(ErrorKind::ProxyUnauthorized.new()),
+            _ => Err(ErrorKind::ProxyUrl.new()),
         }
     }
 }

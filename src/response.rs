@@ -466,21 +466,19 @@ fn parse_status_line(line: &str) -> Result<(ResponseStatusIndex, u16), Error> {
 
     let mut split = line.splitn(3, ' ');
 
-    let http_version = split.next().ok_or_else(|| ErrorKind::BadStatus.new())?;
+    let http_version = split.next().ok_or_else(|| ErrorKind::Status.new())?;
     if http_version.len() < 5 {
-        return Err(ErrorKind::BadStatus.new());
+        return Err(ErrorKind::Status.new());
     }
     let index1 = http_version.len();
 
-    let status = split.next().ok_or_else(|| ErrorKind::BadStatus.new())?;
+    let status = split.next().ok_or_else(|| ErrorKind::Status.new())?;
     if status.len() < 2 {
-        return Err(ErrorKind::BadStatus.new());
+        return Err(ErrorKind::Status.new());
     }
     let index2 = index1 + status.len();
 
-    let status = status
-        .parse::<u16>()
-        .map_err(|_| ErrorKind::BadStatus.new())?;
+    let status = status.parse::<u16>().map_err(|_| ErrorKind::Status.new())?;
 
     Ok((
         ResponseStatusIndex {
@@ -739,7 +737,7 @@ mod tests {
     fn parse_borked_header() {
         let s = "HTTP/1.1 BORKED\r\n".to_string();
         let err = s.parse::<Response>().unwrap_err();
-        assert_eq!(err.kind(), ErrorKind::BadStatus);
+        assert_eq!(err.kind(), ErrorKind::Status);
     }
 }
 
