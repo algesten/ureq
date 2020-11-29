@@ -526,18 +526,7 @@ pub(crate) fn set_stream(resp: &mut Response, url: String, unit: Option<Unit>, s
 
 fn read_next_line(reader: &mut impl BufRead) -> io::Result<String> {
     let mut s = String::new();
-    let result = reader.read_line(&mut s).map_err(|e| {
-        // On unix-y platforms set_read_timeout and set_write_timeout
-        // causes ErrorKind::WouldBlock instead of ErrorKind::TimedOut.
-        // Since the socket most definitely not set_nonblocking(true),
-        // we can safely normalize WouldBlock to TimedOut
-        if e.kind() == io::ErrorKind::WouldBlock {
-            io::Error::new(io::ErrorKind::TimedOut, "timed out reading headers")
-        } else {
-            e
-        }
-    });
-    if result? == 0 {
+    if reader.read_line(&mut s)? == 0 {
         return Err(io::Error::new(
             io::ErrorKind::ConnectionAborted,
             "Unexpected EOF",

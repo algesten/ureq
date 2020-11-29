@@ -138,13 +138,13 @@ impl Stream {
 
     fn from_tcp_stream(t: TcpStream) -> Stream {
         Stream {
-            inner: BufReader::with_capacity(1000, Inner::Http(t)),
+            inner: BufReader::new(Inner::Http(t)),
         }
     }
 
     fn from_tls_stream(t: StreamOwned<ClientSession, TcpStream>) -> Stream {
         Stream {
-            inner: BufReader::with_capacity(1000, Inner::Https(t)),
+            inner: BufReader::new(Inner::Https(t)),
         }
     }
 
