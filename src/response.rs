@@ -524,34 +524,35 @@ pub(crate) fn set_stream(resp: &mut Response, url: String, unit: Option<Unit>, s
     resp.stream = Some(stream);
 }
 
-fn read_next_line<R: Read>(reader: &mut R) -> io::Result<String> {
-    let mut buf = Vec::new();
-    let mut prev_byte_was_cr = false;
-    let mut one = [0_u8];
-
-    loop {
-        let amt = reader.read(&mut one[..])?;
-
-        if amt == 0 {
-            return Err(io::Error::new(
-                io::ErrorKind::ConnectionAborted,
-                "Unexpected EOF",
-            ));
+fn read_next_line(reader: &mut impl BufRead) -> io::Result<String> {
+    let mut s = String::new();
+    let result = reader.read_line(&mut s).map_err(|e| {
+        // On unix-y platforms set_read_timeout and set_write_timeout
+        // causes ErrorKind::WouldBlock instead of ErrorKind::TimedOut.
+        // Since the socket most definitely not set_nonblocking(true),
+        // we can safely normalize WouldBlock to TimedOut
+        if e.kind() == io::ErrorKind::WouldBlock {
+            io::Error::new(io::ErrorKind::TimedOut, "timed out reading headers")
+        } else {
+            e
         }
-
-        let byte = one[0];
-
-        if byte == b'\n' && prev_byte_was_cr {
-            buf.pop(); // removing the '\r'
-            return String::from_utf8(buf).map_err(|_| {
-                io::Error::new(io::ErrorKind::InvalidInput, "Header is not in ASCII")
-            });
-        }
-
-        prev_byte_was_cr = byte == b'\r';
-
-        buf.push(byte);
+    });
+    if result? == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::ConnectionAborted,
+            "Unexpected EOF",
+        ));
     }
+
+    if !s.ends_with("\r\n") {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("Header field didn't end with \\r: {}", s),
+        ));
+    }
+    s.pop();
+    s.pop();
+    Ok(s)
 }
 
 /// Limits a `Read` to a content size (as set by a "Content-Length" header).
