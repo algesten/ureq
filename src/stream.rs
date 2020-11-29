@@ -135,7 +135,7 @@ impl Stream {
         }
     }
 
-    #[cfg(tls)]
+    #[cfg(feature = "tls")]
     fn from_tls_stream(t: StreamOwned<ClientSession, TcpStream>) -> Stream {
         Stream {
             inner: BufReader::new(Inner::Https(t)),
