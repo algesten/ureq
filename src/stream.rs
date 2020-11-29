@@ -82,23 +82,16 @@ impl BufRead for DeadlineStream {
 
 impl Read for DeadlineStream {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        if let Some(deadline) = self.deadline {
-            let timeout = time_until_deadline(deadline)?;
-            if let Some(socket) = self.stream.socket() {
-                socket.set_read_timeout(Some(timeout))?;
-                socket.set_write_timeout(Some(timeout))?;
-            }
-        }
-        self.stream.read(buf).map_err(|e| {
-            // On unix-y platforms set_read_timeout and set_write_timeout
-            // causes ErrorKind::WouldBlock instead of ErrorKind::TimedOut.
-            // Since the socket most definitely not set_nonblocking(true),
-            // we can safely normalize WouldBlock to TimedOut
-            if e.kind() == io::ErrorKind::WouldBlock {
-                return io_err_timeout("timed out reading response".to_string());
-            }
-            e
-        })
+        // All reads on a DeadlineStream use the BufRead impl. This ensures
+        // that we have a chance to set the correct timeout before each recv
+        // syscall.
+        // Copied from the BufReader implementation of `read()`.
+        let nread = {
+            let mut rem = self.fill_buf()?;
+            rem.read(buf)?
+        };
+        self.consume(nread);
+        Ok(nread)
     }
 }
 
