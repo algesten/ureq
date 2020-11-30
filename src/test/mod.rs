@@ -3,7 +3,7 @@ use crate::stream::Stream;
 use crate::unit::Unit;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
-use std::io::{Cursor, Write};
+use std::io::Write;
 use std::sync::{Arc, Mutex};
 
 mod agent_test;
@@ -29,7 +29,7 @@ where
 }
 
 #[allow(clippy::write_with_newline)]
-pub fn make_response(
+pub(crate) fn make_response(
     status: u16,
     status_text: &str,
     headers: Vec<&str>,
@@ -42,9 +42,7 @@ pub fn make_response(
     }
     write!(&mut buf, "\r\n").ok();
     buf.append(&mut body);
-    let cursor = Cursor::new(buf);
-    let write: Vec<u8> = vec![];
-    Ok(Stream::Test(Box::new(cursor), write))
+    Ok(Stream::from_vec(buf))
 }
 
 pub(crate) fn resolve_handler(unit: &Unit) -> Result<Stream, Error> {
