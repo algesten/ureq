@@ -89,11 +89,6 @@ impl Response {
         self.url.as_ref().map(|s| &s[..]).unwrap_or("")
     }
 
-    /// The entire status line like: `HTTP/1.1 200 OK`
-    pub fn status_line(&self) -> &str {
-        self.status_line.as_str()
-    }
-
     /// The http version: `HTTP/1.1`
     pub fn http_version(&self) -> &str {
         &self.status_line.as_str()[0..self.index.http_version]
