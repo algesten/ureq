@@ -4,7 +4,7 @@ use std::{fmt, io::BufRead};
 
 use chunked_transfer::Decoder as ChunkDecoder;
 
-use crate::error::{Error, ErrorKind};
+use crate::error::{Error, ErrorKind::BadStatus};
 use crate::header::Header;
 use crate::pool::PoolReturnRead;
 use crate::stream::{DeadlineStream, Stream};
@@ -41,8 +41,7 @@ pub const DEFAULT_CHARACTER_SET: &str = "utf-8";
 /// ```
 pub struct Response {
     url: Option<String>,
-    status_line: String,
-    index: ResponseStatusIndex,
+    version: String,
     status: u16,
     headers: Vec<Header>,
     unit: Option<Unit>,
@@ -58,12 +57,7 @@ struct ResponseStatusIndex {
 
 impl fmt::Debug for Response {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "Response[status: {}, status_text: {}]",
-            self.status(),
-            self.status_text()
-        )
+        write!(f, "Response[status: {}]", self.status())
     }
 }
 
@@ -94,24 +88,14 @@ impl Response {
         self.url.as_ref().map(|s| &s[..]).unwrap_or("")
     }
 
-    /// The entire status line like: `HTTP/1.1 200 OK`
-    pub fn status_line(&self) -> &str {
-        self.status_line.as_str()
-    }
-
     /// The http version: `HTTP/1.1`
     pub fn http_version(&self) -> &str {
-        &self.status_line.as_str()[0..self.index.http_version]
+        &self.version
     }
 
     /// The status as a u16: `200`
     pub fn status(&self) -> u16 {
         self.status
-    }
-
-    /// The status text: `OK`
-    pub fn status_text(&self) -> &str {
-        &self.status_line.as_str()[self.index.response_code + 1..].trim()
     }
 
     /// The header corresponding header value for the give name, if any.
@@ -429,7 +413,7 @@ impl Response {
         // HTTP/1.1 200 OK\r\n
         let status_line = read_next_line(&mut reader)?;
 
-        let (index, status) = parse_status_line(status_line.as_str())?;
+        let (version, status) = parse_status_line(status_line.as_str())?;
 
         let mut headers: Vec<Header> = Vec::new();
         loop {
@@ -444,8 +428,7 @@ impl Response {
 
         Ok(Response {
             url: None,
-            status_line,
-            index,
+            version,
             status,
             headers,
             unit: None,
@@ -460,34 +443,44 @@ impl Response {
 }
 
 /// parse a line like: HTTP/1.1 200 OK\r\n
-fn parse_status_line(line: &str) -> Result<(ResponseStatusIndex, u16), Error> {
+fn parse_status_line(line: &str) -> Result<(String, u16), Error> {
     //
 
-    let mut split = line.splitn(3, ' ');
-
-    let http_version = split.next().ok_or_else(|| ErrorKind::BadStatus.new())?;
-    if http_version.len() < 5 {
-        return Err(ErrorKind::BadStatus.new());
+    let err = Err(BadStatus.new());
+    if !line.is_ascii() {
+        return err;
     }
-    let index1 = http_version.len();
-
-    let status = split.next().ok_or_else(|| ErrorKind::BadStatus.new())?;
-    if status.len() < 2 {
-        return Err(ErrorKind::BadStatus.new());
+    // https://tools.ietf.org/html/rfc7230#section-3.1.2
+    //      status-line = HTTP-version SP status-code SP reason-phrase CRLF
+    let split: Vec<&str> = line.splitn(3, ' ').collect();
+    if split.len() != 3 {
+        return err;
     }
-    let index2 = index1 + status.len();
 
-    let status = status
-        .parse::<u16>()
-        .map_err(|_| ErrorKind::BadStatus.new())?;
+    // https://tools.ietf.org/html/rfc7230#appendix-B
+    //    HTTP-name = %x48.54.54.50 ; HTTP
+    //    HTTP-version = HTTP-name "/" DIGIT "." DIGIT
+    let http_version = split[0];
+    if !http_version.starts_with("HTTP/") {
+        return err;
+    }
+    if http_version.len() != 8 {
+        return err;
+    }
+    if !http_version.as_bytes()[5].is_ascii_digit() || !http_version.as_bytes()[7].is_ascii_digit()
+    {
+        return err;
+    }
 
-    Ok((
-        ResponseStatusIndex {
-            http_version: index1,
-            response_code: index2,
-        },
-        status,
-    ))
+    let status_str: &str = split[1];
+    //      status-code    = 3DIGIT
+    if status_str.len() != 3 {
+        return err;
+    }
+
+    let status: u16 = status_str.parse().map_err(|_| BadStatus.new())?;
+
+    Ok((http_version.to_string(), status))
 }
 
 impl FromStr for Response {
@@ -727,7 +720,7 @@ mod tests {
     fn parse_borked_header() {
         let s = "HTTP/1.1 BORKED\r\n".to_string();
         let err = s.parse::<Response>().unwrap_err();
-        assert_eq!(err.kind(), ErrorKind::BadStatus);
+        assert_eq!(err.kind(), BadStatus);
     }
 }
 
