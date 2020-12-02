@@ -99,7 +99,7 @@ impl Error {
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum ErrorKind {
     /// The url could not be understood.
-    Url,
+    InvalidUrl,
     /// The url scheme could not be understood.
     UnknownScheme,
     /// DNS lookup failed.
@@ -145,7 +145,7 @@ impl From<io::Error> for Error {
 impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ErrorKind::Url => write!(f, "Bad URL"),
+            ErrorKind::InvalidUrl => write!(f, "Bad URL"),
             ErrorKind::UnknownScheme => write!(f, "Unknown Scheme"),
             ErrorKind::Dns => write!(f, "Dns Failed"),
             ErrorKind::ConnectionFailed => write!(f, "Connection Failed"),
@@ -195,6 +195,6 @@ fn connection_closed() {
 fn error_is_send_and_sync() {
     fn takes_send(_: impl Send) {}
     fn takes_sync(_: impl Sync) {}
-    takes_send(crate::error::ErrorKind::Url.new());
-    takes_sync(crate::error::ErrorKind::Url.new());
+    takes_send(crate::error::ErrorKind::InvalidUrl.new());
+    takes_sync(crate::error::ErrorKind::InvalidUrl.new());
 }

@@ -108,7 +108,7 @@ impl Request {
         let mut url: Url = match self.url.clone() {
             Urlish::Url(u) => u,
             Urlish::Str(s) => s.parse().map_err(|e: url::ParseError| {
-                ErrorKind::Url
+                ErrorKind::InvalidUrl
                     .msg(&format!("failed to parse URL '{}'", self.url))
                     .src(e)
             })?,
