@@ -47,28 +47,23 @@ fn get_and_write(agent: &ureq::Agent, url: &str) {
     }
 }
 
+use ureq::Error::{Status, Transport};
+
 fn get_response(agent: &ureq::Agent, url: &str) -> result::Result<Response, ureq::Error> {
     let fetch = || agent.get(url).call();
-    let mut result = fetch();
     for _ in 1..4 {
-        let err = match result {
-            Ok(r) => return Ok(r),
-            Err(e) => e,
-        };
-        match err {
-            ureq::Error::Status(429, r) => {
+        match fetch() {
+            Err(Status(429, r)) => {
                 let retry: Option<u64> = r.header("retry-after").and_then(|h| h.parse().ok());
                 eprintln!("429 for {}, retrying in {}", r.status(), r.get_url());
                 thread::sleep(Duration::from_secs(retry.unwrap_or(5)));
                 eprintln!("error status {} body {}", r.status(), r.into_string()?);
             }
-            ureq::Error::Status(_, r) => return Err(r.into()),
-            ureq::Error::Transport(e) => return Err(e.into()),
+            result => return result,
         };
-        result = fetch();
     }
-    println!("Failed after 5 tries: {:?}", &result);
-    result
+    // Last try, return success or failure regardless of status code.
+    fetch()
 }
 
 fn get_many(urls: Vec<String>, simultaneous_fetches: usize) -> Result<(), Oops> {
