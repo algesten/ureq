@@ -254,7 +254,10 @@ fn io_error() {
     let mut err = Error::new(ErrorKind::Io, Some("oops".to_string())).src(ioe);
 
     err = err.url("http://example.com/".parse().unwrap());
-    assert_eq!(err.to_string(), "http://example.com/: Io: oops: too slow");
+    assert_eq!(
+        err.to_string(),
+        "http://example.com/: Network Error: oops: too slow"
+    );
 }
 
 #[test]
