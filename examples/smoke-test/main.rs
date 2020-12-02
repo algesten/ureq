@@ -1,11 +1,11 @@
-use std::io::{self, BufRead, BufReader, Read, Write};
+use std::io::{self, BufRead, BufReader, Read};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
-use std::{env, error, fmt, result, result::Result};
+use std::{env, error, fmt, result};
 
 use log::{error, info};
-use ureq::{self, Response};
+use ureq;
 
 #[derive(Debug)]
 struct Oops(String);
@@ -30,13 +30,14 @@ impl fmt::Display for Oops {
     }
 }
 
-fn get(agent: &ureq::Agent, url: &str) -> std::result::Result<(), Oops> {
-    let r = get_response(agent, url)?;
-    let mut reader = r.into_reader();
+type Result<T> = result::Result<T, Oops>;
+
+fn get(agent: &ureq::Agent, url: &str) -> Result<Vec<u8>> {
+    let response = agent.get(url).call()?;
+    let mut reader = response.into_reader();
     let mut bytes = vec![];
     reader.read_to_end(&mut bytes)?;
-    std::io::stdout().write_all(&bytes)?;
-    Ok(())
+    Ok(bytes)
 }
 
 fn get_and_write(agent: &ureq::Agent, url: &str) {
@@ -47,26 +48,7 @@ fn get_and_write(agent: &ureq::Agent, url: &str) {
     }
 }
 
-use ureq::Error::{Status, Transport};
-
-fn get_response(agent: &ureq::Agent, url: &str) -> result::Result<Response, ureq::Error> {
-    let fetch = || agent.get(url).call();
-    for _ in 1..4 {
-        match fetch() {
-            Err(Status(429, r)) => {
-                let retry: Option<u64> = r.header("retry-after").and_then(|h| h.parse().ok());
-                eprintln!("429 for {}, retrying in {}", r.status(), r.get_url());
-                thread::sleep(Duration::from_secs(retry.unwrap_or(5)));
-                eprintln!("error status {} body {}", r.status(), r.into_string()?);
-            }
-            result => return result,
-        };
-    }
-    // Last try, return success or failure regardless of status code.
-    fetch()
-}
-
-fn get_many(urls: Vec<String>, simultaneous_fetches: usize) -> Result<(), Oops> {
+fn get_many(urls: Vec<String>, simultaneous_fetches: usize) -> Result<()> {
     let agent = ureq::builder()
         .timeout_connect(Duration::from_secs(5))
         .timeout(Duration::from_secs(20))
@@ -94,7 +76,7 @@ fn get_many(urls: Vec<String>, simultaneous_fetches: usize) -> Result<(), Oops> 
     Ok(())
 }
 
-fn main() -> Result<(), Oops> {
+fn main() -> Result<()> {
     let args = env::args();
     if args.len() == 1 {
         println!(

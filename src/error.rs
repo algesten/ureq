@@ -18,29 +18,25 @@ use crate::Response;
 ///
 /// ```
 /// use std::{result::Result, time::Duration, thread};
-/// use ureq::{Response, Error};
-/// # fn main(){ ureq::is_test(true); get_response(); }
+/// use ureq::{Response, Error, Error::Status};
+/// # fn main(){ ureq::is_test(true); get_response( "http://httpbin.org/status/500" ); }
 ///
-/// // An example of a function that handles HTTP 500 errors differently
-/// // than other errors.
-/// fn get_response() -> Result<Response, Error> {
-///   let fetch = || ureq::get("http://httpbin.org/status/500").call();
-///   let mut result = fetch();
-///   for _ in 1..4 {
-///     let err: ureq::Error = match result {
-///         Ok(r) => return Ok(r),
-///         Err(e) => e,
-///     };
-///     match err {
-///       // Retry 500s after waiting for two seconds.
-///       Error::Status(500, _) => thread::sleep(Duration::from_secs(2)),
-///       Error::Status(_, r) => return Err(r.into()),
-///       Error::Transport(e) => return Err(e.into()),
+/// // An example of a function that handles HTTP 429 and 500 errors differently
+/// // than other errors. They get retried after a suitable delay, up to 4 times.
+/// fn get_response(url: &str) -> Result<Response, Error> {
+///     for _ in 1..4 {
+///         match ureq::get(url).call() {
+///             Err(Status(503, r)) | Err(Status(429, r)) => {
+///                 let retry: Option<u64> = r.header("retry-after").and_then(|h| h.parse().ok());
+///                 let retry = retry.unwrap_or(5);
+///                 eprintln!("{} for {}, retry in {}", r.status(), r.get_url(), retry);
+///                 thread::sleep(Duration::from_secs(retry));
+///             }
+///             result => return result,
+///         };
 ///     }
-///     result = fetch();
-///   }
-///   println!("Failed after 5 tries: {:?}", &result);
-///   result
+///     // Ran out of retries; try one last time and return whatever result we get.
+///     ureq::get(url).call()
 /// }
 /// ```
 #[derive(Debug)]
