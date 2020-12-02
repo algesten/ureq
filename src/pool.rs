@@ -229,7 +229,7 @@ fn pool_connections_limit() {
         proxy: None,
     });
     for key in poolkeys.clone() {
-        pool.add(key, Stream::Cursor(std::io::Cursor::new(vec![])));
+        pool.add(key, Stream::from_vec(vec![]))
     }
     assert_eq!(pool.len(), pool.max_idle_connections);
 
@@ -254,10 +254,7 @@ fn pool_per_host_connections_limit() {
     };
 
     for _ in 0..pool.max_idle_connections_per_host * 2 {
-        pool.add(
-            poolkey.clone(),
-            Stream::Cursor(std::io::Cursor::new(vec![])),
-        );
+        pool.add(poolkey.clone(), Stream::from_vec(vec![]))
     }
     assert_eq!(pool.len(), pool.max_idle_connections_per_host);
 
@@ -275,15 +272,12 @@ fn pool_checks_proxy() {
     let pool = ConnectionPool::new_with_limits(10, 1);
     let url = Url::parse("zzz:///example.com").unwrap();
 
-    pool.add(
-        PoolKey::new(&url, None),
-        Stream::Cursor(std::io::Cursor::new(vec![])),
-    );
+    pool.add(PoolKey::new(&url, None), Stream::from_vec(vec![]));
     assert_eq!(pool.len(), 1);
 
     pool.add(
         PoolKey::new(&url, Some(Proxy::new("localhost:9999").unwrap())),
-        Stream::Cursor(std::io::Cursor::new(vec![])),
+        Stream::from_vec(vec![]),
     );
     assert_eq!(pool.len(), 2);
 
@@ -292,7 +286,7 @@ fn pool_checks_proxy() {
             &url,
             Some(Proxy::new("user:password@localhost:9999").unwrap()),
         ),
-        Stream::Cursor(std::io::Cursor::new(vec![])),
+        Stream::from_vec(vec![]),
     );
     assert_eq!(pool.len(), 3);
 }
