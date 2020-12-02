@@ -122,7 +122,7 @@ impl Request {
             unit::connect(unit, true, 0, reader, false).map_err(|e| e.url(url.clone()))?;
 
         if response.error() && self.error_on_non_2xx {
-            Err(ErrorKind::HTTP.new().url(url.clone()).response(response))
+            Err(Error::Status(response.status(), response))
         } else {
             Ok(response)
         }
