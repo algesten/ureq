@@ -172,7 +172,7 @@ pub(crate) fn connect(
     let host = unit
         .url
         .host_str()
-        .ok_or(ErrorKind::Url.msg("no host in URL"))?;
+        .ok_or(ErrorKind::InvalidUrl.msg("no host in URL"))?;
     let url = &unit.url;
     let method = &unit.method;
     // open socket
@@ -241,7 +241,7 @@ pub(crate) fn connect(
         if let Some(location) = location {
             // join location header to current url in case it it relative
             let new_url = url.join(location).map_err(|e| {
-                ErrorKind::Url
+                ErrorKind::InvalidUrl
                     .msg(&format!("Bad redirection: {}", location))
                     .src(e)
             })?;
