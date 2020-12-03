@@ -109,9 +109,9 @@ pub enum ErrorKind {
     /// Too many redirects.
     TooManyRedirects,
     /// A status line we don't understand `HTTP/1.1 200 OK`.
-    Status,
+    BadStatus,
     /// A header line that couldn't be parsed.
-    Header,
+    BadHeader,
     /// Some unspecified `std::io::Error`.
     Io,
     /// Proxy information was not properly formatted
@@ -150,8 +150,8 @@ impl fmt::Display for ErrorKind {
             ErrorKind::Dns => write!(f, "Dns Failed"),
             ErrorKind::ConnectionFailed => write!(f, "Connection Failed"),
             ErrorKind::TooManyRedirects => write!(f, "Too Many Redirects"),
-            ErrorKind::Status => write!(f, "Bad Status"),
-            ErrorKind::Header => write!(f, "Bad Header"),
+            ErrorKind::BadStatus => write!(f, "Bad Status"),
+            ErrorKind::BadHeader => write!(f, "Bad Header"),
             ErrorKind::Io => write!(f, "Network Error"),
             ErrorKind::ProxyUrl => write!(f, "Malformed proxy"),
             ErrorKind::ProxyConnect => write!(f, "Proxy failed to connect"),

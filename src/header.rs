@@ -45,7 +45,7 @@ impl Header {
 
     pub(crate) fn validate(&self) -> Result<(), Error> {
         if !valid_name(self.name()) || !valid_value(&self.line.as_str()[self.index + 1..]) {
-            Err(ErrorKind::Header.msg(&format!("invalid header '{}'", self.line)))
+            Err(ErrorKind::BadHeader.msg(&format!("invalid header '{}'", self.line)))
         } else {
             Ok(())
         }
@@ -132,11 +132,11 @@ impl FromStr for Header {
         let line = s.to_string();
         let index = s
             .find(':')
-            .ok_or_else(|| ErrorKind::Header.msg("no colon in header"))?;
+            .ok_or_else(|| ErrorKind::BadHeader.msg("no colon in header"))?;
 
         // no value?
         if index >= s.len() {
-            return Err(ErrorKind::Header.msg("no value in header"));
+            return Err(ErrorKind::BadHeader.msg("no value in header"));
         }
 
         let header = Header { line, index };
@@ -185,7 +185,7 @@ fn test_parse_invalid_name() {
     for c in cases {
         let result = c.parse::<Header>();
         assert!(
-            matches!(result, Err(ref e) if e.kind() == ErrorKind::Header),
+            matches!(result, Err(ref e) if e.kind() == ErrorKind::BadHeader),
             "'{}'.parse(): expected BadHeader, got {:?}",
             c,
             result
