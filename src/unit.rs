@@ -264,7 +264,9 @@ pub(crate) fn connect(
                     return connect(new_unit, use_pooled, redirect_count + 1, empty, true);
                 }
                 // never change the method for 307/308
-                307 | 308 => {
+                // only resend the request if it cannot have a body
+                // NOTE: DELETE is intentionally excluded: https://stackoverflow.com/questions/299628
+                307 | 308 if ["GET", "HEAD", "OPTIONS", "TRACE"].contains(&method.as_str()) => {
                     let empty = Payload::Empty.into_read();
                     debug!("redirect {} {} -> {}", resp.status(), url, new_url);
                     return connect(unit, use_pooled, redirect_count - 1, empty, true);
