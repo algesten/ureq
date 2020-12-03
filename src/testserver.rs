@@ -28,8 +28,8 @@ pub(crate) fn test_agent() -> Agent {
             stream.write_all(b"HTTP/1.1 200 OK\r\n")?;
             stream.write_all(b"\r\n")?;
             stream.write_all(br#"{"hello": "world"}"#)?;
-        } else if headers.path() == "/redirect/3" {
-            stream.write_all(b"HTTP/1.1 302 Found\r\n")?;
+        } else if headers.path() == "/status/307" {
+            stream.write_all(b"HTTP/1.1 307 Found\r\n")?;
             stream.write_all(b"Location: /redirect/3\r\n")?;
             stream.write_all(b"\r\n")?;
         } else {
