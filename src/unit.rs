@@ -188,7 +188,7 @@ pub(crate) fn connect(
 
     if let Err(err) = send_result {
         if is_recycled {
-            debug!("retrying request early {} {}", method, url);
+            debug!("retrying request early {} {}: {}", method, url, err);
             // we try open a new connection, this time there will be
             // no connection in the pool. don't use it.
             return connect(unit, false, redirect_count, body, redir);
@@ -218,7 +218,7 @@ pub(crate) fn connect(
     // up to N+1 total tries, where N is max_idle_connections_per_host.
     let mut resp = match result {
         Err(err) if err.connection_closed() && retryable && is_recycled => {
-            debug!("retrying request {} {}", method, url);
+            debug!("retrying request {} {}: {}", method, url, err);
             let empty = Payload::Empty.into_read();
             return connect(unit, false, redirect_count, empty, redir);
         }
@@ -263,9 +263,15 @@ pub(crate) fn connect(
                     debug!("redirect {} {} -> {}", resp.status(), url, new_url);
                     return connect(new_unit, use_pooled, redirect_count + 1, empty, true);
                 }
+                // never change the method for 307/308
+                // only resend the request if it cannot have a body
+                // NOTE: DELETE is intentionally excluded: https://stackoverflow.com/questions/299628
+                307 | 308 if ["GET", "HEAD", "OPTIONS", "TRACE"].contains(&method.as_str()) => {
+                    let empty = Payload::Empty.into_read();
+                    debug!("redirect {} {} -> {}", resp.status(), url, new_url);
+                    return connect(unit, use_pooled, redirect_count - 1, empty, true);
+                }
                 _ => (),
-                // reinstate this with expect-100
-                // 307 | 308 | _ => connect(unit, method, use_pooled, redirects - 1, body),
             };
         }
     }
@@ -306,19 +312,17 @@ fn connect_socket(unit: &Unit, hostname: &str, use_pooled: bool) -> Result<(Stre
         scheme => return Err(ErrorKind::UnknownScheme.msg(&format!("unknown scheme '{}'", scheme))),
     };
     if use_pooled {
-        let agent = &unit.agent;
+        let pool = &unit.agent.state.pool;
+        let proxy = &unit.agent.config.proxy;
         // The connection may have been closed by the server
         // due to idle timeout while it was sitting in the pool.
         // Loop until we find one that is still good or run out of connections.
-        while let Some(stream) = agent
-            .state
-            .pool
-            .try_get_connection(&unit.url, unit.agent.config.proxy.clone())
-        {
+        while let Some(stream) = pool.try_get_connection(&unit.url, proxy.clone()) {
             let server_closed = stream.server_closed()?;
             if !server_closed {
                 return Ok((stream, true));
             }
+            debug!("dropping stream from pool; closed by server: {:?}", stream);
         }
     }
     let stream = match unit.url.scheme() {

@@ -7,6 +7,7 @@ use crate::stream::Stream;
 use crate::unit::Unit;
 use crate::Proxy;
 
+use log::debug;
 use url::Url;
 
 /// Holder of recycled connections.
@@ -115,6 +116,7 @@ impl ConnectionPool {
                 remove_last_match(&mut inner.lru, &key)
                     .expect("invariant failed: key in recycle but not in lru");
 
+                debug!("pulling stream from pool: {:?} -> {:?}", key, stream);
                 Some(stream)
             }
             Entry::Vacant(_) => None,
@@ -125,6 +127,7 @@ impl ConnectionPool {
         if self.noop() {
             return;
         }
+        debug!("adding stream to pool: {:?} -> {:?}", key, stream);
 
         let mut inner = self.inner.lock().unwrap();
         match inner.recycle.entry(key.clone()) {
@@ -133,7 +136,13 @@ impl ConnectionPool {
                 streams.push_back(stream);
                 if streams.len() > self.max_idle_connections_per_host {
                     // Remove the oldest entry
-                    streams.pop_front();
+                    let stream = streams.pop_front().expect("empty streams list");
+                    debug!(
+                        "host {:?} has {} conns, dropping oldest: {:?}",
+                        key,
+                        streams.len(),
+                        stream
+                    );
                     remove_first_match(&mut inner.lru, &key)
                         .expect("invariant failed: key in recycle but not in lru");
                 }
@@ -159,9 +168,10 @@ impl ConnectionPool {
         match inner.recycle.entry(key) {
             Entry::Occupied(mut occupied_entry) => {
                 let streams = occupied_entry.get_mut();
-                streams
+                let stream = streams
                     .pop_front()
                     .expect("invariant failed: key existed in recycle but no streams available");
+                debug!("dropping oldest stream in pool: {:?}", stream);
                 if streams.len() == 0 {
                     occupied_entry.remove();
                 }
@@ -229,7 +239,7 @@ fn pool_connections_limit() {
         proxy: None,
     });
     for key in poolkeys.clone() {
-        pool.add(key, Stream::Cursor(std::io::Cursor::new(vec![])));
+        pool.add(key, Stream::from_vec(vec![]))
     }
     assert_eq!(pool.len(), pool.max_idle_connections);
 
@@ -254,10 +264,7 @@ fn pool_per_host_connections_limit() {
     };
 
     for _ in 0..pool.max_idle_connections_per_host * 2 {
-        pool.add(
-            poolkey.clone(),
-            Stream::Cursor(std::io::Cursor::new(vec![])),
-        );
+        pool.add(poolkey.clone(), Stream::from_vec(vec![]))
     }
     assert_eq!(pool.len(), pool.max_idle_connections_per_host);
 
@@ -275,15 +282,12 @@ fn pool_checks_proxy() {
     let pool = ConnectionPool::new_with_limits(10, 1);
     let url = Url::parse("zzz:///example.com").unwrap();
 
-    pool.add(
-        PoolKey::new(&url, None),
-        Stream::Cursor(std::io::Cursor::new(vec![])),
-    );
+    pool.add(PoolKey::new(&url, None), Stream::from_vec(vec![]));
     assert_eq!(pool.len(), 1);
 
     pool.add(
         PoolKey::new(&url, Some(Proxy::new("localhost:9999").unwrap())),
-        Stream::Cursor(std::io::Cursor::new(vec![])),
+        Stream::from_vec(vec![]),
     );
     assert_eq!(pool.len(), 2);
 
@@ -292,7 +296,7 @@ fn pool_checks_proxy() {
             &url,
             Some(Proxy::new("user:password@localhost:9999").unwrap()),
         ),
-        Stream::Cursor(std::io::Cursor::new(vec![])),
+        Stream::from_vec(vec![]),
     );
     assert_eq!(pool.len(), 3);
 }

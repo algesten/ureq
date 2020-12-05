@@ -5,9 +5,7 @@ use std::io::{self, copy, empty, Cursor, Read, Write};
 #[cfg(feature = "charset")]
 use crate::response::DEFAULT_CHARACTER_SET;
 #[cfg(feature = "charset")]
-use encoding::label::encoding_from_whatwg_label;
-#[cfg(feature = "charset")]
-use encoding::EncoderTrap;
+use encoding_rs::Encoding;
 
 #[cfg(feature = "json")]
 use super::SerdeValue;
@@ -80,10 +78,10 @@ impl<'a> Payload<'a> {
             Payload::Text(text, _charset) => {
                 #[cfg(feature = "charset")]
                 let bytes = {
-                    let encoding = encoding_from_whatwg_label(&_charset)
-                        .or_else(|| encoding_from_whatwg_label(DEFAULT_CHARACTER_SET))
+                    let encoding = Encoding::for_label(_charset.as_bytes())
+                        .or_else(|| Encoding::for_label(DEFAULT_CHARACTER_SET.as_bytes()))
                         .unwrap();
-                    encoding.encode(&text, EncoderTrap::Replace).unwrap()
+                    encoding.encode(&text).0
                 };
                 #[cfg(not(feature = "charset"))]
                 let bytes = text.as_bytes();
