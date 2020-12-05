@@ -1,3 +1,7 @@
+# 1.5.3
+
+ * Backport: follow redirects non-body request on 307/308 (#253)
+
 # 1.5.2
 
  * Remove 'static constraint on Request.send(), allowing a wider variety of
