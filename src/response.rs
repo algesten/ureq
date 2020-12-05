@@ -41,7 +41,8 @@ pub const DEFAULT_CHARACTER_SET: &str = "utf-8";
 /// ```
 pub struct Response {
     url: Option<String>,
-    version: String,
+    status_line: String,
+    index: ResponseStatusIndex,
     status: u16,
     headers: Vec<Header>,
     unit: Option<Unit>,
@@ -57,7 +58,12 @@ struct ResponseStatusIndex {
 
 impl fmt::Debug for Response {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Response[status: {}]", self.status())
+        write!(
+            f,
+            "Response[status: {}, status_text: {}]",
+            self.status(),
+            self.status_text()
+        )
     }
 }
 
@@ -88,14 +94,24 @@ impl Response {
         self.url.as_ref().map(|s| &s[..]).unwrap_or("")
     }
 
+    /// The entire status line like: `HTTP/1.1 200 OK`
+    pub fn status_line(&self) -> &str {
+        self.status_line.as_str()
+    }
+
     /// The http version: `HTTP/1.1`
     pub fn http_version(&self) -> &str {
-        &self.version
+        &self.status_line.as_str()[0..self.index.http_version]
     }
 
     /// The status as a u16: `200`
     pub fn status(&self) -> u16 {
         self.status
+    }
+
+    /// The status text: `OK`
+    pub fn status_text(&self) -> &str {
+        &self.status_line.as_str()[self.index.response_code + 1..].trim()
     }
 
     /// The header corresponding header value for the give name, if any.
@@ -389,7 +405,7 @@ impl Response {
         // HTTP/1.1 200 OK\r\n
         let status_line = read_next_line(&mut reader)?;
 
-        let (version, status) = parse_status_line(status_line.as_str())?;
+        let (index, status) = parse_status_line(status_line.as_str())?;
 
         let mut headers: Vec<Header> = Vec::new();
         loop {
@@ -404,7 +420,8 @@ impl Response {
 
         Ok(Response {
             url: None,
-            version,
+            status_line,
+            index,
             status,
             headers,
             unit: None,
@@ -419,7 +436,7 @@ impl Response {
 }
 
 /// parse a line like: HTTP/1.1 200 OK\r\n
-fn parse_status_line(line: &str) -> Result<(String, u16), Error> {
+fn parse_status_line(line: &str) -> Result<(ResponseStatusIndex, u16), Error> {
     //
 
     let err = Err(BadStatus.new());
@@ -456,7 +473,13 @@ fn parse_status_line(line: &str) -> Result<(String, u16), Error> {
 
     let status: u16 = status_str.parse().map_err(|_| BadStatus.new())?;
 
-    Ok((http_version.to_string(), status))
+    Ok((
+        ResponseStatusIndex {
+            http_version: http_version.len(),
+            response_code: http_version.len() + status_str.len(),
+        },
+        status,
+    ))
 }
 
 impl FromStr for Response {
