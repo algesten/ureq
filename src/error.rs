@@ -10,11 +10,14 @@ use crate::Response;
 ///
 /// This can represent connection-level errors (e.g. connection refused),
 /// protocol-level errors (malformed response), or status code errors
-/// (e.g. 404 Not Found). For status code errors, [kind()](Error::kind()) will be
-/// [ErrorKind::HTTP], [status()](Error::status()) will return the status
-/// code, and [into_response()](Error::into_response()) will return the underlying
-/// [Response](crate::Response). You can use that Response to, for instance, read
-/// the full body (which may contain a useful error message).
+/// (e.g. 404 Not Found). Status code errors are represented by the
+/// [Status](Error::Status) enum variant, while connection-level and
+/// protocol-level errors are represented by the [Transport](Error::Transport)
+/// enum variant. You can use a match statement to extract a Response
+/// from a `Status` error. For instance, you may want to read the full
+/// body of a response because you expect it to contain a useful error
+/// message. Or you may want to handle certain error code responses
+/// differently.
 ///
 /// ```
 /// use std::{result::Result, time::Duration, thread};
@@ -40,18 +43,23 @@ use crate::Response;
 /// }
 /// ```
 #[derive(Debug)]
+pub enum Error {
+    /// A response was successfully received but had status code >= 400.
+    /// Values are (status_code, Response).
+    Status(u16, Response),
+    /// There was an error making the request or receiving the response.
+    Transport(Transport),
+}
+
+// Any error that is not a status code error. For instance, DNS name not found,
+// connection refused, or malformed response.
+#[derive(Debug)]
 pub struct Transport {
     kind: ErrorKind,
     message: Option<String>,
     url: Option<Url>,
     source: Option<Box<dyn error::Error + Send + Sync + 'static>>,
     response: Option<Response>,
-}
-
-#[derive(Debug)]
-pub enum Error {
-    Status(u16, Response),
-    Transport(Transport),
 }
 
 impl Display for Error {
