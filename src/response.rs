@@ -58,7 +58,12 @@ struct ResponseStatusIndex {
 
 impl fmt::Debug for Response {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Response[status: {}]", self.status(),)
+        write!(
+            f,
+            "Response[status: {}, status_text: {}]",
+            self.status(),
+            self.status_text()
+        )
     }
 }
 
@@ -72,14 +77,14 @@ impl Response {
     /// ```
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
-    /// let resp = ureq::Response::new(401, "Please log in")?;
+    /// let resp = ureq::Response::new(401, "Authorization Required", "Please log in")?;
     ///
     /// assert_eq!(resp.status(), 401);
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new(status: u16, body: &str) -> Result<Response, Error> {
-        let r = format!("HTTP/1.1 {} Ignored\r\n\r\n{}\n", status, body);
+    pub fn new(status: u16, status_text: &str, body: &str) -> Result<Response, Error> {
+        let r = format!("HTTP/1.1 {} {}\r\n\r\n{}\n", status, status_text, body);
         (r.as_ref() as &str).parse()
     }
 
@@ -97,6 +102,11 @@ impl Response {
     /// The status as a u16: `200`
     pub fn status(&self) -> u16 {
         self.status
+    }
+
+    /// The status text: `OK`
+    pub fn status_text(&self) -> &str {
+        &self.status_line.as_str()[self.index.response_code + 1..].trim()
     }
 
     /// The header corresponding header value for the give name, if any.

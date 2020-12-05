@@ -167,7 +167,7 @@ impl fmt::Display for ErrorKind {
 #[test]
 fn status_code_error() {
     let mut err = Error::new(ErrorKind::HTTP, None);
-    err = err.response(Response::new(500, "too much going on").unwrap());
+    err = err.response(Response::new(500, "Internal Server Error", "too much going on").unwrap());
     assert_eq!(err.to_string(), "status code 500");
 
     err = err.url("http://example.com/".parse().unwrap());
