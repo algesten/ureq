@@ -220,7 +220,7 @@ mod testserver;
 
 pub use crate::agent::Agent;
 pub use crate::agent::AgentBuilder;
-pub use crate::error::{Error, ErrorKind};
+pub use crate::error::{Error, ErrorKind, Transport};
 pub use crate::header::Header;
 pub use crate::proxy::Proxy;
 pub use crate::request::Request;

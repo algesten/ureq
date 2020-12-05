@@ -1,6 +1,6 @@
-use std::fmt;
-use std::io::{self, Cursor, Read};
+use std::io::{self, Read};
 use std::str::FromStr;
+use std::{fmt, io::BufRead};
 
 use chunked_transfer::Decoder as ChunkDecoder;
 
@@ -14,9 +14,7 @@ use crate::unit::Unit;
 use serde::de::DeserializeOwned;
 
 #[cfg(feature = "charset")]
-use encoding::label::encoding_from_whatwg_label;
-#[cfg(feature = "charset")]
-use encoding::DecoderTrap;
+use encoding_rs::Encoding;
 
 pub const DEFAULT_CONTENT_TYPE: &str = "text/plain";
 pub const DEFAULT_CHARACTER_SET: &str = "utf-8";
@@ -145,30 +143,6 @@ impl Response {
             .filter(|h| h.is_name(name))
             .map(|h| h.value())
             .collect()
-    }
-
-    /// Whether the response status is: 200 <= status <= 299
-    pub fn ok(&self) -> bool {
-        self.status >= 200 && self.status <= 299
-    }
-
-    pub fn redirect(&self) -> bool {
-        self.status >= 300 && self.status <= 399
-    }
-
-    /// Whether the response status is: 400 <= status <= 499
-    pub fn client_error(&self) -> bool {
-        self.status >= 400 && self.status <= 499
-    }
-
-    /// Whether the response status is: 500 <= status <= 599
-    pub fn server_error(&self) -> bool {
-        self.status >= 500 && self.status <= 599
-    }
-
-    /// Whether the response status is: 400 <= status <= 599
-    pub fn error(&self) -> bool {
-        self.client_error() || self.server_error()
     }
 
     /// The content type part of the "Content-Type" header without
@@ -327,12 +301,13 @@ impl Response {
     pub fn into_string(self) -> io::Result<String> {
         #[cfg(feature = "charset")]
         {
-            let encoding = encoding_from_whatwg_label(self.charset())
-                .or_else(|| encoding_from_whatwg_label(DEFAULT_CHARACTER_SET))
+            let encoding = Encoding::for_label(self.charset().as_bytes())
+                .or_else(|| Encoding::for_label(DEFAULT_CHARACTER_SET.as_bytes()))
                 .unwrap();
             let mut buf: Vec<u8> = vec![];
             self.into_reader().read_to_end(&mut buf)?;
-            Ok(encoding.decode(&buf, DecoderTrap::Replace).unwrap())
+            let (text, _, _) = encoding.decode(&buf);
+            Ok(text.into_owned())
         }
         #[cfg(not(feature = "charset"))]
         {
@@ -425,7 +400,7 @@ impl Response {
     /// let resp = ureq::Response::do_from_read(read);
     ///
     /// assert_eq!(resp.status(), 401);
-    pub(crate) fn do_from_read(mut reader: impl Read) -> Result<Response, Error> {
+    pub(crate) fn do_from_read(mut reader: impl BufRead) -> Result<Response, Error> {
         //
         // HTTP/1.1 200 OK\r\n
         let status_line = read_next_line(&mut reader)?;
@@ -455,8 +430,8 @@ impl Response {
     }
 
     #[cfg(test)]
-    pub fn to_write_vec(&self) -> Vec<u8> {
-        self.stream.as_ref().unwrap().to_write_vec()
+    pub fn to_write_vec(self) -> Vec<u8> {
+        self.stream.unwrap().to_write_vec()
     }
 }
 
@@ -508,10 +483,9 @@ impl FromStr for Response {
     /// assert_eq!(body, "Hello World!!!");
     /// ```
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let bytes = s.as_bytes().to_owned();
-        let mut cursor = Cursor::new(bytes);
-        let mut resp = Self::do_from_read(&mut cursor)?;
-        set_stream(&mut resp, "".into(), None, Stream::Cursor(cursor));
+        let mut stream = Stream::from_vec(s.as_bytes().to_owned());
+        let mut resp = Self::do_from_read(&mut stream)?;
+        set_stream(&mut resp, "".into(), None, stream);
         Ok(resp)
     }
 }
@@ -525,34 +499,24 @@ pub(crate) fn set_stream(resp: &mut Response, url: String, unit: Option<Unit>, s
     resp.stream = Some(stream);
 }
 
-fn read_next_line<R: Read>(reader: &mut R) -> io::Result<String> {
-    let mut buf = Vec::new();
-    let mut prev_byte_was_cr = false;
-    let mut one = [0_u8];
-
-    loop {
-        let amt = reader.read(&mut one[..])?;
-
-        if amt == 0 {
-            return Err(io::Error::new(
-                io::ErrorKind::ConnectionAborted,
-                "Unexpected EOF",
-            ));
-        }
-
-        let byte = one[0];
-
-        if byte == b'\n' && prev_byte_was_cr {
-            buf.pop(); // removing the '\r'
-            return String::from_utf8(buf).map_err(|_| {
-                io::Error::new(io::ErrorKind::InvalidInput, "Header is not in ASCII")
-            });
-        }
-
-        prev_byte_was_cr = byte == b'\r';
-
-        buf.push(byte);
+fn read_next_line(reader: &mut impl BufRead) -> io::Result<String> {
+    let mut s = String::new();
+    if reader.read_line(&mut s)? == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::ConnectionAborted,
+            "Unexpected EOF",
+        ));
     }
+
+    if !s.ends_with("\r\n") {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("Header field didn't end with \\r: {}", s),
+        ));
+    }
+    s.pop();
+    s.pop();
+    Ok(s)
 }
 
 /// Limits a `Read` to a content size (as set by a "Content-Length" header).
