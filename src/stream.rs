@@ -111,35 +111,38 @@ pub(crate) fn io_err_timeout(error: String) -> io::Error {
 
 impl fmt::Debug for Stream {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut result = f.debug_struct("Stream");
         match self.inner.get_ref() {
-            Inner::Http(tcpstream) => result.field("tcp", tcpstream),
+            Inner::Http(tcpstream) => write!(f, "{:?}", tcpstream),
             #[cfg(feature = "tls")]
-            Inner::Https(tlsstream) => result.field("tls", tlsstream.get_ref()),
-            Inner::Test(_, _) => result.field("test", &String::new()),
-        };
-        result.finish()
+            Inner::Https(tlsstream) => write!(f, "{:?}", tlsstream.get_ref()),
+            Inner::Test(_, _) => write!(f, "Stream(Test)"),
+        }
     }
 }
 
 impl Stream {
+    fn logged_create(stream: Stream) -> Stream {
+        debug!("created stream: {:?}", stream);
+        stream
+    }
+
     pub(crate) fn from_vec(v: Vec<u8>) -> Stream {
-        Stream {
+        Stream::logged_create(Stream {
             inner: BufReader::new(Inner::Test(Box::new(Cursor::new(v)), vec![])),
-        }
+        })
     }
 
     fn from_tcp_stream(t: TcpStream) -> Stream {
-        Stream {
+        Stream::logged_create(Stream {
             inner: BufReader::new(Inner::Http(t)),
-        }
+        })
     }
 
     #[cfg(feature = "tls")]
     fn from_tls_stream(t: StreamOwned<ClientSession, TcpStream>) -> Stream {
-        Stream {
+        Stream::logged_create(Stream {
             inner: BufReader::new(Inner::Https(t)),
-        }
+        })
     }
 
     // Check if the server has closed a stream by performing a one-byte
@@ -206,8 +209,8 @@ impl Stream {
     }
 
     #[cfg(test)]
-    pub fn to_write_vec(self) -> Vec<u8> {
-        match self.inner.into_inner() {
+    pub fn to_write_vec(&self) -> Vec<u8> {
+        match self.inner.get_ref() {
             Inner::Test(_, writer) => writer.clone(),
             _ => panic!("to_write_vec on non Test stream"),
         }
@@ -295,6 +298,12 @@ impl Write for Stream {
             Inner::Https(stream) => stream.flush(),
             Inner::Test(_, writer) => writer.flush(),
         }
+    }
+}
+
+impl Drop for Stream {
+    fn drop(&mut self) {
+        debug!("dropping stream: {:?}", self);
     }
 }
 
@@ -388,7 +397,7 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
             None => None,
         };
 
-        debug!("connecting to {}", &sock_addr);
+        debug!("connecting to {} at {}", netloc, &sock_addr);
         // connect with a configured timeout.
         let stream = if Some(Proto::SOCKS5) == proto {
             connect_socks5(

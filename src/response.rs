@@ -129,30 +129,6 @@ impl Response {
             .collect()
     }
 
-    /// Whether the response status is: 200 <= status <= 299
-    pub fn ok(&self) -> bool {
-        self.status >= 200 && self.status <= 299
-    }
-
-    pub fn redirect(&self) -> bool {
-        self.status >= 300 && self.status <= 399
-    }
-
-    /// Whether the response status is: 400 <= status <= 499
-    pub fn client_error(&self) -> bool {
-        self.status >= 400 && self.status <= 499
-    }
-
-    /// Whether the response status is: 500 <= status <= 599
-    pub fn server_error(&self) -> bool {
-        self.status >= 500 && self.status <= 599
-    }
-
-    /// Whether the response status is: 400 <= status <= 599
-    pub fn error(&self) -> bool {
-        self.client_error() || self.server_error()
-    }
-
     /// The content type part of the "Content-Type" header without
     /// the charset.
     ///
