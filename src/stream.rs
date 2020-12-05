@@ -341,7 +341,7 @@ pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error
     let port = unit.url.port().unwrap_or(443);
 
     let sni = webpki::DNSNameRef::try_from_ascii_str(hostname)
-        .map_err(|err| ErrorKind::DnsFailed.new().src(err))?;
+        .map_err(|err| ErrorKind::Dns.new().src(err))?;
     let tls_conf: &Arc<rustls::ClientConfig> = unit
         .agent
         .config
@@ -375,10 +375,10 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
     let sock_addrs = unit
         .resolver()
         .resolve(&netloc)
-        .map_err(|e| ErrorKind::DnsFailed.new().src(e))?;
+        .map_err(|e| ErrorKind::Dns.new().src(e))?;
 
     if sock_addrs.is_empty() {
-        return Err(ErrorKind::DnsFailed.msg(&format!("No ip address for {}", hostname)));
+        return Err(ErrorKind::Dns.msg(&format!("No ip address for {}", hostname)));
     }
 
     let proto = if let Some(ref proxy) = proxy {

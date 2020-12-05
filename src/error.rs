@@ -168,11 +168,11 @@ impl Error {
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum ErrorKind {
     /// The url could not be understood.
-    BadUrl,
+    InvalidUrl,
     /// The url scheme could not be understood.
     UnknownScheme,
     /// DNS lookup failed.
-    DnsFailed,
+    Dns,
     /// Connection to server failed.
     ConnectionFailed,
     /// Too many redirects.
@@ -184,14 +184,12 @@ pub enum ErrorKind {
     /// Some unspecified `std::io::Error`.
     Io,
     /// Proxy information was not properly formatted
-    BadProxy,
-    /// Proxy credentials were not properly formatted
-    BadProxyCreds,
+    InvalidProxyUrl,
     /// Proxy could not connect
     ProxyConnect,
     /// Incorrect credentials for proxy
-    InvalidProxyCreds,
-    /// HTTP status code indicating an error (e.g. 4xx, 5xx).
+    ProxyUnauthorized,
+    /// HTTP status code indicating an error (e.g. 4xx, 5xx)
     /// Read the inner response body for details and to return
     /// the connection to the pool.
     HTTP,
@@ -228,18 +226,17 @@ impl From<Transport> for Error {
 impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ErrorKind::BadUrl => write!(f, "Bad URL"),
+            ErrorKind::InvalidUrl => write!(f, "Bad URL"),
             ErrorKind::UnknownScheme => write!(f, "Unknown Scheme"),
-            ErrorKind::DnsFailed => write!(f, "Dns Failed"),
+            ErrorKind::Dns => write!(f, "Dns Failed"),
             ErrorKind::ConnectionFailed => write!(f, "Connection Failed"),
             ErrorKind::TooManyRedirects => write!(f, "Too Many Redirects"),
             ErrorKind::BadStatus => write!(f, "Bad Status"),
             ErrorKind::BadHeader => write!(f, "Bad Header"),
             ErrorKind::Io => write!(f, "Network Error"),
-            ErrorKind::BadProxy => write!(f, "Malformed proxy"),
-            ErrorKind::BadProxyCreds => write!(f, "Failed to parse proxy credentials"),
+            ErrorKind::InvalidProxyUrl => write!(f, "Malformed proxy"),
             ErrorKind::ProxyConnect => write!(f, "Proxy failed to connect"),
-            ErrorKind::InvalidProxyCreds => write!(f, "Provided proxy credentials are incorrect"),
+            ErrorKind::ProxyUnauthorized => write!(f, "Provided proxy credentials are incorrect"),
             ErrorKind::HTTP => write!(f, "HTTP status error"),
         }
     }
@@ -282,6 +279,6 @@ fn connection_closed() {
 fn error_is_send_and_sync() {
     fn takes_send(_: impl Send) {}
     fn takes_sync(_: impl Sync) {}
-    takes_send(crate::error::ErrorKind::BadUrl.new());
-    takes_sync(crate::error::ErrorKind::BadUrl.new());
+    takes_send(crate::error::ErrorKind::InvalidUrl.new());
+    takes_sync(crate::error::ErrorKind::InvalidUrl.new());
 }

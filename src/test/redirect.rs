@@ -106,7 +106,7 @@ fn redirect_host() {
     let url = format!("http://localhost:{}/", srv.port);
     let result = crate::Agent::new().get(&url).call();
     assert!(
-        matches!(result, Err(ref e) if e.kind() == ErrorKind::DnsFailed),
+        matches!(result, Err(ref e) if e.kind() == ErrorKind::Dns),
         "expected Err(DnsFailed), got: {:?}",
         result
     );
