@@ -61,17 +61,24 @@ impl Display for Error {
                 write!(f, "{}: status code {}", response.get_url(), status)?;
             }
             Error::Transport(err) => {
-                if let Some(url) = &err.url {
-                    write!(f, "{}: ", url)?;
-                }
-                write!(f, "{}", err.kind)?;
-                if let Some(message) = &err.message {
-                    write!(f, ": {}", message)?;
-                }
-                if let Some(source) = &err.source {
-                    write!(f, ": {}", source)?;
-                }
+                write!(f, "{}", err)?;
             }
+        }
+        Ok(())
+    }
+}
+
+impl Display for Transport {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(url) = &self.url {
+            write!(f, "{}: ", url)?;
+        }
+        write!(f, "{}", self.kind)?;
+        if let Some(message) = &self.message {
+            write!(f, ": {}", message)?;
+        }
+        if let Some(source) = &self.source {
+            write!(f, ": {}", source)?;
         }
         Ok(())
     }
