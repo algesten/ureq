@@ -184,7 +184,7 @@ pub enum ErrorKind {
     /// Some unspecified `std::io::Error`.
     Io,
     /// Proxy information was not properly formatted
-    ProxyUrl,
+    InvalidProxyUrl,
     /// Proxy could not connect
     ProxyConnect,
     /// Incorrect credentials for proxy
@@ -234,7 +234,7 @@ impl fmt::Display for ErrorKind {
             ErrorKind::BadStatus => write!(f, "Bad Status"),
             ErrorKind::BadHeader => write!(f, "Bad Header"),
             ErrorKind::Io => write!(f, "Network Error"),
-            ErrorKind::ProxyUrl => write!(f, "Malformed proxy"),
+            ErrorKind::InvalidProxyUrl => write!(f, "Malformed proxy"),
             ErrorKind::ProxyConnect => write!(f, "Proxy failed to connect"),
             ErrorKind::ProxyUnauthorized => write!(f, "Provided proxy credentials are incorrect"),
             ErrorKind::HTTP => write!(f, "HTTP status error"),
