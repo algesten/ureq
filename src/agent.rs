@@ -408,14 +408,24 @@ impl AgentBuilder {
     ///
     /// If the redirect count hits this limit (and it's > 0), TooManyRedirects is returned.
     ///
+    /// WARNING: for 307 and 308 redirects, this value is ignored for methods that have a body.
+    /// You must handle 307 redirects yourself when sending a PUT, POST, PATCH, or DELETE request.
+    ///
     /// ```
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
     /// let result = ureq::builder()
     ///     .redirects(1)
     ///     .build()
-    ///     .get("http://httpbin.org/redirect/3")
-    ///     .call();
+    ///     .get("http://httpbin.org/status/301")
+    ///     .error_on_non_2xx(false)
+    ///     .call()?;
+    /// assert_ne!(result.status(), 301);
+    ///
+    /// let result = ureq::post("http://httpbin.org/status/307")
+    ///     .error_on_non_2xx(false)
+    ///     .send_bytes(b"some data")?;
+    /// assert_eq!(result.status(), 307);
     /// # Ok(())
     /// # }
     /// ```
