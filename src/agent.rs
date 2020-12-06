@@ -417,6 +417,8 @@ impl AgentBuilder {
     /// let result = ureq::builder()
     ///     .redirects(1)
     ///     .build()
+    ///     # ;
+    /// # let result = ureq::agent()
     ///     .get("http://httpbin.org/status/301")
     ///     .call()?;
     /// assert_ne!(result.status(), 301);

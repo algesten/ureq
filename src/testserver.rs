@@ -17,6 +17,8 @@ pub(crate) fn test_agent() -> Agent {
         let headers = read_request(&stream);
         if headers.0.is_empty() {
             // no headers probably means it's the initial request to check test server is up.
+        } else if headers.path() == "/status/200" {
+            stream.write_all(b"HTTP/1.1 200 OK\r\n\r\n")?;
         } else if headers.path() == "/status/500" {
             stream.write_all(b"HTTP/1.1 500 Server Internal Error\r\n\r\n")?;
         } else if headers.path() == "/bytes/100" {
@@ -30,11 +32,11 @@ pub(crate) fn test_agent() -> Agent {
             stream.write_all(br#"{"hello": "world"}"#)?;
         } else if headers.path() == "/status/301" {
             stream.write_all(b"HTTP/1.1 301 Found\r\n")?;
-            stream.write_all(b"Location: /redirect/3\r\n")?;
+            stream.write_all(b"Location: /status/200\r\n")?;
             stream.write_all(b"\r\n")?;
         } else if headers.path() == "/status/307" {
             stream.write_all(b"HTTP/1.1 307 Found\r\n")?;
-            stream.write_all(b"Location: /redirect/3\r\n")?;
+            stream.write_all(b"Location: /status/200\r\n")?;
             stream.write_all(b"\r\n")?;
         } else {
             stream.write_all(b"HTTP/1.1 200 OK\r\n")?;
