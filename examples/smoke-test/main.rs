@@ -78,32 +78,9 @@ fn get_many(urls: Vec<String>, simultaneous_fetches: usize) -> Result<()> {
 
 fn main() -> Result<()> {
     let args = env::args();
-    if args.len() == 1 {
-        println!(
-            r##"Usage: {:#?} top-1m.csv
-        
-Where top-1m.csv is a simple, unquoted CSV containing two fields, a rank and
-a domain name. For instance you can get such a list from https://tranco-list.eu/.
-
-For each domain, this program will attempt to GET four URLs: The domain name
-name with HTTP and HTTPS, and with and without a www prefix. It will fetch
-using 50 threads concurrently.
-"##,
-            env::current_exe()?
-        );
-        return Ok(());
-    }
     env_logger::init();
-    let file = std::fs::File::open(args.skip(1).next().unwrap())?;
-    let bufreader = BufReader::new(file);
-    let mut urls = vec![];
-    for line in bufreader.lines() {
-        let domain = line?.rsplit(",").next().unwrap().to_string();
-        urls.push(format!("http://{}/", domain));
-        urls.push(format!("https://{}/", domain));
-        urls.push(format!("http://www.{}/", domain));
-        urls.push(format!("https://www.{}/", domain));
+    for a in args {
+        get_and_write(&ureq::agent(), &a);
     }
-    get_many(urls, 50)?;
     Ok(())
 }

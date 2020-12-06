@@ -1,14 +1,21 @@
-use std::io::{self, Read};
 use std::str::FromStr;
 use std::{fmt, io::BufRead};
+use std::{
+    io::{self, Read},
+    sync::Arc,
+};
 
 use chunked_transfer::Decoder as ChunkDecoder;
+use url::Url;
 
-use crate::error::{Error, ErrorKind};
 use crate::header::Header;
 use crate::pool::PoolReturnRead;
 use crate::stream::{DeadlineStream, Stream};
 use crate::unit::Unit;
+use crate::{
+    error::{Error, ErrorKind},
+    stream,
+};
 
 #[cfg(feature = "json")]
 use serde::de::DeserializeOwned;
@@ -40,13 +47,16 @@ pub const DEFAULT_CHARACTER_SET: &str = "utf-8";
 /// # }
 /// ```
 pub struct Response {
-    url: Option<String>,
+    url: Option<Url>,
     status_line: String,
     index: ResponseStatusIndex,
     status: u16,
     headers: Vec<Header>,
     unit: Option<Unit>,
-    stream: Option<Stream>,
+    stream: Stream,
+    // If this Response resulted from a redirect, the Response containing
+    // that redirect.
+    previous: Option<Arc<Response>>,
 }
 
 /// index into status_line where we split: HTTP/1.1 200 OK
@@ -243,7 +253,7 @@ impl Response {
                 .and_then(|l| l.parse::<usize>().ok())
         };
 
-        let stream = self.stream.expect("No reader in response?!");
+        let stream = self.stream;
         let unit = self.unit;
         if let Some(unit) = &unit {
             let result = stream.set_read_timeout(unit.agent.config.timeout_read);
@@ -382,6 +392,13 @@ impl Response {
         })
     }
 
+    // Returns an iterator across the redirect history of this response,
+    // if any. The iterator starts with the response before this one.
+    // If this response was not redirected, the iterator is empty.
+    pub(crate) fn history(&self) -> Hist {
+        Hist::new(self.previous.as_deref())
+    }
+
     /// Create a response from a Read trait impl.
     ///
     /// This is hopefully useful for unit tests.
@@ -395,16 +412,18 @@ impl Response {
     /// let resp = ureq::Response::do_from_read(read);
     ///
     /// assert_eq!(resp.status(), 401);
-    pub(crate) fn do_from_read(mut reader: impl BufRead) -> Result<Response, Error> {
+    pub(crate) fn do_from_stream(stream: Stream, unit: Option<Unit>) -> Result<Response, Error> {
         //
         // HTTP/1.1 200 OK\r\n
-        let status_line = read_next_line(&mut reader)?;
+        let mut stream =
+            stream::DeadlineStream::new(stream, unit.as_ref().and_then(|u| u.deadline.clone()));
+        let status_line = read_next_line(&mut stream)?;
 
         let (index, status) = parse_status_line(status_line.as_str())?;
 
         let mut headers: Vec<Header> = Vec::new();
         loop {
-            let line = read_next_line(&mut reader)?;
+            let line = read_next_line(&mut stream)?;
             if line.is_empty() {
                 break;
             }
@@ -419,14 +438,27 @@ impl Response {
             index,
             status,
             headers,
-            unit: None,
-            stream: None,
+            unit,
+            stream: stream.into(),
+            previous: None,
         })
+    }
+
+    pub(crate) fn do_from_request(
+        unit: Unit,
+        stream: Stream,
+        previous: Option<Arc<Response>>,
+    ) -> Result<Response, Error> {
+        let url = Some(unit.url.clone());
+        let mut resp = Response::do_from_stream(stream, Some(unit))?;
+        resp.previous = previous;
+        resp.url = url;
+        Ok(resp)
     }
 
     #[cfg(test)]
     pub fn to_write_vec(self) -> Vec<u8> {
-        self.stream.unwrap().to_write_vec()
+        self.stream.to_write_vec()
     }
 }
 
@@ -478,20 +510,34 @@ impl FromStr for Response {
     /// assert_eq!(body, "Hello World!!!");
     /// ```
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut stream = Stream::from_vec(s.as_bytes().to_owned());
-        let mut resp = Self::do_from_read(&mut stream)?;
-        set_stream(&mut resp, "".into(), None, stream);
-        Ok(resp)
+        let stream = Stream::from_vec(s.as_bytes().to_owned());
+        Self::do_from_stream(stream, None)
     }
 }
 
-/// "Give away" Unit and Stream to the response.
-///
-/// *Internal API*
-pub(crate) fn set_stream(resp: &mut Response, url: String, unit: Option<Unit>, stream: Stream) {
-    resp.url = Some(url);
-    resp.unit = unit;
-    resp.stream = Some(stream);
+// Hist is an iterator over the history of a redirected response. It
+// yields the URLs that were requested in backwards order, from most recent
+// to least recent.
+pub(crate) struct Hist<'a> {
+    response: Option<&'a Response>,
+}
+
+impl<'a> Hist<'a> {
+    fn new(response: Option<&'a Response>) -> Hist<'a> {
+        Hist { response }
+    }
+}
+impl<'a> Iterator for Hist<'a> {
+    type Item = &'a Response;
+    fn next(&mut self) -> Option<&'a Response> {
+        let response = match self.response {
+            None => return None,
+            Some(r) => r,
+        };
+
+        self.response = response.previous.as_deref();
+        return Some(response);
+    }
 }
 
 fn read_next_line(reader: &mut impl BufRead) -> io::Result<String> {
