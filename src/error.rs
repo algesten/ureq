@@ -2,7 +2,7 @@ use url::Url;
 
 use std::error;
 use std::fmt::{self, Display};
-use std::io::{self};
+use std::io;
 
 use crate::Response;
 
@@ -253,15 +253,32 @@ impl fmt::Display for ErrorKind {
     }
 }
 
-// #[test]
-// fn status_code_error() {
-//     let mut err = Error::new(ErrorKind::HTTP, None);
-//     err = err.response(Response::new(500, "Internal Server Error", "too much going on").unwrap());
-//     assert_eq!(err.to_string(), "status code 500");
+#[test]
+fn status_code_error() {
+    let mut response = Response::new(404, "NotFound", "").unwrap();
+    response.set_url("http://example.org/".parse().unwrap());
+    let err = Error::Status(response.status(), response);
 
-//     err = err.url("http://example.com/".parse().unwrap());
-//     assert_eq!(err.to_string(), "http://example.com/: status code 500");
-// }
+    assert_eq!(err.to_string(), "http://example.org/: status code 404");
+}
+
+#[test]
+fn status_code_error_redirect() {
+    use std::sync::Arc;
+    let mut response0 = Response::new(302, "Found", "").unwrap();
+    response0.set_url("http://example.org/".parse().unwrap());
+    let mut response1 = Response::new(302, "Found", "").unwrap();
+    response1.set_previous(Arc::new(response0));
+    let mut response2 = Response::new(500, "Internal Server Error", "server overloaded").unwrap();
+    response2.set_previous(Arc::new(response1));
+    response2.set_url("http://example.com/".parse().unwrap());
+    let err = Error::Status(response2.status(), response2);
+
+    assert_eq!(
+        err.to_string(),
+        "http://example.com/: status code 500 (redirected from http://example.org/)"
+    );
+}
 
 #[test]
 fn io_error() {

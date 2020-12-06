@@ -460,6 +460,16 @@ impl Response {
     pub fn to_write_vec(self) -> Vec<u8> {
         self.stream.to_write_vec()
     }
+
+    #[cfg(test)]
+    pub fn set_url(&mut self, url: Url) {
+        self.url = Some(url);
+    }
+
+    #[cfg(test)]
+    pub fn set_previous(&mut self, previous: Arc<Response>) {
+        self.previous = Some(previous);
+    }
 }
 
 /// parse a line like: HTTP/1.1 200 OK\r\n
@@ -745,6 +755,24 @@ mod tests {
         let s = "HTTP/1.1 BORKED\r\n".to_string();
         let err = s.parse::<Response>().unwrap_err();
         assert_eq!(err.kind(), ErrorKind::BadStatus);
+    }
+
+    #[test]
+    fn history() {
+        let mut response0 = Response::new(302, "Found", "").unwrap();
+        response0.set_url("http://1.example.com/".parse().unwrap());
+        assert_eq!(response0.history().count(), 0);
+
+        let mut response1 = Response::new(302, "Found", "").unwrap();
+        response1.set_url("http://2.example.com/".parse().unwrap());
+        response1.set_previous(Arc::new(response0));
+
+        let mut response2 = Response::new(404, "NotFound", "").unwrap();
+        response2.set_url("http://2.example.com/".parse().unwrap());
+        response2.set_previous(Arc::new(response1));
+
+        let hist: Vec<&str> = response2.history().map(|r| r.get_url()).collect();
+        assert_eq!(hist, ["http://2.example.com/", "http://1.example.com/"])
     }
 }
 
