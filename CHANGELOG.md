@@ -1,3 +1,7 @@
+# 1.5.4
+
+ * Fix panic introduced in 1.5.4 on redirects. (#274)
+
 # 1.5.3
 
  * Backport: follow redirects non-body request on 307/308 (#253)
