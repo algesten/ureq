@@ -127,3 +127,17 @@ fn redirect_post() {
     assert!(resp.has("x-foo"));
     assert_eq!(resp.header("x-foo").unwrap(), "bar");
 }
+
+#[test]
+fn redirect_308() {
+    test::set_handler("/redirect_get3", |_| {
+        test::make_response(308, "Go here", vec!["Location: /valid_response"], vec![])
+    });
+    test::set_handler("/valid_response", |unit| {
+        assert_eq!(unit.method, "GET");
+        test::make_response(200, "OK", vec![], vec![])
+    });
+    let resp = get("test://host/redirect_get3").call().unwrap();
+    assert_eq!(resp.status(), 200);
+    assert_eq!(resp.get_url(), "test://host/valid_response");
+}

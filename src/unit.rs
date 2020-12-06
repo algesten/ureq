@@ -271,7 +271,9 @@ pub(crate) fn connect(
                 307 | 308 if ["GET", "HEAD", "OPTIONS", "TRACE"].contains(&method.as_str()) => {
                     let empty = Payload::Empty.into_read();
                     debug!("redirect {} {} -> {}", resp.status(), url, new_url);
-                    return connect(unit, use_pooled, empty, Some(Arc::new(resp)));
+                    // recreate the unit to get a new hostname and cookies for the new host.
+                    let new_unit = Unit::new(&unit.agent, &unit.method, &new_url, &unit.headers, &empty);
+                    return connect(new_unit, use_pooled, empty, Some(Arc::new(resp)));
                 }
                 _ => (),
             };
