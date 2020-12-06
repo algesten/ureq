@@ -206,7 +206,6 @@ pub(crate) fn connect(
     body::send_body(body, unit.is_chunked, &mut stream)?;
 
     // start reading the response to process cookies and redirects.
-    // let mut stream = stream::DeadlineStream::new(stream, unit.deadline);
     let result = Response::do_from_request(unit.clone(), stream, previous.clone());
 
     // https://tools.ietf.org/html/rfc7230#section-6.3.1
