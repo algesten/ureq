@@ -240,8 +240,10 @@ pub(crate) fn connect(
                 // NOTE: DELETE is intentionally excluded: https://stackoverflow.com/questions/299628
                 307 | 308 if ["GET", "HEAD", "OPTIONS", "TRACE"].contains(&method.as_str()) => {
                     let empty = Payload::Empty.into_read();
+                    // recreate the unit to get a new hostname and cookies for the new host.
+                    let new_unit = Unit::new(req, &new_url, false, &empty);
                     debug!("redirect {} {} -> {}", resp.status(), url, new_url);
-                    return connect(req, unit, use_pooled, redirect_count - 1, empty, true);
+                    return connect(req, new_unit, use_pooled, redirect_count + 1, empty, true);
                 }
                 _ => (),
             };
