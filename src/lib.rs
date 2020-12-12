@@ -23,14 +23,14 @@
 //! In its simplest form, ureq looks like this:
 //!
 //! ```rust
-//! # fn main() -> Result<(), ureq::Error> {
+//! fn main() -> Result<(), ureq::Error> {
 //! # ureq::is_test(true);
-//! let body: String = ureq::get("http://example.com")
-//!     .set("Accept", "text/html")
-//!     .call()?
-//!     .into_string()?;
-//! # Ok(())
-//! # }
+//!   let body: String = ureq::get("http://example.com")
+//!       .set("Example-Header", "header value")
+//!       .call()?
+//!       .into_string()?;
+//!   Ok(())
+//! }
 //! ```
 //!
 //! For more involved tasks, you'll want to create an [Agent]. An Agent

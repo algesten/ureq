@@ -25,10 +25,13 @@ Version 2.0.0 was released recently and changed some APIs. See the [changelog] f
 In its simplest form, ureq looks like this:
 
 ```rust
-let body: String = ureq::get("http://example.com")
-    .set("Accept", "text/html")
-    .call()?
-    .into_string()?;
+fn main() -> Result<(), ureq::Error> {
+  let body: String = ureq::get("http://example.com")
+      .set("Example-Header", "header value")
+      .call()?
+      .into_string()?;
+  Ok(())
+}
 ```
 
 For more involved tasks, you'll want to create an [Agent]. An Agent
