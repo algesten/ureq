@@ -72,6 +72,12 @@ Ureq supports sending and receiving json, if you enable the "json" feature:
       .into_string()?;
 ```
 
+### Error handling
+
+ureq returns errors via `Result<T, ureq::Error>`. That includes I/O errors,
+protocol errors, and status code errors (when the server responded 4xx or
+5xx). More details on the [Error] type.
+
 ### Features
 
 To enable a minimal dependency tree, some features are off by default.
@@ -192,6 +198,7 @@ If ureq is not what you're looking for, check out these other Rust HTTP clients:
 [post()]: https://docs.rs/ureq/latest/ureq/fn.post.html
 [put()]: https://docs.rs/ureq/latest/ureq/fn.put.html
 [Request]: https://docs.rs/ureq/latest/ureq/struct.Request.html
+[Error]: https://docs.rs/ureq/latest/ureq/enum.Error.html
 [Request::call()]: https://docs.rs/ureq/latest/ureq/struct.Request.html#method.call
 [Request::send()]: https://docs.rs/ureq/latest/ureq/struct.Request.html#method.send
 [Request::send_bytes()]: https://docs.rs/ureq/latest/ureq/struct.Request.html#method.send_bytes

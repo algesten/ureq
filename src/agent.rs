@@ -417,13 +417,13 @@ impl AgentBuilder {
     /// let result = ureq::builder()
     ///     .redirects(1)
     ///     .build()
+    ///     # ;
+    /// # let result = ureq::agent()
     ///     .get("http://httpbin.org/status/301")
-    ///     .error_on_non_2xx(false)
     ///     .call()?;
     /// assert_ne!(result.status(), 301);
     ///
     /// let result = ureq::post("http://httpbin.org/status/307")
-    ///     .error_on_non_2xx(false)
     ///     .send_bytes(b"some data")?;
     /// assert_eq!(result.status(), 307);
     /// # Ok(())

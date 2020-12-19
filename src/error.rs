@@ -42,6 +42,23 @@ use crate::Response;
 ///     ureq::get(url).call()
 /// }
 /// ```
+///
+/// If you'd like to treat all status code errors as normal, successful responses,
+/// you can use [Result::or_else](std::result::Result::or_else) like this:
+///
+/// ```
+/// use ureq::Error::Status;
+/// # fn main() -> std::result::Result<(), ureq::Error> {
+/// # ureq::is_test(true);
+/// let resp = ureq::get("http://example.com/")
+///   .call()
+///   .or_else(|e| match e { 
+///     Status(_, r) => Ok(r), // turn status errors into Ok Responses.
+///     _ => Err(e),
+///   })?;
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Debug)]
 pub enum Error {
     /// A response was successfully received but had status code >= 400.

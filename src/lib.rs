@@ -82,6 +82,12 @@
 //! # fn main() {}
 //! ```
 //!
+//! ## Error handling
+//!
+//! ureq returns errors via `Result<T, ureq::Error>`. That includes I/O errors,
+//! protocol errors, and status code errors (when the server responded 4xx or
+//! 5xx). More details on the [Error] type.
+//!
 //! ## Features
 //!
 //! To enable a minimal dependency tree, some features are off by default.
