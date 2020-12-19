@@ -1,4 +1,9 @@
-# 2.0.0
+# 2.0.0-rc3
+
+ * Refactor Error to use an enum for easier extraction of status code errors.
+ * (Internal) Use BufRead::read_line when reading headers.
+
+# 2.0.0-rc2
 
  * Remove the "synthetic error" concept. Methods that formerly returned
    Response now return Result<Response, Error>.

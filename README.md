@@ -25,10 +25,13 @@ Version 2.0.0 was released recently and changed some APIs. See the [changelog] f
 In its simplest form, ureq looks like this:
 
 ```rust
-let body: String = ureq::get("http://example.com")
-    .set("Accept", "text/html")
-    .call()?
-    .into_string()?;
+fn main() -> Result<(), ureq::Error> {
+  let body: String = ureq::get("http://example.com")
+      .set("Example-Header", "header value")
+      .call()?
+      .into_string()?;
+  Ok(())
+}
 ```
 
 For more involved tasks, you'll want to create an [Agent]. An Agent
@@ -68,6 +71,12 @@ Ureq supports sending and receiving json, if you enable the "json" feature:
       }))?
       .into_string()?;
 ```
+
+### Error handling
+
+ureq returns errors via `Result<T, ureq::Error>`. That includes I/O errors,
+protocol errors, and status code errors (when the server responded 4xx or
+5xx). More details on the [Error] type.
 
 ### Features
 
@@ -189,6 +198,7 @@ If ureq is not what you're looking for, check out these other Rust HTTP clients:
 [post()]: https://docs.rs/ureq/latest/ureq/fn.post.html
 [put()]: https://docs.rs/ureq/latest/ureq/fn.put.html
 [Request]: https://docs.rs/ureq/latest/ureq/struct.Request.html
+[Error]: https://docs.rs/ureq/latest/ureq/enum.Error.html
 [Request::call()]: https://docs.rs/ureq/latest/ureq/struct.Request.html#method.call
 [Request::send()]: https://docs.rs/ureq/latest/ureq/struct.Request.html#method.send
 [Request::send_bytes()]: https://docs.rs/ureq/latest/ureq/struct.Request.html#method.send_bytes

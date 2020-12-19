@@ -12,6 +12,7 @@
 [post()]: https://docs.rs/ureq/latest/ureq/fn.post.html
 [put()]: https://docs.rs/ureq/latest/ureq/fn.put.html
 [Request]: https://docs.rs/ureq/latest/ureq/struct.Request.html
+[Error]: https://docs.rs/ureq/latest/ureq/enum.Error.html
 [Request::call()]: https://docs.rs/ureq/latest/ureq/struct.Request.html#method.call
 [Request::send()]: https://docs.rs/ureq/latest/ureq/struct.Request.html#method.send
 [Request::send_bytes()]: https://docs.rs/ureq/latest/ureq/struct.Request.html#method.send_bytes

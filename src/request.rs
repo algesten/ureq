@@ -108,7 +108,7 @@ impl Request {
         let mut url: Url = match self.url.clone() {
             Urlish::Url(u) => u,
             Urlish::Str(s) => s.parse().map_err(|e: url::ParseError| {
-                ErrorKind::BadUrl
+                ErrorKind::InvalidUrl
                     .msg(&format!("failed to parse URL '{}'", self.url))
                     .src(e)
             })?,
@@ -118,10 +118,9 @@ impl Request {
         }
         let reader = payload.into_read();
         let unit = Unit::new(&self.agent, &self.method, &url, &self.headers, &reader);
-        let response =
-            unit::connect(unit, true, 0, reader, false).map_err(|e| e.url(url.clone()))?;
+        let response = unit::connect(unit, true, reader, None).map_err(|e| e.url(url.clone()))?;
 
-        if self.error_on_non_2xx && response.status() >= 400 {
+        if response.status() >= 400 {
             Err(Error::Status(response.status(), response))
         } else {
             Ok(response)
@@ -335,26 +334,6 @@ impl Request {
     pub fn query(mut self, param: &str, value: &str) -> Self {
         self.query_params
             .push((param.to_string(), value.to_string()));
-        self
-    }
-
-    /// By default, if a response's status is anything but a 2xx or 3xx,
-    /// call()/send() and related methods will return an Error. If you want
-    /// to handle such responses as non-errors, set this to `false`.
-    ///
-    /// Example:
-    /// ```
-    /// # fn main() -> Result<(), ureq::Error> {
-    /// # ureq::is_test(true);
-    /// let response = ureq::get("http://httpbin.org/status/500")
-    ///     .error_on_non_2xx(false)
-    ///     .call()?;
-    /// assert_eq!(response.status(), 500);
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub fn error_on_non_2xx(mut self, value: bool) -> Self {
-        self.error_on_non_2xx = value;
         self
     }
 }

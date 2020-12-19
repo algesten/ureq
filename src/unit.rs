@@ -1,5 +1,8 @@
-use std::io::{self, Write};
 use std::time;
+use std::{
+    io::{self, Write},
+    sync::Arc,
+};
 
 use log::{debug, info};
 use url::Url;
@@ -19,6 +22,7 @@ use crate::Agent;
 /// A Unit is fully-built Request, ready to execute.
 ///
 /// *Internal API*
+#[derive(Clone)]
 pub(crate) struct Unit {
     pub agent: Agent,
     pub method: String,
@@ -163,16 +167,15 @@ impl Unit {
 pub(crate) fn connect(
     unit: Unit,
     use_pooled: bool,
-    redirect_count: u32,
     body: SizedReader,
-    redir: bool,
+    previous: Option<Arc<Response>>,
 ) -> Result<Response, Error> {
     //
 
     let host = unit
         .url
         .host_str()
-        .ok_or(ErrorKind::BadUrl.msg("no host in URL"))?;
+        .ok_or(ErrorKind::InvalidUrl.msg("no host in URL"))?;
     let url = &unit.url;
     let method = &unit.method;
     // open socket
@@ -184,14 +187,14 @@ pub(crate) fn connect(
         info!("sending request {} {}", method, url);
     }
 
-    let send_result = send_prelude(&unit, &mut stream, redir);
+    let send_result = send_prelude(&unit, &mut stream, previous.is_some());
 
     if let Err(err) = send_result {
         if is_recycled {
             debug!("retrying request early {} {}: {}", method, url, err);
             // we try open a new connection, this time there will be
             // no connection in the pool. don't use it.
-            return connect(unit, false, redirect_count, body, redir);
+            return connect(unit, false, body, previous);
         } else {
             // not a pooled connection, propagate the error.
             return Err(err.into());
@@ -203,8 +206,7 @@ pub(crate) fn connect(
     body::send_body(body, unit.is_chunked, &mut stream)?;
 
     // start reading the response to process cookies and redirects.
-    let mut stream = stream::DeadlineStream::new(stream, unit.deadline);
-    let result = Response::do_from_read(&mut stream);
+    let result = Response::do_from_request(unit.clone(), stream, previous.clone());
 
     // https://tools.ietf.org/html/rfc7230#section-6.3.1
     // When an inbound connection is closed prematurely, a client MAY
@@ -216,11 +218,11 @@ pub(crate) fn connect(
     // from the ConnectionPool, since those are most likely to have
     // reached a server-side timeout. Note that this means we may do
     // up to N+1 total tries, where N is max_idle_connections_per_host.
-    let mut resp = match result {
+    let resp = match result {
         Err(err) if err.connection_closed() && retryable && is_recycled => {
             debug!("retrying request {} {}: {}", method, url, err);
             let empty = Payload::Empty.into_read();
-            return connect(unit, false, redirect_count, empty, redir);
+            return connect(unit, false, empty, previous);
         }
         Err(e) => return Err(e),
         Ok(resp) => resp,
@@ -232,8 +234,10 @@ pub(crate) fn connect(
 
     // handle redirects
     if (300..399).contains(&resp.status()) && unit.agent.config.redirects > 0 {
-        if redirect_count == unit.agent.config.redirects {
-            return Err(ErrorKind::TooManyRedirects.new());
+        if let Some(previous) = previous {
+            if previous.history().count() + 1 >= unit.agent.config.redirects as usize {
+                return Err(ErrorKind::TooManyRedirects.new());
+            }
         }
 
         // the location header
@@ -241,7 +245,7 @@ pub(crate) fn connect(
         if let Some(location) = location {
             // join location header to current url in case it it relative
             let new_url = url.join(location).map_err(|e| {
-                ErrorKind::BadUrl
+                ErrorKind::InvalidUrl
                     .msg(&format!("Bad redirection: {}", location))
                     .src(e)
             })?;
@@ -261,7 +265,7 @@ pub(crate) fn connect(
                         Unit::new(&unit.agent, &new_method, &new_url, &unit.headers, &empty);
 
                     debug!("redirect {} {} -> {}", resp.status(), url, new_url);
-                    return connect(new_unit, use_pooled, redirect_count + 1, empty, true);
+                    return connect(new_unit, use_pooled, empty, Some(Arc::new(resp)));
                 }
                 // never change the method for 307/308
                 // only resend the request if it cannot have a body
@@ -269,7 +273,7 @@ pub(crate) fn connect(
                 307 | 308 if ["GET", "HEAD", "OPTIONS", "TRACE"].contains(&method.as_str()) => {
                     let empty = Payload::Empty.into_read();
                     debug!("redirect {} {} -> {}", resp.status(), url, new_url);
-                    return connect(unit, use_pooled, redirect_count - 1, empty, true);
+                    return connect(unit, use_pooled, empty, Some(Arc::new(resp)));
                 }
                 _ => (),
             };
@@ -277,13 +281,6 @@ pub(crate) fn connect(
     }
 
     debug!("response {} to {} {}", resp.status(), method, url);
-
-    let mut stream: Stream = stream.into();
-    stream.reset()?;
-
-    // since it is not a redirect, or we're not following redirects,
-    // give away the incoming stream to the response object.
-    crate::response::set_stream(&mut resp, unit.url.to_string(), Some(unit), stream);
 
     // release the response
     Ok(resp)

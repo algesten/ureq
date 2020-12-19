@@ -2,7 +2,7 @@ use url::Url;
 
 use std::error;
 use std::fmt::{self, Display};
-use std::io::{self};
+use std::io;
 
 use crate::Response;
 
@@ -10,11 +10,14 @@ use crate::Response;
 ///
 /// This can represent connection-level errors (e.g. connection refused),
 /// protocol-level errors (malformed response), or status code errors
-/// (e.g. 404 Not Found). For status code errors, [kind()](Error::kind()) will be
-/// [ErrorKind::HTTP], [status()](Error::status()) will return the status
-/// code, and [into_response()](Error::into_response()) will return the underlying
-/// [Response](crate::Response). You can use that Response to, for instance, read
-/// the full body (which may contain a useful error message).
+/// (e.g. 404 Not Found). Status code errors are represented by the
+/// [Status](Error::Status) enum variant, while connection-level and
+/// protocol-level errors are represented by the [Transport](Error::Transport)
+/// enum variant. You can use a match statement to extract a Response
+/// from a `Status` error. For instance, you may want to read the full
+/// body of a response because you expect it to contain a useful error
+/// message. Or you may want to handle certain error code responses
+/// differently.
 ///
 /// ```
 /// use std::{result::Result, time::Duration, thread};
@@ -39,6 +42,34 @@ use crate::Response;
 ///     ureq::get(url).call()
 /// }
 /// ```
+///
+/// If you'd like to treat all status code errors as normal, successful responses,
+/// you can use [Result::or_else](std::result::Result::or_else) like this:
+///
+/// ```
+/// use ureq::Error::Status;
+/// # fn main() -> std::result::Result<(), ureq::Error> {
+/// # ureq::is_test(true);
+/// let resp = ureq::get("http://example.com/")
+///   .call()
+///   .or_else(|e| match e { 
+///     Status(_, r) => Ok(r), // turn status errors into Ok Responses.
+///     _ => Err(e),
+///   })?;
+/// # Ok(())
+/// # }
+/// ```
+#[derive(Debug)]
+pub enum Error {
+    /// A response was successfully received but had status code >= 400.
+    /// Values are (status_code, Response).
+    Status(u16, Response),
+    /// There was an error making the request or receiving the response.
+    Transport(Transport),
+}
+
+// Any error that is not a status code error. For instance, DNS name not found,
+// connection refused, or malformed response.
 #[derive(Debug)]
 pub struct Transport {
     kind: ErrorKind,
@@ -48,17 +79,14 @@ pub struct Transport {
     response: Option<Response>,
 }
 
-#[derive(Debug)]
-pub enum Error {
-    Status(u16, Response),
-    Transport(Transport),
-}
-
 impl Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::Status(status, response) => {
                 write!(f, "{}: status code {}", response.get_url(), status)?;
+                if let Some(original) = response.history().last() {
+                    write!(f, " (redirected from {})", original.get_url())?;
+                }
             }
             Error::Transport(err) => {
                 write!(f, "{}", err)?;
@@ -168,11 +196,11 @@ impl Error {
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum ErrorKind {
     /// The url could not be understood.
-    BadUrl,
+    InvalidUrl,
     /// The url scheme could not be understood.
     UnknownScheme,
     /// DNS lookup failed.
-    DnsFailed,
+    Dns,
     /// Connection to server failed.
     ConnectionFailed,
     /// Too many redirects.
@@ -184,14 +212,12 @@ pub enum ErrorKind {
     /// Some unspecified `std::io::Error`.
     Io,
     /// Proxy information was not properly formatted
-    BadProxy,
-    /// Proxy credentials were not properly formatted
-    BadProxyCreds,
+    InvalidProxyUrl,
     /// Proxy could not connect
     ProxyConnect,
     /// Incorrect credentials for proxy
-    InvalidProxyCreds,
-    /// HTTP status code indicating an error (e.g. 4xx, 5xx).
+    ProxyUnauthorized,
+    /// HTTP status code indicating an error (e.g. 4xx, 5xx)
     /// Read the inner response body for details and to return
     /// the connection to the pool.
     HTTP,
@@ -228,32 +254,48 @@ impl From<Transport> for Error {
 impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ErrorKind::BadUrl => write!(f, "Bad URL"),
+            ErrorKind::InvalidUrl => write!(f, "Bad URL"),
             ErrorKind::UnknownScheme => write!(f, "Unknown Scheme"),
-            ErrorKind::DnsFailed => write!(f, "Dns Failed"),
+            ErrorKind::Dns => write!(f, "Dns Failed"),
             ErrorKind::ConnectionFailed => write!(f, "Connection Failed"),
             ErrorKind::TooManyRedirects => write!(f, "Too Many Redirects"),
             ErrorKind::BadStatus => write!(f, "Bad Status"),
             ErrorKind::BadHeader => write!(f, "Bad Header"),
             ErrorKind::Io => write!(f, "Network Error"),
-            ErrorKind::BadProxy => write!(f, "Malformed proxy"),
-            ErrorKind::BadProxyCreds => write!(f, "Failed to parse proxy credentials"),
+            ErrorKind::InvalidProxyUrl => write!(f, "Malformed proxy"),
             ErrorKind::ProxyConnect => write!(f, "Proxy failed to connect"),
-            ErrorKind::InvalidProxyCreds => write!(f, "Provided proxy credentials are incorrect"),
+            ErrorKind::ProxyUnauthorized => write!(f, "Provided proxy credentials are incorrect"),
             ErrorKind::HTTP => write!(f, "HTTP status error"),
         }
     }
 }
 
-// #[test]
-// fn status_code_error() {
-//     let mut err = Error::new(ErrorKind::HTTP, None);
-//     err = err.response(Response::new(500, "Internal Server Error", "too much going on").unwrap());
-//     assert_eq!(err.to_string(), "status code 500");
+#[test]
+fn status_code_error() {
+    let mut response = Response::new(404, "NotFound", "").unwrap();
+    response.set_url("http://example.org/".parse().unwrap());
+    let err = Error::Status(response.status(), response);
 
-//     err = err.url("http://example.com/".parse().unwrap());
-//     assert_eq!(err.to_string(), "http://example.com/: status code 500");
-// }
+    assert_eq!(err.to_string(), "http://example.org/: status code 404");
+}
+
+#[test]
+fn status_code_error_redirect() {
+    use std::sync::Arc;
+    let mut response0 = Response::new(302, "Found", "").unwrap();
+    response0.set_url("http://example.org/".parse().unwrap());
+    let mut response1 = Response::new(302, "Found", "").unwrap();
+    response1.set_previous(Arc::new(response0));
+    let mut response2 = Response::new(500, "Internal Server Error", "server overloaded").unwrap();
+    response2.set_previous(Arc::new(response1));
+    response2.set_url("http://example.com/".parse().unwrap());
+    let err = Error::Status(response2.status(), response2);
+
+    assert_eq!(
+        err.to_string(),
+        "http://example.com/: status code 500 (redirected from http://example.org/)"
+    );
+}
 
 #[test]
 fn io_error() {
@@ -282,6 +324,6 @@ fn connection_closed() {
 fn error_is_send_and_sync() {
     fn takes_send(_: impl Send) {}
     fn takes_sync(_: impl Sync) {}
-    takes_send(crate::error::ErrorKind::BadUrl.new());
-    takes_sync(crate::error::ErrorKind::BadUrl.new());
+    takes_send(crate::error::ErrorKind::InvalidUrl.new());
+    takes_sync(crate::error::ErrorKind::InvalidUrl.new());
 }

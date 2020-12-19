@@ -23,14 +23,14 @@
 //! In its simplest form, ureq looks like this:
 //!
 //! ```rust
-//! # fn main() -> Result<(), ureq::Error> {
+//! fn main() -> Result<(), ureq::Error> {
 //! # ureq::is_test(true);
-//! let body: String = ureq::get("http://example.com")
-//!     .set("Accept", "text/html")
-//!     .call()?
-//!     .into_string()?;
-//! # Ok(())
-//! # }
+//!   let body: String = ureq::get("http://example.com")
+//!       .set("Example-Header", "header value")
+//!       .call()?
+//!       .into_string()?;
+//!   Ok(())
+//! }
 //! ```
 //!
 //! For more involved tasks, you'll want to create an [Agent]. An Agent
@@ -81,6 +81,12 @@
 //! # #[cfg(not(feature = "json"))]
 //! # fn main() {}
 //! ```
+//!
+//! ## Error handling
+//!
+//! ureq returns errors via `Result<T, ureq::Error>`. That includes I/O errors,
+//! protocol errors, and status code errors (when the server responded 4xx or
+//! 5xx). More details on the [Error] type.
 //!
 //! ## Features
 //!
@@ -369,7 +375,7 @@ mod tests {
     #[cfg(feature = "tls")]
     fn connect_https_invalid_name() {
         let result = get("https://example.com{REQUEST_URI}/").call();
-        let e = ErrorKind::DnsFailed;
+        let e = ErrorKind::Dns;
         assert_eq!(result.unwrap_err().kind(), e);
     }
 }
