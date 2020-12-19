@@ -8,14 +8,12 @@ use std::{
 use chunked_transfer::Decoder as ChunkDecoder;
 use url::Url;
 
+use crate::error::{Error, ErrorKind::BadStatus};
 use crate::header::Header;
 use crate::pool::PoolReturnRead;
 use crate::stream::{DeadlineStream, Stream};
 use crate::unit::Unit;
-use crate::{
-    error::{Error, ErrorKind},
-    stream,
-};
+use crate::stream;
 
 #[cfg(feature = "json")]
 use serde::de::DeserializeOwned;
@@ -476,28 +474,43 @@ impl Response {
 fn parse_status_line(line: &str) -> Result<(ResponseStatusIndex, u16), Error> {
     //
 
-    let mut split = line.splitn(3, ' ');
-
-    let http_version = split.next().ok_or_else(|| ErrorKind::BadStatus.new())?;
-    if http_version.len() < 5 {
-        return Err(ErrorKind::BadStatus.new());
+    if !line.is_ascii() {
+        return Err(BadStatus.msg("Status line not ASCII"));
     }
-    let index1 = http_version.len();
-
-    let status = split.next().ok_or_else(|| ErrorKind::BadStatus.new())?;
-    if status.len() < 2 {
-        return Err(ErrorKind::BadStatus.new());
+    // https://tools.ietf.org/html/rfc7230#section-3.1.2
+    //      status-line = HTTP-version SP status-code SP reason-phrase CRLF
+    let split: Vec<&str> = line.splitn(3, ' ').collect();
+    if split.len() != 3 {
+        return Err(BadStatus.msg("Wrong number of tokens in status line"));
     }
-    let index2 = index1 + status.len();
 
-    let status = status
-        .parse::<u16>()
-        .map_err(|_| ErrorKind::BadStatus.new())?;
+    // https://tools.ietf.org/html/rfc7230#appendix-B
+    //    HTTP-name = %x48.54.54.50 ; HTTP
+    //    HTTP-version = HTTP-name "/" DIGIT "." DIGIT
+    let http_version = split[0];
+    if !http_version.starts_with("HTTP/") {
+        return Err(BadStatus.msg("HTTP version did not start with HTTP/"));
+    }
+    if http_version.len() != 8 {
+        return Err(BadStatus.msg("HTTP version was wrong length"));
+    }
+    if !http_version.as_bytes()[5].is_ascii_digit() || !http_version.as_bytes()[7].is_ascii_digit()
+    {
+        return Err(BadStatus.msg("HTTP version did not match format"));
+    }
+
+    let status_str: &str = split[1];
+    //      status-code    = 3DIGIT
+    if status_str.len() != 3 {
+        return Err(BadStatus.msg("Status code was wrong length"));
+    }
+
+    let status: u16 = status_str.parse().map_err(|_| BadStatus.new())?;
 
     Ok((
         ResponseStatusIndex {
-            http_version: index1,
-            response_code: index2,
+            http_version: http_version.len(),
+            response_code: http_version.len() + status_str.len(),
         },
         status,
     ))
@@ -754,7 +767,7 @@ mod tests {
     fn parse_borked_header() {
         let s = "HTTP/1.1 BORKED\r\n".to_string();
         let err = s.parse::<Response>().unwrap_err();
-        assert_eq!(err.kind(), ErrorKind::BadStatus);
+        assert_eq!(err.kind(), BadStatus);
     }
 
     #[test]
