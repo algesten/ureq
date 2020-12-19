@@ -1,3 +1,9 @@
+# 2.0.0-rc4
+
+ * Remove error_on_non_2xx. (#272)
+ * Do more validation on status line. (#266)
+ * (internal) Add history to response objects (#275)
+
 # 2.0.0-rc3
 
  * Refactor Error to use an enum for easier extraction of status code errors.
