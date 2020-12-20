@@ -19,18 +19,37 @@ use crate::Response;
 /// message. Or you may want to handle certain error code responses
 /// differently.
 ///
+/// # Examples
+///
+/// Example of matching out all unexpected server status codes.
+///
+/// ```no_run
+/// use ureq::Error;
+///
+/// match ureq::get("http://mypage.example.com/").call() {
+///     Ok(response) => { /* it worked */},
+///     Err(Error::Status(code, response)) => {
+///         /* the server returned an unexpected status
+///            code (such as 400, 500 etc) */
+///     }
+///     Err(_) => { /* some kind of io/transport error */ }
+/// }
+/// ```
+///
+/// An example of a function that handles HTTP 429 and 500 errors differently
+/// than other errors. They get retried after a suitable delay, up to 4 times.
+///
 /// ```
 /// use std::{result::Result, time::Duration, thread};
 /// use ureq::{Response, Error, Error::Status};
 /// # fn main(){ ureq::is_test(true); get_response( "http://httpbin.org/status/500" ); }
 ///
-/// // An example of a function that handles HTTP 429 and 500 errors differently
-/// // than other errors. They get retried after a suitable delay, up to 4 times.
 /// fn get_response(url: &str) -> Result<Response, Error> {
 ///     for _ in 1..4 {
 ///         match ureq::get(url).call() {
 ///             Err(Status(503, r)) | Err(Status(429, r)) => {
-///                 let retry: Option<u64> = r.header("retry-after").and_then(|h| h.parse().ok());
+///                 let retry: Option<u64> = r.header("retry-after")
+///                     .and_then(|h| h.parse().ok());
 ///                 let retry = retry.unwrap_or(5);
 ///                 eprintln!("{} for {}, retry in {}", r.status(), r.get_url(), retry);
 ///                 thread::sleep(Duration::from_secs(retry));
@@ -52,7 +71,7 @@ use crate::Response;
 /// # ureq::is_test(true);
 /// let resp = ureq::get("http://example.com/")
 ///   .call()
-///   .or_else(|e| match e { 
+///   .or_else(|e| match e {
 ///     Status(_, r) => Ok(r), // turn status errors into Ok Responses.
 ///     _ => Err(e),
 ///   })?;

@@ -86,7 +86,25 @@
 //!
 //! ureq returns errors via `Result<T, ureq::Error>`. That includes I/O errors,
 //! protocol errors, and status code errors (when the server responded 4xx or
-//! 5xx). More details on the [Error] type.
+//! 5xx).
+//!
+//! ```rust
+//! use ureq::Error;
+//!
+//! # fn req() {
+//! match ureq::get("http://mypage.example.com/").call() {
+//!     Ok(response) => { /* it worked */},
+//!     Err(Error::Status(code, response)) => {
+//!         /* the server returned an unexpected status
+//!            code (such as 400, 500 etc) */
+//!     }
+//!     Err(_) => { /* some kind of io/transport error */ }
+//! }
+//! # }
+//! # fn main() {}
+//! ```
+//!
+//! More details on the [Error] type.
 //!
 //! ## Features
 //!
