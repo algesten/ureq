@@ -25,11 +25,14 @@ Version 2.0.0 was released recently and changed some APIs. See the [changelog] f
 In its simplest form, ureq looks like this:
 
 ```rust
+use ureq;
+
 fn main() -> Result<(), ureq::Error> {
   let body: String = ureq::get("http://example.com")
       .set("Example-Header", "header value")
-      .call()?
+      .call()
       .into_string()?;
+  println!("{:#?}",body);
   Ok(())
 }
 ```
