@@ -25,15 +25,12 @@ Version 2.0.0 was released recently and changed some APIs. See the [changelog] f
 In its simplest form, ureq looks like this:
 
 ```rust
-use ureq;
-
 fn main() -> Result<(), ureq::Error> {
-  let body: String = ureq::get("http://example.com")
-      .set("Example-Header", "header value")
-      .call()
-      .into_string()?;
-  println!("{:#?}",body);
-  Ok(())
+    let body: String = ureq::get("http://example.com")
+        .set("Example-Header", "header value")
+        .call()?
+        .into_string()?;
+    Ok(())
 }
 ```
 
@@ -79,7 +76,22 @@ Ureq supports sending and receiving json, if you enable the "json" feature:
 
 ureq returns errors via `Result<T, ureq::Error>`. That includes I/O errors,
 protocol errors, and status code errors (when the server responded 4xx or
-5xx). More details on the [Error] type.
+5xx)
+
+```rust
+use ureq::Error;
+
+match ureq::get("http://mypage.example.com/").call() {
+    Ok(response) => { /* it worked */},
+    Err(Error::Status(code, response)) => {
+        /* the server returned an unexpected status
+           code (such as 400, 500 etc) */
+    }
+    Err(_) => { /* some kind of io/transport error */ }
+}
+```
+
+More details on the [Error] type.
 
 ### Features
 

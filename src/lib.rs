@@ -25,11 +25,11 @@
 //! ```rust
 //! fn main() -> Result<(), ureq::Error> {
 //! # ureq::is_test(true);
-//!   let body: String = ureq::get("http://example.com")
-//!       .set("Example-Header", "header value")
-//!       .call()?
-//!       .into_string()?;
-//!   Ok(())
+//!     let body: String = ureq::get("http://example.com")
+//!         .set("Example-Header", "header value")
+//!         .call()?
+//!         .into_string()?;
+//!     Ok(())
 //! }
 //! ```
 //!
@@ -86,7 +86,7 @@
 //!
 //! ureq returns errors via `Result<T, ureq::Error>`. That includes I/O errors,
 //! protocol errors, and status code errors (when the server responded 4xx or
-//! 5xx).
+//! 5xx)
 //!
 //! ```rust
 //! use ureq::Error;
