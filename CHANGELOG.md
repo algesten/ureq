@@ -1,4 +1,4 @@
-# 2.0.0-rc2
+# 2.0.0
  * Methods that formerly returned Response now return Result<Response, Error>.
    You'll need to change all instances of `.call()` to `.call()?` or handle
    errors using a `match` statement.
