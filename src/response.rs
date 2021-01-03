@@ -11,9 +11,9 @@ use url::Url;
 use crate::error::{Error, ErrorKind::BadStatus};
 use crate::header::Header;
 use crate::pool::PoolReturnRead;
+use crate::stream;
 use crate::stream::{DeadlineStream, Stream};
 use crate::unit::Unit;
-use crate::stream;
 
 #[cfg(feature = "json")]
 use serde::de::DeserializeOwned;
