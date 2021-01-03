@@ -1,3 +1,45 @@
+# 2.0.0-rc2
+ * Methods that formerly returned Response now return Result<Response, Error>.
+   You'll need to change all instances of `.call()` to `.call()?` or handle
+   errors using a `match` statement.
+ * Non-2xx responses are considered Error by default. See [Error documentation]
+   for details on how to get Response bodies for non-2xx.
+ * Rewrite Error type. It's now an enum of two types of error: Status and
+   Transport. Status errors (i.e. non-2xx) can be readily turned into a
+   Response using match statements.
+ * Errors now include the source error (e.g. errors from DNS or I/O) when
+   appropriate, as well as the URL that caused an error.
+ * The "synthetic error" concept is removed.
+ * Move more configuration to Agent. Timeouts, TLS config, and proxy config
+   now require building an Agent.
+ * Create AgentBuilder to separate the process of building an agent from using
+   the resulting agent. Headers can be set on an AgentBuilder, not the
+   resulting Agent.
+ * Agent is cheaply cloneable with an internal Arc. This makes it easy to
+   share a single agent throughout your program.
+ * There is now a default timeout_connect of 30 seconds. Read and write
+   timeouts continue to be unset by default.
+ * Add ureq::request_url and Agent::request_url, to send requests with
+   already-parsed URLs.
+ * Remove native_tls support.
+ * Remove convenience methods `options(url)`, `trace(url)`, and `patch(url)`.
+   To send requests with those verbs use `request(method, url)`.
+ * Remove Request::build. This was a workaround because some of Request's
+   methods took `&mut self` instead of `mut self`, and is no longer needed.
+   You can simply delete any calls to `Request::build`.
+ * Remove Agent::set_cookie.
+ * Remove Header from the public API. The type wasn't used by any public
+   methods.
+ * Remove basic auth support. The API was incomplete. We may add back something
+   better in the future.
+ * Remove into_json_deserialize. Now into_json handles both serde_json::Value
+   and other types that implement serde::Deserialize. If you were using
+   serde_json before, you will probably have to explicitly annotate a type,
+   like: `let v: serde_json::Value = response.into_json();`.
+ * Rewrite README and top-level documentation.
+
+[Error documentation]: https://docs.rs/ureq/2.0.0-rc4/ureq/enum.Error.html
+
 # 2.0.0-rc4
 
  * Remove error_on_non_2xx. (#272)
@@ -10,7 +52,7 @@
  * (Internal) Use BufRead::read_line when reading headers.
 
 # 2.0.0-rc2
-
+ * These changes are mostly already listed under 2.0.0.
  * Remove the "synthetic error" concept. Methods that formerly returned
    Response now return Result<Response, Error>.
  * Rewrite Error type. Instead of an enum, it's now a struct with an
