@@ -6,6 +6,7 @@ description = "Simple, safe HTTP client"
 license = "MIT/Apache-2.0"
 repository = "https://github.com/algesten/ureq"
 readme = "README.md"
+documentation = "https://docs.rs/ureq/"
 keywords = ["web", "request", "https", "http", "client"]
 categories = ["web-programming::http-client"]
 edition = "2018"
