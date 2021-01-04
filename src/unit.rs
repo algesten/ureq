@@ -160,22 +160,58 @@ impl Unit {
     }
 }
 
-/// Used for retrying a failed connection, or for following a redirect.
-struct Retry<'a>(Unit, bool, SizedReader<'a>, Vec<String>);
-
 /// Perform a connection. Follows redirects.
 pub(crate) fn connect(
-    unit: Unit,
+    mut unit: Unit,
     use_pooled: bool,
-    body: SizedReader,
-    previous: Vec<String>,
+    mut body: SizedReader,
+    mut previous: Vec<String>,
 ) -> Result<Response, Error> {
-    let mut req = Retry(unit, use_pooled, body, previous);
     loop {
-        match connect_inner(req)? {
-            Ok(resp) => return Ok(resp),
-            Err(retry) => req = retry,
+        let resp = connect_inner(&unit, use_pooled, body, previous)?;
+        // handle redirects
+        if (300..399).contains(&resp.status()) && unit.agent.config.redirects > 0 {
+            if resp.history.len() >= unit.agent.config.redirects as usize {
+                return Err(ErrorKind::TooManyRedirects.new());
+            }
+
+            // the location header
+            let location = resp.header("location");
+            if let Some(location) = location {
+                let url = &unit.url;
+                let method = &unit.method;
+                // join location header to current url in case it it relative
+                let new_url = url.join(location).map_err(|e| {
+                    ErrorKind::InvalidUrl
+                        .msg(&format!("Bad redirection: {}", location))
+                        .src(e)
+                })?;
+
+                // perform the redirect differently depending on 3xx code.
+                let new_method = match resp.status() {
+                    // this is to follow how curl does it. POST, PUT etc change
+                    // to GET on a redirect.
+                    301 | 302 | 303 => match &method[..] {
+                        "GET" | "HEAD" => unit.method,
+                        _ => "GET".into(),
+                    },
+                    // never change the method for 307/308
+                    // only resend the request if it cannot have a body
+                    // NOTE: DELETE is intentionally excluded: https://stackoverflow.com/questions/299628
+                    307 | 308 if ["GET", "HEAD", "OPTIONS", "TRACE"].contains(&method.as_str()) => {
+                        unit.method
+                    }
+                    _ => return Ok(resp),
+                };
+                debug!("redirect {} {} -> {}", resp.status(), url, new_url);
+                body = Payload::Empty.into_read();
+                previous = resp.history;
+                // recreate the unit to get a new hostname and cookies for the new host.
+                unit = Unit::new(&unit.agent, &new_method, &new_url, &unit.headers, &body);
+                continue;
+            }
         }
+        return Ok(resp);
     }
 }
 
@@ -183,9 +219,11 @@ pub(crate) fn connect(
 ///
 /// This return type is a misuse of `Result`; really it should be `Either`.
 fn connect_inner(
-    Retry(unit, use_pooled, body, mut previous): Retry,
-) -> Result<Result<Response, Retry>, Error> {
-    let retry = |u, p, b, prev| Ok(Err(Retry(u, p, b, prev)));
+    unit: &Unit,
+    use_pooled: bool,
+    body: SizedReader,
+    mut previous: Vec<String>,
+) -> Result<Response, Error> {
     let host = unit
         .url
         .host_str()
@@ -208,7 +246,7 @@ fn connect_inner(
             debug!("retrying request early {} {}: {}", method, url, err);
             // we try open a new connection, this time there will be
             // no connection in the pool. don't use it.
-            return retry(unit, false, body, previous);
+            return connect_inner(unit, false, body, previous);
         } else {
             // not a pooled connection, propagate the error.
             return Err(err.into());
@@ -237,7 +275,7 @@ fn connect_inner(
         Err(err) if err.connection_closed() && retryable && is_recycled => {
             debug!("retrying request {} {}: {}", method, url, err);
             let empty = Payload::Empty.into_read();
-            return retry(unit, false, empty, previous);
+            return connect_inner(unit, false, empty, previous);
         }
         Err(e) => return Err(e),
         Ok(resp) => resp,
@@ -247,60 +285,11 @@ fn connect_inner(
     #[cfg(feature = "cookies")]
     save_cookies(&unit, &resp);
 
-    // handle redirects
-    if (300..399).contains(&resp.status()) && unit.agent.config.redirects > 0 {
-        if previous.len() >= unit.agent.config.redirects as usize {
-            return Err(ErrorKind::TooManyRedirects.new());
-        }
-
-        // the location header
-        let location = resp.header("location");
-        if let Some(location) = location {
-            // join location header to current url in case it it relative
-            let new_url = url.join(location).map_err(|e| {
-                ErrorKind::InvalidUrl
-                    .msg(&format!("Bad redirection: {}", location))
-                    .src(e)
-            })?;
-
-            // perform the redirect differently depending on 3xx code.
-            match resp.status() {
-                301 | 302 | 303 => {
-                    let empty = Payload::Empty.into_read();
-                    // this is to follow how curl does it. POST, PUT etc change
-                    // to GET on a redirect.
-                    let new_method = match &method[..] {
-                        "GET" | "HEAD" => method.to_string(),
-                        _ => "GET".into(),
-                    };
-                    // recreate the unit to get a new hostname and cookies for the new host.
-                    let new_unit =
-                        Unit::new(&unit.agent, &new_method, &new_url, &unit.headers, &empty);
-
-                    debug!("redirect {} {} -> {}", resp.status(), url, new_url);
-                    return retry(new_unit, use_pooled, empty, previous);
-                }
-                // never change the method for 307/308
-                // only resend the request if it cannot have a body
-                // NOTE: DELETE is intentionally excluded: https://stackoverflow.com/questions/299628
-                307 | 308 if ["GET", "HEAD", "OPTIONS", "TRACE"].contains(&method.as_str()) => {
-                    let empty = Payload::Empty.into_read();
-                    // recreate the unit to get a new hostname and cookies for the new host.
-                    let new_unit =
-                        Unit::new(&unit.agent, &unit.method, &new_url, &unit.headers, &empty);
-                    debug!("redirect {} {} -> {}", resp.status(), url, new_url);
-                    return retry(new_unit, use_pooled, empty, previous);
-                }
-                _ => (),
-            };
-        }
-    }
-
     debug!("response {} to {} {}", resp.status(), method, url);
 
     // release the response
     resp.history = previous;
-    Ok(Ok(resp))
+    Ok(resp)
 }
 
 #[cfg(feature = "cookies")]
