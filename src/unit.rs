@@ -182,7 +182,7 @@ pub(crate) fn connect(
             if let Some(location) = location {
                 let url = &unit.url;
                 let method = &unit.method;
-                // join location header to current url in case it it relative
+                // join location header to current url in case it is relative
                 let new_url = url.join(location).map_err(|e| {
                     ErrorKind::InvalidUrl
                         .msg(&format!("Bad redirection: {}", location))
@@ -218,8 +218,6 @@ pub(crate) fn connect(
 }
 
 /// Perform a connection. Does not follow redirects.
-///
-/// This return type is a misuse of `Result`; really it should be `Either`.
 fn connect_inner(
     unit: &Unit,
     use_pooled: bool,
@@ -248,6 +246,7 @@ fn connect_inner(
             debug!("retrying request early {} {}: {}", method, url, err);
             // we try open a new connection, this time there will be
             // no connection in the pool. don't use it.
+            // NOTE: this recurses at most once because `use_pooled` is `false`.
             return connect_inner(unit, false, body, previous);
         } else {
             // not a pooled connection, propagate the error.
@@ -276,6 +275,7 @@ fn connect_inner(
         Err(err) if err.connection_closed() && retryable && is_recycled => {
             debug!("retrying request {} {}: {}", method, url, err);
             let empty = Payload::Empty.into_read();
+            // NOTE: this recurses at most once because `use_pooled` is `false`.
             return connect_inner(unit, false, empty, previous);
         }
         Err(e) => return Err(e),
