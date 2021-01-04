@@ -1,3 +1,6 @@
+# 2.0.1
+ * Fix handling of 308 redirects (port from 1.5.4 branch).
+
 # 2.0.0
  * Methods that formerly returned Response now return Result<Response, Error>.
    You'll need to change all instances of `.call()` to `.call()?` or handle
