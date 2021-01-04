@@ -221,6 +221,7 @@ fn connect_inner(
 
     // start reading the response to process cookies and redirects.
     let result = Response::do_from_request(unit.clone(), stream);
+    previous.push(url.to_string());
 
     // https://tools.ietf.org/html/rfc7230#section-6.3.1
     // When an inbound connection is closed prematurely, a client MAY
@@ -277,7 +278,6 @@ fn connect_inner(
                         Unit::new(&unit.agent, &new_method, &new_url, &unit.headers, &empty);
 
                     debug!("redirect {} {} -> {}", resp.status(), url, new_url);
-                    previous.push(url.to_string());
                     return retry(new_unit, use_pooled, empty, previous);
                 }
                 // never change the method for 307/308
@@ -289,7 +289,6 @@ fn connect_inner(
                     let new_unit =
                         Unit::new(&unit.agent, &unit.method, &new_url, &unit.headers, &empty);
                     debug!("redirect {} {} -> {}", resp.status(), url, new_url);
-                    previous.push(url.to_string());
                     return retry(new_unit, use_pooled, empty, previous);
                 }
                 _ => (),

@@ -460,7 +460,9 @@ impl Response {
 
     #[cfg(test)]
     pub fn set_previous(&mut self, previous: Arc<Response>) {
-        self.previous = vec![previous.get_url().to_owned()];
+        let mut history = previous.previous.clone();
+        history.push(previous.get_url().to_string());
+        self.previous = history;
     }
 }
 
