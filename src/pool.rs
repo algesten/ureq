@@ -107,7 +107,7 @@ impl ConnectionPool {
                 let stream = streams.pop_back();
                 let stream = stream.expect("invariant failed: empty VecDeque in `recycle`");
 
-                if streams.len() == 0 {
+                if streams.is_empty() {
                     occupied_entry.remove();
                 }
 
@@ -172,7 +172,7 @@ impl ConnectionPool {
                     .pop_front()
                     .expect("invariant failed: key existed in recycle but no streams available");
                 debug!("dropping oldest stream in pool: {:?}", stream);
-                if streams.len() == 0 {
+                if streams.is_empty() {
                     occupied_entry.remove();
                 }
             }
@@ -214,7 +214,7 @@ impl PoolKey {
             scheme: url.scheme().to_string(),
             hostname: url.host_str().unwrap_or("").to_string(),
             port,
-            proxy: proxy,
+            proxy,
         }
     }
 }

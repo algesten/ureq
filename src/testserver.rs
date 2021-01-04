@@ -82,10 +82,10 @@ pub struct TestHeaders(Vec<String>);
 impl TestHeaders {
     // Return the path for a request, e.g. /foo from "GET /foo HTTP/1.1"
     pub fn path(&self) -> &str {
-        if self.0.len() == 0 {
+        if self.0.is_empty() {
             ""
         } else {
-            &self.0[0].split(" ").nth(1).unwrap()
+            &self.0[0].split(' ').nth(1).unwrap()
         }
     }
 
@@ -105,7 +105,7 @@ pub fn read_request(stream: &TcpStream) -> TestHeaders {
                 eprintln!("testserver: in read_request: {}", e);
                 break;
             }
-            Ok(line) if line == "" => break,
+            Ok(line) if line.is_empty() => break,
             Ok(line) => results.push(line),
         };
     }

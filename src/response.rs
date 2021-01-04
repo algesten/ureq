@@ -414,7 +414,7 @@ impl Response {
         //
         // HTTP/1.1 200 OK\r\n
         let mut stream =
-            stream::DeadlineStream::new(stream, unit.as_ref().and_then(|u| u.deadline.clone()));
+            stream::DeadlineStream::new(stream, unit.as_ref().and_then(|u| u.deadline));
         let status_line = read_next_line(&mut stream)?;
 
         let (index, status) = parse_status_line(status_line.as_str())?;
@@ -559,7 +559,7 @@ impl<'a> Iterator for Hist<'a> {
         };
 
         self.response = response.previous.as_deref();
-        return Some(response);
+        Some(response)
     }
 }
 

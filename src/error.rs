@@ -182,7 +182,7 @@ impl Error {
     pub fn kind(&self) -> ErrorKind {
         match self {
             Error::Status(_, _) => ErrorKind::HTTP,
-            Error::Transport(Transport { kind: k, .. }) => k.clone(),
+            Error::Transport(Transport { kind: k, .. }) => *k,
         }
     }
 
