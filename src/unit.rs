@@ -168,7 +168,9 @@ pub(crate) fn connect(
     mut previous: Vec<String>,
 ) -> Result<Response, Error> {
     loop {
-        let resp = connect_inner(&unit, use_pooled, body, previous)?;
+        let mut resp = connect_inner(&unit, use_pooled, body, &previous)?;
+        previous.push(unit.url.to_string());
+        resp.history = previous;
         // handle redirects
         if (300..399).contains(&resp.status()) && unit.agent.config.redirects > 0 {
             if resp.history.len() >= unit.agent.config.redirects as usize {
@@ -222,7 +224,7 @@ fn connect_inner(
     unit: &Unit,
     use_pooled: bool,
     body: SizedReader,
-    mut previous: Vec<String>,
+    previous: &[String],
 ) -> Result<Response, Error> {
     let host = unit
         .url
@@ -259,7 +261,6 @@ fn connect_inner(
 
     // start reading the response to process cookies and redirects.
     let result = Response::do_from_request(unit.clone(), stream);
-    previous.push(url.to_string());
 
     // https://tools.ietf.org/html/rfc7230#section-6.3.1
     // When an inbound connection is closed prematurely, a client MAY
@@ -271,7 +272,7 @@ fn connect_inner(
     // from the ConnectionPool, since those are most likely to have
     // reached a server-side timeout. Note that this means we may do
     // up to N+1 total tries, where N is max_idle_connections_per_host.
-    let mut resp = match result {
+    let resp = match result {
         Err(err) if err.connection_closed() && retryable && is_recycled => {
             debug!("retrying request {} {}: {}", method, url, err);
             let empty = Payload::Empty.into_read();
@@ -288,7 +289,6 @@ fn connect_inner(
     debug!("response {} to {} {}", resp.status(), method, url);
 
     // release the response
-    resp.history = previous;
     Ok(resp)
 }
 
