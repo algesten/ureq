@@ -279,16 +279,16 @@ pub fn is_test(is: bool) -> bool {
         IS_TEST.store(true, Ordering::SeqCst);
     }
     let x = IS_TEST.load(Ordering::SeqCst);
-    return x;
+    x
 }
 
 /// Agents are used to hold configuration and keep state between requests.
 pub fn agent() -> Agent {
     #[cfg(not(test))]
     if is_test(false) {
-        return testserver::test_agent();
+        testserver::test_agent()
     } else {
-        return AgentBuilder::new().build();
+        AgentBuilder::new().build()
     }
     #[cfg(test)]
     return testserver::test_agent();
