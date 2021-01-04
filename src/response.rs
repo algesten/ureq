@@ -51,9 +51,12 @@ pub struct Response {
     headers: Vec<Header>,
     unit: Option<Unit>,
     stream: Stream,
-    // If this Response resulted from a redirect, the Response containing
-    // that redirect.
-    pub(crate) previous: Vec<String>,
+    /// The redirect history of this response, if any. The history starts with
+    /// the first response received and ends with the response immediately
+    /// previous to this one.
+    ///
+    /// If this response was not redirected, the history is empty.
+    pub(crate) history: Vec<String>,
 }
 
 /// index into status_line where we split: HTTP/1.1 200 OK
@@ -389,13 +392,6 @@ impl Response {
         })
     }
 
-    // Returns an iterator across the redirect history of this response,
-    // if any. The iterator starts with the response before this one.
-    // If this response was not redirected, the iterator is empty.
-    pub(crate) fn history(&self) -> Hist {
-        Hist::new(&self.previous)
-    }
-
     /// Create a response from a Read trait impl.
     ///
     /// This is hopefully useful for unit tests.
@@ -437,7 +433,7 @@ impl Response {
             headers,
             unit,
             stream: stream.into(),
-            previous: vec![],
+            history: vec![],
         })
     }
 
@@ -460,9 +456,9 @@ impl Response {
 
     #[cfg(test)]
     pub fn set_previous(&mut self, previous: Arc<Response>) {
-        let mut history = previous.previous.clone();
+        let mut history = previous.history.clone();
         history.push(previous.get_url().to_string());
-        self.previous = history;
+        self.history = history;
     }
 }
 
@@ -531,23 +527,6 @@ impl FromStr for Response {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let stream = Stream::from_vec(s.as_bytes().to_owned());
         Self::do_from_stream(stream, None)
-    }
-}
-
-// Hist is an iterator over the history of a redirected response. It
-// yields the URLs that were requested in backwards order, from most recent
-// to least recent.
-pub(crate) struct Hist<'a> {
-    response: &'a [String],
-}
-
-impl<'a> Hist<'a> {
-    fn new(response: &'a [String]) -> Hist<'a> {
-        Hist { response }
-    }
-
-    pub(crate) fn iter(&self) -> impl Iterator<Item = &'a String> + 'a {
-        self.response.iter().rev()
     }
 }
 
@@ -762,7 +741,7 @@ mod tests {
     fn history() {
         let mut response0 = Response::new(302, "Found", "").unwrap();
         response0.set_url("http://1.example.com/".parse().unwrap());
-        assert_eq!(response0.history().iter().count(), 0);
+        assert_eq!(response0.history.iter().count(), 0);
 
         let mut response1 = Response::new(302, "Found", "").unwrap();
         response1.set_url("http://2.example.com/".parse().unwrap());
@@ -772,8 +751,8 @@ mod tests {
         response2.set_url("http://2.example.com/".parse().unwrap());
         response2.set_previous(Arc::new(response1));
 
-        let hist: Vec<&str> = response2.history().iter().map(|r| &**r).collect();
-        assert_eq!(hist, ["http://2.example.com/", "http://1.example.com/"])
+        let hist: Vec<&str> = response2.history.iter().map(|r| &**r).collect();
+        assert_eq!(hist, ["http://1.example.com/", "http://2.example.com/"])
     }
 }
 

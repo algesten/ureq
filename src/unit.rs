@@ -299,7 +299,7 @@ fn connect_inner(
     debug!("response {} to {} {}", resp.status(), method, url);
 
     // release the response
-    resp.previous = previous;
+    resp.history = previous;
     Ok(Ok(resp))
 }
 
