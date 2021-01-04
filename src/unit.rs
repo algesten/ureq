@@ -165,8 +165,8 @@ pub(crate) fn connect(
     mut unit: Unit,
     use_pooled: bool,
     mut body: SizedReader,
-    mut previous: Vec<String>,
 ) -> Result<Response, Error> {
+    let mut previous = vec![];
     loop {
         let mut resp = connect_inner(&unit, use_pooled, body, &previous)?;
         previous.push(unit.url.to_string());
