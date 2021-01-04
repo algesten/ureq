@@ -141,3 +141,22 @@ fn redirect_308() {
     assert_eq!(resp.status(), 200);
     assert_eq!(resp.get_url(), "test://host/valid_response");
 }
+
+#[test]
+fn too_many_redirects() {
+    for i in 0..10_000 {
+        test::set_handler(&format!("/malicious_redirect_{}", i), move |_| {
+            let location = format!("Location: /malicious_redirect_{}", i + 1);
+            test::make_response(302, "Go here", vec![&location], vec![])
+        });
+    }
+
+    test::set_handler("/malicious_redirect_10000", |unit| {
+        assert_eq!(unit.method, "GET");
+        test::make_response(200, "OK", vec![], vec![])
+    });
+
+    let req = crate::builder().redirects(10001).build();
+    let resp = req.get("test://host/malicious_redirect_0").call().unwrap();
+    assert_eq!(resp.get_url(), "test://host/malicious_redirect_10000");
+}

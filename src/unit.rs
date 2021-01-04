@@ -163,13 +163,32 @@ impl Unit {
     }
 }
 
-/// Perform a connection. Used recursively for redirects.
+/// Used for retrying a failed connection, or for following a redirect.
+struct Retry<'a>(Unit, bool, SizedReader<'a>, Option<Arc<Response>>);
+
+/// Perform a connection. Follows redirects.
 pub(crate) fn connect(
     unit: Unit,
     use_pooled: bool,
     body: SizedReader,
     previous: Option<Arc<Response>>,
 ) -> Result<Response, Error> {
+    let mut req = Retry(unit, use_pooled, body, previous);
+    loop {
+        match connect_inner(req)? {
+            Ok(resp) => return Ok(resp),
+            Err(retry) => req = retry,
+        }
+    }
+}
+
+/// Perform a connection. Does not follow redirects.
+///
+/// This return type is a misuse of `Result`; really it should be `Either`.
+fn connect_inner(
+    Retry(unit, use_pooled, body, previous): Retry,
+) -> Result<Result<Response, Retry>, Error> {
+    let retry = |u, p, b, prev| Ok(Err(Retry(u, p, b, prev)));
     let host = unit
         .url
         .host_str()
@@ -192,7 +211,7 @@ pub(crate) fn connect(
             debug!("retrying request early {} {}: {}", method, url, err);
             // we try open a new connection, this time there will be
             // no connection in the pool. don't use it.
-            return connect(unit, false, body, previous);
+            return retry(unit, false, body, previous);
         } else {
             // not a pooled connection, propagate the error.
             return Err(err.into());
@@ -220,7 +239,7 @@ pub(crate) fn connect(
         Err(err) if err.connection_closed() && retryable && is_recycled => {
             debug!("retrying request {} {}: {}", method, url, err);
             let empty = Payload::Empty.into_read();
-            return connect(unit, false, empty, previous);
+            return retry(unit, false, empty, previous);
         }
         Err(e) => return Err(e),
         Ok(resp) => resp,
@@ -263,7 +282,7 @@ pub(crate) fn connect(
                         Unit::new(&unit.agent, &new_method, &new_url, &unit.headers, &empty);
 
                     debug!("redirect {} {} -> {}", resp.status(), url, new_url);
-                    return connect(new_unit, use_pooled, empty, Some(Arc::new(resp)));
+                    return retry(new_unit, use_pooled, empty, Some(Arc::new(resp)));
                 }
                 // never change the method for 307/308
                 // only resend the request if it cannot have a body
@@ -272,8 +291,9 @@ pub(crate) fn connect(
                     let empty = Payload::Empty.into_read();
                     debug!("redirect {} {} -> {}", resp.status(), url, new_url);
                     // recreate the unit to get a new hostname and cookies for the new host.
-                    let new_unit = Unit::new(&unit.agent, &unit.method, &new_url, &unit.headers, &empty);
-                    return connect(new_unit, use_pooled, empty, Some(Arc::new(resp)));
+                    let new_unit =
+                        Unit::new(&unit.agent, &unit.method, &new_url, &unit.headers, &empty);
+                    return retry(new_unit, use_pooled, empty, Some(Arc::new(resp)));
                 }
                 _ => (),
             };
@@ -283,7 +303,7 @@ pub(crate) fn connect(
     debug!("response {} to {} {}", resp.status(), method, url);
 
     // release the response
-    Ok(resp)
+    Ok(Ok(resp))
 }
 
 #[cfg(feature = "cookies")]
