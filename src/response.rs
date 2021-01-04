@@ -1,7 +1,5 @@
 use std::io::{self, Read};
 use std::str::FromStr;
-#[cfg(test)]
-use std::sync::Arc;
 use std::{fmt, io::BufRead};
 
 use chunked_transfer::Decoder as ChunkDecoder;
@@ -455,10 +453,10 @@ impl Response {
     }
 
     #[cfg(test)]
-    pub fn set_previous(&mut self, previous: Arc<Response>) {
-        let mut history = previous.history.clone();
-        history.push(previous.get_url().to_string());
-        self.history = history;
+    pub fn history_from_previous(&mut self, previous: Response) {
+        let previous_url = previous.get_url().to_string();
+        self.history = previous.history;
+        self.history.push(previous_url);
     }
 }
 
@@ -745,11 +743,11 @@ mod tests {
 
         let mut response1 = Response::new(302, "Found", "").unwrap();
         response1.set_url("http://2.example.com/".parse().unwrap());
-        response1.set_previous(Arc::new(response0));
+        response1.history_from_previous(response0);
 
         let mut response2 = Response::new(404, "NotFound", "").unwrap();
         response2.set_url("http://2.example.com/".parse().unwrap());
-        response2.set_previous(Arc::new(response1));
+        response2.history_from_previous(response1);
 
         let hist: Vec<&str> = response2.history.iter().map(|r| &**r).collect();
         assert_eq!(hist, ["http://1.example.com/", "http://2.example.com/"])

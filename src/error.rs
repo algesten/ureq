@@ -300,13 +300,12 @@ fn status_code_error() {
 
 #[test]
 fn status_code_error_redirect() {
-    use std::sync::Arc;
     let mut response0 = Response::new(302, "Found", "").unwrap();
     response0.set_url("http://example.org/".parse().unwrap());
     let mut response1 = Response::new(302, "Found", "").unwrap();
-    response1.set_previous(Arc::new(response0));
+    response1.history_from_previous(response0);
     let mut response2 = Response::new(500, "Internal Server Error", "server overloaded").unwrap();
-    response2.set_previous(Arc::new(response1));
+    response2.history_from_previous(response1);
     response2.set_url("http://example.com/".parse().unwrap());
     let err = Error::Status(response2.status(), response2);
 
