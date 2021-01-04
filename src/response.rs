@@ -739,7 +739,7 @@ mod tests {
     fn history() {
         let mut response0 = Response::new(302, "Found", "").unwrap();
         response0.set_url("http://1.example.com/".parse().unwrap());
-        assert_eq!(response0.history.iter().count(), 0);
+        assert!(response0.history.is_empty());
 
         let mut response1 = Response::new(302, "Found", "").unwrap();
         response1.set_url("http://2.example.com/".parse().unwrap());
