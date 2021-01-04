@@ -291,7 +291,7 @@ pub fn agent() -> Agent {
         AgentBuilder::new().build()
     }
     #[cfg(test)]
-    return testserver::test_agent();
+    testserver::test_agent()
 }
 
 /// Make a request with the HTTP verb as a parameter.
