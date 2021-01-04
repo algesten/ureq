@@ -170,8 +170,6 @@ pub(crate) fn connect(
     body: SizedReader,
     previous: Option<Arc<Response>>,
 ) -> Result<Response, Error> {
-    //
-
     let host = unit
         .url
         .host_str()

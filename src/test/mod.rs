@@ -24,8 +24,14 @@ pub(crate) fn set_handler<H>(path: &str, handler: H)
 where
     H: Fn(&Unit) -> Result<Stream, Error> + Send + 'static,
 {
-    let mut handlers = TEST_HANDLERS.lock().unwrap();
-    handlers.insert(path.to_string(), Box::new(handler));
+    let path = path.to_string();
+    let handler = Box::new(handler);
+    // See `resolve_handler` below for why poisoning isn't necessary.
+    let mut handlers = match TEST_HANDLERS.lock() {
+        Ok(h) => h,
+        Err(poison) => poison.into_inner(),
+    };
+    handlers.insert(path, handler);
 }
 
 #[allow(clippy::write_with_newline)]
@@ -46,8 +52,17 @@ pub(crate) fn make_response(
 }
 
 pub(crate) fn resolve_handler(unit: &Unit) -> Result<Stream, Error> {
-    let mut handlers = TEST_HANDLERS.lock().unwrap();
     let path = unit.url.path();
-    let handler = handlers.remove(path).unwrap();
+    // The only way this can panic is if
+    // 1. `remove(path).unwrap()` panics, in which case the HANDLERS haven't been modified.
+    // 2. `make_hash` for `handlers.insert` panics (in `set_handler`), in which case the HANDLERS haven't been modified.
+    // In all cases, another test will fail as a result, so it's ok to continue other tests in parallel.
+    let mut handlers = match TEST_HANDLERS.lock() {
+        Ok(h) => h,
+        Err(poison) => poison.into_inner(),
+    };
+    let handler = handlers.remove(path)
+        .unwrap_or_else(|| panic!("call make_response(\"{}\") before fetching it in tests (or if you did make it, avoid fetching it more than once)", path));
+    drop(handlers);
     handler(unit)
 }

@@ -13,6 +13,9 @@ use crate::{Agent, AgentBuilder};
 // An agent to be installed by default for tests and doctests, such
 // that all hostnames resolve to a TestServer on localhost.
 pub(crate) fn test_agent() -> Agent {
+    #[cfg(test)]
+    let _ = env_logger::try_init();
+
     let testserver = TestServer::new(|mut stream: TcpStream| -> io::Result<()> {
         let headers = read_request(&stream);
         if headers.0.is_empty() {
