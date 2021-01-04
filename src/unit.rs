@@ -1,8 +1,5 @@
+use std::io::{self, Write};
 use std::time;
-use std::{
-    io::{self, Write},
-    sync::Arc,
-};
 
 use log::{debug, info};
 use url::Url;
@@ -164,14 +161,14 @@ impl Unit {
 }
 
 /// Used for retrying a failed connection, or for following a redirect.
-struct Retry<'a>(Unit, bool, SizedReader<'a>, Option<Arc<Response>>);
+struct Retry<'a>(Unit, bool, SizedReader<'a>, Vec<String>);
 
 /// Perform a connection. Follows redirects.
 pub(crate) fn connect(
     unit: Unit,
     use_pooled: bool,
     body: SizedReader,
-    previous: Option<Arc<Response>>,
+    previous: Vec<String>,
 ) -> Result<Response, Error> {
     let mut req = Retry(unit, use_pooled, body, previous);
     loop {
@@ -186,7 +183,7 @@ pub(crate) fn connect(
 ///
 /// This return type is a misuse of `Result`; really it should be `Either`.
 fn connect_inner(
-    Retry(unit, use_pooled, body, previous): Retry,
+    Retry(unit, use_pooled, body, mut previous): Retry,
 ) -> Result<Result<Response, Retry>, Error> {
     let retry = |u, p, b, prev| Ok(Err(Retry(u, p, b, prev)));
     let host = unit
@@ -204,7 +201,7 @@ fn connect_inner(
         info!("sending request {} {}", method, url);
     }
 
-    let send_result = send_prelude(&unit, &mut stream, previous.is_some());
+    let send_result = send_prelude(&unit, &mut stream, !previous.is_empty());
 
     if let Err(err) = send_result {
         if is_recycled {
@@ -223,7 +220,7 @@ fn connect_inner(
     body::send_body(body, unit.is_chunked, &mut stream)?;
 
     // start reading the response to process cookies and redirects.
-    let result = Response::do_from_request(unit.clone(), stream, previous.clone());
+    let result = Response::do_from_request(unit.clone(), stream);
 
     // https://tools.ietf.org/html/rfc7230#section-6.3.1
     // When an inbound connection is closed prematurely, a client MAY
@@ -235,7 +232,7 @@ fn connect_inner(
     // from the ConnectionPool, since those are most likely to have
     // reached a server-side timeout. Note that this means we may do
     // up to N+1 total tries, where N is max_idle_connections_per_host.
-    let resp = match result {
+    let mut resp = match result {
         Err(err) if err.connection_closed() && retryable && is_recycled => {
             debug!("retrying request {} {}: {}", method, url, err);
             let empty = Payload::Empty.into_read();
@@ -251,10 +248,8 @@ fn connect_inner(
 
     // handle redirects
     if (300..399).contains(&resp.status()) && unit.agent.config.redirects > 0 {
-        if let Some(previous) = previous {
-            if previous.history().count() + 1 >= unit.agent.config.redirects as usize {
-                return Err(ErrorKind::TooManyRedirects.new());
-            }
+        if previous.len() >= unit.agent.config.redirects as usize {
+            return Err(ErrorKind::TooManyRedirects.new());
         }
 
         // the location header
@@ -282,18 +277,20 @@ fn connect_inner(
                         Unit::new(&unit.agent, &new_method, &new_url, &unit.headers, &empty);
 
                     debug!("redirect {} {} -> {}", resp.status(), url, new_url);
-                    return retry(new_unit, use_pooled, empty, Some(Arc::new(resp)));
+                    previous.push(url.to_string());
+                    return retry(new_unit, use_pooled, empty, previous);
                 }
                 // never change the method for 307/308
                 // only resend the request if it cannot have a body
                 // NOTE: DELETE is intentionally excluded: https://stackoverflow.com/questions/299628
                 307 | 308 if ["GET", "HEAD", "OPTIONS", "TRACE"].contains(&method.as_str()) => {
                     let empty = Payload::Empty.into_read();
-                    debug!("redirect {} {} -> {}", resp.status(), url, new_url);
                     // recreate the unit to get a new hostname and cookies for the new host.
                     let new_unit =
                         Unit::new(&unit.agent, &unit.method, &new_url, &unit.headers, &empty);
-                    return retry(new_unit, use_pooled, empty, Some(Arc::new(resp)));
+                    debug!("redirect {} {} -> {}", resp.status(), url, new_url);
+                    previous.push(url.to_string());
+                    return retry(new_unit, use_pooled, empty, previous);
                 }
                 _ => (),
             };
@@ -303,6 +300,7 @@ fn connect_inner(
     debug!("response {} to {} {}", resp.status(), method, url);
 
     // release the response
+    resp.previous = previous;
     Ok(Ok(resp))
 }
 

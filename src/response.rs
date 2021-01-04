@@ -1,9 +1,8 @@
+use std::io::{self, Read};
 use std::str::FromStr;
+#[cfg(test)]
+use std::sync::Arc;
 use std::{fmt, io::BufRead};
-use std::{
-    io::{self, Read},
-    sync::Arc,
-};
 
 use chunked_transfer::Decoder as ChunkDecoder;
 use url::Url;
@@ -54,7 +53,7 @@ pub struct Response {
     stream: Stream,
     // If this Response resulted from a redirect, the Response containing
     // that redirect.
-    previous: Option<Arc<Response>>,
+    pub(crate) previous: Vec<String>,
 }
 
 /// index into status_line where we split: HTTP/1.1 200 OK
@@ -394,7 +393,7 @@ impl Response {
     // if any. The iterator starts with the response before this one.
     // If this response was not redirected, the iterator is empty.
     pub(crate) fn history(&self) -> Hist {
-        Hist::new(self.previous.as_deref())
+        Hist::new(&self.previous)
     }
 
     /// Create a response from a Read trait impl.
@@ -438,18 +437,13 @@ impl Response {
             headers,
             unit,
             stream: stream.into(),
-            previous: None,
+            previous: vec![],
         })
     }
 
-    pub(crate) fn do_from_request(
-        unit: Unit,
-        stream: Stream,
-        previous: Option<Arc<Response>>,
-    ) -> Result<Response, Error> {
+    pub(crate) fn do_from_request(unit: Unit, stream: Stream) -> Result<Response, Error> {
         let url = Some(unit.url.clone());
         let mut resp = Response::do_from_stream(stream, Some(unit))?;
-        resp.previous = previous;
         resp.url = url;
         Ok(resp)
     }
@@ -466,7 +460,7 @@ impl Response {
 
     #[cfg(test)]
     pub fn set_previous(&mut self, previous: Arc<Response>) {
-        self.previous = Some(previous);
+        self.previous = vec![previous.get_url().to_owned()];
     }
 }
 
@@ -542,24 +536,16 @@ impl FromStr for Response {
 // yields the URLs that were requested in backwards order, from most recent
 // to least recent.
 pub(crate) struct Hist<'a> {
-    response: Option<&'a Response>,
+    response: &'a [String],
 }
 
 impl<'a> Hist<'a> {
-    fn new(response: Option<&'a Response>) -> Hist<'a> {
+    fn new(response: &'a [String]) -> Hist<'a> {
         Hist { response }
     }
-}
-impl<'a> Iterator for Hist<'a> {
-    type Item = &'a Response;
-    fn next(&mut self) -> Option<&'a Response> {
-        let response = match self.response {
-            None => return None,
-            Some(r) => r,
-        };
 
-        self.response = response.previous.as_deref();
-        Some(response)
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &'a String> + 'a {
+        self.response.iter().rev()
     }
 }
 
@@ -774,7 +760,7 @@ mod tests {
     fn history() {
         let mut response0 = Response::new(302, "Found", "").unwrap();
         response0.set_url("http://1.example.com/".parse().unwrap());
-        assert_eq!(response0.history().count(), 0);
+        assert_eq!(response0.history().iter().count(), 0);
 
         let mut response1 = Response::new(302, "Found", "").unwrap();
         response1.set_url("http://2.example.com/".parse().unwrap());
@@ -784,7 +770,7 @@ mod tests {
         response2.set_url("http://2.example.com/".parse().unwrap());
         response2.set_previous(Arc::new(response1));
 
-        let hist: Vec<&str> = response2.history().map(|r| r.get_url()).collect();
+        let hist: Vec<&str> = response2.history().iter().map(|r| &**r).collect();
         assert_eq!(hist, ["http://2.example.com/", "http://1.example.com/"])
     }
 }
