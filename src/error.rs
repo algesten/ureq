@@ -103,8 +103,8 @@ impl Display for Error {
         match self {
             Error::Status(status, response) => {
                 write!(f, "{}: status code {}", response.get_url(), status)?;
-                if let Some(original) = response.history().last() {
-                    write!(f, " (redirected from {})", original.get_url())?;
+                if let Some(original) = response.history.get(0) {
+                    write!(f, " (redirected from {})", original)?;
                 }
             }
             Error::Transport(err) => {
@@ -300,19 +300,22 @@ fn status_code_error() {
 
 #[test]
 fn status_code_error_redirect() {
-    use std::sync::Arc;
-    let mut response0 = Response::new(302, "Found", "").unwrap();
-    response0.set_url("http://example.org/".parse().unwrap());
-    let mut response1 = Response::new(302, "Found", "").unwrap();
-    response1.set_previous(Arc::new(response0));
-    let mut response2 = Response::new(500, "Internal Server Error", "server overloaded").unwrap();
-    response2.set_previous(Arc::new(response1));
-    response2.set_url("http://example.com/".parse().unwrap());
-    let err = Error::Status(response2.status(), response2);
+    use crate::{get, test};
 
+    test::set_handler("/redirect_a", |unit| {
+        assert_eq!(unit.method, "GET");
+        test::make_response(302, "Go here", vec!["Location: test://example.edu/redirect_b"], vec![])
+    });
+    test::set_handler("/redirect_b", |unit| {
+        assert_eq!(unit.method, "GET");
+        test::make_response(302, "Go here", vec!["Location: http://example.com/status/500"], vec![])
+    });
+
+    let err = get("test://example.org/redirect_a").call().unwrap_err();
+    assert_eq!(err.kind(), ErrorKind::HTTP, "{:?}", err);
     assert_eq!(
         err.to_string(),
-        "http://example.com/: status code 500 (redirected from http://example.org/)"
+        "http://example.com/status/500: status code 500 (redirected from test://example.org/redirect_a)"
     );
 }
 

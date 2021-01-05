@@ -118,7 +118,7 @@ impl Request {
         }
         let reader = payload.into_read();
         let unit = Unit::new(&self.agent, &self.method, &url, &self.headers, &reader);
-        let response = unit::connect(unit, true, reader, None).map_err(|e| e.url(url.clone()))?;
+        let response = unit::connect(unit, true, reader).map_err(|e| e.url(url.clone()))?;
 
         if response.status() >= 400 {
             Err(Error::Status(response.status(), response))

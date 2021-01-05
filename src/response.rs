@@ -1,9 +1,6 @@
+use std::io::{self, Read};
 use std::str::FromStr;
 use std::{fmt, io::BufRead};
-use std::{
-    io::{self, Read},
-    sync::Arc,
-};
 
 use chunked_transfer::Decoder as ChunkDecoder;
 use url::Url;
@@ -52,9 +49,12 @@ pub struct Response {
     headers: Vec<Header>,
     unit: Option<Unit>,
     stream: Stream,
-    // If this Response resulted from a redirect, the Response containing
-    // that redirect.
-    previous: Option<Arc<Response>>,
+    /// The redirect history of this response, if any. The history starts with
+    /// the first response received and ends with the response immediately
+    /// previous to this one.
+    ///
+    /// If this response was not redirected, the history is empty.
+    pub(crate) history: Vec<String>,
 }
 
 /// index into status_line where we split: HTTP/1.1 200 OK
@@ -390,13 +390,6 @@ impl Response {
         })
     }
 
-    // Returns an iterator across the redirect history of this response,
-    // if any. The iterator starts with the response before this one.
-    // If this response was not redirected, the iterator is empty.
-    pub(crate) fn history(&self) -> Hist {
-        Hist::new(self.previous.as_deref())
-    }
-
     /// Create a response from a Read trait impl.
     ///
     /// This is hopefully useful for unit tests.
@@ -438,18 +431,13 @@ impl Response {
             headers,
             unit,
             stream: stream.into(),
-            previous: None,
+            history: vec![],
         })
     }
 
-    pub(crate) fn do_from_request(
-        unit: Unit,
-        stream: Stream,
-        previous: Option<Arc<Response>>,
-    ) -> Result<Response, Error> {
+    pub(crate) fn do_from_request(unit: Unit, stream: Stream) -> Result<Response, Error> {
         let url = Some(unit.url.clone());
         let mut resp = Response::do_from_stream(stream, Some(unit))?;
-        resp.previous = previous;
         resp.url = url;
         Ok(resp)
     }
@@ -465,8 +453,10 @@ impl Response {
     }
 
     #[cfg(test)]
-    pub fn set_previous(&mut self, previous: Arc<Response>) {
-        self.previous = Some(previous);
+    pub fn history_from_previous(&mut self, previous: Response) {
+        let previous_url = previous.get_url().to_string();
+        self.history = previous.history;
+        self.history.push(previous_url);
     }
 }
 
@@ -535,31 +525,6 @@ impl FromStr for Response {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let stream = Stream::from_vec(s.as_bytes().to_owned());
         Self::do_from_stream(stream, None)
-    }
-}
-
-// Hist is an iterator over the history of a redirected response. It
-// yields the URLs that were requested in backwards order, from most recent
-// to least recent.
-pub(crate) struct Hist<'a> {
-    response: Option<&'a Response>,
-}
-
-impl<'a> Hist<'a> {
-    fn new(response: Option<&'a Response>) -> Hist<'a> {
-        Hist { response }
-    }
-}
-impl<'a> Iterator for Hist<'a> {
-    type Item = &'a Response;
-    fn next(&mut self) -> Option<&'a Response> {
-        let response = match self.response {
-            None => return None,
-            Some(r) => r,
-        };
-
-        self.response = response.previous.as_deref();
-        Some(response)
     }
 }
 
@@ -774,18 +739,18 @@ mod tests {
     fn history() {
         let mut response0 = Response::new(302, "Found", "").unwrap();
         response0.set_url("http://1.example.com/".parse().unwrap());
-        assert_eq!(response0.history().count(), 0);
+        assert!(response0.history.is_empty());
 
         let mut response1 = Response::new(302, "Found", "").unwrap();
         response1.set_url("http://2.example.com/".parse().unwrap());
-        response1.set_previous(Arc::new(response0));
+        response1.history_from_previous(response0);
 
         let mut response2 = Response::new(404, "NotFound", "").unwrap();
         response2.set_url("http://2.example.com/".parse().unwrap());
-        response2.set_previous(Arc::new(response1));
+        response2.history_from_previous(response1);
 
-        let hist: Vec<&str> = response2.history().map(|r| r.get_url()).collect();
-        assert_eq!(hist, ["http://2.example.com/", "http://1.example.com/"])
+        let hist: Vec<&str> = response2.history.iter().map(|r| &**r).collect();
+        assert_eq!(hist, ["http://1.example.com/", "http://2.example.com/"])
     }
 }
 
