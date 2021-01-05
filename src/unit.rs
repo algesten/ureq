@@ -174,7 +174,7 @@ pub(crate) fn connect(
         if !(300..399).contains(&resp.status()) || unit.agent.config.redirects == 0 {
             break resp;
         }
-        if resp.history.len() >= unit.agent.config.redirects as usize {
+        if resp.history.len() + 1 >= unit.agent.config.redirects as usize {
             return Err(ErrorKind::TooManyRedirects.new());
         }
         // the location header
