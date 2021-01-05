@@ -35,6 +35,22 @@ fn redirect_many() {
         .get("test://host/redirect_many1")
         .call();
     assert!(matches!(result, Err(e) if e.kind() == ErrorKind::TooManyRedirects));
+
+    test::set_handler("/redirect_many1", |_| {
+        test::make_response(302, "Go here", vec!["Location: /redirect_many2"], vec![])
+    });
+    test::set_handler("/redirect_many2", |_| {
+        test::make_response(302, "Go here", vec!["Location: /redirect_many3"], vec![])
+    });
+    test::set_handler("/redirect_many3", |_| {
+        test::make_response(302, "Go here", vec!["Location: /redirect_many4"], vec![])
+    });
+    let result = builder()
+        .redirects(2)
+        .build()
+        .get("test://host/redirect_many1")
+        .call();
+    assert!(matches!(result, Err(e) if e.kind() == ErrorKind::TooManyRedirects));
 }
 
 #[test]
