@@ -166,55 +166,56 @@ pub(crate) fn connect(
     use_pooled: bool,
     mut body: SizedReader,
 ) -> Result<Response, Error> {
-    let mut previous = vec![];
-    loop {
-        let mut resp = connect_inner(&unit, use_pooled, body, &previous)?;
-        previous.push(unit.url.to_string());
-        resp.history = previous;
+    let mut history = vec![];
+    let mut resp = loop {
+        let resp = connect_inner(&unit, use_pooled, body, &history)?;
+
         // handle redirects
-        if (300..399).contains(&resp.status()) && unit.agent.config.redirects > 0 {
-            if resp.history.len() >= unit.agent.config.redirects as usize {
-                return Err(ErrorKind::TooManyRedirects.new());
-            }
-
-            // the location header
-            let location = resp.header("location");
-            if let Some(location) = location {
-                let url = &unit.url;
-                let method = &unit.method;
-                // join location header to current url in case it is relative
-                let new_url = url.join(location).map_err(|e| {
-                    ErrorKind::InvalidUrl
-                        .msg(&format!("Bad redirection: {}", location))
-                        .src(e)
-                })?;
-
-                // perform the redirect differently depending on 3xx code.
-                let new_method = match resp.status() {
-                    // this is to follow how curl does it. POST, PUT etc change
-                    // to GET on a redirect.
-                    301 | 302 | 303 => match &method[..] {
-                        "GET" | "HEAD" => unit.method,
-                        _ => "GET".into(),
-                    },
-                    // never change the method for 307/308
-                    // only resend the request if it cannot have a body
-                    // NOTE: DELETE is intentionally excluded: https://stackoverflow.com/questions/299628
-                    307 | 308 if ["GET", "HEAD", "OPTIONS", "TRACE"].contains(&method.as_str()) => {
-                        unit.method
-                    }
-                    _ => return Ok(resp),
-                };
-                debug!("redirect {} {} -> {}", resp.status(), url, new_url);
-                body = Payload::Empty.into_read();
-                previous = resp.history;
-                // recreate the unit to get a new hostname and cookies for the new host.
-                unit = Unit::new(&unit.agent, &new_method, &new_url, &unit.headers, &body);
-                continue;
-            }
+        if !(300..399).contains(&resp.status()) || unit.agent.config.redirects == 0 {
+            break resp;
         }
-        return Ok(resp);
-    }
+        if resp.history.len() >= unit.agent.config.redirects as usize {
+            return Err(ErrorKind::TooManyRedirects.new());
+        }
+        // the location header
+        let location = match resp.header("location") {
+            Some(l) => l,
+            None => break resp,
+        };
+
+        let url = &unit.url;
+        let method = &unit.method;
+        // join location header to current url in case it is relative
+        let new_url = url.join(location).map_err(|e| {
+            ErrorKind::InvalidUrl
+                .msg(&format!("Bad redirection: {}", location))
+                .src(e)
+        })?;
+
+        // perform the redirect differently depending on 3xx code.
+        let new_method = match resp.status() {
+            // this is to follow how curl does it. POST, PUT etc change
+            // to GET on a redirect.
+            301 | 302 | 303 => match &method[..] {
+                "GET" | "HEAD" => unit.method,
+                _ => "GET".into(),
+            },
+            // never change the method for 307/308
+            // only resend the request if it cannot have a body
+            // NOTE: DELETE is intentionally excluded: https://stackoverflow.com/questions/299628
+            307 | 308 if ["GET", "HEAD", "OPTIONS", "TRACE"].contains(&method.as_str()) => {
+                unit.method
+            }
+            _ => break resp,
+        };
+        debug!("redirect {} {} -> {}", resp.status(), url, new_url);
+        history.push(unit.url.to_string());
+        body = Payload::Empty.into_read();
+        // recreate the unit to get a new hostname and cookies for the new host.
+        unit = Unit::new(&unit.agent, &new_method, &new_url, &unit.headers, &body);
+    };
+    resp.history = history;
+    Ok(resp)
 }
 
 /// Perform a connection. Does not follow redirects.
