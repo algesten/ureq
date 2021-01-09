@@ -142,6 +142,15 @@ impl error::Error for Error {
     }
 }
 
+impl error::Error for Transport {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match &self.source {
+            Some(s) => Some(s.as_ref()),
+            None => None,
+        }
+    }
+}
+
 impl Error {
     pub(crate) fn new(kind: ErrorKind, message: Option<String>) -> Self {
         Error::Transport(Transport {
