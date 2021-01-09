@@ -119,6 +119,7 @@
 //! * `charset` enables interpreting the charset part of the Content-Type header
 //!    (e.g.  `Content-Type: text/plain; charset=iso-8859-1`). Without this, the
 //!    library defaults to Rust's built in `utf-8`.
+//! * `socks-proxy` enables proxy config using the `socks://` and `socks5://` prefix.
 //!
 //! # Plain requests
 //!
@@ -180,6 +181,52 @@
 //! we first check if the user has set a `; charset=<whatwg charset>` and attempt
 //! to encode the request body using that.
 //!
+//!
+//! # Proxying
+//!
+//! ureq supports two kinds of proxies,  HTTP [`CONNECT`] and [`SOCKS5`], the former is
+//! always available while the latter must be enabled using the feature
+//! `ureq = { version = "*", features = ["socks-proxy"] }`.
+//!
+//! Proxies settings are configured on an [Agent] (using [AgentBuilder]). All request sent
+//! through the agent will be proxied.
+//!
+//! ## Example using HTTP CONNECT
+//!
+//! ```rust
+//! fn proxy_example_1() -> std::result::Result<(), ureq::Error> {
+//!     // Configure an http connect proxy. Notice we could have used
+//!     // the http:// prefix here (it's optional).
+//!     let proxy = ureq::Proxy::new("user:password@cool.proxy:9090")?;
+//!     let agent = ureq::AgentBuilder::new()
+//!         .proxy(proxy)
+//!         .build();
+//!
+//!     // This is proxied.
+//!     let resp = agent.get("http://cool.server").call()?;
+//!     Ok(())
+//! }
+//! # fn main() {}
+//! ```
+//!
+//! ## Example using SOCKS5
+//!
+//! ```rust
+//! # #[cfg(feature = "socks-proxy")]
+//! fn proxy_example_2() -> std::result::Result<(), ureq::Error> {
+//!     // Configure a SOCKS proxy.
+//!     let proxy = ureq::Proxy::new("socks5://user:password@cool.proxy:9090")?;
+//!     let agent = ureq::AgentBuilder::new()
+//!         .proxy(proxy)
+//!         .build();
+//!
+//!     // This is proxied.
+//!     let resp = agent.get("http://cool.server").call()?;
+//!     Ok(())
+//! }
+//! # fn main() {}
+//! ```
+//!
 //! # Blocking I/O for simplicity
 //!
 //! Ureq uses blocking I/O rather than Rust's newer [asynchronous (async) I/O][async]. Async I/O
@@ -205,6 +252,8 @@
 //! [async-std]: https://github.com/async-rs/async-std#async-std
 //! [tokio]: https://github.com/tokio-rs/tokio#tokio
 //! [what-color]: https://journal.stuffwithstuff.com/2015/02/01/what-color-is-your-function/
+//! [`CONNECT`]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods/CONNECT
+//! [`SOCKS5`]: https://en.wikipedia.org/wiki/SOCKS#SOCKS5
 //!
 //! ------------------------------------------------------------------------------
 //!
