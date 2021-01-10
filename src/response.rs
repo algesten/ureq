@@ -583,7 +583,7 @@ impl<R: Read> Read for LimitedRead<R> {
             // received, the recipient MUST consider the message to be
             // incomplete and close the connection.
             Ok(0) => Err(io::Error::new(
-                io::ErrorKind::InvalidData,
+                io::ErrorKind::UnexpectedEof,
                 "response body closed before all bytes were read",
             )),
             Ok(amount) => {
@@ -601,7 +601,7 @@ fn short_read() {
     let mut lr = LimitedRead::new(Cursor::new(vec![b'a'; 3]), 10);
     let mut buf = vec![0; 1000];
     let result = lr.read_to_end(&mut buf);
-    assert!(result.is_err());
+    assert!(result.err().unwrap().kind() == io::ErrorKind::UnexpectedEof);
 }
 
 impl<R: Read> From<LimitedRead<R>> for Stream
