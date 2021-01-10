@@ -1,3 +1,8 @@
+# 2.0.1
+ * Fix handling of 308 redirects (port from 1.5.4 branch).
+ * Return UnexpectedEof instead of InvalidData on short responses. (#293)
+ * Implement std::error::Error for error::Transport. (#299)
+
 # 2.0.0
  * Methods that formerly returned Response now return Result<Response, Error>.
    You'll need to change all instances of `.call()` to `.call()?` or handle
