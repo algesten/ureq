@@ -85,7 +85,7 @@ pub fn add_header(headers: &mut Vec<Header>, header: Header) {
 // tchar = "!" / "#" / "$" / "%" / "&" / "'" / "*" / "+" / "-" / "." /
 // "^" / "_" / "`" / "|" / "~" / DIGIT / ALPHA
 fn valid_name(name: &str) -> bool {
-    name.len() > 0 && name.bytes().all(is_tchar)
+    !name.is_empty() && name.bytes().all(is_tchar)
 }
 
 #[inline]
