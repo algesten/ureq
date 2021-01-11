@@ -21,6 +21,15 @@ enum Urlish {
     Str(String),
 }
 
+impl fmt::Display for Urlish {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Urlish::Url(u) => write!(f, "{}", u),
+            Urlish::Str(s) => write!(f, "{}", s),
+        }
+    }
+}
+
 /// Request instances are builders that creates a request.
 ///
 /// ```
@@ -42,12 +51,16 @@ pub struct Request {
     query_params: Vec<(String, String)>,
 }
 
-impl fmt::Display for Urlish {
+/// Format: `$method $url`.
+/// ```
+/// let request = ureq::get("http://example.com/form")
+///     .query("foo", "bar baz");  // not included in Display
+///
+/// assert_eq!(format!("{}", request), "GET http://example.com/form");
+/// ```
+impl fmt::Display for Request {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Urlish::Url(u) => write!(f, "{}", u),
-            Urlish::Str(s) => write!(f, "{}", s),
-        }
+        write!(f, "{} {}", self.method, self.url)
     }
 }
 
