@@ -1,3 +1,6 @@
+# Unreleased
+ * Add `Display` impl for `Request` of form _`"$method $url"`_.
+
 # 2.0.1
  * Fix handling of 308 redirects (port from 1.5.4 branch).
  * Return UnexpectedEof instead of InvalidData on short responses. (#293)
