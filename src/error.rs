@@ -313,11 +313,21 @@ fn status_code_error_redirect() {
 
     test::set_handler("/redirect_a", |unit| {
         assert_eq!(unit.method, "GET");
-        test::make_response(302, "Go here", vec!["Location: test://example.edu/redirect_b"], vec![])
+        test::make_response(
+            302,
+            "Go here",
+            vec!["Location: test://example.edu/redirect_b"],
+            vec![],
+        )
     });
     test::set_handler("/redirect_b", |unit| {
         assert_eq!(unit.method, "GET");
-        test::make_response(302, "Go here", vec!["Location: http://example.com/status/500"], vec![])
+        test::make_response(
+            302,
+            "Go here",
+            vec!["Location: http://example.com/status/500"],
+            vec![],
+        )
     });
 
     let err = get("test://example.org/redirect_a").call().unwrap_err();

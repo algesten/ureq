@@ -80,7 +80,8 @@ impl Unit {
 
             let username = url.username();
             let password = url.password().unwrap_or("");
-            if (!username.is_empty() || !password.is_empty()) && get_header(&headers, "authorization").is_none()
+            if (!username.is_empty() || !password.is_empty())
+                && get_header(&headers, "authorization").is_none()
             {
                 let encoded = base64::encode(&format!("{}:{}", username, password));
                 extra.push(Header::new("Authorization", &format!("Basic {}", encoded)));
