@@ -321,7 +321,7 @@ impl Response {
     }
 
     /// Read the body of this response into a serde_json::Value, or any other type that
-    // implements the [serde::Deserialize] trait.
+    /// implements the [serde::Deserialize] trait.
     ///
     /// You must use either a type annotation as shown below (`message: Message`), or the
     /// [turbofish operator] (`::<Type>`) so Rust knows what type you are trying to read.
