@@ -3,6 +3,14 @@ on: [push, pull_request]
 name: CI
 
 jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Run Rustfmt
+      run: cargo fmt -- --check
+
   doc:
     name: Docs
     runs-on: ubuntu-latest
