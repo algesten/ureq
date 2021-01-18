@@ -148,8 +148,7 @@ impl TestServer {
             }
         });
         // before returning from new(), ensure the server is ready to accept connections
-        loop {
-            if let Err(e) = TcpStream::connect(format!("127.0.0.1:{}", port)) {
+        while let Err(e) = TcpStream::connect(format!("127.0.0.1:{}", port)) {
                 match e.kind() {
                     io::ErrorKind::ConnectionRefused => {
                         std::thread::sleep(Duration::from_millis(100));
@@ -157,9 +156,6 @@ impl TestServer {
                     }
                     _ => eprintln!("testserver: pre-connect with error {}", e),
                 }
-            } else {
-                break;
-            }
         }
         TestServer {
             port,
@@ -172,9 +168,8 @@ impl Drop for TestServer {
     fn drop(&mut self) {
         self.done.store(true, Ordering::SeqCst);
         // Connect once to unblock the listen loop.
-        match TcpStream::connect(format!("localhost:{}", self.port)) {
-            Err(e) => eprintln!("error dropping testserver: {}", e),
-            _ => {}
+        if let Err(e) = TcpStream::connect(format!("localhost:{}", self.port)) {
+            eprintln!("error dropping testserver: {}", e);
         }
     }
 }

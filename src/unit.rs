@@ -36,7 +36,7 @@ impl Unit {
         agent: &Agent,
         method: &str,
         url: &Url,
-        headers: &Vec<Header>,
+        headers: &[Header],
         body: &SizedReader,
     ) -> Self {
         //
@@ -142,10 +142,8 @@ impl Unit {
     pub(crate) fn is_retryable(&self, body: &SizedReader) -> bool {
         // Per https://tools.ietf.org/html/rfc7231#section-8.1.3
         // these methods are idempotent.
-        let idempotent = match self.method.as_str() {
-            "DELETE" | "GET" | "HEAD" | "OPTIONS" | "PUT" | "TRACE" => true,
-            _ => false,
-        };
+        let idempotent = matches!(self.method.as_str(),
+            "DELETE" | "GET" | "HEAD" | "OPTIONS" | "PUT" | "TRACE");
         // Unsized bodies aren't retryable because we can't rewind the reader.
         // Sized bodies are retryable only if they are zero-length because of
         // coincidences of the current implementation - the function responsible
@@ -229,7 +227,7 @@ fn connect_inner(
     let host = unit
         .url
         .host_str()
-        .ok_or(ErrorKind::InvalidUrl.msg("no host in URL"))?;
+        .ok_or_else(|| ErrorKind::InvalidUrl.msg("no host in URL"))?;
     let url = &unit.url;
     let method = &unit.method;
     // open socket

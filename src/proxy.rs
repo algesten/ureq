@@ -46,7 +46,7 @@ impl Proxy {
         match host {
             Some(host) => {
                 let mut parts = host.as_ref().split(':').collect::<Vec<&str>>().into_iter();
-                let host = parts.next().ok_or(ErrorKind::InvalidProxyUrl.new())?;
+                let host = parts.next().ok_or_else(|| ErrorKind::InvalidProxyUrl.new())?;
                 let port = parts.next();
                 Ok((
                     String::from(host),
@@ -155,11 +155,11 @@ Proxy-Connection: Keep-Alive\r\n\
         let top_line = response_string
             .lines()
             .next()
-            .ok_or(ErrorKind::ProxyConnect.new())?;
+            .ok_or_else(|| ErrorKind::ProxyConnect.new())?;
         let status_code = top_line
             .split_whitespace()
             .nth(1)
-            .ok_or(ErrorKind::ProxyConnect.new())?;
+            .ok_or_else(|| ErrorKind::ProxyConnect.new())?;
 
         match status_code {
             "200" => Ok(()),

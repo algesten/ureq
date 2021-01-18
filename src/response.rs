@@ -228,11 +228,7 @@ impl Response {
             .unwrap_or(false);
 
         let is_head = (&self.unit).as_ref().map(|u| u.is_head()).unwrap_or(false);
-        let has_no_body = is_head
-            || match self.status {
-                204 | 304 => true,
-                _ => false,
-            };
+        let has_no_body = is_head || self.status == 204 || self.status == 304;
 
         let is_chunked = self
             .header("transfer-encoding")

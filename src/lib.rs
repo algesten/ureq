@@ -327,8 +327,7 @@ pub fn is_test(is: bool) -> bool {
     if is {
         IS_TEST.store(true, Ordering::SeqCst);
     }
-    let x = IS_TEST.load(Ordering::SeqCst);
-    x
+    IS_TEST.load(Ordering::SeqCst)
 }
 
 /// Agents are used to hold configuration and keep state between requests.
