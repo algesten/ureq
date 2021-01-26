@@ -4,7 +4,6 @@ use std::{fmt, time};
 use url::{form_urlencoded, Url};
 
 use crate::body::Payload;
-use crate::error::ErrorKind;
 use crate::header::{self, Header};
 use crate::unit::{self, Unit};
 use crate::Response;
@@ -15,10 +14,29 @@ use super::SerdeValue;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Debug, Clone)]
-enum Urlish {
-    Url(Url),
-    Str(String),
+#[derive(Clone)]
+struct ParsedUrl(std::result::Result<Url, url::ParseError>);
+
+impl fmt::Display for ParsedUrl {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Ok(url) = &self.0 {
+            write!(f, "{}", url.as_str())
+        } else {
+            write!(f, "{:?}", self.0)
+        }
+    }
+}
+
+impl From<String> for ParsedUrl {
+    fn from(s: String) -> Self {
+        ParsedUrl(s.parse())
+    }
+}
+
+impl From<Url> for ParsedUrl {
+    fn from(url: Url) -> Self {
+        ParsedUrl(Ok(url))
+    }
 }
 
 /// Request instances are builders that creates a request.
@@ -36,53 +54,38 @@ enum Urlish {
 pub struct Request {
     agent: Agent,
     method: String,
-    url: Urlish,
+    parsed_url: ParsedUrl,
     error_on_non_2xx: bool,
     headers: Vec<Header>,
-    query_params: Vec<(String, String)>,
     timeout: Option<time::Duration>,
-}
-
-impl fmt::Display for Urlish {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Urlish::Url(u) => write!(f, "{}", u),
-            Urlish::Str(s) => write!(f, "{}", s),
-        }
-    }
 }
 
 impl fmt::Debug for Request {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "Request({} {} {:?}, {:?})",
-            self.method, self.url, self.query_params, self.headers
+            "Request({} {}, {:?})",
+            self.method, self.parsed_url, self.headers
         )
     }
 }
 
 impl Request {
     pub(crate) fn new(agent: Agent, method: String, url: String) -> Request {
-        Request {
-            agent,
-            method,
-            url: Urlish::Str(url),
-            headers: vec![],
-            error_on_non_2xx: true,
-            query_params: vec![],
-            timeout: None,
-        }
+        Self::_new(agent, method, url.into())
     }
 
     pub(crate) fn with_url(agent: Agent, method: String, url: Url) -> Request {
+        Self::_new(agent, method, url.into())
+    }
+
+    fn _new(agent: Agent, method: String, parsed_url: ParsedUrl) -> Request {
         Request {
             agent,
             method,
-            url: Urlish::Url(url),
+            parsed_url,
             headers: vec![],
             error_on_non_2xx: true,
-            query_params: vec![],
             timeout: None,
         }
     }
@@ -115,17 +118,8 @@ impl Request {
         for h in &self.headers {
             h.validate()?;
         }
-        let mut url: Url = match self.url {
-            Urlish::Url(u) => u,
-            Urlish::Str(s) => s.parse().map_err(|e| {
-                ErrorKind::InvalidUrl
-                    .msg(&format!("failed to parse URL: {:?}", e))
-                    .src(e)
-            })?,
-        };
-        for (name, value) in self.query_params {
-            url.query_pairs_mut().append_pair(&name, &value);
-        }
+        let url = self.parsed_url.0?;
+
         let deadline = match self.timeout.or(self.agent.config.timeout) {
             None => None,
             Some(timeout) => {
@@ -349,7 +343,7 @@ impl Request {
     /// ```
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
-    /// let resp = ureq::get("http://httpbin.org/response-headers")
+    /// let resp = ureq::get("http://httpbin.org/get")
     ///     .query("format", "json")
     ///     .query("dest", "/login")
     ///     .call()?;
@@ -357,9 +351,49 @@ impl Request {
     /// # }
     /// ```
     pub fn query(mut self, param: &str, value: &str) -> Self {
-        self.query_params
-            .push((param.to_string(), value.to_string()));
+        if let Ok(url) = &mut self.parsed_url.0 {
+            url.query_pairs_mut().append_pair(param, value);
+        }
         self
+    }
+
+    /// Returns the value of the request method. Something like `GET`, `POST`, `PUT` etc.
+    ///
+    /// ```
+    /// let req = ureq::put("http://httpbin.org/put");
+    ///
+    /// assert_eq!(req.method(), "PUT");
+    /// ```
+    pub fn method(&self) -> &str {
+        &self.method
+    }
+
+    /// Returns all query parameters as a vector of key-value pairs.
+    ///
+    /// ```
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// let req = ureq::get("http://httpbin.org/get")
+    ///     .query("foo", "42")
+    ///     .query("foo", "43");
+    ///
+    /// assert_eq!(req.query_params(), vec![
+    ///     ("foo".to_string(), "42".to_string()),
+    ///     ("foo".to_string(), "43".to_string())
+    /// ]);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn query_params(&self) -> Vec<(String, String)> {
+        let mut ret = vec![];
+
+        if let Ok(url) = &self.parsed_url.0 {
+            for (k, v) in url.query_pairs() {
+                ret.push((k.into(), v.into()));
+            }
+        }
+
+        ret
     }
 }
 

@@ -1,4 +1,4 @@
-use url::Url;
+use url::{ParseError, Url};
 
 use std::error;
 use std::fmt::{self, Display};
@@ -312,6 +312,14 @@ impl From<io::Error> for Error {
 impl From<Transport> for Error {
     fn from(err: Transport) -> Error {
         Error::Transport(err)
+    }
+}
+
+impl From<ParseError> for Error {
+    fn from(err: ParseError) -> Self {
+        ErrorKind::InvalidUrl
+            .msg(&format!("failed to parse URL: {:?}", err))
+            .src(err)
     }
 }
 
