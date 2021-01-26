@@ -111,19 +111,19 @@ impl Request {
         self.do_call(Payload::Empty)
     }
 
-    fn do_call(&self, payload: Payload) -> Result<Response> {
+    fn do_call(self, payload: Payload) -> Result<Response> {
         for h in &self.headers {
             h.validate()?;
         }
-        let mut url: Url = match self.url.clone() {
+        let mut url: Url = match self.url {
             Urlish::Url(u) => u,
-            Urlish::Str(s) => s.parse().map_err(|e: url::ParseError| {
+            Urlish::Str(s) => s.parse().map_err(|e| {
                 ErrorKind::InvalidUrl
-                    .msg(&format!("failed to parse URL '{}'", self.url))
+                    .msg(&format!("failed to parse URL: {:?}", e))
                     .src(e)
             })?,
         };
-        for (name, value) in self.query_params.clone() {
+        for (name, value) in self.query_params {
             url.query_pairs_mut().append_pair(&name, &value);
         }
         let deadline = match self.timeout.or(self.agent.config.timeout) {
