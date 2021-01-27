@@ -36,6 +36,7 @@ pub(crate) struct AgentConfig {
     pub timeout_write: Option<Duration>,
     pub timeout: Option<Duration>,
     pub redirects: u32,
+    pub user_agent: String,
     #[cfg(feature = "tls")]
     pub tls_config: Option<TLSClientConfig>,
 }
@@ -208,6 +209,7 @@ impl AgentBuilder {
                 timeout_write: None,
                 timeout: None,
                 redirects: 5,
+                user_agent: format!("ureq/{}", env!("CARGO_PKG_VERSION")),
                 #[cfg(feature = "tls")]
                 tls_config: None,
             },
@@ -431,6 +433,39 @@ impl AgentBuilder {
     /// ```
     pub fn redirects(mut self, n: u32) -> Self {
         self.config.redirects = n;
+        self
+    }
+
+    /// The user-agent header to associate with all requests from this agent by default.
+    ///
+    /// Defaults to `ureq/[VERSION]`. You can override the user-agent on an individual request by
+    /// setting the `User-Agent` header when constructing the request.
+    ///
+    /// ```
+    /// # #[cfg(feature = "json")]
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// let agent = ureq::builder()
+    ///     .user_agent("ferris/1.0")
+    ///     .build();
+    ///
+    /// // Uses agent's header
+    /// let result: serde_json::Value =
+    ///     agent.get("http://httpbin.org/headers").call()?.into_json()?;
+    /// assert_eq!(&result["headers"]["User-Agent"], "ferris/1.0");
+    ///
+    /// // Overrides user-agent set on the agent
+    /// let result: serde_json::Value = agent.get("http://httpbin.org/headers")
+    ///     .set("User-Agent", "super-ferris/2.0")
+    ///     .call()?.into_json()?;
+    /// assert_eq!(&result["headers"]["User-Agent"], "super-ferris/2.0");
+    /// # Ok(())
+    /// # }
+    /// # #[cfg(not(feature = "json"))]
+    /// # fn main() {}
+    /// ```
+    pub fn user_agent(mut self, user_agent: &str) -> Self {
+        self.config.user_agent = user_agent.into();
         self
     }
 

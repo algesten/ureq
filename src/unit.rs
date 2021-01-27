@@ -342,8 +342,6 @@ fn connect_socket(unit: &Unit, hostname: &str, use_pooled: bool) -> Result<(Stre
 /// Send request line + headers (all up until the body).
 #[allow(clippy::write_with_newline)]
 fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> io::Result<()> {
-    //
-
     // build into a buffer and send in one go.
     let mut prelude: Vec<u8> = vec![];
 
@@ -379,11 +377,7 @@ fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> io::Result<()>
         }
     }
     if !header::has_header(&unit.headers, "user-agent") {
-        write!(
-            prelude,
-            "User-Agent: ureq/{}\r\n",
-            env!("CARGO_PKG_VERSION")
-        )?;
+        write!(prelude, "User-Agent: {}\r\n", &unit.agent.config.user_agent)?;
     }
     if !header::has_header(&unit.headers, "accept") {
         write!(prelude, "Accept: */*\r\n")?;
