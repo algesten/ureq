@@ -1,7 +1,4 @@
-use std::{
-    io::{self, Write},
-    net::TcpStream,
-};
+use std::{io::{self, Write}, net::TcpStream, thread, time::Duration};
 use testserver::{self, TestServer};
 
 use crate::{error::Error, test};
@@ -156,6 +153,28 @@ fn redirect_308() {
     let resp = get("test://host/redirect_get3").call().unwrap();
     assert_eq!(resp.status(), 200);
     assert_eq!(resp.get_url(), "test://host/valid_response");
+}
+
+#[test]
+fn redirects_hit_timeout() {
+    // A chain of 2 redirects and an OK, each of which takes 50ms; we set a
+    // timeout of 100ms and should error.
+    test::set_handler("/redirect_sleep1", |_| {
+        thread::sleep(Duration::from_millis(50));
+        test::make_response(302, "Go here", vec!["Location: /redirect_sleep2"], vec![])
+    });
+    test::set_handler("/redirect_sleep2", |_| {
+        thread::sleep(Duration::from_millis(50));
+        test::make_response(302, "Go here", vec!["Location: /ok"], vec![])
+    });
+    test::set_handler("/ok", |_| {
+        thread::sleep(Duration::from_millis(50));
+        test::make_response(200, "Go here", vec![], vec![])
+    });
+    let req = crate::builder().timeout(Duration::from_millis(100)).build();
+    let result = req.get("test://host/redirect_sleep1").call();
+    assert!(matches!(result, Err(Error::Transport(_))),
+        "expected Transport error, got {:?}", result);
 }
 
 #[test]

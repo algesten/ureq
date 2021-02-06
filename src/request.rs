@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, time};
 use std::io::Read;
 
 use url::{form_urlencoded, Url};
@@ -116,8 +116,16 @@ impl Request {
         for (name, value) in self.query_params.clone() {
             url.query_pairs_mut().append_pair(&name, &value);
         }
+        let deadline = match self.agent.config.timeout {
+            None => None,
+            Some(timeout) => {
+                let now = time::Instant::now();
+                Some(now.checked_add(timeout).unwrap())
+            }
+        };
+
         let reader = payload.into_read();
-        let unit = Unit::new(&self.agent, &self.method, &url, &self.headers, &reader);
+        let unit = Unit::new(&self.agent, &self.method, &url, &self.headers, &reader, deadline);
         let response = unit::connect(unit, true, reader).map_err(|e| e.url(url.clone()))?;
 
         if response.status() >= 400 {

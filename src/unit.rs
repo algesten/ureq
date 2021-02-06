@@ -38,6 +38,7 @@ impl Unit {
         url: &Url,
         headers: &Vec<Header>,
         body: &SizedReader,
+        deadline: Option<time::Instant>
     ) -> Self {
         //
 
@@ -98,14 +99,6 @@ impl Unit {
             .chain(extra_headers.iter())
             .cloned()
             .collect();
-
-        let deadline = match agent.config.timeout {
-            None => None,
-            Some(timeout) => {
-                let now = time::Instant::now();
-                Some(now.checked_add(timeout).unwrap())
-            }
-        };
 
         Unit {
             agent: agent.clone(),
@@ -213,7 +206,7 @@ pub(crate) fn connect(
         history.push(unit.url.to_string());
         body = Payload::Empty.into_read();
         // recreate the unit to get a new hostname and cookies for the new host.
-        unit = Unit::new(&unit.agent, &new_method, &new_url, &unit.headers, &body);
+        unit = Unit::new(&unit.agent, &new_method, &new_url, &unit.headers, &body, unit.deadline);
     };
     resp.history = history;
     Ok(resp)
