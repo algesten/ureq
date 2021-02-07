@@ -1,4 +1,9 @@
-use std::{io::{self, Write}, net::TcpStream, thread, time::Duration};
+use std::{
+    io::{self, Write},
+    net::TcpStream,
+    thread,
+    time::Duration,
+};
 use testserver::{self, TestServer};
 
 use crate::{error::Error, test};
@@ -173,8 +178,11 @@ fn redirects_hit_timeout() {
     });
     let req = crate::builder().timeout(Duration::from_millis(100)).build();
     let result = req.get("test://host/redirect_sleep1").call();
-    assert!(matches!(result, Err(Error::Transport(_))),
-        "expected Transport error, got {:?}", result);
+    assert!(
+        matches!(result, Err(Error::Transport(_))),
+        "expected Transport error, got {:?}",
+        result
+    );
 }
 
 #[test]

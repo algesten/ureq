@@ -38,7 +38,7 @@ impl Unit {
         url: &Url,
         headers: &Vec<Header>,
         body: &SizedReader,
-        deadline: Option<time::Instant>
+        deadline: Option<time::Instant>,
     ) -> Self {
         //
 
@@ -206,7 +206,14 @@ pub(crate) fn connect(
         history.push(unit.url.to_string());
         body = Payload::Empty.into_read();
         // recreate the unit to get a new hostname and cookies for the new host.
-        unit = Unit::new(&unit.agent, &new_method, &new_url, &unit.headers, &body, unit.deadline);
+        unit = Unit::new(
+            &unit.agent,
+            &new_method,
+            &new_url,
+            &unit.headers,
+            &body,
+            unit.deadline,
+        );
     };
     resp.history = history;
     Ok(resp)

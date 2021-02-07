@@ -1,5 +1,5 @@
-use std::{fmt, time};
 use std::io::Read;
+use std::{fmt, time};
 
 use url::{form_urlencoded, Url};
 
@@ -125,7 +125,14 @@ impl Request {
         };
 
         let reader = payload.into_read();
-        let unit = Unit::new(&self.agent, &self.method, &url, &self.headers, &reader, deadline);
+        let unit = Unit::new(
+            &self.agent,
+            &self.method,
+            &url,
+            &self.headers,
+            &reader,
+            deadline,
+        );
         let response = unit::connect(unit, true, reader).map_err(|e| e.url(url.clone()))?;
 
         if response.status() >= 400 {
