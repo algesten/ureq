@@ -1,3 +1,7 @@
+# 2.0.2
+ * Bugfix: Apply deadline across redirects. (#313)
+ * OrAnyStatus::or_any_status ergonomic helper
+
 # 2.0.1
  * Fix handling of 308 redirects (port from 1.5.4 branch).
  * Return UnexpectedEof instead of InvalidData on short responses. (#293)
