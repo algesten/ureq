@@ -537,14 +537,16 @@ fn read_next_line(reader: &mut impl BufRead) -> io::Result<String> {
         ));
     }
 
-    if !s.ends_with("\r\n") {
+    if !s.ends_with("\n") {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            format!("Header field didn't end with \\r: {}", s),
+            format!("Header field didn't end with \\n: {}", s),
         ));
     }
     s.pop();
-    s.pop();
+    if s.ends_with("\r") {
+        s.pop();
+    }
     Ok(s)
 }
 
