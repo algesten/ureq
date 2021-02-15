@@ -647,6 +647,16 @@ mod tests {
     }
 
     #[test]
+    fn content_type_without_cr() {
+        let s = "HTTP/1.1 200 OK\r\n\
+                 Content-Type: application/json\n\
+                 \r\n\
+                 OK";
+        let resp = s.parse::<Response>().unwrap();
+        assert_eq!("application/json", resp.content_type());
+    }
+
+    #[test]
     fn content_type_with_charset() {
         let s = "HTTP/1.1 200 OK\r\n\
                  Content-Type: application/json; charset=iso-8859-4\r\n\
