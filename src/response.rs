@@ -28,6 +28,12 @@ pub const DEFAULT_CHARACTER_SET: &str = "utf-8";
 /// [`into_reader()`](#method.into_reader), [`into_json()`](#method.into_json), or
 /// [`into_string()`](#method.into_string) consumes the response.
 ///
+/// When dropping a `Response` instance, one one of two things can happen. If
+/// the response has unread bytes, the underlying socket cannot be reused,
+/// and the connection is closed. If there are no unread bytes, the connection
+/// is returned to the [`Agent`](crate::Agent) connection pool used (notice there is always
+/// an agent present, also when not explicitly configured by the user).
+///
 /// ```
 /// # fn main() -> Result<(), ureq::Error> {
 /// # ureq::is_test(true);
