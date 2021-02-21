@@ -1,8 +1,8 @@
-use std::io;
-use std::time::Duration;
 use std::env;
 use std::error;
 use std::fmt;
+use std::io;
+use std::time::Duration;
 
 use ureq;
 
@@ -38,26 +38,37 @@ impl fmt::Display for Error {
 
 impl From<StringError> for Error {
     fn from(source: StringError) -> Self {
-        Error{source: source.into()}
+        Error {
+            source: source.into(),
+        }
     }
 }
 
 impl From<ureq::Error> for Error {
     fn from(source: ureq::Error) -> Self {
-        Error{source: source.into()}
+        Error {
+            source: source.into(),
+        }
     }
 }
 
 impl From<io::Error> for Error {
     fn from(source: io::Error) -> Self {
-        Error{source: source.into()}
+        Error {
+            source: source.into(),
+        }
     }
 }
 
 fn get(agent: &ureq::Agent, url: &str, print_headers: bool) -> Result<(), Error> {
     let response = agent.get(url).call()?;
     if print_headers {
-        println!("{} {} {}", response.http_version(), response.status(), response.status_text());
+        println!(
+            "{} {} {}",
+            response.http_version(),
+            response.status(),
+            response.status_text()
+        );
         for h in response.headers_names() {
             println!("{}: {}", h, response.header(&h).unwrap_or_default());
         }
@@ -70,7 +81,7 @@ fn get(agent: &ureq::Agent, url: &str, print_headers: bool) -> Result<(), Error>
 
 fn main() {
     match main2() {
-        Ok(()) => {},
+        Ok(()) => {}
         Err(e) => {
             eprintln!("{}", e);
             std::process::exit(1);

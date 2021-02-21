@@ -411,8 +411,10 @@ fn save_cookies(unit: &Unit, resp: &Response) {
         return;
     }
     let cookies = headers.into_iter().flat_map(|header_value| {
-        debug!("received 'set-cookie: {}' from {} {}", header_value,
-            unit.method, unit.url);
+        debug!(
+            "received 'set-cookie: {}' from {} {}",
+            header_value, unit.method, unit.url
+        );
         match Cookie::parse(header_value.to_string()) {
             Err(_) => None,
             Ok(c) => Some(c),
