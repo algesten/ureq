@@ -475,7 +475,12 @@ fn parse_status_line(line: &str) -> Result<(ResponseStatusIndex, u16), Error> {
     }
     // https://tools.ietf.org/html/rfc7230#section-3.1.2
     //      status-line = HTTP-version SP status-code SP reason-phrase CRLF
-    let split: Vec<&str> = line.splitn(3, ' ').collect();
+    let mut split: Vec<&str> = line.splitn(3, ' ').collect();
+    if split.len() == 2 {
+        // As a special case, we are lenient parsing lines without reason phrase.
+        // This is technically against spec. "HTTP/1.1 200\r\n"
+        split.push("");
+    }
     if split.len() != 3 {
         return Err(BadStatus.msg("Wrong number of tokens in status line"));
     }
@@ -751,6 +756,13 @@ mod tests {
         let s = "HTTP/1.1 BORKED\r\n".to_string();
         let err = s.parse::<Response>().unwrap_err();
         assert_eq!(err.kind(), BadStatus);
+    }
+
+    #[test]
+    fn parse_header_without_reason() {
+        let s = "HTTP/1.1 302\r\n\r\n".to_string();
+        let resp = s.parse::<Response>().unwrap();
+        assert_eq!(resp.status_text(), "");
     }
 
     #[test]
