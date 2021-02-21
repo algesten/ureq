@@ -330,6 +330,7 @@ fn configure_certs(config: &mut rustls::ClientConfig) {
 #[cfg(feature = "tls")]
 pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error> {
     use once_cell::sync::Lazy;
+    use rustls::Session;
     use std::sync::Arc;
 
     static TLS_CONF: Lazy<Arc<rustls::ClientConfig>> = Lazy::new(|| {
@@ -349,10 +350,14 @@ pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error
         .as_ref()
         .map(|c| &c.0)
         .unwrap_or(&*TLS_CONF);
-    let sess = rustls::ClientSession::new(&tls_conf, sni);
+    let mut sock = connect_host(unit, hostname, port)?;
+    let mut sess = rustls::ClientSession::new(&tls_conf, sni);
 
-    let sock = connect_host(unit, hostname, port)?;
-
+    sess.complete_io(&mut sock).map_err(|err| {
+        ErrorKind::ConnectionFailed
+            .msg("error during TLS handshake. Sometimes this means the host doesn't support any of the same ciphersuites as rustls, or doesn't support TLS 1.2 and above")
+            .src(err)
+    })?;
     let stream = rustls::StreamOwned::new(sess, sock);
 
     Ok(Stream::from_tls_stream(stream))
