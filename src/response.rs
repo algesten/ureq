@@ -471,7 +471,7 @@ fn parse_status_line(line: &str) -> Result<(ResponseStatusIndex, u16), Error> {
     //      status-line = HTTP-version SP status-code SP reason-phrase CRLF
     let mut split: Vec<&str> = line.splitn(3, ' ').collect();
     if split.len() == 2 {
-        // As a special case, we are lenient parsing lines without reason phrase.
+        // As a special case, we are lenient parsing lines without a space after the code.
         // This is technically against spec. "HTTP/1.1 200\r\n"
         split.push("");
     }
