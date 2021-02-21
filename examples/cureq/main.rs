@@ -28,6 +28,14 @@ struct Error {
     source: Box<dyn error::Error>,
 }
 
+impl error::Error for Error {}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.source)
+    }
+}
+
 impl From<StringError> for Error {
     fn from(source: StringError) -> Self {
         Error{source: source.into()}
@@ -60,7 +68,17 @@ fn get(agent: &ureq::Agent, url: &str, print_headers: bool) -> Result<(), Error>
     Ok(())
 }
 
-fn main() -> Result<(), Error> {
+fn main() {
+    match main2() {
+        Ok(()) => {},
+        Err(e) => {
+            eprintln!("{}", e);
+            std::process::exit(1);
+        }
+    }
+}
+
+fn main2() -> Result<(), Error> {
     let mut args: Vec<String> = env::args().collect();
     if args.len() == 1 {
         println!(
