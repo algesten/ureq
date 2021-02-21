@@ -1,5 +1,4 @@
 use log::debug;
-use rustls::Session;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::SocketAddr;
 use std::net::TcpStream;
@@ -331,6 +330,7 @@ fn configure_certs(config: &mut rustls::ClientConfig) {
 #[cfg(feature = "tls")]
 pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error> {
     use once_cell::sync::Lazy;
+    use rustls::Session;
     use std::sync::Arc;
 
     static TLS_CONF: Lazy<Arc<rustls::ClientConfig>> = Lazy::new(|| {
