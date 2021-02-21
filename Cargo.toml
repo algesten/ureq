@@ -46,3 +46,7 @@ env_logger = "0.8.1"
 
 [[example]]
 name = "smoke-test"
+
+[[example]]
+name = "cureq"
+required-features = ["charset", "cookies", "socks-proxy"]
