@@ -317,7 +317,7 @@ pub(crate) fn connect_http(unit: &Unit, hostname: &str) -> Result<Stream, Error>
 #[cfg(all(feature = "tls", feature = "native-certs"))]
 fn configure_certs(config: &mut rustls::ClientConfig) {
     config.root_store =
-        rustls_native_certs::load_native_certs().expect("Could not load patform certs");
+        rustls_native_certs::load_native_certs().expect("Could not load platform certs");
 }
 
 #[cfg(all(feature = "tls", not(feature = "native-certs")))]
