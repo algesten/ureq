@@ -125,6 +125,27 @@ fn overall_timeout_during_headers() {
 }
 
 #[test]
+fn overall_timeout_override_during_headers() {
+    // Start a test server on an available port, that dribbles out a response at 1 write per 10ms.
+    let server = TestServer::new(dribble_headers_respond);
+    let url = format!("http://localhost:{}/", server.port);
+    let agent = builder().timeout(Duration::from_secs(90000)).build();
+    let result = agent.get(&url).timeout(Duration::from_millis(500)).call();
+    match result {
+        Ok(_) => Err("successful response".to_string()),
+        Err(e) if e.kind() == ErrorKind::Io => {
+            let ioe: Option<&io::Error> = e.source().and_then(|s| s.downcast_ref());
+            match ioe {
+                Some(e) if e.kind() == io::ErrorKind::TimedOut => Ok(()),
+                _ => Err(format!("wrong error type {:?}", e)),
+            }
+        }
+        Err(e) => Err(format!("Unexpected error type: {:?}", e)),
+    }
+    .expect("expected timeout but got something else");
+}
+
+#[test]
 #[cfg(feature = "json")]
 fn overall_timeout_reading_json() {
     // Start a test server on an available port, that dribbles out a response at 1 write per 10ms.
