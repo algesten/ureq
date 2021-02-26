@@ -40,6 +40,7 @@ pub struct Request {
     error_on_non_2xx: bool,
     headers: Vec<Header>,
     query_params: Vec<(String, String)>,
+    timeout: Option<time::Duration>,
 }
 
 impl fmt::Display for Urlish {
@@ -70,6 +71,7 @@ impl Request {
             headers: vec![],
             error_on_non_2xx: true,
             query_params: vec![],
+            timeout: None,
         }
     }
 
@@ -81,7 +83,15 @@ impl Request {
             headers: vec![],
             error_on_non_2xx: true,
             query_params: vec![],
+            timeout: None,
         }
+    }
+
+    #[inline(always)]
+    /// Sets overall timeout for the request, overriding agent's configuration if any.
+    pub fn timeout(mut self, timeout: time::Duration) -> Self {
+        self.timeout = Some(timeout);
+        self
     }
 
     /// Sends the request with no body and blocks the caller until done.
@@ -116,7 +126,7 @@ impl Request {
         for (name, value) in self.query_params.clone() {
             url.query_pairs_mut().append_pair(&name, &value);
         }
-        let deadline = match self.agent.config.timeout {
+        let deadline = match self.timeout.or(self.agent.config.timeout) {
             None => None,
             Some(timeout) => {
                 let now = time::Instant::now();
