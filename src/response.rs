@@ -8,9 +8,9 @@ use url::Url;
 use crate::error::{Error, ErrorKind::BadStatus};
 use crate::header::Header;
 use crate::pool::PoolReturnRead;
-use crate::stream;
 use crate::stream::{DeadlineStream, Stream};
 use crate::unit::Unit;
+use crate::{stream, ErrorKind};
 
 #[cfg(feature = "json")]
 use serde::de::DeserializeOwned;
@@ -414,13 +414,13 @@ impl Response {
         // HTTP/1.1 200 OK\r\n
         let mut stream =
             stream::DeadlineStream::new(stream, unit.as_ref().and_then(|u| u.deadline));
-        let status_line = read_next_line(&mut stream)?;
+        let status_line = read_next_line(&mut stream, "the status line")?;
 
         let (index, status) = parse_status_line(status_line.as_str())?;
 
         let mut headers: Vec<Header> = Vec::new();
         loop {
-            let line = read_next_line(&mut stream)?;
+            let line = read_next_line(&mut stream, "a header")?;
             if line.is_empty() {
                 break;
             }
@@ -539,9 +539,33 @@ impl FromStr for Response {
     }
 }
 
-fn read_next_line(reader: &mut impl BufRead) -> io::Result<String> {
+fn read_next_line(reader: &mut impl BufRead, context: &str) -> io::Result<String> {
     let mut s = String::new();
-    if reader.read_line(&mut s)? == 0 {
+    let result = reader.read_line(&mut s);
+
+    if let Err(e) = result {
+        // Provide context to errors encountered while reading the line.
+        // ureq does not currently handle non-ascii status lines and
+        // header values. For historical reasons, the HTTP spec does
+        // allow for characters in the range 0x80-0xff, but these are
+        // very rarely encountered in the wild.
+        // See https://github.com/algesten/ureq/issues/320
+        let reason = if e.kind() == io::ErrorKind::InvalidData {
+            format!("Invalid data in {}", context)
+        } else {
+            format!("Error encountered in {}", context)
+        };
+
+        let kind = e.kind();
+
+        // Use an intermediate wrapper type which carries the error message
+        // as well as a .source() reference to the original error.
+        let wrapper = Error::new(ErrorKind::Io, Some(reason)).src(e);
+
+        return Err(io::Error::new(kind, wrapper));
+    }
+
+    if result? == 0 {
         return Err(io::Error::new(
             io::ErrorKind::ConnectionAborted,
             "Unexpected EOF",
@@ -763,6 +787,22 @@ mod tests {
         let s = "HTTP/1.1 302\r\n\r\n".to_string();
         let resp = s.parse::<Response>().unwrap();
         assert_eq!(resp.status_text(), "");
+    }
+
+    #[test]
+    #[cfg(feature = "charset")]
+    fn read_next_line_non_ascii_reason() {
+        let (cow, _, _) =
+            encoding_rs::WINDOWS_1252.encode("HTTP/1.1 302 Déplacé Temporairement\r\n");
+        let bytes = cow.to_vec();
+        let mut reader = io::BufReader::new(io::Cursor::new(bytes));
+        let r = read_next_line(&mut reader, "test status line");
+        let e = r.unwrap_err();
+        assert_eq!(e.kind(), io::ErrorKind::InvalidData);
+        assert_eq!(
+            e.to_string(),
+            "Network Error: Invalid data in test status line: stream did not contain valid UTF-8"
+        );
     }
 
     #[test]
