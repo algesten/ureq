@@ -301,7 +301,7 @@ fn extract_cookies(agent: &Agent, url: &Url) -> Option<Header> {
         .cookie_tin
         .get_request_cookies(url)
         .iter()
-        .map(|c| c.encoded().to_string())
+        .map(|c| c.to_string())
         .collect::<Vec<_>>()
         .join(";");
     match header_value.as_str() {
