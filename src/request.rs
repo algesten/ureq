@@ -15,7 +15,7 @@ use super::SerdeValue;
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Clone)]
-struct ParsedUrl(std::result::Result<Url, url::ParseError>);
+struct ParsedUrl(std::result::Result<Url, url::ParseError>, Option<String>);
 
 impl fmt::Display for ParsedUrl {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -29,13 +29,15 @@ impl fmt::Display for ParsedUrl {
 
 impl From<String> for ParsedUrl {
     fn from(s: String) -> Self {
-        ParsedUrl(s.parse())
+        let url = s.parse();
+        let orig = if url.is_err() { Some(s) } else { None };
+        ParsedUrl(url, orig)
     }
 }
 
 impl From<Url> for ParsedUrl {
     fn from(url: Url) -> Self {
-        ParsedUrl(Ok(url))
+        ParsedUrl(Ok(url), None)
     }
 }
 
@@ -394,6 +396,89 @@ impl Request {
         }
 
         ret
+    }
+
+    /// Get a clone of the Url that will be used for this request.
+    ///
+    /// The url might differ from that originally provided when constructing the
+    /// request if additional query parameters have been added using [`Request::query()`].
+    ///
+    /// The url is wrapped in a `Result` since a common use case is to construct
+    /// the [`Request`] using a `&str`.
+    ///
+    /// ```
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// let req = ureq::get("http://httpbin.org/get")
+    ///     .query("foo", "bar");
+    ///
+    /// assert_eq!(req.parsed_url().unwrap().as_str(), "http://httpbin.org/get?foo=bar");
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn parsed_url(&self) -> Result<Url> {
+        Ok(self.parsed_url.0.clone()?)
+    }
+
+    /// Get the url str that will be used for this request.
+    ///
+    /// The url might differ from that originally provided when constructing the
+    /// request if additional query parameters have been added using [`Request::query()`].
+    ///
+    /// In case the original url provided to build the request is not possible to
+    /// parse to a Url, this function returns the original, and it will error once the
+    /// Request object is used.
+    ///
+    /// ```
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// let req = ureq::get("http://httpbin.org/get")
+    ///     .query("foo", "bar");
+    ///
+    /// assert_eq!(req.url(), "http://httpbin.org/get?foo=bar");
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// ```
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// let req = ureq::get("SO WRONG")
+    ///     .query("foo", "bar"); // does nothing
+    ///
+    /// assert_eq!(req.url(), "SO WRONG");
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn url(&self) -> &str {
+        if let Ok(url) = &self.parsed_url.0 {
+            url.as_str()
+        } else {
+            self.parsed_url
+                .1
+                .as_ref()
+                .map(|s| s.as_str())
+                // This should not happen since we either created Request using a valid Url
+                // object, in which case we have Ok(url) above, or we used a String, in
+                // which case we definitely have a value in self.parsed_url.1
+                .expect("Illegal URL without original")
+        }
+    }
+
+    /// Test whether the url for this request is valid. If this test is
+    /// `false`, the resulting use of this Request will fail with an error.
+    ///
+    /// ```
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// let req = ureq::get("OMG SO WRONG");
+    ///
+    /// assert_eq!(req.is_url_valid(), false);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn is_url_valid(&self) -> bool {
+        self.parsed_url.0.is_ok()
     }
 }
 
