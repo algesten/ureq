@@ -1,10 +1,14 @@
-use std::env;
 use std::error;
 use std::fmt;
 use std::io;
 use std::time::Duration;
+use std::{env, sync::Arc};
 
+use rustls::{
+    Certificate, ClientConfig, RootCertStore, ServerCertVerified, ServerCertVerifier, TLSError,
+};
 use ureq;
+use webpki::DNSNameRef;
 
 #[derive(Debug)]
 struct StringError(String);
@@ -79,6 +83,20 @@ fn get(agent: &ureq::Agent, url: &str, print_headers: bool) -> Result<(), Error>
     Ok(())
 }
 
+struct AcceptAll {}
+
+impl ServerCertVerifier for AcceptAll {
+    fn verify_server_cert(
+        &self,
+        _roots: &RootCertStore,
+        _presented_certs: &[Certificate],
+        _dns_name: DNSNameRef<'_>,
+        _ocsp_response: &[u8],
+    ) -> Result<ServerCertVerified, TLSError> {
+        Ok(ServerCertVerified::assertion())
+    }
+}
+
 fn main() {
     match main2() {
         Ok(()) => {}
@@ -103,10 +121,9 @@ Fetch url and copy it to stdout.
     }
     args.remove(0);
     env_logger::init();
-    let agent = ureq::builder()
+    let mut builder = ureq::builder()
         .timeout_connect(Duration::from_secs(30))
-        .timeout(Duration::from_secs(300))
-        .build();
+        .timeout(Duration::from_secs(300));
     let flags: Vec<&String> = args.iter().filter(|s| s.starts_with("-")).collect();
     let nonflags: Vec<&String> = args.iter().filter(|s| !s.starts_with("-")).collect();
 
@@ -114,9 +131,18 @@ Fetch url and copy it to stdout.
     for flag in flags {
         match flag.as_ref() {
             "-i" => print_headers = true,
+            "-k" => {
+                let mut client_config = ClientConfig::new();
+                client_config
+                    .dangerous()
+                    .set_certificate_verifier(Arc::new(AcceptAll {}));
+                builder = builder.tls_config(Arc::new(client_config));
+            }
             f => Err(StringError(format!("unrecognized flag '{}'", f)))?,
         }
     }
+
+    let agent = builder.build();
 
     for url in nonflags {
         get(&agent, &url, print_headers)?;
