@@ -410,10 +410,8 @@ mod tests {
     }
 
     #[test]
-    fn error_is_send_and_sync() {
-        fn takes_send(_: impl Send) {}
-        fn takes_sync(_: impl Sync) {}
-        takes_send(crate::error::ErrorKind::InvalidUrl.new());
-        takes_sync(crate::error::ErrorKind::InvalidUrl.new());
+    fn error_implements_send_and_sync() {
+        let _error: Box<dyn Send> = Box::new(Error::new(ErrorKind::Io, None));
+        let _error: Box<dyn Sync> = Box::new(Error::new(ErrorKind::Io, None));
     }
 }

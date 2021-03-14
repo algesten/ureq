@@ -833,4 +833,10 @@ mod tests {
         let hist: Vec<&str> = response2.history.iter().map(|r| &**r).collect();
         assert_eq!(hist, ["http://1.example.com/", "http://2.example.com/"])
     }
+
+    #[test]
+    fn response_implements_send_and_sync() {
+        let _response: Box<dyn Send> = Box::new(Response::new(302, "Found", "").unwrap());
+        let _response: Box<dyn Sync> = Box::new(Response::new(302, "Found", "").unwrap());
+    }
 }
