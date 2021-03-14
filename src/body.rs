@@ -150,26 +150,6 @@ fn copy_chunked<R: Read, W: Write>(reader: &mut R, writer: &mut W) -> io::Result
     }
 }
 
-#[test]
-fn test_copy_chunked() {
-    let mut source = Vec::<u8>::new();
-    source.resize(CHUNK_MAX_PAYLOAD_SIZE, 33);
-    source.extend_from_slice(b"hello world");
-
-    let mut dest = Vec::<u8>::new();
-    copy_chunked(&mut &source[..], &mut dest).unwrap();
-
-    let mut dest_expected = Vec::<u8>::new();
-    dest_expected.extend_from_slice(format!("{:x}\r\n", CHUNK_MAX_PAYLOAD_SIZE).as_bytes());
-    dest_expected.resize(dest_expected.len() + CHUNK_MAX_PAYLOAD_SIZE, 33);
-    dest_expected.extend_from_slice(b"\r\n");
-
-    dest_expected.extend_from_slice(b"b\r\nhello world\r\n");
-    dest_expected.extend_from_slice(b"0\r\n\r\n");
-
-    assert_eq!(dest, dest_expected);
-}
-
 /// Helper to send a body, either as chunked or not.
 pub(crate) fn send_body(
     mut body: SizedReader,
@@ -183,4 +163,29 @@ pub(crate) fn send_body(
     };
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_copy_chunked() {
+        let mut source = Vec::<u8>::new();
+        source.resize(CHUNK_MAX_PAYLOAD_SIZE, 33);
+        source.extend_from_slice(b"hello world");
+
+        let mut dest = Vec::<u8>::new();
+        copy_chunked(&mut &source[..], &mut dest).unwrap();
+
+        let mut dest_expected = Vec::<u8>::new();
+        dest_expected.extend_from_slice(format!("{:x}\r\n", CHUNK_MAX_PAYLOAD_SIZE).as_bytes());
+        dest_expected.resize(dest_expected.len() + CHUNK_MAX_PAYLOAD_SIZE, 33);
+        dest_expected.extend_from_slice(b"\r\n");
+
+        dest_expected.extend_from_slice(b"b\r\nhello world\r\n");
+        dest_expected.extend_from_slice(b"0\r\n\r\n");
+
+        assert_eq!(dest, dest_expected);
+    }
 }

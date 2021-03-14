@@ -171,8 +171,7 @@ Proxy-Connection: Keep-Alive\r\n\
 
 #[cfg(test)]
 mod tests {
-    use super::Proto;
-    use super::Proxy;
+    use super::*;
 
     #[test]
     fn parse_proxy_fakeproto() {
