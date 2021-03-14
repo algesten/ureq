@@ -43,6 +43,6 @@ impl CookieTin {
         I: Iterator<Item = cookie::Cookie<'static>>,
     {
         let mut store = self.inner.write().unwrap();
-        store.store_response_cookies(cookies, url)
+        store.store_response_cookies(cookies, url);
     }
 }
