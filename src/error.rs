@@ -342,73 +342,78 @@ impl fmt::Display for ErrorKind {
     }
 }
 
-#[test]
-fn status_code_error() {
-    let mut response = Response::new(404, "NotFound", "").unwrap();
-    response.set_url("http://example.org/".parse().unwrap());
-    let err = Error::Status(response.status(), response);
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    assert_eq!(err.to_string(), "http://example.org/: status code 404");
-}
+    #[test]
+    fn status_code_error() {
+        let mut response = Response::new(404, "NotFound", "").unwrap();
+        response.set_url("http://example.org/".parse().unwrap());
+        let err = Error::Status(response.status(), response);
 
-#[test]
-fn status_code_error_redirect() {
-    use crate::{get, test};
+        assert_eq!(err.to_string(), "http://example.org/: status code 404");
+    }
 
-    test::set_handler("/redirect_a", |unit| {
-        assert_eq!(unit.method, "GET");
-        test::make_response(
-            302,
-            "Go here",
-            vec!["Location: test://example.edu/redirect_b"],
-            vec![],
-        )
-    });
-    test::set_handler("/redirect_b", |unit| {
-        assert_eq!(unit.method, "GET");
-        test::make_response(
-            302,
-            "Go here",
-            vec!["Location: http://example.com/status/500"],
-            vec![],
-        )
-    });
+    #[test]
+    fn status_code_error_redirect() {
+        use crate::{get, test};
 
-    let err = get("test://example.org/redirect_a").call().unwrap_err();
-    assert_eq!(err.kind(), ErrorKind::HTTP, "{:?}", err);
-    assert_eq!(
+        test::set_handler("/redirect_a", |unit| {
+            assert_eq!(unit.method, "GET");
+            test::make_response(
+                302,
+                "Go here",
+                vec!["Location: test://example.edu/redirect_b"],
+                vec![],
+            )
+        });
+        test::set_handler("/redirect_b", |unit| {
+            assert_eq!(unit.method, "GET");
+            test::make_response(
+                302,
+                "Go here",
+                vec!["Location: http://example.com/status/500"],
+                vec![],
+            )
+        });
+
+        let err = get("test://example.org/redirect_a").call().unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::HTTP, "{:?}", err);
+        assert_eq!(
         err.to_string(),
         "http://example.com/status/500: status code 500 (redirected from test://example.org/redirect_a)"
     );
-}
+    }
 
-#[test]
-fn io_error() {
-    let ioe = io::Error::new(io::ErrorKind::TimedOut, "too slow");
-    let mut err = Error::new(ErrorKind::Io, Some("oops".to_string())).src(ioe);
+    #[test]
+    fn io_error() {
+        let ioe = io::Error::new(io::ErrorKind::TimedOut, "too slow");
+        let mut err = Error::new(ErrorKind::Io, Some("oops".to_string())).src(ioe);
 
-    err = err.url("http://example.com/".parse().unwrap());
-    assert_eq!(
-        err.to_string(),
-        "http://example.com/: Network Error: oops: too slow"
-    );
-}
+        err = err.url("http://example.com/".parse().unwrap());
+        assert_eq!(
+            err.to_string(),
+            "http://example.com/: Network Error: oops: too slow"
+        );
+    }
 
-#[test]
-fn connection_closed() {
-    let ioe = io::Error::new(io::ErrorKind::ConnectionReset, "connection reset");
-    let err = ErrorKind::Io.new().src(ioe);
-    assert!(err.connection_closed());
+    #[test]
+    fn connection_closed() {
+        let ioe = io::Error::new(io::ErrorKind::ConnectionReset, "connection reset");
+        let err = ErrorKind::Io.new().src(ioe);
+        assert!(err.connection_closed());
 
-    let ioe = io::Error::new(io::ErrorKind::ConnectionAborted, "connection aborted");
-    let err = ErrorKind::Io.new().src(ioe);
-    assert!(err.connection_closed());
-}
+        let ioe = io::Error::new(io::ErrorKind::ConnectionAborted, "connection aborted");
+        let err = ErrorKind::Io.new().src(ioe);
+        assert!(err.connection_closed());
+    }
 
-#[test]
-fn error_is_send_and_sync() {
-    fn takes_send(_: impl Send) {}
-    fn takes_sync(_: impl Sync) {}
-    takes_send(crate::error::ErrorKind::InvalidUrl.new());
-    takes_sync(crate::error::ErrorKind::InvalidUrl.new());
+    #[test]
+    fn error_is_send_and_sync() {
+        fn takes_send(_: impl Send) {}
+        fn takes_sync(_: impl Sync) {}
+        takes_send(crate::error::ErrorKind::InvalidUrl.new());
+        takes_sync(crate::error::ErrorKind::InvalidUrl.new());
+    }
 }

@@ -145,72 +145,77 @@ impl FromStr for Header {
     }
 }
 
-#[test]
-fn test_valid_name() {
-    assert!(valid_name("example"));
-    assert!(valid_name("Content-Type"));
-    assert!(valid_name("h-123456789"));
-    assert!(!valid_name("Content-Type:"));
-    assert!(!valid_name("Content-Type "));
-    assert!(!valid_name(" some-header"));
-    assert!(!valid_name("\"invalid\""));
-    assert!(!valid_name("Gödel"));
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-#[test]
-fn test_valid_value() {
-    assert!(valid_value("example"));
-    assert!(valid_value("foo bar"));
-    assert!(valid_value(" foobar "));
-    assert!(valid_value(" foo\tbar "));
-    assert!(valid_value(" foo~"));
-    assert!(valid_value(" !bar"));
-    assert!(valid_value(" "));
-    assert!(!valid_value(" \nfoo"));
-    assert!(!valid_value("foo\x7F"));
-}
-
-#[test]
-fn test_parse_invalid_name() {
-    let cases = vec![
-        "Content-Type  :",
-        " Content-Type: foo",
-        "Content-Type foo",
-        "\"some-header\": foo",
-        "Gödel: Escher, Bach",
-        "Foo: \n",
-        "Foo: \nbar",
-        "Foo: \x7F bar",
-    ];
-    for c in cases {
-        let result = c.parse::<Header>();
-        assert!(
-            matches!(result, Err(ref e) if e.kind() == ErrorKind::BadHeader),
-            "'{}'.parse(): expected BadHeader, got {:?}",
-            c,
-            result
-        );
+    #[test]
+    fn test_valid_name() {
+        assert!(valid_name("example"));
+        assert!(valid_name("Content-Type"));
+        assert!(valid_name("h-123456789"));
+        assert!(!valid_name("Content-Type:"));
+        assert!(!valid_name("Content-Type "));
+        assert!(!valid_name(" some-header"));
+        assert!(!valid_name("\"invalid\""));
+        assert!(!valid_name("Gödel"));
     }
-}
 
-#[test]
-fn empty_value() {
-    let h = "foo:".parse::<Header>().unwrap();
-    assert_eq!(h.value(), "");
-}
+    #[test]
+    fn test_valid_value() {
+        assert!(valid_value("example"));
+        assert!(valid_value("foo bar"));
+        assert!(valid_value(" foobar "));
+        assert!(valid_value(" foo\tbar "));
+        assert!(valid_value(" foo~"));
+        assert!(valid_value(" !bar"));
+        assert!(valid_value(" "));
+        assert!(!valid_value(" \nfoo"));
+        assert!(!valid_value("foo\x7F"));
+    }
 
-#[test]
-fn value_with_whitespace() {
-    let h = "foo:      bar    ".parse::<Header>().unwrap();
-    assert_eq!(h.value(), "bar");
-}
+    #[test]
+    fn test_parse_invalid_name() {
+        let cases = vec![
+            "Content-Type  :",
+            " Content-Type: foo",
+            "Content-Type foo",
+            "\"some-header\": foo",
+            "Gödel: Escher, Bach",
+            "Foo: \n",
+            "Foo: \nbar",
+            "Foo: \x7F bar",
+        ];
+        for c in cases {
+            let result = c.parse::<Header>();
+            assert!(
+                matches!(result, Err(ref e) if e.kind() == ErrorKind::BadHeader),
+                "'{}'.parse(): expected BadHeader, got {:?}",
+                c,
+                result
+            );
+        }
+    }
 
-#[test]
-fn name_and_value() {
-    let header: Header = "X-Forwarded-For: 127.0.0.1".parse().unwrap();
-    assert_eq!("X-Forwarded-For", header.name());
-    assert_eq!("127.0.0.1", header.value());
-    assert!(header.is_name("X-Forwarded-For"));
-    assert!(header.is_name("x-forwarded-for"));
-    assert!(header.is_name("X-FORWARDED-FOR"));
+    #[test]
+    fn empty_value() {
+        let h = "foo:".parse::<Header>().unwrap();
+        assert_eq!(h.value(), "");
+    }
+
+    #[test]
+    fn value_with_whitespace() {
+        let h = "foo:      bar    ".parse::<Header>().unwrap();
+        assert_eq!(h.value(), "bar");
+    }
+
+    #[test]
+    fn name_and_value() {
+        let header: Header = "X-Forwarded-For: 127.0.0.1".parse().unwrap();
+        assert_eq!("X-Forwarded-For", header.name());
+        assert_eq!("127.0.0.1", header.value());
+        assert!(header.is_name("X-Forwarded-For"));
+        assert!(header.is_name("x-forwarded-for"));
+        assert!(header.is_name("X-FORWARDED-FOR"));
+    }
 }

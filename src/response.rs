@@ -632,15 +632,6 @@ impl<R: Read> Read for LimitedRead<R> {
     }
 }
 
-#[test]
-fn short_read() {
-    use std::io::Cursor;
-    let mut lr = LimitedRead::new(Cursor::new(vec![b'a'; 3]), 10);
-    let mut buf = vec![0; 1000];
-    let result = lr.read_to_end(&mut buf);
-    assert!(result.err().unwrap().kind() == io::ErrorKind::UnexpectedEof);
-}
-
 impl<R: Read> From<LimitedRead<R>> for Stream
 where
     Stream: From<R>,
@@ -667,9 +658,29 @@ pub(crate) fn charset_from_content_type(header: Option<&str>) -> &str {
         .unwrap_or(DEFAULT_CHARACTER_SET)
 }
 
+// ErrorReader returns an error for every read.
+// The error is as close to a clone of the underlying
+// io::Error as we can get.
+struct ErrorReader(io::Error);
+
+impl Read for ErrorReader {
+    fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
+        Err(io::Error::new(self.0.kind(), self.0.to_string()))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn short_read() {
+        use std::io::Cursor;
+        let mut lr = LimitedRead::new(Cursor::new(vec![b'a'; 3]), 10);
+        let mut buf = vec![0; 1000];
+        let result = lr.read_to_end(&mut buf);
+        assert!(result.err().unwrap().kind() == io::ErrorKind::UnexpectedEof);
+    }
 
     #[test]
     fn content_type_without_charset() {
@@ -821,16 +832,5 @@ mod tests {
 
         let hist: Vec<&str> = response2.history.iter().map(|r| &**r).collect();
         assert_eq!(hist, ["http://1.example.com/", "http://2.example.com/"])
-    }
-}
-
-// ErrorReader returns an error for every read.
-// The error is as close to a clone of the underlying
-// io::Error as we can get.
-struct ErrorReader(io::Error);
-
-impl Read for ErrorReader {
-    fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
-        Err(io::Error::new(self.0.kind(), self.0.to_string()))
     }
 }

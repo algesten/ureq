@@ -397,25 +397,30 @@ impl Request {
     }
 }
 
-#[test]
-fn request_implements_send_and_sync() {
-    let _request: Box<dyn Send> = Box::new(Request::new(
-        Agent::new(),
-        "GET".to_string(),
-        "https://example.com/".to_string(),
-    ));
-    let _request: Box<dyn Sync> = Box::new(Request::new(
-        Agent::new(),
-        "GET".to_string(),
-        "https://example.com/".to_string(),
-    ));
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-#[test]
-fn send_byte_slice() {
-    let bytes = vec![1, 2, 3];
-    crate::agent()
-        .post("http://example.com")
-        .send(&bytes[1..2])
-        .ok();
+    #[test]
+    fn request_implements_send_and_sync() {
+        let _request: Box<dyn Send> = Box::new(Request::new(
+            Agent::new(),
+            "GET".to_string(),
+            "https://example.com/".to_string(),
+        ));
+        let _request: Box<dyn Sync> = Box::new(Request::new(
+            Agent::new(),
+            "GET".to_string(),
+            "https://example.com/".to_string(),
+        ));
+    }
+
+    #[test]
+    fn send_byte_slice() {
+        let bytes = vec![1, 2, 3];
+        crate::agent()
+            .post("http://example.com")
+            .send(&bytes[1..2])
+            .ok();
+    }
 }
