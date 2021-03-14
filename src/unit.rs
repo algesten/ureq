@@ -386,7 +386,9 @@ fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> io::Result<()>
     // other headers
     for header in &unit.headers {
         if !redir || !header.is_name("Authorization") {
-            write!(prelude, "{}: {}\r\n", header.name(), header.value())?;
+            if let Some(v) = header.value() {
+                write!(prelude, "{}: {}\r\n", header.name(), v)?;
+            }
         }
     }
 
