@@ -3,6 +3,7 @@ use std::str::FromStr;
 use std::{fmt, io::BufRead};
 
 use chunked_transfer::Decoder as ChunkDecoder;
+use log::trace;
 use url::Url;
 
 use crate::error::{Error, ErrorKind::BadStatus};
@@ -226,20 +227,19 @@ impl Response {
     /// # }
     /// ```
     pub fn into_reader(self) -> impl Read + Send {
-        //
+        // https://tools.ietf.org/html/rfc7230#section-3.3.3
+        // 1.  Any response to a HEAD request and any response with a 1xx
+        // (Informational), 204 (No Content), or 304 (Not Modified) status
+        // code is always terminated by the first empty line after the
+        // header fields, regardless of the header fields present in the
+        // message, and thus cannot contain a message body
+        let is_head = self.unit.as_ref().map(|u| u.is_head()).unwrap_or_default();
+        let has_no_body = match self.status {
+            100..=199 | 204 | 304 => true,
+            _ => is_head,
+        };
+
         let is_http10 = self.http_version().eq_ignore_ascii_case("HTTP/1.0");
-        let is_close = self
-            .header("connection")
-            .map(|c| c.eq_ignore_ascii_case("close"))
-            .unwrap_or(false);
-
-        let is_head = (&self.unit).as_ref().map(|u| u.is_head()).unwrap_or(false);
-        let has_no_body = is_head
-            || match self.status {
-                204 | 304 => true,
-                _ => false,
-            };
-
         let is_chunked = self
             .header("transfer-encoding")
             .map(|enc| !enc.is_empty()) // whatever it says, do chunked
@@ -247,14 +247,32 @@ impl Response {
 
         let use_chunked = !is_http10 && !has_no_body && is_chunked;
 
-        let limit_bytes = if is_http10 || is_close {
-            None
-        } else if has_no_body {
-            // head requests never have a body
+        let content_length = self
+            .header("content-length")
+            .and_then(|l| l.parse::<usize>().ok());
+
+        // Decide whether to use a LimitedRead and what its size should be.
+        // First priority: responses known to never have a body.
+        // Second priority: Transfer-Encoding.
+        // Third priority: Content-Length.
+        let limit_bytes = if has_no_body {
             Some(0)
+        } else if use_chunked {
+            // https://tools.ietf.org/html/rfc7230#section-3.3.3
+            // 3. ... If a message is received with both a Transfer-Encoding and a
+            // Content-Length header field, the Transfer-Encoding overrides the
+            // Content-Length.
+            None
+        } else if content_length.is_some() {
+            // TODO: Check for multiple content-length headers and error.
+            content_length
         } else {
-            self.header("content-length")
-                .and_then(|l| l.parse::<usize>().ok())
+            // https://tools.ietf.org/html/rfc7230#section-3.3.3
+            // 7.  Otherwise, this is a response message without a declared message
+            // body length, so the message body length is determined by the
+            // number of octets received prior to the server closing the
+            // connection.
+            None
         };
 
         let stream = self.stream;
@@ -269,11 +287,22 @@ impl Response {
         let stream = DeadlineStream::new(stream, deadline);
 
         match (use_chunked, limit_bytes) {
-            (true, _) => Box::new(PoolReturnRead::new(unit, ChunkDecoder::new(stream))),
+            (_, Some(0)) => {
+                trace!("returning zero-length response body stream");
+                Box::new(PoolReturnRead::new(unit, LimitedRead::new(stream, 0)))
+            }
+            (true, _) => {
+                trace!("building ChunkDecoder");
+                Box::new(PoolReturnRead::new(unit, ChunkDecoder::new(stream)))
+            }
             (false, Some(len)) => {
+                trace!("building LimitedRead with limit {}", len);
                 Box::new(PoolReturnRead::new(unit, LimitedRead::new(stream, len)))
             }
-            (false, None) => Box::new(stream),
+            (false, None) => {
+                trace!("returning close-delimited response body stream");
+                Box::new(stream)
+            }
         }
     }
 

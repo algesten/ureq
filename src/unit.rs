@@ -284,6 +284,16 @@ fn connect_inner(
         Ok(resp) => resp,
     };
 
+    // https://tools.ietf.org/html/rfc7230#section-3.3.2
+    // A server MUST NOT send a Content-Length header field in any response
+    // with a status code of 1xx (Informational) or 204 (No Content).
+    if resp.header("content-length").is_some() && matches!(resp.status(), (100..=199) | 204) {
+        return Err(ErrorKind::BadHeader.msg(&format!(
+            "received content-length header on response with status {}",
+            resp.status()
+        )));
+    }
+
     // squirrel away cookies
     #[cfg(feature = "cookies")]
     save_cookies(&unit, &resp);
