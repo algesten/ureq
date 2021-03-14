@@ -6,7 +6,7 @@ use chunked_transfer::Decoder as ChunkDecoder;
 use url::Url;
 
 use crate::error::{Error, ErrorKind::BadStatus};
-use crate::header::Header;
+use crate::header::{get_all_headers, get_header, Header, HeaderLine};
 use crate::pool::PoolReturnRead;
 use crate::stream::{DeadlineStream, Stream};
 use crate::unit::Unit;
@@ -119,20 +119,31 @@ impl Response {
     }
 
     /// The status text: `OK`
+    ///
+    /// The HTTP spec allows for non-utf8 status texts. This uses from_utf8_lossy to
+    /// convert such lines to &str.
     pub fn status_text(&self) -> &str {
         &self.status_line.as_str()[self.index.response_code + 1..].trim()
     }
 
-    /// The header corresponding header value for the give name, if any.
+    /// The header value for the given name, or None if not found.
+    ///
+    /// For historical reasons, the HTTP spec allows for header values
+    /// to be encoded using encodigs like iso-8859-1. Such encodings
+    /// means the values are not possible to interpret as utf-8.
+    ///
+    /// In case the header value can't be read as utf-8, this function
+    /// returns `None` (while the name is visible in [`Response::headers_names()`]).
     pub fn header(&self, name: &str) -> Option<&str> {
-        self.headers
-            .iter()
-            .find(|h| h.is_name(name))
-            .map(|h| h.value())
+        get_header(&self.headers, name)
     }
 
     /// A list of the header names in this response.
     /// Lowercased to be uniform.
+    ///
+    /// It's possible for a header name to be returned by this function, and
+    /// still give a `None` value. See [`Response::header()`] for an explanation
+    /// as to why.
     pub fn headers_names(&self) -> Vec<String> {
         self.headers
             .iter()
@@ -147,11 +158,7 @@ impl Response {
 
     /// All headers corresponding values for the give name, or empty vector.
     pub fn all(&self, name: &str) -> Vec<&str> {
-        self.headers
-            .iter()
-            .filter(|h| h.is_name(name))
-            .map(|h| h.value())
-            .collect()
+        get_all_headers(&self.headers, name)
     }
 
     /// The content type part of the "Content-Type" header without
@@ -414,8 +421,9 @@ impl Response {
         // HTTP/1.1 200 OK\r\n
         let mut stream =
             stream::DeadlineStream::new(stream, unit.as_ref().and_then(|u| u.deadline));
-        let status_line = read_next_line(&mut stream, "the status line")?;
 
+        // The status line we can ignore non-utf8 chars and parse as_str_lossy().
+        let status_line = read_next_line(&mut stream, "the status line")?.into_string_lossy();
         let (index, status) = parse_status_line(status_line.as_str())?;
 
         let mut headers: Vec<Header> = Vec::new();
@@ -424,7 +432,7 @@ impl Response {
             if line.is_empty() {
                 break;
             }
-            if let Ok(header) = line.as_str().parse::<Header>() {
+            if let Ok(header) = line.into_header() {
                 headers.push(header);
             }
         }
@@ -539,22 +547,13 @@ impl FromStr for Response {
     }
 }
 
-fn read_next_line(reader: &mut impl BufRead, context: &str) -> io::Result<String> {
-    let mut s = String::new();
-    let result = reader.read_line(&mut s);
+fn read_next_line(reader: &mut impl BufRead, context: &str) -> io::Result<HeaderLine> {
+    let mut buf = Vec::new();
+    let result = reader.read_until(b'\n', &mut buf);
 
     if let Err(e) = result {
         // Provide context to errors encountered while reading the line.
-        // ureq does not currently handle non-ascii status lines and
-        // header values. For historical reasons, the HTTP spec does
-        // allow for characters in the range 0x80-0xff, but these are
-        // very rarely encountered in the wild.
-        // See https://github.com/algesten/ureq/issues/320
-        let reason = if e.kind() == io::ErrorKind::InvalidData {
-            format!("Invalid data in {}", context)
-        } else {
-            format!("Error encountered in {}", context)
-        };
+        let reason = format!("Error encountered in {}", context);
 
         let kind = e.kind();
 
@@ -572,17 +571,19 @@ fn read_next_line(reader: &mut impl BufRead, context: &str) -> io::Result<String
         ));
     }
 
-    if !s.ends_with("\n") {
+    if !buf.ends_with(b"\n") {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            format!("Header field didn't end with \\n: {}", s),
+            format!("Header field didn't end with \\n: {:?}", buf),
         ));
     }
-    s.pop();
-    if s.ends_with("\r") {
-        s.pop();
+
+    buf.pop();
+    if buf.ends_with(b"\r") {
+        buf.pop();
     }
-    Ok(s)
+
+    Ok(buf.into())
 }
 
 /// Limits a `Read` to a content size (as set by a "Content-Length" header).
@@ -808,12 +809,24 @@ mod tests {
         let bytes = cow.to_vec();
         let mut reader = io::BufReader::new(io::Cursor::new(bytes));
         let r = read_next_line(&mut reader, "test status line");
-        let e = r.unwrap_err();
-        assert_eq!(e.kind(), io::ErrorKind::InvalidData);
-        assert_eq!(
-            e.to_string(),
-            "Network Error: Invalid data in test status line: stream did not contain valid UTF-8"
+        let h = r.unwrap();
+        assert_eq!(h.to_string(), "HTTP/1.1 302 D�plac� Temporairement");
+    }
+
+    #[test]
+    #[cfg(feature = "charset")]
+    fn parse_header_with_non_utf8() {
+        let (cow, _, _) = encoding_rs::WINDOWS_1252.encode(
+            "HTTP/1.1 200 OK\r\n\
+            x-geo-header: gött mos!\r\n\
+            \r\n\
+            OK",
         );
+        let v = cow.to_vec();
+        let s = Stream::from_vec(v);
+        let resp = Response::do_from_stream(s.into(), None).unwrap();
+        assert_eq!(resp.status(), 200);
+        assert_eq!(resp.header("x-geo-header"), None);
     }
 
     #[test]
