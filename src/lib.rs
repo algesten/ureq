@@ -297,6 +297,7 @@ pub use crate::error::{Error, ErrorKind, OrAnyStatus, Transport};
 pub use crate::header::Header;
 pub use crate::proxy::Proxy;
 pub use crate::request::Request;
+pub use crate::request::RequestUrl;
 pub use crate::resolve::Resolver;
 pub use crate::response::Response;
 

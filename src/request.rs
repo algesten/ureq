@@ -3,11 +3,11 @@ use std::{fmt, time};
 
 use url::{form_urlencoded, Url};
 
-use crate::body::Payload;
 use crate::header::{self, Header};
 use crate::unit::{self, Unit};
 use crate::Response;
 use crate::{agent::Agent, error::Error};
+use crate::{body::Payload, ErrorKind};
 
 #[cfg(feature = "json")]
 use super::SerdeValue;
@@ -36,6 +36,50 @@ impl From<String> for ParsedUrl {
 impl From<Url> for ParsedUrl {
     fn from(url: Url) -> Self {
         ParsedUrl(Ok(url))
+    }
+}
+
+// RequestUrl is a read-only wrapper around a URL that is ready to be used as
+// part of an HTTP request. It provides more convenient accessors than
+// url::Url. For instance, it returns `&str`'s for query_pairs rather than
+// Cow<'a, str>, and it it provides `&str` rather than `Option<&str>` for
+// host, because a non-empty host is always required for a request.
+pub struct RequestUrl {
+    url: Url,
+    query_pairs: Vec<(String, String)>,
+}
+
+impl RequestUrl {
+    fn new(url: Url) -> Self {
+        let query_pairs: Vec<(String, String)> = url.query_pairs().into_owned().collect();
+        Self { url, query_pairs }
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.url.as_str()
+    }
+
+    pub fn scheme(&self) -> &str {
+        self.url.scheme()
+    }
+
+    pub fn host(&self) -> &str {
+        self.url.host_str().unwrap()
+    }
+
+    pub fn port(&self) -> Option<u16> {
+        self.url.port()
+    }
+
+    pub fn path(&self) -> &str {
+        self.url.path()
+    }
+
+    pub fn query_pairs(&self) -> Vec<(&str, &str)> {
+        self.query_pairs
+            .iter()
+            .map(|qp| (qp.0.as_str(), qp.1.as_str()))
+            .collect()
     }
 }
 
@@ -368,7 +412,12 @@ impl Request {
         &self.method
     }
 
-    /// Returns all query parameters as a vector of key-value pairs.
+    /// Returns the RequestUrl that will be used to perform this request.
+    /// This can be used, for instance, to access the parsed components of
+    /// the URL, like path and query parameters.
+    ///
+    /// If this Request was built with a URL that fails to parse or doesn't
+    /// contain a host, returns Err.
     ///
     /// ```
     /// # fn main() -> Result<(), ureq::Error> {
@@ -377,23 +426,29 @@ impl Request {
     ///     .query("foo", "42")
     ///     .query("foo", "43");
     ///
-    /// assert_eq!(req.query_params(), vec![
-    ///     ("foo".to_string(), "42".to_string()),
-    ///     ("foo".to_string(), "43".to_string())
+    /// let rurl: ureq::RequestUrl = req.get_url()?;
+    /// assert_eq!(rurl.scheme(), "http");
+    /// assert_eq!(rurl.host(), "httpbin.org");
+    /// assert_eq!(rurl.port(), None);
+    /// assert_eq!(rurl.path(), "/get");
+    /// assert_eq!(rurl.query_pairs(), vec![
+    ///     ("foo", "42"),
+    ///     ("foo", "43")
     /// ]);
     /// # Ok(())
     /// # }
     /// ```
-    pub fn query_params(&self) -> Vec<(String, String)> {
-        let mut ret = vec![];
-
-        if let Ok(url) = &self.parsed_url.0 {
-            for (k, v) in url.query_pairs() {
-                ret.push((k.into(), v.into()));
+    pub fn get_url(&self) -> Result<RequestUrl> {
+        match self.parsed_url.clone().0 {
+            Ok(url) => {
+                if url.host().is_some() {
+                    Ok(RequestUrl::new(url.clone()))
+                } else {
+                    Err(ErrorKind::InvalidUrl.msg("Invalid URL: no hostname"))
+                }
             }
+            Err(parse_error) => Err(ErrorKind::InvalidUrl.msg("Invalid URL").src(parse_error)),
         }
-
-        ret
     }
 }
 
