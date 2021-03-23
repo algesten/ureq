@@ -229,7 +229,8 @@ fn connect_inner(
     let host = unit
         .url
         .host_str()
-        .ok_or_else(|| ErrorKind::InvalidUrl.msg("no host in URL"))?;
+        // This unwrap is ok because Request::parse_url() ensure there is always a host present.
+        .unwrap();
     let url = &unit.url;
     let method = &unit.method;
     // open socket

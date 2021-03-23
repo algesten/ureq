@@ -1,7 +1,7 @@
 use std::io::Read;
 use std::{fmt, time};
 
-use url::{form_urlencoded, Url};
+use url::{form_urlencoded, ParseError, Url};
 
 use crate::body::Payload;
 use crate::header::{self, Header};
@@ -13,31 +13,6 @@ use crate::{agent::Agent, error::Error};
 use super::SerdeValue;
 
 pub type Result<T> = std::result::Result<T, Error>;
-
-#[derive(Clone)]
-struct ParsedUrl(std::result::Result<Url, url::ParseError>);
-
-impl fmt::Display for ParsedUrl {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Ok(url) = &self.0 {
-            write!(f, "{}", url.as_str())
-        } else {
-            write!(f, "{:?}", self.0)
-        }
-    }
-}
-
-impl From<String> for ParsedUrl {
-    fn from(s: String) -> Self {
-        ParsedUrl(s.parse())
-    }
-}
-
-impl From<Url> for ParsedUrl {
-    fn from(url: Url) -> Self {
-        ParsedUrl(Ok(url))
-    }
-}
 
 /// Request instances are builders that creates a request.
 ///
@@ -54,7 +29,7 @@ impl From<Url> for ParsedUrl {
 pub struct Request {
     agent: Agent,
     method: String,
-    parsed_url: ParsedUrl,
+    url: String,
     error_on_non_2xx: bool,
     headers: Vec<Header>,
     timeout: Option<time::Duration>,
@@ -65,25 +40,25 @@ impl fmt::Debug for Request {
         write!(
             f,
             "Request({} {}, {:?})",
-            self.method, self.parsed_url, self.headers
+            self.method, self.url, self.headers
         )
     }
 }
 
 impl Request {
     pub(crate) fn new(agent: Agent, method: String, url: String) -> Request {
-        Self::_new(agent, method, url.into())
+        Self::_new(agent, method, url)
     }
 
     pub(crate) fn with_url(agent: Agent, method: String, url: Url) -> Request {
-        Self::_new(agent, method, url.into())
+        Self::_new(agent, method, url.to_string())
     }
 
-    fn _new(agent: Agent, method: String, parsed_url: ParsedUrl) -> Request {
+    fn _new(agent: Agent, method: String, url: String) -> Request {
         Request {
             agent,
             method,
-            parsed_url,
+            url,
             headers: vec![],
             error_on_non_2xx: true,
             timeout: None,
@@ -114,11 +89,22 @@ impl Request {
         self.do_call(Payload::Empty)
     }
 
+    fn parse_url(&self) -> Result<Url> {
+        Ok(self.url.parse().and_then(|url: Url|
+            // No hostname is fine for urls in general, but not for website urls.
+            if url.host_str().is_none() {
+                Err(ParseError::EmptyHost)
+            } else {
+                Ok(url)
+            }
+        )?)
+    }
+
     fn do_call(self, payload: Payload) -> Result<Response> {
         for h in &self.headers {
             h.validate()?;
         }
-        let url = self.parsed_url.0?;
+        let url = self.parse_url()?;
 
         let deadline = match self.timeout.or(self.agent.config.timeout) {
             None => None,
@@ -351,8 +337,11 @@ impl Request {
     /// # }
     /// ```
     pub fn query(mut self, param: &str, value: &str) -> Self {
-        if let Ok(url) = &mut self.parsed_url.0 {
+        if let Ok(mut url) = self.parse_url() {
             url.query_pairs_mut().append_pair(param, value);
+
+            // replace url
+            self.url = url.to_string();
         }
         self
     }
@@ -368,6 +357,115 @@ impl Request {
         &self.method
     }
 
+    /// Get the url str that will be used for this request.
+    ///
+    /// The url might differ from that originally provided when constructing the
+    /// request if additional query parameters have been added using [`Request::query()`].
+    ///
+    /// In case the original url provided to build the request is not possible to
+    /// parse to a Url, this function returns the original, and it will error once the
+    /// Request object is used.
+    ///
+    /// ```
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// let req = ureq::get("http://httpbin.org/get")
+    ///     .query("foo", "bar");
+    ///
+    /// assert_eq!(req.url(), "http://httpbin.org/get?foo=bar");
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// ```
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// let req = ureq::get("SO WRONG")
+    ///     .query("foo", "bar"); // does nothing
+    ///
+    /// assert_eq!(req.url(), "SO WRONG");
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn url(&self) -> &str {
+        &self.url
+    }
+
+    /// Get the parsed url that will be used for this request. The parsed url
+    /// has functions to inspect the parts of the url further.
+    ///
+    /// The url might differ from that originally provided when constructing the
+    /// request if additional query parameters have been added using [`Request::query()`].
+    ///
+    /// Returns a `Result` since a common use case is to construct
+    /// the [`Request`] using a `&str` in which case the url needs to be parsed
+    /// to inspect the parts. If the Request url is not possible to parse, this
+    /// function produces the same error that would otherwise happen when
+    /// `call` or `send_*` is called.
+    ///
+    /// ```
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// let req = ureq::get("http://httpbin.org/get")
+    ///     .query("foo", "bar");
+    ///
+    /// assert_eq!(req.request_url().unwrap().host(), "httpbin.org");
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn request_url(&self) -> Result<RequestUrl> {
+        Ok(RequestUrl::new(self.parse_url()?))
+    }
+}
+
+/// Parsed result of a request url with handy inspection methods.
+#[derive(Debug, Clone)]
+pub struct RequestUrl {
+    url: Url,
+    query_pairs: Vec<(String, String)>,
+}
+
+impl RequestUrl {
+    fn new(url: Url) -> Self {
+        // This is needed to avoid url::Url Cow<str>. We want ureq API to work with &str.
+        let query_pairs = url
+            .query_pairs()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+
+        RequestUrl { url, query_pairs }
+    }
+
+    /// Handle the request url as a standard [`url::Url`].
+    pub fn as_url(&self) -> &Url {
+        &self.url
+    }
+
+    /// Get the scheme of the request url, i.e. "https" or "http".
+    pub fn scheme(&self) -> &str {
+        self.url.scheme()
+    }
+
+    /// Host of the request url.
+    pub fn host(&self) -> &str {
+        // this unwrap() is ok, because RequestUrl is tested for empty host
+        // urls in Request::parse_url().
+        self.url.host_str().unwrap()
+    }
+
+    /// Port of the request url, if available. Ports are only available if they
+    /// are present in the original url. Specifically the scheme default ports,
+    /// 443 for `https` and and 80 for `http` are `None` unless explicitly
+    /// set in the url, i.e. `https://my-host.com:443/some/path`.
+    pub fn port(&self) -> Option<u16> {
+        self.url.port()
+    }
+
+    /// Path of the request url.
+    pub fn path(&self) -> &str {
+        self.url.path()
+    }
+
     /// Returns all query parameters as a vector of key-value pairs.
     ///
     /// ```
@@ -377,23 +475,18 @@ impl Request {
     ///     .query("foo", "42")
     ///     .query("foo", "43");
     ///
-    /// assert_eq!(req.query_params(), vec![
-    ///     ("foo".to_string(), "42".to_string()),
-    ///     ("foo".to_string(), "43".to_string())
+    /// assert_eq!(req.request_url().unwrap().query_pairs(), vec![
+    ///     ("foo", "42"),
+    ///     ("foo", "43")
     /// ]);
     /// # Ok(())
     /// # }
     /// ```
-    pub fn query_params(&self) -> Vec<(String, String)> {
-        let mut ret = vec![];
-
-        if let Ok(url) = &self.parsed_url.0 {
-            for (k, v) in url.query_pairs() {
-                ret.push((k.into(), v.into()));
-            }
-        }
-
-        ret
+    pub fn query_pairs(&self) -> Vec<(&str, &str)> {
+        self.query_pairs
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_str()))
+            .collect()
     }
 }
 
@@ -422,5 +515,18 @@ mod tests {
             .post("http://example.com")
             .send(&bytes[1..2])
             .ok();
+    }
+
+    #[test]
+    fn disallow_empty_host() {
+        let req = crate::agent().get("file:///some/path");
+
+        // Both request_url and call() must surface the same error.
+        assert_eq!(
+            req.request_url().unwrap_err().kind(),
+            crate::ErrorKind::InvalidUrl
+        );
+
+        assert_eq!(req.call().unwrap_err().kind(), crate::ErrorKind::InvalidUrl);
     }
 }
