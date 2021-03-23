@@ -1,4 +1,5 @@
 use std::io::Read;
+use std::sync::Arc;
 use std::{fmt, time};
 
 use url::{form_urlencoded, ParseError, Url};
@@ -20,7 +21,7 @@ pub struct ParsedUrl {
     /// Url parse result kept as Result since we want to defer the surfacing of it
     /// until we do call()/send()/etc.
     result: std::result::Result<Url, url::ParseError>,
-    origin: Option<String>,
+    origin: Option<Arc<String>>,
 }
 
 impl fmt::Display for ParsedUrl {
@@ -55,6 +56,8 @@ impl ParsedUrl {
                 result = Err(ParseError::EmptyHost);
             }
         }
+
+        let origin = origin.map(Arc::new);
 
         ParsedUrl { result, origin }
     }
@@ -471,11 +474,15 @@ impl Request {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn parsed_url(&self) -> Result<&ParsedUrl> {
-        // If there is a parse error, surface it now.
-        let _ = self.parsed_url.result.as_ref()?;
+    pub fn parsed_url(&self) -> Result<ParsedUrl> {
+        let p = self.parsed_url.clone();
 
-        return Ok(&self.parsed_url);
+        // If there is a parse error, surface it now.
+        if let Err(e) = p.result {
+            return Err(e.into());
+        }
+
+        return Ok(p);
     }
 
     /// Get the url str that will be used for this request.
@@ -521,22 +528,6 @@ impl Request {
                 // which case we definitely have a value in self.parsed_url.1
                 .expect("Illegal URL without original")
         }
-    }
-
-    /// Test whether the url for this request is valid. If this test is
-    /// `false`, the resulting use of this Request will fail with an error.
-    ///
-    /// ```
-    /// # fn main() -> Result<(), ureq::Error> {
-    /// # ureq::is_test(true);
-    /// let req = ureq::get("OMG SO WRONG");
-    ///
-    /// assert_eq!(req.is_url_valid(), false);
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub fn is_url_valid(&self) -> bool {
-        self.parsed_url.result.is_ok()
     }
 }
 

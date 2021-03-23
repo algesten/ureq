@@ -323,14 +323,6 @@ impl From<ParseError> for Error {
     }
 }
 
-impl From<&ParseError> for Error {
-    fn from(err: &ParseError) -> Self {
-        ErrorKind::InvalidUrl
-            .msg(&format!("failed to parse URL: {:?}", err))
-            .src(err.clone())
-    }
-}
-
 impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
