@@ -21,7 +21,10 @@ pub struct ParsedUrl {
     /// Url parse result kept as Result since we want to defer the surfacing of it
     /// until we do call()/send()/etc.
     result: std::result::Result<Url, url::ParseError>,
+    /// The original &str url, or None if constructed via url::Url.
     origin: Option<Arc<String>>,
+    /// Query pairs copied out from Cow<str> in url::Url when using Request::parsed_url().
+    query_pairs: Option<Vec<(String, String)>>,
 }
 
 impl fmt::Display for ParsedUrl {
@@ -59,7 +62,27 @@ impl ParsedUrl {
 
         let origin = origin.map(Arc::new);
 
-        ParsedUrl { result, origin }
+        ParsedUrl {
+            result,
+            origin,
+            query_pairs: None,
+        }
+    }
+
+    /// Prepares the ParsedUrl to return an owned copy from `Request::parsed_url()`.
+    fn cloned_with_query_pairs(&self) -> Self {
+        let mut clone = self.clone();
+        let mut query_pairs = vec![];
+
+        if let Ok(url) = &self.result {
+            for (k, v) in url.query_pairs() {
+                query_pairs.push((k.into(), v.into()));
+            }
+        }
+
+        clone.query_pairs = Some(query_pairs);
+
+        clone
     }
 
     // NOTICE:
@@ -110,17 +133,19 @@ impl ParsedUrl {
     ///     .query("foo", "43");
     ///
     /// assert_eq!(req.parsed_url().unwrap().query_pairs(), vec![
-    ///     ("foo".to_string(), "42".to_string()),
-    ///     ("foo".to_string(), "43".to_string())
+    ///     ("foo", "42"),
+    ///     ("foo", "43")
     /// ]);
     /// # Ok(())
     /// # }
     /// ```
-    pub fn query_pairs(&self) -> Vec<(String, String)> {
+    pub fn query_pairs(&self) -> Vec<(&str, &str)> {
         let mut ret = vec![];
 
-        for (k, v) in self.as_url().query_pairs() {
-            ret.push((k.into(), v.into()));
+        if let Some(v) = &self.query_pairs {
+            for (k, v) in v {
+                ret.push((k.as_str(), v.as_str()));
+            }
         }
 
         ret
@@ -475,7 +500,7 @@ impl Request {
     /// # }
     /// ```
     pub fn parsed_url(&self) -> Result<ParsedUrl> {
-        let p = self.parsed_url.clone();
+        let p = self.parsed_url.cloned_with_query_pairs();
 
         // If there is a parse error, surface it now.
         if let Err(e) = p.result {
