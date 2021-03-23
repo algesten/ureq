@@ -353,10 +353,8 @@ pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error
     let mut sock = connect_host(unit, hostname, port)?;
     let mut sess = rustls::ClientSession::new(&tls_conf, sni);
 
-    sess.complete_io(&mut sock).map_err(|err| {
-        ErrorKind::ConnectionFailed.new()
-            .src(err)
-    })?;
+    sess.complete_io(&mut sock)
+        .map_err(|err| ErrorKind::ConnectionFailed.new().src(err))?;
     let stream = rustls::StreamOwned::new(sess, sock);
 
     Ok(Stream::from_tls_stream(stream))
