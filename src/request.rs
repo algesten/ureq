@@ -18,71 +18,162 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// Parsed result of a request url with handy inspection methods.
 #[derive(Clone)]
 pub struct ParsedUrl {
-    /// Url parse result kept as Result since we want to defer the surfacing of it
-    /// until we do call()/send()/etc.
-    result: std::result::Result<Url, url::ParseError>,
-    /// The original &str url, or None if constructed via url::Url.
-    origin: Option<Arc<String>>,
-    /// Query pairs copied out from Cow<str> in url::Url when using Request::parsed_url().
-    query_pairs: Option<Vec<(String, String)>>,
+    url_state: UrlState,
 }
 
-impl fmt::Display for ParsedUrl {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Ok(url) = &self.result {
-            write!(f, "{}", url.as_str())
-        } else {
-            write!(f, "{:?}", self.result)
-        }
-    }
+/// Encapsulation of the various state a url can be in.
+#[derive(Clone)]
+enum UrlState {
+    /// String has not yet been parsed to a Url yet.
+    Unparsed(Arc<String>),
+    /// A successfully parsed url.
+    Parsed(Url),
+    /// Special state when using `Request::parsed_url().
+    /// Query pairs copied out from Cow<str> in url::Url.
+    ParsedAndQueryPairs(ParsedAndQueryPairs),
+    /// A url that failed to parse. The string is the original we tried to parse.
+    ParseError(Arc<String>, ParseError),
 }
 
-impl From<String> for ParsedUrl {
-    fn from(s: String) -> Self {
-        let result = s.parse();
-        let origin = if result.is_err() { Some(s) } else { None };
-        ParsedUrl::new(result, origin)
-    }
+#[derive(Clone)]
+struct ParsedAndQueryPairs {
+    url: Url,
+    query_pairs: Vec<(String, String)>,
 }
 
-impl From<Url> for ParsedUrl {
-    fn from(url: Url) -> Self {
-        ParsedUrl::new(Ok(url), None)
-    }
-}
-
-impl ParsedUrl {
-    fn new(mut result: std::result::Result<Url, ParseError>, origin: Option<String>) -> Self {
-        if let Ok(url) = &result {
-            if url.host_str().is_none() {
+impl UrlState {
+    fn ensure_correct(self) -> Self {
+        match self {
+            UrlState::Parsed(url) => {
                 // No hostname is fine for urls in general, but not for website urls.
-                result = Err(ParseError::EmptyHost);
+                if url.host_str().is_none() {
+                    return UrlState::ParseError(
+                        Arc::new(url.as_str().to_string()),
+                        ParseError::EmptyHost,
+                    );
+                }
+
+                // validated ok
+                UrlState::Parsed(url)
             }
+            x @ _ => x,
         }
+    }
 
-        let origin = origin.map(Arc::new);
-
-        ParsedUrl {
-            result,
-            origin,
-            query_pairs: None,
+    fn parse(self) -> Self {
+        match self {
+            UrlState::Unparsed(s) => match Url::parse(&*s) {
+                Ok(url) => UrlState::Parsed(url),
+                Err(err) => UrlState::ParseError(s, err),
+            },
+            x @ _ => x,
         }
     }
 
     /// Prepares the ParsedUrl to return an owned copy from `Request::parsed_url()`.
     fn cloned_with_query_pairs(&self) -> Self {
-        let mut clone = self.clone();
-        let mut query_pairs = vec![];
+        match self.clone().parse() {
+            UrlState::Parsed(url) => {
+                let mut query_pairs = vec![];
 
-        if let Ok(url) = &self.result {
-            for (k, v) in url.query_pairs() {
-                query_pairs.push((k.into(), v.into()));
+                for (k, v) in url.query_pairs() {
+                    query_pairs.push((k.into(), v.into()));
+                }
+
+                UrlState::ParsedAndQueryPairs(ParsedAndQueryPairs { url, query_pairs })
             }
+            x @ _ => x,
         }
+    }
 
-        clone.query_pairs = Some(query_pairs);
+    /// Force unwrap as ParsedAndQueryPairs.
+    fn unwrap_parsed_and_query_pairs(&self) -> &ParsedAndQueryPairs {
+        match self {
+            UrlState::ParsedAndQueryPairs(p) => p,
+            _ => panic!("as_parsed_and_query_pairs in unexpected state"),
+        }
+    }
 
-        clone
+    /// Append a query parameter. Causes parse() if need be.
+    fn query_append(self, param: &str, value: &str) -> Self {
+        let mut parsed = self.parse();
+        match &mut parsed {
+            UrlState::Parsed(url) => {
+                url.query_pairs_mut().append_pair(param, value);
+            }
+            UrlState::ParseError(_, _) => {
+                // ignore
+            }
+            _ => unreachable!(),
+        }
+        parsed
+    }
+}
+
+impl fmt::Display for UrlState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self {
+            UrlState::Unparsed(url) => write!(f, "{}", url),
+            UrlState::Parsed(url) => write!(f, "{}", url.as_str()),
+            UrlState::ParsedAndQueryPairs(p) => write!(f, "{}", p.url.as_str()),
+            UrlState::ParseError(_, error) => write!(f, "{:?}", error),
+        }
+    }
+}
+
+impl fmt::Display for ParsedUrl {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.url_state)
+    }
+}
+
+impl From<String> for ParsedUrl {
+    fn from(s: String) -> Self {
+        ParsedUrl::new(UrlState::Unparsed(Arc::new(s)))
+    }
+}
+
+impl From<Url> for ParsedUrl {
+    fn from(url: Url) -> Self {
+        ParsedUrl::new(UrlState::Parsed(url))
+    }
+}
+
+impl ParsedUrl {
+    fn new(url_state: UrlState) -> Self {
+        let url_state = url_state.ensure_correct();
+
+        ParsedUrl { url_state }
+    }
+
+    /// Prepares the ParsedUrl to return an owned copy from `Request::parsed_url()`.
+    fn cloned_with_query_pairs(&self) -> Self {
+        let url_state = self.url_state.cloned_with_query_pairs();
+        ParsedUrl { url_state }
+    }
+
+    fn into_result(self) -> std::result::Result<Url, ParseError> {
+        match self.url_state.parse() {
+            UrlState::Parsed(url) => Ok(url),
+            UrlState::ParseError(_, err) => Err(err),
+            _ => unreachable!(),
+        }
+    }
+
+    fn surface_error(self) -> std::result::Result<Self, ParseError> {
+        match self.url_state.parse() {
+            UrlState::ParseError(_, err) => Err(err),
+            url_state @ _ => Ok(ParsedUrl { url_state }),
+        }
+    }
+
+    fn as_str(&self) -> &str {
+        match &self.url_state {
+            UrlState::Unparsed(s) => s.as_str(),
+            UrlState::Parsed(u) => u.as_str(),
+            UrlState::ParsedAndQueryPairs(p) => p.url.as_str(),
+            UrlState::ParseError(s, _) => s.as_str(),
+        }
     }
 
     // NOTICE:
@@ -94,7 +185,7 @@ impl ParsedUrl {
 
     /// Handle the parsed url as a standard [`url::Url`].
     pub fn as_url(&self) -> &Url {
-        self.result.as_ref().unwrap()
+        &self.url_state.unwrap_parsed_and_query_pairs().url
     }
 
     /// Get the scheme of the parsed url, i.e. "https" or "http".
@@ -142,10 +233,9 @@ impl ParsedUrl {
     pub fn query_pairs(&self) -> Vec<(&str, &str)> {
         let mut ret = vec![];
 
-        if let Some(v) = &self.query_pairs {
-            for (k, v) in v {
-                ret.push((k.as_str(), v.as_str()));
-            }
+        let v = &self.url_state.unwrap_parsed_and_query_pairs().query_pairs;
+        for (k, v) in v {
+            ret.push((k.as_str(), v.as_str()));
         }
 
         ret
@@ -231,7 +321,7 @@ impl Request {
         for h in &self.headers {
             h.validate()?;
         }
-        let url = self.parsed_url.result?;
+        let url = self.parsed_url.into_result()?;
 
         let deadline = match self.timeout.or(self.agent.config.timeout) {
             None => None,
@@ -464,9 +554,7 @@ impl Request {
     /// # }
     /// ```
     pub fn query(mut self, param: &str, value: &str) -> Self {
-        if let Ok(url) = &mut self.parsed_url.result {
-            url.query_pairs_mut().append_pair(param, value);
-        }
+        self.parsed_url.url_state = self.parsed_url.url_state.query_append(param, value);
         self
     }
 
@@ -503,9 +591,7 @@ impl Request {
         let p = self.parsed_url.cloned_with_query_pairs();
 
         // If there is a parse error, surface it now.
-        if let Err(e) = p.result {
-            return Err(e.into());
-        }
+        let p = p.surface_error()?;
 
         return Ok(p);
     }
@@ -541,18 +627,7 @@ impl Request {
     /// # }
     /// ```
     pub fn url(&self) -> &str {
-        if let Ok(url) = &self.parsed_url.result {
-            url.as_str()
-        } else {
-            self.parsed_url
-                .origin
-                .as_ref()
-                .map(|s| s.as_str())
-                // This should not happen since we either created Request using a valid Url
-                // object, in which case we have Ok(url) above, or we used a String, in
-                // which case we definitely have a value in self.parsed_url.1
-                .expect("Illegal URL without original")
-        }
+        self.parsed_url.as_str()
     }
 }
 
@@ -577,12 +652,4 @@ fn send_byte_slice() {
         .post("http://example.com")
         .send(&bytes[1..2])
         .ok();
-}
-
-#[test]
-fn empty_host_url() {
-    let url = url::Url::parse("file:///some/path").unwrap();
-    let parsed = ParsedUrl::new(Ok(url), None);
-    assert!(parsed.result.is_err());
-    assert_eq!(parsed.result.unwrap_err(), ParseError::EmptyHost);
 }
