@@ -1,7 +1,7 @@
 use std::io::Read;
 use std::{fmt, time};
 
-use url::{form_urlencoded, Url};
+use url::{form_urlencoded, ParseError, Url};
 
 use crate::body::Payload;
 use crate::header::{self, Header};
@@ -14,30 +14,113 @@ use super::SerdeValue;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// Parsed result of a request url with handy inspection methods.
 #[derive(Clone)]
-struct ParsedUrl(std::result::Result<Url, url::ParseError>, Option<String>);
+pub struct ParsedUrl {
+    /// Url parse result kept as Result since we want to defer the surfacing of it
+    /// until we do call()/send()/etc.
+    result: std::result::Result<Url, url::ParseError>,
+    origin: Option<String>,
+}
 
 impl fmt::Display for ParsedUrl {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Ok(url) = &self.0 {
+        if let Ok(url) = &self.result {
             write!(f, "{}", url.as_str())
         } else {
-            write!(f, "{:?}", self.0)
+            write!(f, "{:?}", self.result)
         }
     }
 }
 
 impl From<String> for ParsedUrl {
     fn from(s: String) -> Self {
-        let url = s.parse();
-        let orig = if url.is_err() { Some(s) } else { None };
-        ParsedUrl(url, orig)
+        let result = s.parse();
+        let origin = if result.is_err() { Some(s) } else { None };
+        ParsedUrl::new(result, origin)
     }
 }
 
 impl From<Url> for ParsedUrl {
     fn from(url: Url) -> Self {
-        ParsedUrl(Ok(url), None)
+        ParsedUrl::new(Ok(url), None)
+    }
+}
+
+impl ParsedUrl {
+    fn new(mut result: std::result::Result<Url, ParseError>, origin: Option<String>) -> Self {
+        if let Ok(url) = &result {
+            if url.host_str().is_none() {
+                // No hostname is fine for urls in general, but not for website urls.
+                result = Err(ParseError::EmptyHost);
+            }
+        }
+
+        ParsedUrl { result, origin }
+    }
+
+    // NOTICE:
+    // The unwrap() in all folllowing functions is ok because
+    // we can only get a `ParsedUrl` via `Request::parsed_url()`, in
+    // which case a potential error state is surfaced. In other words,
+    // if the user has an instance of ParsedUrl, they are guaranteed it
+    // contains an Ok() value.
+
+    /// Handle the parsed url as a standard [`url::Url`].
+    pub fn as_url(&self) -> &Url {
+        self.result.as_ref().unwrap()
+    }
+
+    /// Get the scheme of the parsed url, i.e. "https" or "http".
+    pub fn scheme(&self) -> &str {
+        self.as_url().scheme()
+    }
+
+    /// Host of the parsed url.
+    pub fn host(&self) -> &str {
+        // this unwrap() is ok, because ParsedUrl is tested for empty host
+        // urls in ParsedUrl::new(). At this point we are guaranteed there
+        // is no empty host.
+        self.as_url().host_str().unwrap()
+    }
+
+    /// Port of the parsed url, if available. Ports are only available if they
+    /// are present in the original url. Specifically the scheme default ports,
+    /// 443 for `https` and and 80 for `http` are `None` unless explicitly
+    /// set in the url, i.e. `https://my-host.com:443/some/path`.
+    pub fn port(&self) -> Option<u16> {
+        self.as_url().port()
+    }
+
+    /// Path of the parsed url.
+    pub fn path(&self) -> &str {
+        self.as_url().path()
+    }
+
+    /// Returns all query parameters as a vector of key-value pairs.
+    ///
+    /// ```
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// let req = ureq::get("http://httpbin.org/get")
+    ///     .query("foo", "42")
+    ///     .query("foo", "43");
+    ///
+    /// assert_eq!(req.parsed_url().unwrap().query_pairs(), vec![
+    ///     ("foo".to_string(), "42".to_string()),
+    ///     ("foo".to_string(), "43".to_string())
+    /// ]);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn query_pairs(&self) -> Vec<(String, String)> {
+        let mut ret = vec![];
+
+        for (k, v) in self.as_url().query_pairs() {
+            ret.push((k.into(), v.into()));
+        }
+
+        ret
     }
 }
 
@@ -120,7 +203,7 @@ impl Request {
         for h in &self.headers {
             h.validate()?;
         }
-        let url = self.parsed_url.0?;
+        let url = self.parsed_url.result?;
 
         let deadline = match self.timeout.or(self.agent.config.timeout) {
             None => None,
@@ -353,7 +436,7 @@ impl Request {
     /// # }
     /// ```
     pub fn query(mut self, param: &str, value: &str) -> Self {
-        if let Ok(url) = &mut self.parsed_url.0 {
+        if let Ok(url) = &mut self.parsed_url.result {
             url.query_pairs_mut().append_pair(param, value);
         }
         self
@@ -370,41 +453,13 @@ impl Request {
         &self.method
     }
 
-    /// Returns all query parameters as a vector of key-value pairs.
-    ///
-    /// ```
-    /// # fn main() -> Result<(), ureq::Error> {
-    /// # ureq::is_test(true);
-    /// let req = ureq::get("http://httpbin.org/get")
-    ///     .query("foo", "42")
-    ///     .query("foo", "43");
-    ///
-    /// assert_eq!(req.query_params(), vec![
-    ///     ("foo".to_string(), "42".to_string()),
-    ///     ("foo".to_string(), "43".to_string())
-    /// ]);
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub fn query_params(&self) -> Vec<(String, String)> {
-        let mut ret = vec![];
-
-        if let Ok(url) = &self.parsed_url.0 {
-            for (k, v) in url.query_pairs() {
-                ret.push((k.into(), v.into()));
-            }
-        }
-
-        ret
-    }
-
-    /// Get a clone of the Url that will be used for this request.
+    /// Get the parsed url that will be used for this request.
     ///
     /// The url might differ from that originally provided when constructing the
     /// request if additional query parameters have been added using [`Request::query()`].
     ///
     /// The url is wrapped in a `Result` since a common use case is to construct
-    /// the [`Request`] using a `&str`.
+    /// the [`Request`] using a `&str` in which case the url is parsed.
     ///
     /// ```
     /// # fn main() -> Result<(), ureq::Error> {
@@ -412,12 +467,15 @@ impl Request {
     /// let req = ureq::get("http://httpbin.org/get")
     ///     .query("foo", "bar");
     ///
-    /// assert_eq!(req.parsed_url().unwrap().as_str(), "http://httpbin.org/get?foo=bar");
+    /// assert_eq!(req.parsed_url().unwrap().host(), "httpbin.org");
     /// # Ok(())
     /// # }
     /// ```
-    pub fn parsed_url(&self) -> Result<Url> {
-        Ok(self.parsed_url.0.clone()?)
+    pub fn parsed_url(&self) -> Result<&ParsedUrl> {
+        // If there is a parse error, surface it now.
+        let _ = self.parsed_url.result.as_ref()?;
+
+        return Ok(&self.parsed_url);
     }
 
     /// Get the url str that will be used for this request.
@@ -451,11 +509,11 @@ impl Request {
     /// # }
     /// ```
     pub fn url(&self) -> &str {
-        if let Ok(url) = &self.parsed_url.0 {
+        if let Ok(url) = &self.parsed_url.result {
             url.as_str()
         } else {
             self.parsed_url
-                .1
+                .origin
                 .as_ref()
                 .map(|s| s.as_str())
                 // This should not happen since we either created Request using a valid Url
@@ -478,7 +536,7 @@ impl Request {
     /// # }
     /// ```
     pub fn is_url_valid(&self) -> bool {
-        self.parsed_url.0.is_ok()
+        self.parsed_url.result.is_ok()
     }
 }
 
@@ -503,4 +561,12 @@ fn send_byte_slice() {
         .post("http://example.com")
         .send(&bytes[1..2])
         .ok();
+}
+
+#[test]
+fn empty_host_url() {
+    let url = url::Url::parse("file:///some/path").unwrap();
+    let parsed = ParsedUrl::new(Ok(url), None);
+    assert!(parsed.result.is_err());
+    assert_eq!(parsed.result.unwrap_err(), ParseError::EmptyHost);
 }
