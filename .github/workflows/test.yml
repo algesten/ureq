@@ -10,7 +10,8 @@ jobs:
     - uses: actions/checkout@v2
     - name: Run Rustfmt
       run: cargo fmt -- --check
-
+    - name: Run Clippy
+      run: RUSTFLAGS="-D warnings" cargo clippy      
   doc:
     name: Docs
     runs-on: ubuntu-latest
