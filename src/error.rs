@@ -288,6 +288,8 @@ pub enum ErrorKind {
 }
 
 impl ErrorKind {
+    #[allow(clippy::wrong_self_convention)]
+    #[allow(clippy::new_ret_no_self)]
     pub(crate) fn new(self) -> Error {
         Error::new(self, None)
     }
