@@ -20,7 +20,7 @@ use encoding_rs::Encoding;
 
 pub const DEFAULT_CONTENT_TYPE: &str = "text/plain";
 pub const DEFAULT_CHARACTER_SET: &str = "utf-8";
-const INTO_STRING_LIMIT: usize = 1_024 * 1_024;
+const INTO_STRING_LIMIT: usize = 10 * 1_024 * 1_024;
 // Follow the example of curl and limit a single header to 100kB:
 // https://curl.se/libcurl/c/CURLOPT_HEADERFUNCTION.html
 const MAX_HEADER_SIZE: usize = 100 * 1_024;
@@ -216,6 +216,11 @@ impl Response {
     ///    length regardless of how many bytes the server sends.
     /// 3. If no length header, the reader is until server stream end.
     ///
+    /// Note: If you use `read_to_end()` on the resulting reader, a malicious
+    /// server might return enough bytes to exhaust available memroy. If you're
+    /// making requests to untrusted servers, you should use `.take()` to
+    /// limit the response bytes read.
+    ///
     /// Example:
     ///
     /// ```
@@ -231,6 +236,7 @@ impl Response {
     ///
     /// let mut bytes: Vec<u8> = Vec::with_capacity(len);
     /// resp.into_reader()
+    ///     .take(10_000_000)
     ///     .read_to_end(&mut bytes)?;
     ///
     /// assert_eq!(bytes.len(), len);
@@ -296,7 +302,7 @@ impl Response {
     /// implementation first reads the reader to end into a `Vec<u8>` and then
     /// attempts to decode it using the charset.
     ///
-    /// If the response is larger than 1 megabyte, this will return an error.
+    /// If the response is larger than 10 megabytes, this will return an error.
     ///
     /// Example:
     ///
