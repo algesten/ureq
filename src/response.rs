@@ -58,8 +58,10 @@ pub struct Response {
     index: ResponseStatusIndex,
     status: u16,
     headers: Vec<Header>,
-    unit: Option<Unit>,
-    stream: Stream,
+    // Boxed to avoid taking up too much size.
+    unit: Option<Box<Unit>>,
+    // Boxed to avoid taking up too much size.
+    stream: Box<Stream>,
     /// The redirect history of this response, if any. The history starts with
     /// the first response received and ends with the response immediately
     /// previous to this one.
@@ -255,7 +257,7 @@ impl Response {
             .map(|c| c.eq_ignore_ascii_case("close"))
             .unwrap_or(false);
 
-        let is_head = (&self.unit).as_ref().map(|u| u.is_head()).unwrap_or(false);
+        let is_head = self.unit.as_ref().map(|u| u.is_head()).unwrap_or(false);
         let has_no_body = is_head
             || match self.status {
                 204 | 304 => true,
@@ -288,7 +290,7 @@ impl Response {
             }
         }
         let deadline = unit.as_ref().and_then(|u| u.deadline);
-        let stream = DeadlineStream::new(stream, deadline);
+        let stream = DeadlineStream::new(*stream, deadline);
 
         match (use_chunked, limit_bytes) {
             (true, _) => Box::new(PoolReturnRead::new(unit, ChunkDecoder::new(stream))),
@@ -482,8 +484,8 @@ impl Response {
             index,
             status,
             headers,
-            unit,
-            stream: stream.into(),
+            unit: unit.map(Box::new),
+            stream: Box::new(stream.into()),
             history: vec![],
         })
     }
@@ -954,5 +956,13 @@ mod tests {
     fn response_implements_send_and_sync() {
         let _response: Box<dyn Send> = Box::new(Response::new(302, "Found", "").unwrap());
         let _response: Box<dyn Sync> = Box::new(Response::new(302, "Found", "").unwrap());
+    }
+
+    #[test]
+    fn ensure_response_size() {
+        // This is platform dependent, so we can't be too strict or precise.
+        let size = std::mem::size_of::<Response>();
+        println!("Response size: {}", size);
+        assert!(size < 400); // 200 on Macbook M1
     }
 }

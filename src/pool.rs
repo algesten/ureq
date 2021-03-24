@@ -225,13 +225,13 @@ impl PoolKey {
 /// *Internal API*
 pub(crate) struct PoolReturnRead<R: Read + Sized + Into<Stream>> {
     // unit that contains the agent where we want to return the reader.
-    unit: Option<Unit>,
+    unit: Option<Box<Unit>>,
     // wrapped reader around the same stream
     reader: Option<R>,
 }
 
 impl<R: Read + Sized + Into<Stream>> PoolReturnRead<R> {
-    pub fn new(unit: Option<Unit>, reader: R) -> Self {
+    pub fn new(unit: Option<Box<Unit>>, reader: R) -> Self {
         PoolReturnRead {
             unit,
             reader: Some(reader),
