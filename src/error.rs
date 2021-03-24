@@ -416,4 +416,12 @@ mod tests {
         let _error: Box<dyn Send> = Box::new(Error::new(ErrorKind::Io, None));
         let _error: Box<dyn Sync> = Box::new(Error::new(ErrorKind::Io, None));
     }
+
+    #[test]
+    fn ensure_error_size() {
+        // This is platform dependent, so we can't be too strict or precise.
+        let size = std::mem::size_of::<Error>();
+        println!("Error size: {}", size);
+        assert!(size < 500); // 344 on Macbook M1
+    }
 }
