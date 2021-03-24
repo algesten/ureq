@@ -353,11 +353,8 @@ pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error
     let mut sock = connect_host(unit, hostname, port)?;
     let mut sess = rustls::ClientSession::new(&tls_conf, sni);
 
-    sess.complete_io(&mut sock).map_err(|err| {
-        ErrorKind::ConnectionFailed
-            .msg("error during TLS handshake. Sometimes this means the host doesn't support any of the same ciphersuites as rustls, or doesn't support TLS 1.2 and above")
-            .src(err)
-    })?;
+    sess.complete_io(&mut sock)
+        .map_err(|err| ErrorKind::ConnectionFailed.new().src(err))?;
     let stream = rustls::StreamOwned::new(sess, sock);
 
     Ok(Stream::from_tls_stream(stream))
