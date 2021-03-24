@@ -472,28 +472,7 @@ fn is_cookie_rfc_compliant(cookie: &Cookie) -> bool {
     //                       | "{" | "}" | SP | HT
 
     fn is_valid_name(b: &u8) -> bool {
-        b.is_ascii()
-            && !b.is_ascii_control()
-            && !b.is_ascii_whitespace()
-            && *b != b'('
-            && *b != b')'
-            && *b != b'<'
-            && *b != b'>'
-            && *b != b'@'
-            && *b != b','
-            && *b != b';'
-            && *b != b':'
-            && *b != b'\\'
-            && *b != b'\"'
-            && *b != b'/'
-            && *b != b'['
-            && *b != b']'
-            && *b != b'?'
-            && *b != b'='
-            && *b != b'{'
-            && *b != b'}'
-            && *b != b' '
-            && *b != b'\t'
+        header::is_tchar(b)
     }
 
     fn is_valid_value(b: &u8) -> bool {

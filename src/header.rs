@@ -190,7 +190,7 @@ fn valid_name(name: &[u8]) -> bool {
 }
 
 #[inline]
-fn is_tchar(b: &u8) -> bool {
+pub(crate) fn is_tchar(b: &u8) -> bool {
     match b {
         b'!' | b'#' | b'$' | b'%' | b'&' => true,
         b'\'' | b'*' | b'+' | b'-' | b'.' => true,
