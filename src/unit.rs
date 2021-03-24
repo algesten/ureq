@@ -301,6 +301,15 @@ fn extract_cookies(agent: &Agent, url: &Url) -> Option<Header> {
         .cookie_tin
         .get_request_cookies(url)
         .iter()
+        // This guards against sending rfc non-compliant cookies, even if the user has
+        // "prepped" their local cookie store with such cookies.
+        .filter(|c| {
+            let is_ok = is_cookie_rfc_compliant(c);
+            if !is_ok {
+                debug!("do not send non compliant cookie: {:?}", c);
+            }
+            is_ok
+        })
         .map(|c| c.to_string())
         .collect::<Vec<_>>()
         .join(";");
@@ -419,13 +428,103 @@ fn save_cookies(unit: &Unit, resp: &Response) {
         );
         match Cookie::parse(header_value.to_string()) {
             Err(_) => None,
-            Ok(c) => Some(c),
+            Ok(c) => {
+                // This guards against accepting rfc non-compliant cookies from a host.
+                if is_cookie_rfc_compliant(&c) {
+                    Some(c)
+                } else {
+                    debug!("ignore incoming non compliant cookie: {:?}", c);
+                    None
+                }
+            }
         }
     });
     unit.agent
         .state
         .cookie_tin
         .store_response_cookies(cookies, &unit.url.clone());
+}
+
+#[cfg(feature = "cookies")]
+fn is_cookie_rfc_compliant(cookie: &Cookie) -> bool {
+    // https://tools.ietf.org/html/rfc6265#page-9
+    // set-cookie-header = "Set-Cookie:" SP set-cookie-string
+    // set-cookie-string = cookie-pair *( ";" SP cookie-av )
+    // cookie-pair       = cookie-name "=" cookie-value
+    // cookie-name       = token
+    // cookie-value      = *cookie-octet / ( DQUOTE *cookie-octet DQUOTE )
+    // cookie-octet      = %x21 / %x23-2B / %x2D-3A / %x3C-5B / %x5D-7E
+    //                       ; US-ASCII characters excluding CTLs,
+    //                       ; whitespace DQUOTE, comma, semicolon,
+    //                       ; and backslash
+    // token             = <token, defined in [RFC2616], Section 2.2>
+
+    // https://tools.ietf.org/html/rfc2616#page-17
+    // CHAR           = <any US-ASCII character (octets 0 - 127)>
+    // ...
+    //        CTL            = <any US-ASCII control character
+    //                         (octets 0 - 31) and DEL (127)>
+    // ...
+    //        token          = 1*<any CHAR except CTLs or separators>
+    //        separators     = "(" | ")" | "<" | ">" | "@"
+    //                       | "," | ";" | ":" | "\" | <">
+    //                       | "/" | "[" | "]" | "?" | "="
+    //                       | "{" | "}" | SP | HT
+
+    fn is_valid_name(b: &u8) -> bool {
+        b.is_ascii()
+            && !b.is_ascii_control()
+            && !b.is_ascii_whitespace()
+            && *b != b'('
+            && *b != b')'
+            && *b != b'<'
+            && *b != b'>'
+            && *b != b'@'
+            && *b != b','
+            && *b != b';'
+            && *b != b':'
+            && *b != b'\\'
+            && *b != b'\"'
+            && *b != b'/'
+            && *b != b'['
+            && *b != b']'
+            && *b != b'?'
+            && *b != b'='
+            && *b != b'{'
+            && *b != b'}'
+            && *b != b' '
+            && *b != b'\t'
+    }
+
+    fn is_valid_value(b: &u8) -> bool {
+        b.is_ascii()
+            && !b.is_ascii_control()
+            && !b.is_ascii_whitespace()
+            && *b != b'"'
+            && *b != b','
+            && *b != b';'
+            && *b != b'\\'
+    }
+
+    let name = cookie.name().as_bytes();
+
+    let valid_name = name.iter().all(is_valid_name);
+
+    if !valid_name {
+        log::trace!("cookie name is not valid: {:?}", cookie.name());
+        return false;
+    }
+
+    let value = cookie.value().as_bytes();
+
+    let valid_value = value.iter().all(is_valid_value);
+
+    if !valid_value {
+        log::trace!("cookie value is not valid: {:?}", cookie.value());
+        return false;
+    }
+
+    true
 }
 
 #[cfg(test)]
@@ -463,17 +562,49 @@ mod tests {
     }
 
     #[test]
-    fn cookies_not_percent_encoded() {
+    fn not_send_illegal_cookies() {
+        // This prepares a cookie store with a cookie that isn't legal
+        // according to the relevant rfcs. ureq should not send this.
         let empty = b"";
         let mut store = CookieStore::load_json(&empty[..]).unwrap();
         let url = Url::parse("https://mydomain.com").unwrap();
         let cookie = Cookie::new("borked///", "illegal<>//");
         store.insert_raw(&cookie, &url).unwrap();
+
         let agent = crate::builder().cookie_store(store).build();
         let cookies = extract_cookies(&agent, &url);
-        assert_eq!(
-            cookies,
-            Some(Header::new("Cookie", "borked///=illegal<>//"))
-        );
+        assert_eq!(cookies, None);
+    }
+
+    #[test]
+    fn check_cookie_crate_allows_illegal() {
+        // This test is there to see whether the cookie crate enforces
+        // https://tools.ietf.org/html/rfc6265#page-9
+        // https://tools.ietf.org/html/rfc2616#page-17
+        // for cookie name or cookie value.
+        // As long as it doesn't, we do additional filtering in ureq
+        // to not let non-compliant cookies through.
+        let cookie = Cookie::parse("borked///=illegal\\,").unwrap();
+        // these should not be allowed according to the RFCs.
+        assert_eq!(cookie.name(), "borked///");
+        assert_eq!(cookie.value(), "illegal\\,");
+    }
+
+    #[test]
+    fn illegal_cookie_name() {
+        let cookie = Cookie::parse("borked/=value").unwrap();
+        assert!(!is_cookie_rfc_compliant(&cookie));
+    }
+
+    #[test]
+    fn illegal_cookie_value() {
+        let cookie = Cookie::parse("name=borked,").unwrap();
+        assert!(!is_cookie_rfc_compliant(&cookie));
+    }
+
+    #[test]
+    fn legal_cookie_name_value() {
+        let cookie = Cookie::parse("name=value").unwrap();
+        assert!(is_cookie_rfc_compliant(&cookie));
     }
 }
