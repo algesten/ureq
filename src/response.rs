@@ -20,6 +20,7 @@ use encoding_rs::Encoding;
 
 pub const DEFAULT_CONTENT_TYPE: &str = "text/plain";
 pub const DEFAULT_CHARACTER_SET: &str = "utf-8";
+const INTO_STRING_LIMIT: usize = 1_024 * 1_024;
 
 /// Response instances are created as results of firing off requests.
 ///
@@ -291,6 +292,8 @@ impl Response {
     /// implementation first reads the reader to end into a `Vec<u8>` and then
     /// attempts to decode it using the charset.
     ///
+    /// If the response is larger than 1 megabyte, this will return an error.
+    ///
     /// Example:
     ///
     /// ```
@@ -321,14 +324,30 @@ impl Response {
                 .or_else(|| Encoding::for_label(DEFAULT_CHARACTER_SET.as_bytes()))
                 .unwrap();
             let mut buf: Vec<u8> = vec![];
-            self.into_reader().read_to_end(&mut buf)?;
+            self.into_reader()
+                .take((INTO_STRING_LIMIT + 1) as u64)
+                .read_to_end(&mut buf)?;
+            if buf.len() > INTO_STRING_LIMIT {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "response too big for into_string",
+                ));
+            }
             let (text, _, _) = encoding.decode(&buf);
             Ok(text.into_owned())
         }
         #[cfg(not(feature = "charset"))]
         {
             let mut buf: Vec<u8> = vec![];
-            self.into_reader().read_to_end(&mut buf)?;
+            self.into_reader()
+                .take((INTO_STRING_LIMIT + 1) as u64)
+                .read_to_end(&mut buf)?;
+            if buf.len() > INTO_STRING_LIMIT {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "response too big for into_string",
+                ));
+            }
             Ok(String::from_utf8_lossy(&buf).to_string())
         }
     }
@@ -753,6 +772,25 @@ mod tests {
                  \r\n";
         let resp = s.parse::<Response>().unwrap();
         assert_eq!("hello world!!!", resp.into_string().unwrap());
+    }
+
+    #[test]
+    fn into_string_large() {
+        const LEN: usize = INTO_STRING_LIMIT + 1;
+        let s = format!(
+            "HTTP/1.1 200 OK\r\n\
+                 Content-Length: {}\r\n
+                 \r\n
+                 {}",
+            LEN,
+            "A".repeat(LEN),
+        );
+        let result = s.parse::<Response>().unwrap();
+        let err = result
+            .into_string()
+            .expect_err("didn't error with too-long body");
+        assert_eq!(err.to_string(), "response too big for into_string");
+        assert_eq!(err.kind(), io::ErrorKind::Other);
     }
 
     #[test]
