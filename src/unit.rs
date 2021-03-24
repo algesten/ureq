@@ -301,7 +301,7 @@ fn extract_cookies(agent: &Agent, url: &Url) -> Option<Header> {
         .cookie_tin
         .get_request_cookies(url)
         .iter()
-        .map(|c| c.encoded().to_string())
+        .map(|c| c.to_string())
         .collect::<Vec<_>>()
         .join(";");
     match header_value.as_str() {
@@ -431,6 +431,9 @@ fn save_cookies(unit: &Unit, resp: &Response) {
 #[cfg(test)]
 #[cfg(feature = "cookies")]
 mod tests {
+    use cookie::Cookie;
+    use cookie_store::CookieStore;
+
     use super::*;
 
     use crate::Agent;
@@ -456,6 +459,21 @@ mod tests {
         assert!(
             result == Some(Header::new("Cookie", order1))
                 || result == Some(Header::new("Cookie", order2))
+        );
+    }
+
+    #[test]
+    fn cookies_not_percent_encoded() {
+        let empty = b"";
+        let mut store = CookieStore::load_json(&empty[..]).unwrap();
+        let url = Url::parse("https://mydomain.com").unwrap();
+        let cookie = Cookie::new("borked///", "illegal<>//");
+        store.insert_raw(&cookie, &url).unwrap();
+        let agent = crate::builder().cookie_store(store).build();
+        let cookies = extract_cookies(&agent, &url);
+        assert_eq!(
+            cookies,
+            Some(Header::new("Cookie", "borked///=illegal<>//"))
         );
     }
 }
