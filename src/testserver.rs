@@ -113,13 +113,8 @@ pub fn read_request(stream: &TcpStream) -> TestHeaders {
     // There's a risk stream is ended here, and fill_buf() would block.
     stream.set_nonblocking(true).ok();
     let mut reader = BufReader::new(stream);
-    loop {
-        let amount = match reader.fill_buf() {
-            Ok(buf) => buf.len(),
-            Err(_) => {
-                break;
-            }
-        };
+    while let Ok(buf) = reader.fill_buf() {
+        let amount = buf.len();
         if amount == 0 {
             break;
         }
@@ -148,17 +143,13 @@ impl TestServer {
             }
         });
         // before returning from new(), ensure the server is ready to accept connections
-        loop {
-            if let Err(e) = TcpStream::connect(format!("127.0.0.1:{}", port)) {
-                match e.kind() {
-                    io::ErrorKind::ConnectionRefused => {
-                        std::thread::sleep(Duration::from_millis(100));
-                        continue;
-                    }
-                    _ => eprintln!("testserver: pre-connect with error {}", e),
+        while let Err(e) = TcpStream::connect(format!("127.0.0.1:{}", port)) {
+            match e.kind() {
+                io::ErrorKind::ConnectionRefused => {
+                    std::thread::sleep(Duration::from_millis(100));
+                    continue;
                 }
-            } else {
-                break;
+                _ => eprintln!("testserver: pre-connect with error {}", e),
             }
         }
         TestServer {
@@ -172,9 +163,8 @@ impl Drop for TestServer {
     fn drop(&mut self) {
         self.done.store(true, Ordering::SeqCst);
         // Connect once to unblock the listen loop.
-        match TcpStream::connect(format!("localhost:{}", self.port)) {
-            Err(e) => eprintln!("error dropping testserver: {}", e),
-            _ => {}
+        if let Err(e) = TcpStream::connect(format!("localhost:{}", self.port)) {
+            eprintln!("error dropping testserver: {}", e);
         }
     }
 }

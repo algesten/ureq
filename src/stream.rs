@@ -25,6 +25,7 @@ pub(crate) struct Stream {
     inner: BufReader<Inner>,
 }
 
+#[allow(clippy::large_enum_variant)]
 enum Inner {
     Http(TcpStream),
     #[cfg(feature = "tls")]

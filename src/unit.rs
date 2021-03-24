@@ -36,7 +36,7 @@ impl Unit {
         agent: &Agent,
         method: &str,
         url: &Url,
-        headers: &Vec<Header>,
+        headers: &[Header],
         body: &SizedReader,
         deadline: Option<time::Instant>,
     ) -> Self {
@@ -229,7 +229,7 @@ fn connect_inner(
     let host = unit
         .url
         .host_str()
-        .ok_or(ErrorKind::InvalidUrl.msg("no host in URL"))?;
+        .ok_or_else(|| ErrorKind::InvalidUrl.msg("no host in URL"))?;
     let url = &unit.url;
     let method = &unit.method;
     // open socket

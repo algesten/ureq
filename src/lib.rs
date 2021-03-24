@@ -1,5 +1,10 @@
 #![forbid(unsafe_code)]
 #![warn(clippy::all)]
+// new is just more readable than ..Default::default().
+#![allow(clippy::new_without_default)]
+// the matches! macro is obscure and not widely known.
+#![allow(clippy::match_like_matches_macro)]
+
 //! A simple, safe HTTP client.
 //!
 //! Ureq's first priority is being easy for you to use. It's great for
@@ -327,8 +332,7 @@ pub fn is_test(is: bool) -> bool {
     if is {
         IS_TEST.store(true, Ordering::SeqCst);
     }
-    let x = IS_TEST.load(Ordering::SeqCst);
-    x
+    IS_TEST.load(Ordering::SeqCst)
 }
 
 /// Agents are used to hold configuration and keep state between requests.
