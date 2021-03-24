@@ -74,10 +74,14 @@ impl fmt::Debug for Response {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "Response[status: {}, status_text: {}]",
+            "Response[status: {}, status_text: {}",
             self.status(),
-            self.status_text()
-        )
+            self.status_text(),
+        )?;
+        if let Some(url) = &self.url {
+            write!(f, ", url: {}", url)?;
+        }
+        write!(f, "]")
     }
 }
 
