@@ -1,3 +1,13 @@
+# 2.1.0
+ * Bugfix: allow status lines without a reason phrase (#316)
+ * Example: "cureq" to easier make ad-hoc command line tests (#330)
+ * Override timeout per Request (#335)
+ * Bugfix: handle non-utf8 status and headers (#347) and better errors (#329)
+ * Request inspection (method, url, etc) (#310, #350)
+ * Bugfix: stop percent encoding cookies (#353)
+ * Enforce cookie RFC naming/value rules (#353)
+ * Bugfix: reduce error struct size (#356)
+
 # 2.0.2
  * Bugfix: Apply deadline across redirects. (#313)
  * OrAnyStatus::or_any_status ergonomic helper
