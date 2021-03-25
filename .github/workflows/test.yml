@@ -6,6 +6,8 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    env: 
+      RUSTFLAGS: -D warnings
     steps:
     - uses: actions/checkout@v2
     - name: Install Rust
@@ -15,10 +17,13 @@ jobs:
         override: true
     - name: Run Rustfmt
       uses: actions-rs/cargo@v1
-      run: cargo fmt -- --check
+      with:
+        command: fmt
+        args: -- --check
     - name: Run Clippy
       uses: actions-rs/cargo@v1
-      run: RUSTFLAGS="-D warnings" cargo clippy      
+      with:
+        command: clippy
   doc:
     name: Docs
     runs-on: ubuntu-latest
