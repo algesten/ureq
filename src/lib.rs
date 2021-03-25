@@ -4,6 +4,8 @@
 #![allow(clippy::new_without_default)]
 // the matches! macro is obscure and not widely known.
 #![allow(clippy::match_like_matches_macro)]
+// we're not changing public api due to a lint.
+#![allow(clippy::upper_case_acronyms)]
 
 //! A simple, safe HTTP client.
 //!
