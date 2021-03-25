@@ -333,35 +333,28 @@ impl Response {
     ///
     pub fn into_string(self) -> io::Result<String> {
         #[cfg(feature = "charset")]
+        let encoding = Encoding::for_label(self.charset().as_bytes())
+            .or_else(|| Encoding::for_label(DEFAULT_CHARACTER_SET.as_bytes()))
+            .unwrap();
+
+        let mut buf: Vec<u8> = vec![];
+        self.into_reader()
+            .take((INTO_STRING_LIMIT + 1) as u64)
+            .read_to_end(&mut buf)?;
+        if buf.len() > INTO_STRING_LIMIT {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "response too big for into_string",
+            ));
+        }
+
+        #[cfg(feature = "charset")]
         {
-            let encoding = Encoding::for_label(self.charset().as_bytes())
-                .or_else(|| Encoding::for_label(DEFAULT_CHARACTER_SET.as_bytes()))
-                .unwrap();
-            let mut buf: Vec<u8> = vec![];
-            self.into_reader()
-                .take((INTO_STRING_LIMIT + 1) as u64)
-                .read_to_end(&mut buf)?;
-            if buf.len() > INTO_STRING_LIMIT {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "response too big for into_string",
-                ));
-            }
             let (text, _, _) = encoding.decode(&buf);
             Ok(text.into_owned())
         }
         #[cfg(not(feature = "charset"))]
         {
-            let mut buf: Vec<u8> = vec![];
-            self.into_reader()
-                .take((INTO_STRING_LIMIT + 1) as u64)
-                .read_to_end(&mut buf)?;
-            if buf.len() > INTO_STRING_LIMIT {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "response too big for into_string",
-                ));
-            }
             Ok(String::from_utf8_lossy(&buf).to_string())
         }
     }
