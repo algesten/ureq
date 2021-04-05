@@ -257,6 +257,7 @@ fn connect_inner(
     }
     let retryable = unit.is_retryable(&body);
 
+    debug!("Sending request body");
     // send the body (which can be empty now depending on redirects)
     body::send_body(body, unit.is_chunked, &mut stream)?;
 
@@ -280,7 +281,10 @@ fn connect_inner(
             // NOTE: this recurses at most once because `use_pooled` is `false`.
             return connect_inner(unit, false, empty, previous);
         }
-        Err(e) => return Err(e),
+        Err(e) => {
+            debug!("Unable to retry request: {:?}", e);
+            return Err(e);
+        },
         Ok(resp) => resp,
     };
 
