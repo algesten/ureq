@@ -182,5 +182,5 @@ pub(crate) fn send_body(
         copy(&mut body.reader, stream)?;
     };
 
-    Ok(())
+    stream.flush()
 }

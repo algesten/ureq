@@ -396,6 +396,7 @@ fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> io::Result<()>
     debug!("writing prelude: {}", String::from_utf8_lossy(&prelude));
     // write all to the wire
     stream.write_all(&prelude[..])?;
+    stream.flush()?;
 
     Ok(())
 }
