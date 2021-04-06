@@ -26,7 +26,7 @@ socks-proxy = ["socks"]
 [dependencies]
 base64 = "0.13"
 chunked_transfer = "1.2.0"
-cookie = { version = "0.15", deafult-features = false, optional = true}
+cookie = { version = "0.15", default-features = false, optional = true}
 once_cell = "1"
 url = "2"
 socks = { version = "0.3.2", optional = true }
