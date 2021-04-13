@@ -370,7 +370,7 @@ pub fn agent() -> Agent {
 ///
 /// let mut url: Url = "http://example.com/some-page".parse().unwrap();
 /// url.set_path("/robots.txt");
-/// let resp: ureq::Response = ureq::request_url("GET", url)
+/// let resp: ureq::Response = ureq::request("GET", url)
 ///     .call()?;
 /// # Ok(())
 /// # }
