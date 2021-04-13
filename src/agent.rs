@@ -4,7 +4,7 @@ use url::Url;
 
 use crate::pool::ConnectionPool;
 use crate::proxy::Proxy;
-use crate::request::Request;
+use crate::request::{LazyUrl, Request};
 use crate::resolve::{ArcResolver, StdResolver};
 use std::time::Duration;
 
@@ -116,16 +116,6 @@ impl Agent {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn request(&self, method: &str, path: &str) -> Request {
-        Request::new(self.clone(), method.into(), path.into())
-    }
-
-    /// Make a request using an already-parsed [Url].
-    ///
-    /// This is useful if you've got a parsed Url from some other source, or if
-    /// you want to parse the URL and then modify it before making the request.
-    /// If you'd just like to pass a String or a `&str`, try [request][Agent::request].
-    ///
     /// ```
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
@@ -135,37 +125,47 @@ impl Agent {
     /// let mut url: Url = "http://example.com/some-page".parse().unwrap();
     /// url.set_path("/robots.txt");
     /// let resp: Response = agent
-    ///     .request_url("GET", &url)
+    ///     .request("GET", url)
     ///     .call()?;
     /// # Ok(())
     /// # }
     /// ```
+    pub fn request<U: Into<LazyUrl>>(&self, method: &str, path: U) -> Request {
+        Request::new(self.clone(), method.into(), path)
+    }
+
+    /// Make a request using an already-parsed [Url].
+    ///
+    /// This is useful if you've got a parsed Url from some other source, or if
+    /// you want to parse the URL and then modify it before making the request.
+    ///
+    #[deprecated]
     pub fn request_url(&self, method: &str, url: &Url) -> Request {
-        Request::with_url(self.clone(), method.into(), url.clone())
+        Request::new(self.clone(), method.into(), url)
     }
 
     /// Make a GET request from this agent.
-    pub fn get(&self, path: &str) -> Request {
+    pub fn get<U: Into<LazyUrl>>(&self, path: U) -> Request {
         self.request("GET", path)
     }
 
     /// Make a HEAD request from this agent.
-    pub fn head(&self, path: &str) -> Request {
+    pub fn head<U: Into<LazyUrl>>(&self, path: U) -> Request {
         self.request("HEAD", path)
     }
 
     /// Make a POST request from this agent.
-    pub fn post(&self, path: &str) -> Request {
+    pub fn post<U: Into<LazyUrl>>(&self, path: U) -> Request {
         self.request("POST", path)
     }
 
     /// Make a PUT request from this agent.
-    pub fn put(&self, path: &str) -> Request {
+    pub fn put<U: Into<LazyUrl>>(&self, path: U) -> Request {
         self.request("PUT", path)
     }
 
     /// Make a DELETE request from this agent.
-    pub fn delete(&self, path: &str) -> Request {
+    pub fn delete<U: Into<LazyUrl>>(&self, path: U) -> Request {
         self.request("DELETE", path)
     }
 

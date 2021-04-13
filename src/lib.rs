@@ -301,7 +301,7 @@ pub use crate::agent::AgentBuilder;
 pub use crate::error::{Error, ErrorKind, OrAnyStatus, Transport};
 pub use crate::header::Header;
 pub use crate::proxy::Proxy;
-pub use crate::request::{Request, RequestUrl};
+pub use crate::request::{LazyUrl, Request, RequestUrl};
 pub use crate::resolve::Resolver;
 pub use crate::response::Response;
 
@@ -362,15 +362,6 @@ pub fn agent() -> Agent {
 /// # Ok(())
 /// # }
 /// ```
-pub fn request(method: &str, path: &str) -> Request {
-    agent().request(method, path)
-}
-/// Make a request using an already-parsed [Url].
-///
-/// This is useful if you've got a parsed Url from some other source, or if
-/// you want to parse the URL and then modify it before making the request.
-/// If you'd just like to pass a String or a `&str`, try [request][request()].
-///
 /// ```
 /// # fn main() -> Result<(), ureq::Error> {
 /// # ureq::is_test(true);
@@ -379,37 +370,47 @@ pub fn request(method: &str, path: &str) -> Request {
 ///
 /// let mut url: Url = "http://example.com/some-page".parse().unwrap();
 /// url.set_path("/robots.txt");
-/// let resp: ureq::Response = ureq::request_url("GET", &url)
+/// let resp: ureq::Response = ureq::request_url("GET", url)
 ///     .call()?;
 /// # Ok(())
 /// # }
 /// ```
+pub fn request<U: Into<LazyUrl>>(method: &str, path: U) -> Request {
+    agent().request(method, path)
+}
+/// Make a request using an already-parsed [Url].
+///
+/// This is useful if you've got a parsed Url from some other source, or if
+/// you want to parse the URL and then modify it before making the request.
+///
+#[deprecated]
+#[allow(deprecated)]
 pub fn request_url(method: &str, url: &Url) -> Request {
     agent().request_url(method, url)
 }
 
 /// Make a GET request.
-pub fn get(path: &str) -> Request {
+pub fn get<U: Into<LazyUrl>>(path: U) -> Request {
     request("GET", path)
 }
 
 /// Make a HEAD request.
-pub fn head(path: &str) -> Request {
+pub fn head<U: Into<LazyUrl>>(path: U) -> Request {
     request("HEAD", path)
 }
 
 /// Make a POST request.
-pub fn post(path: &str) -> Request {
+pub fn post<U: Into<LazyUrl>>(path: U) -> Request {
     request("POST", path)
 }
 
 /// Make a PUT request.
-pub fn put(path: &str) -> Request {
+pub fn put<U: Into<LazyUrl>>(path: U) -> Request {
     request("PUT", path)
 }
 
 /// Make a DELETE request.
-pub fn delete(path: &str) -> Request {
+pub fn delete<U: Into<LazyUrl>>(path: U) -> Request {
     request("DELETE", path)
 }
 

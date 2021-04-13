@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::io::Read;
 use std::{fmt, time};
 
@@ -14,6 +15,52 @@ use super::SerdeValue;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+#[derive(Clone, Debug)]
+#[doc(hidden)]
+pub enum LazyUrl {
+    Str(String),
+    Url(Url),
+}
+
+impl fmt::Display for LazyUrl {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Str(s) => f.pad(s),
+            Self::Url(u) => f.pad(&u.to_string()),
+        }
+    }
+}
+
+impl From<String> for LazyUrl {
+    fn from(s: String) -> Self {
+        Self::Str(s)
+    }
+}
+
+impl From<&String> for LazyUrl {
+    fn from(s: &String) -> Self {
+        Self::Str(s.clone())
+    }
+}
+
+impl From<&str> for LazyUrl {
+    fn from(s: &str) -> Self {
+        Self::Str(s.to_string())
+    }
+}
+
+impl From<Url> for LazyUrl {
+    fn from(u: Url) -> Self {
+        Self::Url(u)
+    }
+}
+
+impl From<&Url> for LazyUrl {
+    fn from(u: &Url) -> Self {
+        Self::Url(u.clone())
+    }
+}
+
 /// Request instances are builders that creates a request.
 ///
 /// ```
@@ -29,7 +76,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub struct Request {
     agent: Agent,
     method: String,
-    url: String,
+    url: LazyUrl,
     error_on_non_2xx: bool,
     headers: Vec<Header>,
     timeout: Option<time::Duration>,
@@ -46,19 +93,11 @@ impl fmt::Debug for Request {
 }
 
 impl Request {
-    pub(crate) fn new(agent: Agent, method: String, url: String) -> Request {
-        Self::_new(agent, method, url)
-    }
-
-    pub(crate) fn with_url(agent: Agent, method: String, url: Url) -> Request {
-        Self::_new(agent, method, url.to_string())
-    }
-
-    fn _new(agent: Agent, method: String, url: String) -> Request {
+    pub(crate) fn new<U: Into<LazyUrl>>(agent: Agent, method: String, url: U) -> Request {
         Request {
             agent,
             method,
-            url,
+            url: url.into(),
             headers: vec![],
             error_on_non_2xx: true,
             timeout: None,
@@ -89,15 +128,17 @@ impl Request {
         self.do_call(Payload::Empty)
     }
 
-    fn parse_url(&self) -> Result<Url> {
-        Ok(self.url.parse().and_then(|url: Url|
-            // No hostname is fine for urls in general, but not for website urls.
-            if url.host_str().is_none() {
-                Err(ParseError::EmptyHost)
-            } else {
-                Ok(url)
-            }
-        )?)
+    fn parse_url(&self) -> Result<Cow<Url>> {
+        let url = match &self.url {
+            LazyUrl::Str(s) => Cow::Owned(s.parse()?),
+            LazyUrl::Url(u) => Cow::Borrowed(u),
+        };
+        // No hostname is fine for urls in general, but not for website urls.
+        if url.host_str().is_none() {
+            Err(ParseError::EmptyHost)?
+        } else {
+            Ok(url)
+        }
     }
 
     fn do_call(self, payload: Payload) -> Result<Response> {
@@ -123,7 +164,7 @@ impl Request {
             &reader,
             deadline,
         );
-        let response = unit::connect(unit, true, reader).map_err(|e| e.url(url.clone()))?;
+        let response = unit::connect(unit, true, reader).map_err(|e| e.url(url.into_owned()))?;
 
         if response.status() >= 400 {
             Err(Error::Status(response.status(), response))
@@ -337,11 +378,12 @@ impl Request {
     /// # }
     /// ```
     pub fn query(mut self, param: &str, value: &str) -> Self {
-        if let Ok(mut url) = self.parse_url() {
+        if let Ok(url) = self.parse_url() {
+            let mut url = url.into_owned();
             url.query_pairs_mut().append_pair(param, value);
 
             // replace url
-            self.url = url.to_string();
+            self.url = url.into();
         }
         self
     }
@@ -372,7 +414,7 @@ impl Request {
     /// let req = ureq::get("http://httpbin.org/get")
     ///     .query("foo", "bar");
     ///
-    /// assert_eq!(req.url(), "http://httpbin.org/get?foo=bar");
+    /// assert_eq!(&req.url(), "http://httpbin.org/get?foo=bar");
     /// # Ok(())
     /// # }
     /// ```
@@ -383,12 +425,15 @@ impl Request {
     /// let req = ureq::get("SO WRONG")
     ///     .query("foo", "bar"); // does nothing
     ///
-    /// assert_eq!(req.url(), "SO WRONG");
+    /// assert_eq!(&req.url(), "SO WRONG");
     /// # Ok(())
     /// # }
     /// ```
-    pub fn url(&self) -> &str {
-        &self.url
+    pub fn url(&self) -> Cow<str> {
+        match &self.url {
+            LazyUrl::Str(s) => Cow::Borrowed(&s),
+            LazyUrl::Url(u) => Cow::Owned(u.to_string()),
+        }
     }
 
     /// Get the parsed url that will be used for this request. The parsed url
@@ -414,7 +459,7 @@ impl Request {
     /// # }
     /// ```
     pub fn request_url(&self) -> Result<RequestUrl> {
-        Ok(RequestUrl::new(self.parse_url()?))
+        Ok(RequestUrl::new(self.parse_url()?.into_owned()))
     }
 }
 
