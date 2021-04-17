@@ -2,7 +2,7 @@ use crate::error::{Error, ErrorKind};
 
 /// Proxy protocol
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum Proto {
+pub(crate) enum Proto {
     HttpConnect,
     Socks5,
 }
