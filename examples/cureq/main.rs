@@ -1,6 +1,7 @@
 use std::error;
 use std::fmt;
 use std::io;
+use std::thread;
 use std::time::Duration;
 use std::{env, sync::Arc};
 
@@ -64,8 +65,19 @@ impl From<io::Error> for Error {
     }
 }
 
-fn get(agent: &ureq::Agent, url: &str, print_headers: bool) -> Result<(), Error> {
-    let response = agent.get(url).call()?;
+fn perform(
+    agent: &ureq::Agent,
+    method: &str,
+    url: &str,
+    data: &[u8],
+    print_headers: bool,
+) -> Result<(), Error> {
+    let req = agent.request(method, url);
+    let response = if method == "GET" && data.len() == 0 {
+        req.call()?
+    } else {
+        req.send_bytes(data)?
+    };
     if print_headers {
         println!(
             "{} {} {}",
@@ -108,29 +120,43 @@ fn main() {
 }
 
 fn main2() -> Result<(), Error> {
-    let mut args: Vec<String> = env::args().collect();
-    if args.len() == 1 {
+    let mut args = env::args();
+    if args.next().is_none() {
         println!(
             r##"Usage: {:#?} url [url ...]
-            
+
+-i            Include headers when printing response
+-X <method>   Use the given request method (GET, POST, etc)
+-d <string>   Use the given data as the request body (useful for POST)
+--wait <n>    Wait n seconds between requests
+-k            Ignore certificate errors
+
 Fetch url and copy it to stdout.
 "##,
             env::current_exe()?
         );
         return Ok(());
     }
-    args.remove(0);
     env_logger::init();
     let mut builder = ureq::builder()
         .timeout_connect(Duration::from_secs(30))
         .timeout(Duration::from_secs(300));
-    let flags: Vec<&String> = args.iter().filter(|s| s.starts_with("-")).collect();
-    let nonflags: Vec<&String> = args.iter().filter(|s| !s.starts_with("-")).collect();
+    let mut nonflags: Vec<String> = vec![];
 
     let mut print_headers: bool = false;
-    for flag in flags {
-        match flag.as_ref() {
+    let mut method: String = "GET".into();
+    let mut data: Vec<u8> = vec![];
+    let mut wait = Duration::new(0, 0);
+    while let Some(arg) = args.next() {
+        match arg.as_ref() {
             "-i" => print_headers = true,
+            "-X" => method = args.next().expect("flag -X requires a value"),
+            "-d" => data = args.next().expect("flag -d requires a value").into(),
+            "--wait" => {
+                let wait_string: String = args.next().expect("flag --wait requires a value").into();
+                let wait_seconds: u64 = wait_string.parse().expect("invalid --wait flag");
+                wait = Duration::from_secs(wait_seconds);
+            }
             "-k" => {
                 let mut client_config = ClientConfig::new();
                 client_config
@@ -138,14 +164,22 @@ Fetch url and copy it to stdout.
                     .set_certificate_verifier(Arc::new(AcceptAll {}));
                 builder = builder.tls_config(Arc::new(client_config));
             }
-            f => Err(StringError(format!("unrecognized flag '{}'", f)))?,
+            arg => {
+                if arg.starts_with("-") {
+                    Err(StringError(format!("unrecognized flag '{}'", arg)))?;
+                }
+                nonflags.push(arg.to_owned());
+            }
         }
     }
 
     let agent = builder.build();
 
-    for url in nonflags {
-        get(&agent, &url, print_headers)?;
+    for (i, url) in nonflags.iter().enumerate() {
+        perform(&agent, &method, &url, &data, print_headers)?;
+        if i != nonflags.len() - 1 {
+            thread::sleep(wait);
+        }
     }
     Ok(())
 }
