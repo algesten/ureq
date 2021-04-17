@@ -8,9 +8,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
     - name: Run Rustfmt
+      uses: actions-rs/cargo@v1
       run: cargo fmt -- --check
     - name: Run Clippy
+      uses: actions-rs/cargo@v1
       run: RUSTFLAGS="-D warnings" cargo clippy      
   doc:
     name: Docs
