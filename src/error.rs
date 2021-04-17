@@ -226,7 +226,7 @@ impl Error {
     /// ```
     pub fn kind(&self) -> ErrorKind {
         match self {
-            Error::Status(_, _) => ErrorKind::HTTP,
+            Error::Status(_, _) => ErrorKind::Http,
             Error::Transport(Transport { kind: k, .. }) => *k,
         }
     }
@@ -284,7 +284,7 @@ pub enum ErrorKind {
     /// HTTP status code indicating an error (e.g. 4xx, 5xx)
     /// Read the inner response body for details and to return
     /// the connection to the pool.
-    HTTP,
+    Http,
 }
 
 impl ErrorKind {
@@ -339,7 +339,7 @@ impl fmt::Display for ErrorKind {
             ErrorKind::InvalidProxyUrl => write!(f, "Malformed proxy"),
             ErrorKind::ProxyConnect => write!(f, "Proxy failed to connect"),
             ErrorKind::ProxyUnauthorized => write!(f, "Provided proxy credentials are incorrect"),
-            ErrorKind::HTTP => write!(f, "HTTP status error"),
+            ErrorKind::Http => write!(f, "HTTP status error"),
         }
     }
 }
@@ -381,7 +381,7 @@ mod tests {
         });
 
         let err = get("test://example.org/redirect_a").call().unwrap_err();
-        assert_eq!(err.kind(), ErrorKind::HTTP, "{:?}", err);
+        assert_eq!(err.kind(), ErrorKind::Http, "{:?}", err);
         assert_eq!(
         err.to_string(),
         "http://example.com/status/500: status code 500 (redirected from test://example.org/redirect_a)"

@@ -3,8 +3,8 @@ use crate::error::{Error, ErrorKind};
 /// Proxy protocol
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Proto {
-    HTTPConnect,
-    SOCKS5,
+    HttpConnect,
+    Socks5,
 }
 
 /// Proxy server definition
@@ -83,13 +83,13 @@ impl Proxy {
 
         let proto = if proxy_parts.len() == 2 {
             match proxy_parts.next() {
-                Some("http") => Proto::HTTPConnect,
-                Some("socks") => Proto::SOCKS5,
-                Some("socks5") => Proto::SOCKS5,
+                Some("http") => Proto::HttpConnect,
+                Some("socks") => Proto::Socks5,
+                Some("socks5") => Proto::Socks5,
                 _ => return Err(ErrorKind::InvalidProxyUrl.new()),
             }
         } else {
-            Proto::HTTPConnect
+            Proto::HttpConnect
         };
 
         let remaining_parts = proxy_parts.next();
@@ -130,8 +130,8 @@ impl Proxy {
             ));
 
             match self.proto {
-                Proto::HTTPConnect => format!("Proxy-Authorization: basic {}\r\n", creds),
-                Proto::SOCKS5 => String::new(),
+                Proto::HttpConnect => format!("Proxy-Authorization: basic {}\r\n", creds),
+                Proto::Socks5 => String::new(),
             }
         } else {
             String::new()
@@ -187,7 +187,7 @@ mod tests {
         assert_eq!(proxy.password, Some(String::from("p@ssw0rd")));
         assert_eq!(proxy.server, String::from("localhost"));
         assert_eq!(proxy.port, 9999);
-        assert_eq!(proxy.proto, Proto::HTTPConnect);
+        assert_eq!(proxy.proto, Proto::HttpConnect);
     }
 
     #[cfg(feature = "socks-proxy")]
@@ -198,7 +198,7 @@ mod tests {
         assert_eq!(proxy.password, Some(String::from("p@ssw0rd")));
         assert_eq!(proxy.server, String::from("localhost"));
         assert_eq!(proxy.port, 9999);
-        assert_eq!(proxy.proto, Proto::SOCKS5);
+        assert_eq!(proxy.proto, Proto::Socks5);
     }
 
     #[cfg(feature = "socks-proxy")]
@@ -209,7 +209,7 @@ mod tests {
         assert_eq!(proxy.password, Some(String::from("p@ssw0rd")));
         assert_eq!(proxy.server, String::from("localhost"));
         assert_eq!(proxy.port, 9999);
-        assert_eq!(proxy.proto, Proto::SOCKS5);
+        assert_eq!(proxy.proto, Proto::Socks5);
     }
 
     #[test]

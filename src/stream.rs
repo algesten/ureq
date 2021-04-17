@@ -402,7 +402,7 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
 
         debug!("connecting to {} at {}", netloc, &sock_addr);
         // connect with a configured timeout.
-        let stream = if Some(Proto::SOCKS5) == proto {
+        let stream = if Some(Proto::Socks5) == proto {
             connect_socks5(
                 &unit,
                 proxy.clone().unwrap(),
@@ -445,7 +445,7 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         stream.set_write_timeout(unit.agent.config.timeout_write)?;
     }
 
-    if proto == Some(Proto::HTTPConnect) {
+    if proto == Some(Proto::HttpConnect) {
         if let Some(ref proxy) = proxy {
             write!(stream, "{}", proxy.connect(hostname, port)).unwrap();
             stream.flush()?;

@@ -38,7 +38,7 @@ pub(crate) struct AgentConfig {
     pub redirects: u32,
     pub user_agent: String,
     #[cfg(feature = "tls")]
-    pub tls_config: Option<TLSClientConfig>,
+    pub tls_config: Option<TlsClientConfig>,
 }
 
 /// Agents keep state between requests.
@@ -485,7 +485,7 @@ impl AgentBuilder {
     /// ```
     #[cfg(feature = "tls")]
     pub fn tls_config(mut self, tls_config: Arc<rustls::ClientConfig>) -> Self {
-        self.config.tls_config = Some(TLSClientConfig(tls_config));
+        self.config.tls_config = Some(TlsClientConfig(tls_config));
         self
     }
 
@@ -524,10 +524,10 @@ impl AgentBuilder {
 
 #[cfg(feature = "tls")]
 #[derive(Clone)]
-pub(crate) struct TLSClientConfig(pub(crate) Arc<rustls::ClientConfig>);
+pub(crate) struct TlsClientConfig(pub(crate) Arc<rustls::ClientConfig>);
 
 #[cfg(feature = "tls")]
-impl std::fmt::Debug for TLSClientConfig {
+impl std::fmt::Debug for TlsClientConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TLSClientConfig").finish()
     }
