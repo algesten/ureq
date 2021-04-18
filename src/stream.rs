@@ -150,8 +150,9 @@ impl Stream {
     // connection: return true. If this returns a successful read, there are
     // some bytes on the connection even though there was no inflight request.
     // For plain HTTP streams, that might mean an HTTP 408 was pushed; it
-    // could also mean a buggy server. For HTTPS streams, that might mean a
-    // close_notify alert, which is the proper way to shut down an idle stream.
+    // could also mean a buggy server that sent more bytes than a response's
+    // Content-Length. For HTTPS streams, that might mean a close_notify alert,
+    // which is the proper way to shut down an idle stream.
     // Either way, bytes available on the stream before we've made a request
     // means the stream is not usable, so we should discard it.
     // If this returns WouldBlock (aka EAGAIN),
