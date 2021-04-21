@@ -47,14 +47,6 @@ impl fmt::Debug for Request {
 
 impl Request {
     pub(crate) fn new(agent: Agent, method: String, url: String) -> Request {
-        Self::_new(agent, method, url)
-    }
-
-    pub(crate) fn with_url(agent: Agent, method: String, url: Url) -> Request {
-        Self::_new(agent, method, url.to_string())
-    }
-
-    fn _new(agent: Agent, method: String, url: String) -> Request {
         Request {
             agent,
             method,

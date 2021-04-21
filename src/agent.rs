@@ -141,7 +141,7 @@ impl Agent {
     /// # }
     /// ```
     pub fn request_url(&self, method: &str, url: &Url) -> Request {
-        Request::with_url(self.clone(), method.into(), url.clone())
+        Request::new(self.clone(), method.into(), url.to_string())
     }
 
     /// Make a GET request from this agent.
