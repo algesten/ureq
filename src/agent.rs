@@ -68,6 +68,7 @@ impl AgentState {
     fn new() -> Self {
         Self::default()
     }
+
     pub fn pool(&mut self) -> &mut ConnectionPool {
         &mut self.pool
     }

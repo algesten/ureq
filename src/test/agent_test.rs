@@ -44,7 +44,7 @@ fn idle_timeout_handler(mut stream: TcpStream) -> io::Result<()> {
 // Handler that answers with a simple HTTP response, and times
 // out idle connections after 2 seconds, sending an HTTP 408 response
 fn idle_timeout_handler_408(mut stream: TcpStream) -> io::Result<()> {
-    read_request(&stream);
+    read_headers(&stream);
     stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 8\r\n\r\nresponse")?;
     let twosec = Duration::from_secs(2);
     stream.set_read_timeout(Some(twosec))?;
@@ -91,13 +91,16 @@ fn connection_reuse_with_408() {
     let testserver = TestServer::new(idle_timeout_handler_408);
     let url = format!("http://localhost:{}", testserver.port);
     let agent = Agent::new();
-    let resp = agent.get(&url).call().unwrap();
+    let resp = agent.get(&url).call();
+    if resp.error() {
+        panic!("error: {} {}", resp.status(), resp.into_string().unwrap());
+    }
 
     // use up the connection so it gets returned to the pool
     assert_eq!(resp.status(), 200);
     resp.into_string().unwrap();
 
-    assert!(agent.state.pool.len() > 0);
+    assert!(agent.state.try_lock().unwrap().pool.len() > 0);
 
     // wait for the server to close the connection.
     std::thread::sleep(Duration::from_secs(3));
@@ -109,7 +112,10 @@ fn connection_reuse_with_408() {
     // pulls from the pool. If for some reason the timed-out
     // connection wasn't in the pool, we won't be testing what
     // we thought we were testing.
-    let resp = agent.post(&url).send_string("hello".into()).unwrap();
+    let resp = agent.post(&url).send_string("hello".into());
+    if resp.error() {
+        panic!("error: {} {}", resp.status(), resp.into_string().unwrap());
+    }
     assert_eq!(resp.status(), 200);
 }
 
