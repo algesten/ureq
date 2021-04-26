@@ -223,7 +223,7 @@ impl Response {
     /// 3. If no length header, the reader is until server stream end.
     ///
     /// Note: If you use `read_to_end()` on the resulting reader, a malicious
-    /// server might return enough bytes to exhaust available memroy. If you're
+    /// server might return enough bytes to exhaust available memory. If you're
     /// making requests to untrusted servers, you should use `.take()` to
     /// limit the response bytes read.
     ///
