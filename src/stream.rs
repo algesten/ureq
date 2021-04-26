@@ -355,8 +355,8 @@ pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error
 
     let port = unit.url.port().unwrap_or(443);
 
-    let sni = webpki::DNSNameRef::try_from_ascii_str(hostname)
-        .map_err(|err| ErrorKind::Dns.new().src(err))?;
+    let sni = webpki::DnsNameRef::try_from_ascii_str(hostname)
+        .map_err(|err| ErrorKind::Dns.msg("invalid DNS name"))?;
     let tls_conf: &Arc<rustls::ClientConfig> = unit
         .agent
         .config

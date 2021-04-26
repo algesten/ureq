@@ -9,7 +9,7 @@ use rustls::{
     Certificate, ClientConfig, RootCertStore, ServerCertVerified, ServerCertVerifier, TLSError,
 };
 use ureq;
-use webpki::DNSNameRef;
+use webpki::DnsNameRef;
 
 #[derive(Debug)]
 struct StringError(String);
@@ -102,7 +102,7 @@ impl ServerCertVerifier for AcceptAll {
         &self,
         _roots: &RootCertStore,
         _presented_certs: &[Certificate],
-        _dns_name: DNSNameRef<'_>,
+        _dns_name: DnsNameRef<'_>,
         _ocsp_response: &[u8],
     ) -> Result<ServerCertVerified, TLSError> {
         Ok(ServerCertVerified::assertion())
