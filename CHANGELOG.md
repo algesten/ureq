@@ -1,3 +1,7 @@
+# 1.5.5
+ * Bugfix: don't reuse conns with bytes pending from server (#372). This
+   reduces Transport errors when using an Agent for connection pooling.
+
 # 1.5.4
 
  * Fix panic introduced in 1.5.4 on redirects. (#274)
