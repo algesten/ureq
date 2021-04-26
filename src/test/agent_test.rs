@@ -4,6 +4,7 @@ use crate::test;
 use crate::test::testserver::{read_headers, TestServer};
 use std::io::{self, Read, Write};
 use std::net::TcpStream;
+use std::thread;
 use std::time::Duration;
 
 use super::super::*;
@@ -40,6 +41,18 @@ fn idle_timeout_handler(mut stream: TcpStream) -> io::Result<()> {
     Ok(())
 }
 
+// Handler that answers with a simple HTTP response, and times
+// out idle connections after 2 seconds, sending an HTTP 408 response
+fn idle_timeout_handler_408(mut stream: TcpStream) -> io::Result<()> {
+    read_headers(&stream);
+    stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 8\r\n\r\nresponse")?;
+    let twosec = Duration::from_secs(2);
+    stream.set_read_timeout(Some(twosec))?;
+    thread::sleep(twosec);
+    stream.write_all(b"HTTP/1.1 408 Request Timeout\r\nContent-Length: 7\r\n\r\ntimeout")?;
+    Ok(())
+}
+
 #[test]
 fn connection_reuse() {
     let testserver = TestServer::new(idle_timeout_handler);
@@ -69,6 +82,39 @@ fn connection_reuse() {
     let resp = agent.get(&url).call();
     if let Some(err) = resp.synthetic_error() {
         panic!("Pooled connection failed! {:?}", err);
+    }
+    assert_eq!(resp.status(), 200);
+}
+
+#[test]
+fn connection_reuse_with_408() {
+    let testserver = TestServer::new(idle_timeout_handler_408);
+    let url = format!("http://localhost:{}", testserver.port);
+    let agent = Agent::new();
+    let resp = agent.get(&url).call();
+    if resp.error() {
+        panic!("error: {} {}", resp.status(), resp.into_string().unwrap());
+    }
+
+    // use up the connection so it gets returned to the pool
+    assert_eq!(resp.status(), 200);
+    resp.into_string().unwrap();
+
+    assert!(agent.state.try_lock().unwrap().pool.len() > 0);
+
+    // wait for the server to close the connection.
+    std::thread::sleep(Duration::from_secs(3));
+
+    // try and make a new request on the pool. this fails
+    // when we discover that the TLS connection is dead
+    // first when attempting to read from it.
+    // Note: This test assumes the second  .call() actually
+    // pulls from the pool. If for some reason the timed-out
+    // connection wasn't in the pool, we won't be testing what
+    // we thought we were testing.
+    let resp = agent.post(&url).send_string("hello".into());
+    if resp.error() {
+        panic!("error: {} {}", resp.status(), resp.into_string().unwrap());
     }
     assert_eq!(resp.status(), 200);
 }
