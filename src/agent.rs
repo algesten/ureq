@@ -65,10 +65,6 @@ pub(crate) struct AgentState {
 }
 
 impl AgentState {
-    fn new() -> Self {
-        Self::default()
-    }
-
     pub fn pool(&mut self) -> &mut ConnectionPool {
         &mut self.pool
     }
@@ -95,7 +91,7 @@ impl Agent {
     pub fn build(&self) -> Self {
         Agent {
             headers: self.headers.clone(),
-            state: Arc::new(Mutex::new(AgentState::new())),
+            state: self.state.clone(),
         }
     }
 
@@ -397,6 +393,13 @@ mod tests {
         let mut reader = resp.into_reader();
         let mut buf = vec![];
         reader.read_to_end(&mut buf).unwrap();
+    }
+
+    #[test]
+    fn agent_set_proxy() {
+        let proxy = crate::Proxy::new("user:password@cool.proxy:9090").unwrap();
+        let agent = crate::agent().set_proxy(proxy).build();
+        assert!(agent.state.lock().unwrap().proxy.is_some());
     }
 
     //////////////////// REQUEST TESTS /////////////////////////////
