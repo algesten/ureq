@@ -397,11 +397,7 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         return Err(ErrorKind::Dns.msg(&format!("No ip address for {}", hostname)));
     }
 
-    let proto = if let Some(ref proxy) = proxy {
-        Some(proxy.proto)
-    } else {
-        None
-    };
+    let proto = proxy.as_ref().map(|proxy| proxy.proto);
 
     let mut any_err = None;
     let mut any_stream = None;
