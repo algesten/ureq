@@ -120,7 +120,7 @@ fn escape_path() {
         test::make_response(200, "OK", vec![], vec![])
     });
     let resp = get("test://host/escape_path here").call().unwrap();
-    let vec = resp.to_write_vec();
+    let vec = resp.as_write_vec();
     let s = String::from_utf8_lossy(&vec);
     assert!(s.contains("GET /escape_path%20here HTTP/1.1"))
 }
@@ -198,7 +198,7 @@ pub fn host_no_port() {
         test::make_response(200, "OK", vec![], vec![])
     });
     let resp = get("test://myhost/host_no_port").call().unwrap();
-    let vec = resp.to_write_vec();
+    let vec = resp.as_write_vec();
     let s = String::from_utf8_lossy(&vec);
     assert!(s.contains("\r\nHost: myhost\r\n"));
 }
@@ -209,7 +209,7 @@ pub fn host_with_port() {
         test::make_response(200, "OK", vec![], vec![])
     });
     let resp = get("test://myhost:234/host_with_port").call().unwrap();
-    let vec = resp.to_write_vec();
+    let vec = resp.as_write_vec();
     let s = String::from_utf8_lossy(&vec);
     assert!(s.contains("\r\nHost: myhost:234\r\n"));
 }

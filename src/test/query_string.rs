@@ -8,7 +8,7 @@ fn no_query_string() {
         test::make_response(200, "OK", vec![], vec![])
     });
     let resp = get("test://host/no_query_string").call().unwrap();
-    let vec = resp.to_write_vec();
+    let vec = resp.as_write_vec();
     let s = String::from_utf8_lossy(&vec);
     assert!(s.contains("GET /no_query_string HTTP/1.1"))
 }
@@ -23,7 +23,7 @@ fn escaped_query_string() {
         .query("baz", "yo lo")
         .call()
         .unwrap();
-    let vec = resp.to_write_vec();
+    let vec = resp.as_write_vec();
     let s = String::from_utf8_lossy(&vec);
     assert!(
         s.contains("GET /escaped_query_string?foo=bar&baz=yo+lo HTTP/1.1"),
@@ -38,7 +38,7 @@ fn query_in_path() {
         test::make_response(200, "OK", vec![], vec![])
     });
     let resp = get("test://host/query_in_path?foo=bar").call().unwrap();
-    let vec = resp.to_write_vec();
+    let vec = resp.as_write_vec();
     let s = String::from_utf8_lossy(&vec);
     assert!(s.contains("GET /query_in_path?foo=bar HTTP/1.1"))
 }
@@ -52,7 +52,7 @@ fn query_in_path_and_req() {
         .query("baz", "1 2 3")
         .call()
         .unwrap();
-    let vec = resp.to_write_vec();
+    let vec = resp.as_write_vec();
     let s = String::from_utf8_lossy(&vec);
     assert!(s.contains("GET /query_in_path_and_req?foo=bar&baz=1+2+3 HTTP/1.1"))
 }

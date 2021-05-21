@@ -491,8 +491,8 @@ impl Response {
     }
 
     #[cfg(test)]
-    pub fn to_write_vec(self) -> Vec<u8> {
-        self.stream.to_write_vec()
+    pub fn as_write_vec(&self) -> &[u8] {
+        self.stream.as_write_vec()
     }
 
     #[cfg(test)]
