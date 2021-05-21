@@ -485,7 +485,7 @@ impl AgentBuilder {
     /// ```
     #[cfg(feature = "tls")]
     pub fn tls_config(mut self, tls_config: Arc<rustls::ClientConfig>) -> Self {
-        self.config.tls_config = Some(TLSClientConfig(tls_config));
+        self.config.tls_config = Some(TLSClientConfig::Rustls(tls_config));
         self
     }
 
@@ -524,7 +524,10 @@ impl AgentBuilder {
 
 #[cfg(feature = "tls")]
 #[derive(Clone)]
-pub(crate) struct TLSClientConfig(pub(crate) Arc<rustls::ClientConfig>);
+pub(crate) enum TLSClientConfig {
+    Rustls(Arc<rustls::ClientConfig>),
+    Native,
+}
 
 #[cfg(feature = "tls")]
 impl std::fmt::Debug for TLSClientConfig {
