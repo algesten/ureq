@@ -1,4 +1,5 @@
 use log::debug;
+use rustls::ClientConfig;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::SocketAddr;
 use std::net::TcpStream;
@@ -15,7 +16,7 @@ use rustls::StreamOwned;
 #[cfg(feature = "socks-proxy")]
 use socks::{TargetAddr, ToTargetAddr};
 
-use crate::proxy::Proxy;
+use crate::{agent::TLSClientConfig, proxy::Proxy};
 use crate::{error::Error, proxy::Proto};
 
 use crate::error::ErrorKind;
@@ -25,7 +26,7 @@ pub(crate) struct Stream {
     inner: BufReader<Box<dyn Inner + Send + Sync + 'static>>,
 }
 
-struct HttpsStream(rustls::StreamOwned<rustls::ClientSession, TcpStream>);
+struct RustlsStream(rustls::StreamOwned<rustls::ClientSession, TcpStream>);
 
 trait Inner: Read + Write {
     fn is_poolable(&self) -> bool;
@@ -45,7 +46,7 @@ impl Inner for TcpStream {
     }
 }
 
-impl Inner for HttpsStream {
+impl Inner for RustlsStream {
     fn is_poolable(&self) -> bool {
         true
     }
@@ -57,7 +58,7 @@ impl Inner for HttpsStream {
     }
 }
 
-impl Read for HttpsStream {
+impl Read for RustlsStream {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         match self.0.read(buf) {
             Ok(size) => Ok(size),
@@ -67,7 +68,7 @@ impl Read for HttpsStream {
     }
 }
 
-impl Write for HttpsStream {
+impl Write for RustlsStream {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.0.write(buf)
     }
@@ -212,9 +213,9 @@ impl Stream {
     }
 
     #[cfg(feature = "tls")]
-    fn from_tls_stream(t: StreamOwned<ClientSession, TcpStream>) -> Stream {
+    fn from_rustls_stream(t: StreamOwned<ClientSession, TcpStream>) -> Stream {
         Stream::logged_create(Stream {
-            inner: BufReader::new(Box::new(HttpsStream(t))),
+            inner: BufReader::new(Box::new(RustlsStream(t))),
         })
     }
 
@@ -383,21 +384,26 @@ pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error
 
     let sni = webpki::DNSNameRef::try_from_ascii_str(hostname)
         .map_err(|err| ErrorKind::Dns.new().src(err))?;
-    let tls_conf: &Arc<rustls::ClientConfig> = unit
-        .agent
-        .config
-        .tls_config
-        .as_ref()
-        .map(|c| &c.0)
-        .unwrap_or(&*TLS_CONF);
-    let mut sock = connect_host(unit, hostname, port)?;
-    let mut sess = rustls::ClientSession::new(tls_conf, sni);
+    let tls_conf = &unit.agent.config.tls_config.as_ref();
 
-    sess.complete_io(&mut sock)
-        .map_err(|err| ErrorKind::ConnectionFailed.new().src(err))?;
-    let stream = rustls::StreamOwned::new(sess, sock);
+    let rustls_conn = |conf: &Arc<ClientConfig>| {
+        let mut sock = connect_host(unit, hostname, port)?;
+        let mut sess = rustls::ClientSession::new(&conf, sni);
 
-    Ok(Stream::from_tls_stream(stream))
+        sess.complete_io(&mut sock)
+            .map_err(|err| ErrorKind::ConnectionFailed.new().src(err))?;
+        let stream = rustls::StreamOwned::new(sess, sock);
+
+        Ok(Stream::from_rustls_stream(stream))
+    };
+
+    match tls_conf {
+        Some(TLSClientConfig::Rustls(rc)) => rustls_conn(rc),
+        None => rustls_conn(&*TLS_CONF),
+        Some(TLSClientConfig::Native) => {
+            panic!();
+        }
+    }
 }
 
 pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<TcpStream, Error> {
