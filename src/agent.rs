@@ -37,7 +37,6 @@ pub(crate) struct AgentConfig {
     pub timeout: Option<Duration>,
     pub redirects: u32,
     pub user_agent: String,
-    #[cfg(feature = "tls")]
     pub tls_config: Option<TLSClientConfig>,
 }
 
@@ -210,7 +209,6 @@ impl AgentBuilder {
                 timeout: None,
                 redirects: 5,
                 user_agent: format!("ureq/{}", env!("CARGO_PKG_VERSION")),
-                #[cfg(feature = "tls")]
                 tls_config: None,
             },
             max_idle_connections: DEFAULT_MAX_IDLE_CONNECTIONS,
@@ -487,6 +485,27 @@ impl AgentBuilder {
         self
     }
 
+    /// Set the [native_tls::TlsConnector](https://docs.rs/native-tls/0.2.7/native_tls/struct.TlsConnector.html)
+    /// to use for the connection.
+    ///
+    /// Example:
+    /// ```
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// use std::sync::Arc;
+    /// let tls_connector = Arc::new(native_tls::TlsConnector::new().unwrap());
+    /// let agent = ureq::builder()
+    ///     .tls_connector(tls_connector.clone())
+    ///     .build();
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(feature = "native-tls")]
+    pub fn tls_connector(mut self, connector: Arc<native_tls::TlsConnector>) -> Self {
+        self.config.tls_config = Some(TLSClientConfig::Native(connector));
+        self
+    }
+
     /// Provide the cookie store to be used for all requests using this agent.
     ///
     /// This is useful in two cases. First when there is a need to persist cookies
@@ -520,14 +539,14 @@ impl AgentBuilder {
     }
 }
 
-#[cfg(feature = "tls")]
 #[derive(Clone)]
 pub(crate) enum TLSClientConfig {
+    #[cfg(feature = "tls")]
     Rustls(Arc<rustls::ClientConfig>),
-    Native,
+    #[cfg(feature = "native-tls")]
+    Native(Arc<native_tls::TlsConnector>),
 }
 
-#[cfg(feature = "tls")]
 impl std::fmt::Debug for TLSClientConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TLSClientConfig").finish()

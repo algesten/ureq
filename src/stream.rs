@@ -1,5 +1,4 @@
 use log::debug;
-use rustls::ClientConfig;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::SocketAddr;
 use std::net::TcpStream;
@@ -9,14 +8,10 @@ use std::{fmt, io::Cursor};
 
 use chunked_transfer::Decoder as ChunkDecoder;
 
-#[cfg(feature = "tls")]
-use rustls::ClientSession;
-#[cfg(feature = "tls")]
-use rustls::StreamOwned;
 #[cfg(feature = "socks-proxy")]
 use socks::{TargetAddr, ToTargetAddr};
 
-use crate::{agent::TLSClientConfig, proxy::Proxy};
+use crate::proxy::Proxy;
 use crate::{error::Error, proxy::Proto};
 
 use crate::error::ErrorKind;
@@ -26,26 +21,18 @@ pub(crate) struct Stream {
     inner: BufReader<Box<dyn Inner + Send + Sync + 'static>>,
 }
 
-struct RustlsStream(rustls::StreamOwned<rustls::ClientSession, TcpStream>);
-
 trait Inner: Read + Write {
     fn is_poolable(&self) -> bool;
     fn socket(&self) -> Option<&TcpStream>;
-    fn as_write_vec(&self) -> &[u8];
-}
-
-impl Inner for TcpStream {
-    fn is_poolable(&self) -> bool {
-        true
-    }
-    fn socket(&self) -> Option<&TcpStream> {
-        Some(self)
-    }
     fn as_write_vec(&self) -> &[u8] {
         panic!("as_write_vec on non Test stream");
     }
 }
 
+#[cfg(feature = "tls")]
+struct RustlsStream(rustls::StreamOwned<rustls::ClientSession, TcpStream>);
+
+#[cfg(feature = "tls")]
 impl Inner for RustlsStream {
     fn is_poolable(&self) -> bool {
         true
@@ -53,11 +40,9 @@ impl Inner for RustlsStream {
     fn socket(&self) -> Option<&TcpStream> {
         Some(self.0.get_ref())
     }
-    fn as_write_vec(&self) -> &[u8] {
-        panic!("as_write_vec on non Test stream");
-    }
 }
 
+#[cfg(feature = "tls")]
 impl Read for RustlsStream {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         match self.0.read(buf) {
@@ -68,6 +53,7 @@ impl Read for RustlsStream {
     }
 }
 
+#[cfg(feature = "tls")]
 impl Write for RustlsStream {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.0.write(buf)
@@ -75,6 +61,26 @@ impl Write for RustlsStream {
 
     fn flush(&mut self) -> io::Result<()> {
         self.0.flush()
+    }
+}
+
+impl Inner for TcpStream {
+    fn is_poolable(&self) -> bool {
+        true
+    }
+    fn socket(&self) -> Option<&TcpStream> {
+        Some(self)
+    }
+}
+
+#[cfg(feature = "native-tls")]
+impl Inner for native_tls::TlsStream<TcpStream> {
+    fn is_poolable(&self) -> bool {
+        true
+    }
+
+    fn socket(&self) -> Option<&TcpStream> {
+        Some(self.get_ref())
     }
 }
 
@@ -195,6 +201,13 @@ impl fmt::Debug for Stream {
 }
 
 impl Stream {
+    #[cfg(any(feature = "tls", feature = "native-tls"))]
+    fn new(t: impl Inner + Send + Sync + 'static) -> Stream {
+        Stream::logged_create(Stream {
+            inner: BufReader::new(Box::new(t)),
+        })
+    }
+
     fn logged_create(stream: Stream) -> Stream {
         debug!("created stream: {:?}", stream);
         stream
@@ -209,13 +222,6 @@ impl Stream {
     fn from_tcp_stream(t: TcpStream) -> Stream {
         Stream::logged_create(Stream {
             inner: BufReader::new(Box::new(t)),
-        })
-    }
-
-    #[cfg(feature = "tls")]
-    fn from_rustls_stream(t: StreamOwned<ClientSession, TcpStream>) -> Stream {
-        Stream::logged_create(Stream {
-            inner: BufReader::new(Box::new(RustlsStream(t))),
         })
     }
 
@@ -368,40 +374,65 @@ fn configure_certs(config: &mut rustls::ClientConfig) {
         .add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
 }
 
-#[cfg(feature = "tls")]
+#[cfg(all(not(feature = "tls"), not(feature = "native-tls")))]
+pub(crate) fn connect_https(unit: &Unit, _hostname: &str) -> Result<Stream, Error> {
+    Err(ErrorKind::UnknownScheme
+        .msg("URL has 'https:' scheme but ureq was built without HTTP support")
+        .url(unit.url.clone()))
+}
+
+#[cfg(any(feature = "tls", feature = "native-tls"))]
 pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error> {
-    use once_cell::sync::Lazy;
-    use rustls::Session;
-    use std::sync::Arc;
-
-    static TLS_CONF: Lazy<Arc<rustls::ClientConfig>> = Lazy::new(|| {
-        let mut config = rustls::ClientConfig::new();
-        configure_certs(&mut config);
-        Arc::new(config)
-    });
-
     let port = unit.url.port().unwrap_or(443);
 
-    let sni = webpki::DNSNameRef::try_from_ascii_str(hostname)
-        .map_err(|err| ErrorKind::Dns.new().src(err))?;
     let tls_conf = &unit.agent.config.tls_config.as_ref();
 
-    let rustls_conn = |conf: &Arc<ClientConfig>| {
-        let mut sock = connect_host(unit, hostname, port)?;
-        let mut sess = rustls::ClientSession::new(&conf, sni);
+    let sock = connect_host(unit, hostname, port)?;
+
+    #[cfg(feature = "tls")]
+    let rustls_conn = |mut sock: TcpStream, conf: Option<&std::sync::Arc<rustls::ClientConfig>>| {
+        use once_cell::sync::Lazy;
+        use rustls::Session;
+        use std::sync::Arc;
+
+        static TLS_CONF: Lazy<Arc<rustls::ClientConfig>> = Lazy::new(|| {
+            let mut config = rustls::ClientConfig::new();
+            configure_certs(&mut config);
+            Arc::new(config)
+        });
+
+        let sni = webpki::DNSNameRef::try_from_ascii_str(hostname)
+            .map_err(|err| ErrorKind::Dns.new().src(err))?;
+        let mut sess = rustls::ClientSession::new(conf.unwrap_or(&*TLS_CONF), sni);
 
         sess.complete_io(&mut sock)
             .map_err(|err| ErrorKind::ConnectionFailed.new().src(err))?;
         let stream = rustls::StreamOwned::new(sess, sock);
 
-        Ok(Stream::from_rustls_stream(stream))
+        Ok(Stream::new(RustlsStream(stream)))
     };
 
     match tls_conf {
-        Some(TLSClientConfig::Rustls(rc)) => rustls_conn(rc),
-        None => rustls_conn(&*TLS_CONF),
-        Some(TLSClientConfig::Native) => {
-            panic!();
+        #[cfg(feature = "tls")]
+        Some(crate::agent::TLSClientConfig::Rustls(rc)) => rustls_conn(sock, Some(rc)),
+        #[cfg(feature = "tls")]
+        None => rustls_conn(sock, None),
+        #[cfg(feature = "native-tls")]
+        Some(crate::agent::TLSClientConfig::Native(tc)) => {
+            let tls_stream = tc
+                .connect(hostname, sock)
+                .map_err(|e| ErrorKind::Dns.new().src(e))?;
+
+            Ok(Stream::new(tls_stream))
+        }
+        #[cfg(all(feature = "native-tls", not(feature = "tls")))]
+        None => {
+            let tls_stream = native_tls::TlsConnector::new()
+                .map_err(|e| ErrorKind::Io.new().src(e))?
+                .connect(hostname, sock)
+                .map_err(|e| ErrorKind::Dns.new().src(e))?;
+
+            Ok(Stream::new(tls_stream))
         }
     }
 }
@@ -692,11 +723,4 @@ pub(crate) fn connect_test(unit: &Unit) -> Result<Stream, Error> {
 #[cfg(not(test))]
 pub(crate) fn connect_test(unit: &Unit) -> Result<Stream, Error> {
     Err(ErrorKind::UnknownScheme.msg(&format!("unknown scheme '{}'", unit.url.scheme())))
-}
-
-#[cfg(not(feature = "tls"))]
-pub(crate) fn connect_https(unit: &Unit, _hostname: &str) -> Result<Stream, Error> {
-    Err(ErrorKind::UnknownScheme
-        .msg("URL has 'https:' scheme but ureq was build without HTTP support")
-        .url(unit.url.clone()))
 }
