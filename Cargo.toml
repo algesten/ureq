@@ -12,7 +12,7 @@ edition = "2018"
 
 [package.metadata.docs.rs]
 # Keep in sync with .github/workflows/test.yml
-features = [ "tls", "json", "charset", "cookies", "socks-proxy" ]
+features = [ "tls", "native-tls", "json", "charset", "cookies", "socks-proxy" ]
 
 [features]
 default = ["tls"]

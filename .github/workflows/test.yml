@@ -39,7 +39,7 @@ jobs:
         with:
           command: doc
           # Keep in sync with Cargo.toml's [package.metadata.docs.rs]
-          args: --no-default-features --no-deps --features "tls json charset cookies socks-proxy"
+          args: --no-default-features --no-deps --features "tls native-tls json charset cookies socks-proxy"
   build_and_test:
     name: Test
     runs-on: ubuntu-latest
@@ -48,6 +48,8 @@ jobs:
         tls:
           - ""
           - tls
+          - native-tls
+          - "tls native-tls"
         feature:
           - ""
           - json
