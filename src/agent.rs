@@ -465,7 +465,9 @@ impl AgentBuilder {
         self
     }
 
-    /// Set the TLS client config to use for the connection. See [`ClientConfig`](https://docs.rs/rustls/latest/rustls/struct.ClientConfig.html).
+    /// Use rustls for connections from this agent and set the
+    /// [`rustls::ClientConfig`](https://docs.rs/rustls/0.19.1/rustls/struct.ClientConfig.html)
+    /// to use. Overrides any previous calls to [AgentBuilder::tls_connector]
     ///
     /// Example:
     /// ```
@@ -485,8 +487,9 @@ impl AgentBuilder {
         self
     }
 
-    /// Set the [native_tls::TlsConnector](https://docs.rs/native-tls/0.2.7/native_tls/struct.TlsConnector.html)
-    /// to use for the connection.
+    /// Use native-tls for connections from this agent and set the
+    /// [`native_tls::TlsConnector`](https://docs.rs/native-tls/0.2.7/native_tls/struct.TlsConnector.html)
+    /// to use. Overrides any previous calls to [AgentBuilder::tls_config].
     ///
     /// Example:
     /// ```
