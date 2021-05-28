@@ -236,10 +236,11 @@
 //!
 //! # HTTPS / TLS / SSL
 //!
-//! By default, ureq uses rustls. You can add native-tls support by enableing the native-tls feature
+//! By default, ureq uses rustls. You can add native-tls support by enabling the native-tls feature
 //! and calling AgentBuilder::tls_connector():
 //!
 //! ```no_run
+//! # #[cfg(feature = "native-tls")]
 //! # fn main() -> std::result::Result<(), ureq::Error> {
 //! # ureq::is_test(true);
 //!   use ureq::Agent;
