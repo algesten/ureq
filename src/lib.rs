@@ -241,7 +241,7 @@
 //!
 //! ```no_run
 //! # #[cfg(feature = "native-tls")]
-//! # fn main() -> std::result::Result<(), ureq::Error> {
+//! # fn build() -> std::result::Result<(), ureq::Error> {
 //! # ureq::is_test(true);
 //!   use ureq::Agent;
 //!
@@ -250,6 +250,7 @@
 //!       .build();
 //! # Ok(())
 //! # }
+//! # fn main() {}
 //! ```
 //!
 //! You might want to use native-tls if rustls is not supported on your platform, or if you need to
