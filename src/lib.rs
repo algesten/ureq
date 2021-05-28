@@ -243,6 +243,7 @@
 //! # #[cfg(feature = "native-tls")]
 //! # fn build() -> std::result::Result<(), ureq::Error> {
 //! # ureq::is_test(true);
+//!   use std::sync::Arc;
 //!   use ureq::Agent;
 //!
 //!   let agent = ureq::AgentBuilder::new()
