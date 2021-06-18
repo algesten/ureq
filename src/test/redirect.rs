@@ -147,6 +147,21 @@ fn redirect_post() {
 }
 
 #[test]
+fn redirect_post_with_data() {
+    test::set_handler("/redirect_post1", |unit| {
+        assert_eq!(unit.header("Content-Length").unwrap(), "4");
+        test::make_response(302, "Go here", vec!["Location: /redirect_post2"], vec![])
+    });
+    test::set_handler("/redirect_post2", |unit| {
+        assert_eq!(unit.header("Content-Length"), None);
+        assert_eq!(unit.method, "GET");
+        test::make_response(200, "OK", vec![], vec![])
+    });
+    let resp = post("test://host/redirect_post1").send_string("data").unwrap();
+    assert_eq!(resp.status(), 200);
+}
+
+#[test]
 fn redirect_308() {
     test::set_handler("/redirect_get3", |_| {
         test::make_response(308, "Go here", vec!["Location: /valid_response"], vec![])
