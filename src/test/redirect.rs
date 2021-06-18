@@ -157,7 +157,9 @@ fn redirect_post_with_data() {
         assert_eq!(unit.method, "GET");
         test::make_response(200, "OK", vec![], vec![])
     });
-    let resp = post("test://host/redirect_post1").send_string("data").unwrap();
+    let resp = post("test://host/redirect_post1")
+        .send_string("data")
+        .unwrap();
     assert_eq!(resp.status(), 200);
 }
 
