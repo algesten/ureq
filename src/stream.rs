@@ -377,7 +377,7 @@ fn configure_certs(config: &mut rustls::ClientConfig) {
 #[cfg(all(not(feature = "tls"), not(feature = "native-tls")))]
 pub(crate) fn connect_https(unit: &Unit, _hostname: &str) -> Result<Stream, Error> {
     Err(ErrorKind::UnknownScheme
-        .msg("URL has 'https:' scheme but ureq was built without HTTP support")
+        .msg("URL has 'https:' scheme but ureq was built without TLS support")
         .url(unit.url.clone()))
 }
 
