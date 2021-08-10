@@ -134,7 +134,7 @@ impl Response {
     /// The HTTP spec allows for non-utf8 status texts. This uses from_utf8_lossy to
     /// convert such lines to &str.
     pub fn status_text(&self) -> &str {
-        &self.status_line.as_str()[self.index.response_code + 1..].trim()
+        self.status_line.as_str()[self.index.response_code + 1..].trim()
     }
 
     /// The header value for the given name, or None if not found.

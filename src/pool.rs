@@ -113,7 +113,7 @@ impl ConnectionPool {
 
                 // Remove the newest matching PoolKey from self.lru. That
                 // corresponds to the stream we just removed from `recycle`.
-                remove_last_match(&mut inner.lru, &key)
+                remove_last_match(&mut inner.lru, key)
                     .expect("invariant failed: key in recycle but not in lru");
 
                 debug!("pulling stream from pool: {:?} -> {:?}", key, stream);
