@@ -42,7 +42,7 @@ impl Unit {
     ) -> Self {
         //
 
-        let (is_transfer_encoding_set, mut is_chunked) = get_header(&headers, "transfer-encoding")
+        let (is_transfer_encoding_set, mut is_chunked) = get_header(headers, "transfer-encoding")
             // if the user has set an encoding header, obey that.
             .map(|enc| {
                 let is_transfer_encoding_set = !enc.is_empty();
@@ -60,7 +60,7 @@ impl Unit {
 
             // chunking and Content-Length headers are mutually exclusive
             // also don't write this if the user has set it themselves
-            if !is_chunked && get_header(&headers, "content-length").is_none() {
+            if !is_chunked && get_header(headers, "content-length").is_none() {
                 // if the payload is of known size (everything beside an unsized reader), set
                 // Content-Length,
                 // otherwise, use the chunked Transfer-Encoding (only if no other Transfer-Encoding
@@ -82,7 +82,7 @@ impl Unit {
             let username = url.username();
             let password = url.password().unwrap_or("");
             if (!username.is_empty() || !password.is_empty())
-                && get_header(&headers, "authorization").is_none()
+                && get_header(headers, "authorization").is_none()
             {
                 let encoded = base64::encode(&format!("{}:{}", username, password));
                 extra.push(Header::new("Authorization", &format!("Basic {}", encoded)));
@@ -236,7 +236,7 @@ fn connect_inner(
     let url = &unit.url;
     let method = &unit.method;
     // open socket
-    let (mut stream, is_recycled) = connect_socket(&unit, &host, use_pooled)?;
+    let (mut stream, is_recycled) = connect_socket(unit, host, use_pooled)?;
 
     if is_recycled {
         info!("sending request (reused connection) {} {}", method, url);
@@ -244,7 +244,7 @@ fn connect_inner(
         info!("sending request {} {}", method, url);
     }
 
-    let send_result = send_prelude(&unit, &mut stream, !previous.is_empty());
+    let send_result = send_prelude(unit, &mut stream, !previous.is_empty());
 
     if let Err(err) = send_result {
         if is_recycled {
@@ -343,9 +343,9 @@ fn connect_socket(unit: &Unit, hostname: &str, use_pooled: bool) -> Result<(Stre
         }
     }
     let stream = match unit.url.scheme() {
-        "http" => stream::connect_http(&unit, hostname),
-        "https" => stream::connect_https(&unit, hostname),
-        "test" => connect_test(&unit),
+        "http" => stream::connect_http(unit, hostname),
+        "https" => stream::connect_https(unit, hostname),
+        "test" => connect_test(unit),
         scheme => Err(ErrorKind::UnknownScheme.msg(&format!("unknown scheme {}", scheme))),
     };
     Ok((stream?, false))

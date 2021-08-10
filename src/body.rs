@@ -134,7 +134,7 @@ fn copy_chunked<R: Read, W: Write>(reader: &mut R, writer: &mut W) -> io::Result
         let header = header_str.as_bytes();
         assert!(header.len() <= CHUNK_HEADER_MAX_SIZE);
         let start_index = CHUNK_HEADER_MAX_SIZE - header.len();
-        (&mut chunk[start_index..]).write_all(&header).unwrap();
+        (&mut chunk[start_index..]).write_all(header).unwrap();
 
         // And add the footer
         chunk.extend_from_slice(b"\r\n");

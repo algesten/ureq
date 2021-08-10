@@ -209,7 +209,7 @@ impl Stream {
         match self.inner.get_ref() {
             Inner::Http(b) => Some(b),
             #[cfg(feature = "tls")]
-            Inner::Https(b) => Some(&b.get_ref()),
+            Inner::Https(b) => Some(b.get_ref()),
             _ => None,
         }
     }
@@ -365,7 +365,7 @@ pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error
         .map(|c| &c.0)
         .unwrap_or(&*TLS_CONF);
     let mut sock = connect_host(unit, hostname, port)?;
-    let mut sess = rustls::ClientSession::new(&tls_conf, sni);
+    let mut sess = rustls::ClientSession::new(tls_conf, sni);
 
     sess.complete_io(&mut sock)
         .map_err(|err| ErrorKind::ConnectionFailed.new().src(err))?;
@@ -413,7 +413,7 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         // connect with a configured timeout.
         let stream = if Some(Proto::SOCKS5) == proto {
             connect_socks5(
-                &unit,
+                unit,
                 proxy.clone().unwrap(),
                 connect_deadline,
                 sock_addr,
