@@ -79,11 +79,13 @@ impl Proxy {
     /// * `john:smith@socks.google.com:8000`
     /// * `localhost`
     pub fn new<S: AsRef<str>>(proxy: S) -> Result<Self, Error> {
-        let mut proxy_parts = proxy
-            .as_ref()
-            .splitn(2, "://")
-            .collect::<Vec<&str>>()
-            .into_iter();
+        let mut proxy = proxy.as_ref();
+
+        while proxy.ends_with('/') {
+            proxy = &proxy[..(proxy.len() - 1)];
+        }
+
+        let mut proxy_parts = proxy.splitn(2, "://").collect::<Vec<&str>>().into_iter();
 
         let proto = if proxy_parts.len() == 2 {
             match proxy_parts.next() {
@@ -189,6 +191,16 @@ mod tests {
     #[test]
     fn parse_proxy_http_user_pass_server_port() {
         let proxy = Proxy::new("http://user:p@ssw0rd@localhost:9999").unwrap();
+        assert_eq!(proxy.user, Some(String::from("user")));
+        assert_eq!(proxy.password, Some(String::from("p@ssw0rd")));
+        assert_eq!(proxy.server, String::from("localhost"));
+        assert_eq!(proxy.port, 9999);
+        assert_eq!(proxy.proto, Proto::HTTPConnect);
+    }
+
+    #[test]
+    fn parse_proxy_http_user_pass_server_port_trailing_slash() {
+        let proxy = Proxy::new("http://user:p@ssw0rd@localhost:9999/").unwrap();
         assert_eq!(proxy.user, Some(String::from("user")));
         assert_eq!(proxy.password, Some(String::from("p@ssw0rd")));
         assert_eq!(proxy.server, String::from("localhost"));
