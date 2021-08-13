@@ -1,7 +1,7 @@
 use std::io::{self, Write};
 use std::time;
 
-use log::{debug, info};
+use log::debug;
 use url::Url;
 
 #[cfg(feature = "cookies")]
@@ -239,9 +239,9 @@ fn connect_inner(
     let (mut stream, is_recycled) = connect_socket(unit, host, use_pooled)?;
 
     if is_recycled {
-        info!("sending request (reused connection) {} {}", method, url);
+        debug!("sending request (reused connection) {} {}", method, url);
     } else {
-        info!("sending request {} {}", method, url);
+        debug!("sending request {} {}", method, url);
     }
 
     let send_result = send_prelude(unit, &mut stream, !previous.is_empty());
