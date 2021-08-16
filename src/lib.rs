@@ -126,7 +126,7 @@
 //! * `charset` enables interpreting the charset part of the Content-Type header
 //!    (e.g.  `Content-Type: text/plain; charset=iso-8859-1`). Without this, the
 //!    library defaults to Rust's built in `utf-8`.
-//! * `socks-proxy` enables proxy config using the `socks://` and `socks5://` prefix.
+//! * `socks-proxy` enables proxy config using the `socks4://`, `socks4a://`, `socks5://` and `socks://` prefix.
 //!
 //! # Plain requests
 //!
@@ -191,7 +191,7 @@
 //!
 //! # Proxying
 //!
-//! ureq supports two kinds of proxies,  HTTP [`CONNECT`] and [`SOCKS5`], the former is
+//! ureq supports two kinds of proxies,  HTTP [`CONNECT`], [`SOCKS4`] and [`SOCKS5`], the former is
 //! always available while the latter must be enabled using the feature
 //! `ureq = { version = "*", features = ["socks-proxy"] }`.
 //!
@@ -260,6 +260,7 @@
 //! [tokio]: https://github.com/tokio-rs/tokio#tokio
 //! [what-color]: https://journal.stuffwithstuff.com/2015/02/01/what-color-is-your-function/
 //! [`CONNECT`]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods/CONNECT
+//! [`SOCKS4`]: https://en.wikipedia.org/wiki/SOCKS#SOCKS4
 //! [`SOCKS5`]: https://en.wikipedia.org/wiki/SOCKS#SOCKS5
 //!
 //! ------------------------------------------------------------------------------
