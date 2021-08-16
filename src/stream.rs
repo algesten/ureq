@@ -411,14 +411,15 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
 
         debug!("connecting to {} at {}", netloc, &sock_addr);
         // connect with a configured timeout.
-        let stream = if Some(Proto::SOCKS5) == proto {
-            connect_socks5(
+        let stream = if let Some(proto_r) = proto {
+            connect_socks(
                 unit,
                 proxy.clone().unwrap(),
                 connect_deadline,
                 sock_addr,
                 hostname,
                 port,
+                proto_r,
             )
         } else if let Some(timeout) = timeout {
             TcpStream::connect_timeout(&sock_addr, timeout)
@@ -478,7 +479,7 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
 }
 
 #[cfg(feature = "socks-proxy")]
-fn socks5_local_nslookup(
+fn socks_local_nslookup(
     unit: &Unit,
     hostname: &str,
     port: u16,
@@ -509,20 +510,24 @@ fn socks5_local_nslookup(
 }
 
 #[cfg(feature = "socks-proxy")]
-fn connect_socks5(
+fn connect_socks(
     unit: &Unit,
     proxy: Proxy,
     deadline: Option<Instant>,
     proxy_addr: SocketAddr,
     host: &str,
     port: u16,
+    proto: Proto,
 ) -> Result<TcpStream, std::io::Error> {
     use socks::TargetAddr::Domain;
     use std::net::{Ipv4Addr, Ipv6Addr};
     use std::str::FromStr;
 
-    let host_addr = if Ipv4Addr::from_str(host).is_ok() || Ipv6Addr::from_str(host).is_ok() {
-        match socks5_local_nslookup(unit, host, port) {
+    let host_addr = if Ipv4Addr::from_str(host).is_ok()
+        || Ipv6Addr::from_str(host).is_ok()
+        || proto == Proto::SOCKS4
+    {
+        match socks_local_nslookup(unit, host, port) {
             Ok(addr) => addr,
             Err(err) => return Err(err),
         }
@@ -530,14 +535,14 @@ fn connect_socks5(
         Domain(String::from(host), port)
     };
 
-    // Since Socks5Stream doesn't support set_read_timeout, a suboptimal one is implemented via
+    // Since SocksXStream doesn't support set_read_timeout, a suboptimal one is implemented via
     // thread::spawn.
     // # Happy Path
-    // 1) thread spawns 2) get_socks5_stream returns ok 3) tx sends result ok
+    // 1) thread spawns 2) get_socksX_stream returns ok 3) tx sends result ok
     // 4) slave_signal signals done and cvar notifies master_signal 5) cvar.wait_timeout receives the done signal
     // 6) rx receives the socks5 stream and the function exists
     // # Sad path
-    // 1) get_socks5_stream hangs 2)slave_signal does not send done notification 3) cvar.wait_timeout times out
+    // 1) get_socksX_stream hangs 2)slave_signal does not send done notification 3) cvar.wait_timeout times out
     // 3) an exception is thrown.
     // # Defects
     // 1) In the event of a timeout, a thread may be left running in the background.
@@ -552,8 +557,12 @@ fn connect_socks5(
         let (tx, rx) = channel();
         thread::spawn(move || {
             let (lock, cvar) = &*slave_signal;
-            if tx // try to get a socks5 stream and send it to the parent thread's rx
-                .send(get_socks5_stream(&proxy, &proxy_addr, host_addr))
+            if tx // try to get a socks stream and send it to the parent thread's rx
+                .send(if proto == Proto::SOCKS5 {
+                    get_socks5_stream(&proxy, &proxy_addr, host_addr)
+                } else {
+                    get_socks4_stream(&proxy_addr, host_addr)
+                })
                 .is_ok()
             {
                 // if sending the stream has succeeded we need to notify the parent thread
@@ -575,14 +584,16 @@ fn connect_socks5(
             rx.recv().unwrap()?
         } else {
             return Err(io_err_timeout(format!(
-                "SOCKS5 proxy: {}:{} timed out connecting after {}ms.",
+                "SOCKS proxy: {}:{} timed out connecting after {}ms.",
                 host,
                 port,
                 timeout_connect.as_millis()
             )));
         }
-    } else {
+    } else if proto == Proto::SOCKS5 {
         get_socks5_stream(&proxy, &proxy_addr, host_addr)?
+    } else {
+        get_socks4_stream(&proxy_addr, host_addr)?
     };
 
     Ok(stream)
@@ -612,18 +623,30 @@ fn get_socks5_stream(
     }
 }
 
+#[cfg(feature = "socks-proxy")]
+fn get_socks4_stream(
+    proxy_addr: &SocketAddr,
+    host_addr: TargetAddr,
+) -> Result<TcpStream, std::io::Error> {
+    match socks::Socks4Stream::connect(proxy_addr, host_addr, "") {
+        Ok(socks_stream) => Ok(socks_stream.into_inner()),
+        Err(err) => Err(err),
+    }
+}
+
 #[cfg(not(feature = "socks-proxy"))]
-fn connect_socks5(
+fn connect_socks(
     _unit: &Unit,
     _proxy: Proxy,
     _deadline: Option<Instant>,
     _proxy_addr: SocketAddr,
     _hostname: &str,
     _port: u16,
+    _proto: Proto,
 ) -> Result<TcpStream, std::io::Error> {
     Err(std::io::Error::new(
         io::ErrorKind::Other,
-        "SOCKS5 feature disabled.",
+        "SOCKS feature disabled.",
     ))
 }
 
