@@ -4,6 +4,8 @@ use crate::error::{Error, ErrorKind};
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Proto {
     HTTPConnect,
+    SOCKS4,
+    SOCKS4A,
     SOCKS5,
 }
 
@@ -68,7 +70,9 @@ impl Proxy {
     /// * `proxy` - a str of format `<protocol>://<user>:<password>@<host>:port` . All parts except host are optional.
     /// # Protocols
     /// * `http`: HTTP Connect
-    /// * `socks`, `socks5`: SOCKS5 (requires socks feature)
+    /// * `socks4`: SOCKS4 (requires socks feature)
+    /// * `socks4a`: SOCKS4A (requires socks feature)
+    /// * `socks5` and `socks`: SOCKS5 (requires socks feature)
     /// # Examples
     /// * `http://127.0.0.1:8080`
     /// * `socks5://john:smith@socks.google.com`
@@ -84,6 +88,8 @@ impl Proxy {
         let proto = if proxy_parts.len() == 2 {
             match proxy_parts.next() {
                 Some("http") => Proto::HTTPConnect,
+                Some("socks4") => Proto::SOCKS4,
+                Some("socks4a") => Proto::SOCKS4A,
                 Some("socks") => Proto::SOCKS5,
                 Some("socks5") => Proto::SOCKS5,
                 _ => return Err(ErrorKind::InvalidProxyUrl.new()),
@@ -131,7 +137,7 @@ impl Proxy {
 
             match self.proto {
                 Proto::HTTPConnect => format!("Proxy-Authorization: basic {}\r\n", creds),
-                Proto::SOCKS5 => String::new(),
+                _ => String::new(),
             }
         } else {
             String::new()
@@ -192,8 +198,8 @@ mod tests {
 
     #[cfg(feature = "socks-proxy")]
     #[test]
-    fn parse_proxy_socks_user_pass_server_port() {
-        let proxy = Proxy::new("socks://user:p@ssw0rd@localhost:9999").unwrap();
+    fn parse_proxy_socks4_user_pass_server_port() {
+        let proxy = Proxy::new("socks4://user:p@ssw0rd@localhost:9999").unwrap();
         assert_eq!(proxy.user, Some(String::from("user")));
         assert_eq!(proxy.password, Some(String::from("p@ssw0rd")));
         assert_eq!(proxy.server, String::from("localhost"));
