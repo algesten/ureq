@@ -410,9 +410,9 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         };
 
         debug!("connecting to {} at {}", netloc, &sock_addr);
+
         // connect with a configured timeout.
-        let stream = if Some(Proto::HTTPConnect) != proto {
-            let Some(proto_r) = proto;
+        let stream = if proto.is_some() && Some(Proto::HTTPConnect) != proto {
             connect_socks(
                 unit,
                 proxy.clone().unwrap(),
@@ -420,7 +420,7 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
                 sock_addr,
                 hostname,
                 port,
-                proto_r,
+                proto.unwrap(),
             )
         } else if let Some(timeout) = timeout {
             TcpStream::connect_timeout(&sock_addr, timeout)
