@@ -209,6 +209,28 @@ mod tests {
 
     #[cfg(feature = "socks-proxy")]
     #[test]
+    fn parse_proxy_socks4a_user_pass_server_port() {
+        let proxy = Proxy::new("socks4a://user:p@ssw0rd@localhost:9999").unwrap();
+        assert_eq!(proxy.user, Some(String::from("user")));
+        assert_eq!(proxy.password, Some(String::from("p@ssw0rd")));
+        assert_eq!(proxy.server, String::from("localhost"));
+        assert_eq!(proxy.port, 9999);
+        assert_eq!(proxy.proto, Proto::SOCKS5);
+    }
+
+    #[cfg(feature = "socks-proxy")]
+    #[test]
+    fn parse_proxy_socks_user_pass_server_port() {
+        let proxy = Proxy::new("socks://user:p@ssw0rd@localhost:9999").unwrap();
+        assert_eq!(proxy.user, Some(String::from("user")));
+        assert_eq!(proxy.password, Some(String::from("p@ssw0rd")));
+        assert_eq!(proxy.server, String::from("localhost"));
+        assert_eq!(proxy.port, 9999);
+        assert_eq!(proxy.proto, Proto::SOCKS5);
+    }
+
+    #[cfg(feature = "socks-proxy")]
+    #[test]
     fn parse_proxy_socks5_user_pass_server_port() {
         let proxy = Proxy::new("socks5://user:p@ssw0rd@localhost:9999").unwrap();
         assert_eq!(proxy.user, Some(String::from("user")));
