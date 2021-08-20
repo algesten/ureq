@@ -204,7 +204,7 @@ mod tests {
         assert_eq!(proxy.password, Some(String::from("p@ssw0rd")));
         assert_eq!(proxy.server, String::from("localhost"));
         assert_eq!(proxy.port, 9999);
-        assert_eq!(proxy.proto, Proto::SOCKS5);
+        assert_eq!(proxy.proto, Proto::SOCKS4);
     }
 
     #[cfg(feature = "socks-proxy")]
@@ -215,7 +215,7 @@ mod tests {
         assert_eq!(proxy.password, Some(String::from("p@ssw0rd")));
         assert_eq!(proxy.server, String::from("localhost"));
         assert_eq!(proxy.port, 9999);
-        assert_eq!(proxy.proto, Proto::SOCKS5);
+        assert_eq!(proxy.proto, Proto::SOCKS4A);
     }
 
     #[cfg(feature = "socks-proxy")]
