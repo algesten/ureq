@@ -412,7 +412,7 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         debug!("connecting to {} at {}", netloc, &sock_addr);
 
         // connect with a configured timeout.
-        let stream = if proto.is_some() && Some(Proto::HTTPConnect) != proto {
+        let stream = if None != proto && Some(Proto::HTTPConnect) != proto {
             connect_socks(
                 unit,
                 proxy.clone().unwrap(),
