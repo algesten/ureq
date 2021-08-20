@@ -106,7 +106,7 @@ You can control them when including ureq as a dependency.
 * `charset` enables interpreting the charset part of the Content-Type header
    (e.g.  `Content-Type: text/plain; charset=iso-8859-1`). Without this, the
    library defaults to Rust's built in `utf-8`.
-* `socks-proxy` enables proxy config using the `socks4://`, `socks4a://`, `socks5://` and `socks://` prefix.
+* `socks-proxy` enables proxy config using the `socks4://`, `socks4a://`, `socks5://` and `socks://` (equal to `socks5://`) prefix.
 
 ## Plain requests
 
