@@ -1,3 +1,9 @@
+# 2.2.0
+ * Update to latest dependencies
+ * Add SOCKS4 support (#410).
+ * Downgrade logging on info level to debug (#409).
+ * Bugfix: Clear content-length header on redirect (#394, #395).
+
 # 2.1.1
  * Bugfix: don't reuse conns with bytes pending from server (#372). This
    reduces Transport errors when using an Agent for connection pooling.
