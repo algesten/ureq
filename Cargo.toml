@@ -25,11 +25,11 @@ socks-proxy = ["socks"]
 
 [dependencies]
 base64 = "0.13"
-chunked_transfer = "1.2.0"
+chunked_transfer = "1.2"
 cookie = { version = "0.15", default-features = false, optional = true}
 once_cell = "1"
 url = "2"
-socks = { version = "0.3.3", optional = true }
+socks = { version = "0.3", optional = true }
 rustls = { version = "0.19", optional = true }
 webpki = { version = "0.21", optional = true }
 webpki-roots = { version = "0.21", optional = true }
@@ -37,12 +37,12 @@ rustls-native-certs = { version = "0.5", optional = true }
 serde = { version = "1", optional = true }
 serde_json = { version = "1", optional = true }
 encoding_rs = { version = "0.8", optional = true }
-cookie_store = { version = "0.13.0", optional = true, default-features = false, features = ["preserve_order"] }
-log = "0.4.11"
+cookie_store = { version = "0.15", optional = true, default-features = false, features = ["preserve_order"] }
+log = "0.4"
 
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }
-env_logger = "0.8.1"
+env_logger = "0.9"
 rustls = { version = "0.19", features = ["dangerous_configuration"] }
 
 [[example]]

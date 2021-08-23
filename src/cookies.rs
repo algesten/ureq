@@ -33,8 +33,8 @@ impl CookieTin {
     pub(crate) fn get_request_cookies(&self, url: &Url) -> Vec<cookie::Cookie> {
         let store = self.inner.read().unwrap();
         store
-            .get_request_cookies(url)
-            .map(|c| cookie::Cookie::new(c.name().to_owned(), c.value().to_owned()))
+            .get_request_values(url)
+            .map(|(name, value)| cookie::Cookie::new(name.to_owned(), value.to_owned()))
             .collect()
     }
 
