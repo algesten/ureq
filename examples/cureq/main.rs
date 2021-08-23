@@ -130,6 +130,8 @@ fn main2() -> Result<(), Error> {
 -d <string>   Use the given data as the request body (useful for POST)
 --wait <n>    Wait n seconds between requests
 -k            Ignore certificate errors
+-m <time>     Max time for the entire request
+-ct <time>    Connection timeout
 
 Fetch url and copy it to stdout.
 "##,
@@ -163,6 +165,24 @@ Fetch url and copy it to stdout.
                     .dangerous()
                     .set_certificate_verifier(Arc::new(AcceptAll {}));
                 builder = builder.tls_config(Arc::new(client_config));
+            }
+            "-m" => {
+                let t: f32 = args
+                    .next()
+                    .expect("Timeout arg")
+                    .parse()
+                    .expect("Parse timeout");
+
+                builder = builder.timeout(Duration::from_millis((t * 1000.0) as u64));
+            }
+            "-ct" => {
+                let t: f32 = args
+                    .next()
+                    .expect("Connection timeout arg")
+                    .parse()
+                    .expect("Parse connection timeout");
+
+                builder = builder.timeout_connect(Duration::from_millis((t * 1000.0) as u64));
             }
             arg => {
                 if arg.starts_with("-") {
