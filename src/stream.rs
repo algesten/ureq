@@ -599,8 +599,8 @@ fn get_socks5_stream(
         let stream = Socks5Stream::connect_with_password(
             proxy_addr,
             host_addr,
-            &proxy.user.as_ref().unwrap(),
-            &proxy.password.as_ref().unwrap(),
+            proxy.user.as_ref().unwrap(),
+            proxy.password.as_ref().unwrap(),
         )?
         .into_inner();
         Ok(stream)

@@ -235,9 +235,7 @@ impl AgentBuilder {
                     self.max_idle_connections_per_host,
                 ),
                 #[cfg(feature = "cookies")]
-                cookie_tin: CookieTin::new(
-                    self.cookie_store.unwrap_or_else(|| CookieStore::default()),
-                ),
+                cookie_tin: CookieTin::new(self.cookie_store.unwrap_or_else(CookieStore::default)),
                 resolver: self.resolver,
             }),
         }
