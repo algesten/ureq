@@ -89,7 +89,7 @@ impl Unit {
             }
 
             #[cfg(feature = "cookies")]
-            extra.extend(extract_cookies(agent, &url).into_iter());
+            extra.extend(extract_cookies(agent, url).into_iter());
 
             extra
         };
@@ -289,7 +289,7 @@ fn connect_inner(
 
     // squirrel away cookies
     #[cfg(feature = "cookies")]
-    save_cookies(&unit, &resp);
+    save_cookies(unit, &resp);
 
     debug!("response {} to {} {}", resp.status(), method, url);
 

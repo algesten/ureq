@@ -81,7 +81,7 @@ impl<'a> Payload<'a> {
                     let encoding = Encoding::for_label(_charset.as_bytes())
                         .or_else(|| Encoding::for_label(DEFAULT_CHARACTER_SET.as_bytes()))
                         .unwrap();
-                    encoding.encode(&text).0
+                    encoding.encode(text).0
                 };
                 #[cfg(not(feature = "charset"))]
                 let bytes = text.as_bytes();
