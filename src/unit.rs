@@ -1,5 +1,6 @@
-use std::fmt::Display;
+use std::fmt::{self, Display};
 use std::io::{self, Write};
+use std::ops::Range;
 use std::time;
 
 use log::debug;
@@ -397,7 +398,11 @@ fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> io::Result<()>
     for header in &unit.headers {
         if !redir || !header.is_name("Authorization") {
             if let Some(v) = header.value() {
-                prelude.write_header(header.name(), v)?;
+                if is_header_sensitive(header) {
+                    prelude.write_sensitive_header(header.name(), v)?;
+                } else {
+                    prelude.write_header(header.name(), v)?;
+                }
             }
         }
     }
@@ -405,24 +410,28 @@ fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> io::Result<()>
     // finish
     prelude.finish()?;
 
-    debug!(
-        "writing prelude: {}",
-        String::from_utf8_lossy(prelude.as_slice())
-    );
+    debug!("writing prelude: {:?}", prelude);
     // write all to the wire
     stream.write_all(prelude.as_slice())?;
 
     Ok(())
 }
 
+fn is_header_sensitive(header: &Header) -> bool {
+    header.is_name("Authorization") || header.is_name("Cookie")
+}
+
 struct PreludeBuilder {
     prelude: Vec<u8>,
+    // Sensitive information to be omitted in debug logging
+    sensitive_spans: Vec<Range<usize>>,
 }
 
 impl PreludeBuilder {
     fn new() -> Self {
         PreludeBuilder {
             prelude: Vec::with_capacity(256),
+            sensitive_spans: Vec::new(),
         }
     }
 
@@ -439,12 +448,39 @@ impl PreludeBuilder {
         write!(self.prelude, "{}: {}\r\n", name, value)
     }
 
+    fn write_sensitive_header(&mut self, name: &str, value: impl Display) -> io::Result<()> {
+        write!(self.prelude, "{}: ", name)?;
+        let start = self.prelude.len();
+        write!(self.prelude, "{}", value)?;
+        let end = self.prelude.len();
+        self.sensitive_spans.push(start..end);
+        write!(self.prelude, "\r\n")?;
+        Ok(())
+    }
+
     fn finish(&mut self) -> io::Result<()> {
         write!(self.prelude, "\r\n")
     }
 
     fn as_slice(&self) -> &[u8] {
         &self.prelude
+    }
+}
+
+impl fmt::Debug for PreludeBuilder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut pos = 0;
+        for span in &self.sensitive_spans {
+            write!(
+                f,
+                "{}",
+                String::from_utf8_lossy(&self.prelude[pos..span.start])
+            )?;
+            write!(f, "***")?;
+            pos = span.end;
+        }
+        write!(f, "{}", String::from_utf8_lossy(&self.prelude[pos..]))?;
+        Ok(())
     }
 }
 
