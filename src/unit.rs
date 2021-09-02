@@ -479,7 +479,7 @@ impl fmt::Debug for PreludeBuilder {
             write!(f, "***")?;
             pos = span.end;
         }
-        write!(f, "{}", String::from_utf8_lossy(&self.prelude[pos..]))?;
+        write!(f, "{}", String::from_utf8_lossy(&self.prelude[pos..]).trim_end())?;
         Ok(())
     }
 }
