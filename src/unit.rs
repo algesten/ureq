@@ -410,7 +410,7 @@ fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> io::Result<()>
     // finish
     prelude.finish()?;
 
-    debug!("writing prelude: {:?}", prelude);
+    debug!("writing prelude: {}", prelude);
     // write all to the wire
     stream.write_all(prelude.as_slice())?;
 
@@ -467,7 +467,7 @@ impl PreludeBuilder {
     }
 }
 
-impl fmt::Debug for PreludeBuilder {
+impl fmt::Display for PreludeBuilder {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut pos = 0;
         for span in &self.sensitive_spans {
