@@ -18,6 +18,12 @@ use serde::de::DeserializeOwned;
 #[cfg(feature = "charset")]
 use encoding_rs::Encoding;
 
+#[cfg(feature = "gzip")]
+use flate2::read::GzDecoder;
+
+#[cfg(feature = "brotli")]
+use brotli_decompressor::Decompressor;
+
 pub const DEFAULT_CONTENT_TYPE: &str = "text/plain";
 pub const DEFAULT_CHARACTER_SET: &str = "utf-8";
 const INTO_STRING_LIMIT: usize = 10 * 1_024 * 1_024;
@@ -281,6 +287,11 @@ impl Response {
                 .and_then(|l| l.parse::<usize>().ok())
         };
 
+        let compression = self
+            .header("content-encoding")
+            .map(Compression::from_header_value)
+            .flatten();
+
         let stream = self.stream;
         let unit = self.unit;
         if let Some(unit) = &unit {
@@ -292,12 +303,17 @@ impl Response {
         let deadline = unit.as_ref().and_then(|u| u.deadline);
         let stream = DeadlineStream::new(*stream, deadline);
 
-        match (use_chunked, limit_bytes) {
+        let body_reader: Box<dyn Read + Send> = match (use_chunked, limit_bytes) {
             (true, _) => Box::new(PoolReturnRead::new(unit, ChunkDecoder::new(stream))),
             (false, Some(len)) => {
                 Box::new(PoolReturnRead::new(unit, LimitedRead::new(stream, len)))
             }
             (false, None) => Box::new(stream),
+        };
+
+        match compression {
+            None => body_reader,
+            Some(c) => c.wrap_reader(body_reader),
         }
     }
 
@@ -505,6 +521,38 @@ impl Response {
         let previous_url = previous.url.expect("previous url");
         self.history = previous.history;
         self.history.push(previous_url);
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum Compression {
+    #[cfg(feature = "brotli")]
+    Brotli,
+    #[cfg(feature = "gzip")]
+    Gzip,
+}
+
+impl Compression {
+    /// Convert a string like "br" to an enum value
+    fn from_header_value(value: &str) -> Option<Compression> {
+        match value {
+            #[cfg(feature = "brotli")]
+            "br" => Some(Compression::Brotli),
+            #[cfg(feature = "gzip")]
+            "gzip" | "x-gzip" => Some(Compression::Gzip),
+            _ => None,
+        }
+    }
+
+    /// Wrap the raw reader with a decompressing reader
+    #[allow(unused_variables)] // when no features enabled, reader is unused (unreachable)
+    fn wrap_reader(self, reader: Box<dyn Read + Send>) -> Box<dyn Read + Send> {
+        match self {
+            #[cfg(feature = "brotli")]
+            Compression::Brotli => Box::new(Decompressor::new(reader, 4096)),
+            #[cfg(feature = "gzip")]
+            Compression::Gzip => Box::new(GzDecoder::new(reader)),
+        }
     }
 }
 
