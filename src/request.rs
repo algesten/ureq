@@ -87,11 +87,35 @@ impl Request {
         )?)
     }
 
-    fn do_call(self, payload: Payload) -> Result<Response> {
+    /// Add Accept-Encoding header with supported values, unless user has
+    /// already set this header or is requesting a specific byte-range.
+    #[cfg(any(feature = "gzip", feature = "brotli"))]
+    fn add_accept_encoding(&mut self) {
+        let should_add = !self.headers.iter().map(|h| h.name()).any(|name| {
+            name.eq_ignore_ascii_case("accept-encoding") || name.eq_ignore_ascii_case("range")
+        });
+        if should_add {
+            const GZ: bool = cfg!(feature = "gzip");
+            const BR: bool = cfg!(feature = "brotli");
+            const ACCEPT: &str = match (GZ, BR) {
+                (true, true) => "gzip, br",
+                (true, false) => "gzip",
+                (false, true) => "br",
+                (false, false) => "identity", // unreachable due to cfg feature on this fn
+            };
+            self.headers.push(Header::new("accept-encoding", ACCEPT));
+        }
+    }
+
+    #[cfg_attr(not(any(feature = "gzip", feature = "brotli")), allow(unused_mut))]
+    fn do_call(mut self, payload: Payload) -> Result<Response> {
         for h in &self.headers {
             h.validate()?;
         }
         let url = self.parse_url()?;
+
+        #[cfg(any(feature = "gzip", feature = "brotli"))]
+        self.add_accept_encoding();
 
         let deadline = match self.timeout.or(self.agent.config.timeout) {
             None => None,
