@@ -22,6 +22,8 @@ tls = ["rustls", "webpki", "webpki-roots"]
 native-certs = ["rustls-native-certs"]
 cookies = ["cookie", "cookie_store"]
 socks-proxy = ["socks"]
+gzip = ["flate2"]
+brotli = ["brotli-decompressor"]
 
 [dependencies]
 base64 = "0.13"
@@ -39,6 +41,8 @@ serde_json = { version = "1", optional = true }
 encoding_rs = { version = "0.8", optional = true }
 cookie_store = { version = "0.15", optional = true, default-features = false, features = ["preserve_order"] }
 log = "0.4"
+flate2 = { version = "1.0.22", optional = true }
+brotli-decompressor = { version = "2.3.2", optional = true }
 
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }
