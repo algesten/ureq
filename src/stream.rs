@@ -26,7 +26,7 @@ pub trait HttpsStream: Read + Write + Send + Sync + 'static {
 pub trait HttpsConnector: Send + Sync {
     fn connect(
         &self,
-        name: &str,
+        dns_name: &str,
         tcp_stream: TcpStream,
     ) -> Result<Box<dyn HttpsStream>, crate::error::Error>;
 }
@@ -412,10 +412,10 @@ pub(crate) fn connect_https(unit: &Unit, _hostname: &str) -> Result<Stream, Erro
 impl HttpsConnector for Arc<rustls::ClientConfig> {
     fn connect(
         &self,
-        name: &str,
+        dns_name: &str,
         mut tcp_stream: TcpStream,
     ) -> Result<Box<dyn HttpsStream>, Error> {
-        let sni = webpki::DNSNameRef::try_from_ascii_str(name)
+        let sni = webpki::DNSNameRef::try_from_ascii_str(dns_name)
             .map_err(|err| ErrorKind::Dns.new().src(err))?;
         let mut sess = rustls::ClientSession::new(self, sni);
 
@@ -429,7 +429,11 @@ impl HttpsConnector for Arc<rustls::ClientConfig> {
 
 #[cfg(feature = "native-tls")]
 impl HttpsConnector for native_tls::TlsConnector {
-    fn connect(&self, name: &str, tcp_stream: TcpStream) -> Result<Box<dyn HttpsStream>, Error> {
+    fn connect(
+        &self,
+        dns_name: &str,
+        tcp_stream: TcpStream,
+    ) -> Result<Box<dyn HttpsStream>, Error> {
         let stream = native_tls::TlsConnector::connect(self, name, tcp_stream)
             .map_err(|e| ErrorKind::Dns.new().src(e))?;
         Ok(Box::new(stream))

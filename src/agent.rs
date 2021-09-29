@@ -477,7 +477,7 @@ impl AgentBuilder {
     /// The parameter can be a
     /// [`rustls::ClientConfig`](https://docs.rs/rustls/0.19.1/rustls/struct.ClientConfig.html),
     /// a [`native_tls::TlsConnector`](https://docs.rs/native-tls/0.2.7/native_tls/struct.TlsConnector.html),
-    /// or any time for which you implement the [HttpsConnector] trait.
+    /// or any type for which you implement the [HttpsConnector] trait.
     ///
     /// Example using rustls:
     /// ```
