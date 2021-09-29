@@ -499,7 +499,9 @@ impl AgentBuilder {
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
     /// use std::sync::Arc;
+    /// # #[cfg(feature = "native-tls")]
     /// let tls_connector = Arc::new(native_tls::TlsConnector::new().unwrap());
+    /// # #[cfg(feature = "native-tls")]
     /// let agent = ureq::builder()
     ///     .tls_connector(tls_connector.clone())
     ///     .build();
@@ -507,8 +509,8 @@ impl AgentBuilder {
     /// # }
     /// ```
     #[cfg(feature = "tls")]
-    pub fn tls_config<T: HttpsConnector + 'static>(mut self, tls_config: Arc<T>) -> Self {
-        self.config.tls_config = Some(tls_config);
+    pub fn tls_config<T: HttpsConnector + 'static>(mut self, tls_config: T) -> Self {
+        self.config.tls_config = Some(Arc::new(tls_config));
         self
     }
 
