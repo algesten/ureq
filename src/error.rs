@@ -94,7 +94,8 @@ pub struct Transport {
     message: Option<String>,
     url: Option<Url>,
     source: Option<Box<dyn error::Error + Send + Sync + 'static>>,
-    response: Option<Response>,
+    #[allow(dead_code)]
+    response: Option<Response>,  // when building without tls, only tests read this.
 }
 
 /// Extension to [`Result<Response, Error>`] for handling all status codes as [`Response`].
