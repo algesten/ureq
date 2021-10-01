@@ -30,7 +30,6 @@ pub struct Request {
     agent: Agent,
     method: String,
     url: String,
-    error_on_non_2xx: bool,
     headers: Vec<Header>,
     timeout: Option<time::Duration>,
 }
@@ -52,7 +51,6 @@ impl Request {
             method,
             url,
             headers: vec![],
-            error_on_non_2xx: true,
             timeout: None,
         }
     }
