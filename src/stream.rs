@@ -1,8 +1,10 @@
 use log::debug;
+#[cfg(feature = "tls")]
 use rustls::Session;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::SocketAddr;
 use std::net::TcpStream;
+#[cfg(any(feature = "tls", feature = "native-tls"))]
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;

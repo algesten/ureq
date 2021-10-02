@@ -7,6 +7,7 @@ use crate::pool::ConnectionPool;
 use crate::proxy::Proxy;
 use crate::request::Request;
 use crate::resolve::{ArcResolver, StdResolver};
+#[cfg(any(feature = "tls", feature = "native-tls"))]
 use crate::stream::HttpsConnector;
 use std::time::Duration;
 
@@ -39,6 +40,7 @@ pub(crate) struct AgentConfig {
     pub timeout: Option<Duration>,
     pub redirects: u32,
     pub user_agent: String,
+    #[cfg(any(feature = "tls", feature = "native-tls"))]
     pub tls_config: Option<Arc<dyn HttpsConnector>>,
 }
 
@@ -217,6 +219,7 @@ impl AgentBuilder {
                 timeout: None,
                 redirects: 5,
                 user_agent: format!("ureq/{}", env!("CARGO_PKG_VERSION")),
+                #[cfg(any(feature = "tls", feature = "native-tls"))]
                 tls_config: None,
             },
             max_idle_connections: DEFAULT_MAX_IDLE_CONNECTIONS,
