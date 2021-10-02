@@ -4,7 +4,7 @@ use rustls::Session;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::SocketAddr;
 use std::net::TcpStream;
-#[cfg(any(feature = "tls", feature = "native-tls"))]
+#[cfg(any(feature = "tls", feature = "native-tls", feature = "socks-proxy"))]
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -643,7 +643,7 @@ fn connect_socks(
     #[allow(clippy::mutex_atomic)]
     let stream = if let Some(deadline) = deadline {
         use std::sync::mpsc::channel;
-        use std::sync::{Arc, Condvar, Mutex};
+        use std::sync::{Condvar, Mutex};
         use std::thread;
         let master_signal = Arc::new((Mutex::new(false), Condvar::new()));
         let slave_signal = master_signal.clone();

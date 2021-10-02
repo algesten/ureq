@@ -501,16 +501,16 @@ impl AgentBuilder {
     /// Example using native-tls:
     ///
     /// ```
-    /// # #[cfg(feature = "native-tls")]
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
+    /// # #[cfg(feature = "native-tls")]
+    /// # {
     /// use std::sync::Arc;
-    /// # #[cfg(feature = "native-tls")]
     /// let tls_connector = Arc::new(native_tls::TlsConnector::new().unwrap());
-    /// # #[cfg(feature = "native-tls")]
     /// let agent = ureq::builder()
     ///     .tls_config(tls_connector.clone())
     ///     .build();
+    /// # }
     /// # Ok(())
     /// # }
     /// ```
