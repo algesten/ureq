@@ -94,7 +94,6 @@ pub struct Transport {
     message: Option<String>,
     url: Option<Url>,
     source: Option<Box<dyn error::Error + Send + Sync + 'static>>,
-    response: Option<Response>,
 }
 
 /// Extension to [`Result<Response, Error>`] for handling all status codes as [`Response`].
@@ -193,7 +192,6 @@ impl Error {
             message,
             url: None,
             source: None,
-            response: None,
         })
     }
 
