@@ -486,11 +486,14 @@ impl AgentBuilder {
     /// ```
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
+    /// # #[cfg(feature = "tls")]
+    /// # {
     /// use std::sync::Arc;
     /// let tls_config = Arc::new(rustls::ClientConfig::new());
     /// let agent = ureq::builder()
     ///     .tls_config(tls_config.clone())
     ///     .build();
+    /// # }
     /// # Ok(())
     /// # }
     /// ```
@@ -498,7 +501,7 @@ impl AgentBuilder {
     /// Example using native-tls:
     ///
     /// ```
-    /// # #[cfg(feature = "tls")]
+    /// # #[cfg(feature = "native-tls")]
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
     /// use std::sync::Arc;
@@ -506,12 +509,12 @@ impl AgentBuilder {
     /// let tls_connector = Arc::new(native_tls::TlsConnector::new().unwrap());
     /// # #[cfg(feature = "native-tls")]
     /// let agent = ureq::builder()
-    ///     .tls_connector(tls_connector.clone())
+    ///     .tls_config(tls_connector.clone())
     ///     .build();
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(feature = "tls")]
+    #[cfg(any(feature = "tls", feature = "native-tls"))]
     pub fn tls_config<T: HttpsConnector + 'static>(mut self, tls_config: T) -> Self {
         self.config.tls_config = Some(Arc::new(tls_config));
         self

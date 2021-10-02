@@ -430,13 +430,13 @@ impl HttpsConnector for Arc<rustls::ClientConfig> {
 }
 
 #[cfg(feature = "native-tls")]
-impl HttpsConnector for native_tls::TlsConnector {
+impl HttpsConnector for Arc<native_tls::TlsConnector> {
     fn connect(
         &self,
         dns_name: &str,
         tcp_stream: TcpStream,
     ) -> Result<Box<dyn HttpsStream>, Error> {
-        let stream = native_tls::TlsConnector::connect(self, name, tcp_stream)
+        let stream = native_tls::TlsConnector::connect(self, dns_name, tcp_stream)
             .map_err(|e| ErrorKind::Dns.new().src(e))?;
         Ok(Box::new(stream))
     }
@@ -449,9 +449,15 @@ pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error
     let sock = connect_host(unit, hostname, port)?;
 
     use once_cell::sync::Lazy;
+    #[cfg(feature = "tls")]
     static TLS_CONF: Lazy<Arc<dyn HttpsConnector>> = Lazy::new(|| {
         let mut config = rustls::ClientConfig::new();
         configure_certs(&mut config);
+        Arc::new(Arc::new(config))
+    });
+    #[cfg(all(feature = "native-tls", not(feature = "tls")))]
+    static TLS_CONF: Lazy<Arc<dyn HttpsConnector>> = Lazy::new(|| {
+        let config = native_tls::TlsConnector::new().unwrap();
         Arc::new(Arc::new(config))
     });
 

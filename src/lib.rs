@@ -247,7 +247,7 @@
 //!   use ureq::Agent;
 //!
 //!   let agent = ureq::AgentBuilder::new()
-//!       .tls_connector(Arc::new(native_tls::TlsConnector::new()))
+//!       .tls_config(Arc::new(native_tls::TlsConnector::new().unwrap()))
 //!       .build();
 //! # Ok(())
 //! # }
