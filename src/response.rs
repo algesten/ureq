@@ -22,7 +22,7 @@ use encoding_rs::Encoding;
 use flate2::read::GzDecoder;
 
 #[cfg(feature = "brotli")]
-use brotli_decompressor::Decompressor;
+use brotli_decompressor::Decompressor as BrotliDecoder;
 
 pub const DEFAULT_CONTENT_TYPE: &str = "text/plain";
 pub const DEFAULT_CHARACTER_SET: &str = "utf-8";
@@ -549,7 +549,7 @@ impl Compression {
     fn wrap_reader(self, reader: Box<dyn Read + Send>) -> Box<dyn Read + Send> {
         match self {
             #[cfg(feature = "brotli")]
-            Compression::Brotli => Box::new(Decompressor::new(reader, 4096)),
+            Compression::Brotli => Box::new(BrotliDecoder::new(reader, 4096)),
             #[cfg(feature = "gzip")]
             Compression::Gzip => Box::new(GzDecoder::new(reader)),
         }
