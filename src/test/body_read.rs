@@ -101,6 +101,8 @@ fn gzip_text() {
     // echo -n INPUT | gzip -9 -f | hexdump -ve '1/1 "0x%.2X,"'
     // INPUT is `hello world ` repeated 14 times, no trailing space
     let resp = get("test://host/gzip_text").call().unwrap();
+    assert_eq!(resp.header("content-encoding"), None);
+    assert_eq!(resp.header("content-length"), None);
     let text = resp.into_string().unwrap();
     assert_eq!(text, "hello world ".repeat(14).trim_end());
 }
@@ -121,6 +123,8 @@ fn brotli_text() {
     });
     // echo -n INPUT | brotli -Z -f | hexdump -ve '1/1 "0x%.2X,"'
     let resp = get("test://host/brotli_text").call().unwrap();
+    assert_eq!(resp.header("content-encoding"), None);
+    assert_eq!(resp.header("content-length"), None);
     let text = resp.into_string().unwrap();
     assert_eq!(text, "hello world ".repeat(14).trim_end());
 }
