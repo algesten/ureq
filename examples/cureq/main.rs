@@ -9,7 +9,6 @@ use rustls::{
     Certificate, ClientConfig, RootCertStore, ServerCertVerified, ServerCertVerifier, TLSError,
 };
 use ureq;
-use webpki::DNSNameRef;
 
 #[derive(Debug)]
 struct StringError(String);
@@ -97,12 +96,13 @@ fn perform(
 
 struct AcceptAll {}
 
+#[cfg(feature = "tls")]
 impl ServerCertVerifier for AcceptAll {
     fn verify_server_cert(
         &self,
         _roots: &RootCertStore,
         _presented_certs: &[Certificate],
-        _dns_name: DNSNameRef<'_>,
+        _dns_name: webpki::DNSNameRef<'_>,
         _ocsp_response: &[u8],
     ) -> Result<ServerCertVerified, TLSError> {
         Ok(ServerCertVerified::assertion())
@@ -159,6 +159,7 @@ Fetch url and copy it to stdout.
                 let wait_seconds: u64 = wait_string.parse().expect("invalid --wait flag");
                 wait = Duration::from_secs(wait_seconds);
             }
+            #[cfg(feature = "tls")]
             "-k" => {
                 let mut client_config = ClientConfig::new();
                 client_config

@@ -109,7 +109,7 @@ impl Response {
     /// # }
     /// ```
     pub fn new(status: u16, status_text: &str, body: &str) -> Result<Response, Error> {
-        let r = format!("HTTP/1.1 {} {}\r\n\r\n{}", status, status_text, body);
+        let r = format!("HTTP/1.1 {} {}\r\n\r\n{}\n", status, status_text, body);
         (r.as_ref() as &str).parse()
     }
 
@@ -491,8 +491,8 @@ impl Response {
     }
 
     #[cfg(test)]
-    pub fn to_write_vec(self) -> Vec<u8> {
-        self.stream.to_write_vec()
+    pub fn as_write_vec(&self) -> &[u8] {
+        self.stream.as_write_vec()
     }
 
     #[cfg(test)]

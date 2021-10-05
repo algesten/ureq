@@ -16,8 +16,8 @@
 //!
 //! Ureq is in pure Rust for safety and ease of understanding. It avoids using
 //! `unsafe` directly. It [uses blocking I/O][blocking] instead of async I/O, because that keeps
-//! the API simple and keeps dependencies to a minimum. For TLS, ureq uses
-//! [rustls].
+//! the API simple and and keeps dependencies to a minimum. For TLS, ureq uses
+//! [rustls] or [native-tls](https://docs.rs/native-tls/).
 //!
 //! Version 2.0.0 was released recently and changed some APIs. See the [changelog] for details.
 //!
@@ -234,6 +234,40 @@
 //! # fn main() {}
 //! ```
 //!
+//! # HTTPS / TLS / SSL
+//!
+//! By default, ureq uses rustls. You can add native-tls support by enabling the native-tls feature:
+//!
+//! ```no_run
+//! # #[cfg(feature = "native-tls")]
+//! # fn build() -> std::result::Result<(), ureq::Error> {
+//! # ureq::is_test(true);
+//!   use std::sync::Arc;
+//!   use ureq::Agent;
+//!
+//!   let agent = ureq::AgentBuilder::new()
+//!       .tls_connector(Arc::new(native_tls::TlsConnector::new().unwrap()))
+//!       .build();
+//! # Ok(())
+//! # }
+//! # fn main() {}
+//! ```
+//!
+//! You might want to use native-tls if rustls is not supported on your platform, or if you need to
+//! interoperate with servers that only support less-secure ciphersuites and/or TLS versions older
+//! than 1.2. You can turn off TLS support entirely with `--no-default-features`.
+//!
+//! ## Trusted Roots
+//!
+//! When you use rustls, ureq defaults to trusting [webpki-roots](https://docs.rs/webpki-roots/), a
+//! copy of the Mozilla Root program that is bundled into your program (and so won't update if your
+//! program isn't updated). You can alternately configure
+//! [rustls-native-certs](https://docs.rs/rustls-native-certs/) which extracts the roots from your
+//! OS' trust store. That means it will update when your OS is updated, and also that it will
+//! include locally installed roots.
+//!
+//! When you use native-tls, ureq will use your OS' certificate verifier and root store.
+//!
 //! # Blocking I/O for simplicity
 //!
 //! Ureq uses blocking I/O rather than Rust's newer [asynchronous (async) I/O][async]. Async I/O
@@ -284,6 +318,8 @@ mod proxy;
 mod request;
 mod resolve;
 mod response;
+#[cfg(feature = "tls")]
+mod rtls;
 mod stream;
 mod unit;
 
@@ -307,6 +343,7 @@ pub use crate::proxy::Proxy;
 pub use crate::request::{Request, RequestUrl};
 pub use crate::resolve::Resolver;
 pub use crate::response::Response;
+pub use crate::stream::TlsConnector;
 
 // re-export
 #[cfg(feature = "cookies")]
