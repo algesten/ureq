@@ -74,6 +74,11 @@ pub struct Response {
     ///
     /// If this response was not redirected, the history is empty.
     pub(crate) history: Vec<Url>,
+    /// The Content-Length value. The header itself may have been removed due to
+    /// the automatic decompression system.
+    length: Option<usize>,
+    /// The compression type of the response body.
+    compression: Option<Compression>,
 }
 
 /// index into status_line where we split: HTTP/1.1 200 OK
@@ -283,14 +288,8 @@ impl Response {
             // head requests never have a body
             Some(0)
         } else {
-            self.header("content-length")
-                .and_then(|l| l.parse::<usize>().ok())
+            self.length
         };
-
-        let compression = self
-            .header("content-encoding")
-            .map(Compression::from_header_value)
-            .flatten();
 
         let stream = self.stream;
         let unit = self.unit;
@@ -311,7 +310,7 @@ impl Response {
             (false, None) => Box::new(stream),
         };
 
-        match compression {
+        match self.compression {
             None => body_reader,
             Some(c) => c.wrap_reader(body_reader),
         }
@@ -487,6 +486,16 @@ impl Response {
             ));
         }
 
+        let length = get_header(&headers, "content-length").and_then(|v| v.parse::<usize>().ok());
+
+        let compression =
+            get_header(&headers, "content-encoding").and_then(Compression::from_header_value);
+
+        if compression.is_some() {
+            headers.retain(|h| h.name() != "content-encoding" && h.name() != "content-length");
+            // remove Content-Encoding and length due to automatic decompression
+        }
+
         Ok(Response {
             url: None,
             status_line,
@@ -496,6 +505,8 @@ impl Response {
             unit: unit.map(Box::new),
             stream: Box::new(stream.into()),
             history: vec![],
+            length,
+            compression,
         })
     }
 
