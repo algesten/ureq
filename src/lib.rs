@@ -133,6 +133,8 @@
 //!   TLS implementation, `native-tls` is never picked up as a default or used by the crate level
 //!   convenience calls (`ureq::get` etc) – it must be configured on the agent. The `native-certs` feature
 //!   does nothing for `native-tls`.
+//! * `gzip` enables automatically requesting gzip-compressed responses and decompressing them.
+//! * `brotli` enables automatically requesting Brotli-compressed responses and decompressing them.
 //!
 //! # Plain requests
 //!
