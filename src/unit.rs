@@ -1,4 +1,6 @@
+use std::fmt::{self, Display};
 use std::io::{self, Write};
+use std::ops::Range;
 use std::time;
 
 use log::debug;
@@ -355,15 +357,12 @@ fn connect_socket(unit: &Unit, hostname: &str, use_pooled: bool) -> Result<(Stre
 #[allow(clippy::write_with_newline)]
 fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> io::Result<()> {
     // build into a buffer and send in one go.
-    let mut prelude: Vec<u8> = vec![];
+    let mut prelude = PreludeBuilder::new();
 
     // request line
-    write!(
-        prelude,
-        "{} {}{}{} HTTP/1.1\r\n",
-        unit.method,
+    prelude.write_request_line(
+        &unit.method,
         unit.url.path(),
-        if unit.url.query().is_some() { "?" } else { "" },
         unit.url.query().unwrap_or_default(),
     )?;
 
@@ -378,40 +377,115 @@ fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> io::Result<()>
                     _ => 0,
                 };
                 if scheme_default != 0 && scheme_default == port {
-                    write!(prelude, "Host: {}\r\n", host)?;
+                    prelude.write_header("Host", host)?;
                 } else {
-                    write!(prelude, "Host: {}:{}\r\n", host, port)?;
+                    prelude.write_header("Host", format_args!("{}:{}", host, port))?;
                 }
             }
             None => {
-                write!(prelude, "Host: {}\r\n", host)?;
+                prelude.write_header("Host", host)?;
             }
         }
     }
     if !header::has_header(&unit.headers, "user-agent") {
-        write!(prelude, "User-Agent: {}\r\n", &unit.agent.config.user_agent)?;
+        prelude.write_header("User-Agent", &unit.agent.config.user_agent)?;
     }
     if !header::has_header(&unit.headers, "accept") {
-        write!(prelude, "Accept: */*\r\n")?;
+        prelude.write_header("Accept", "*/*")?;
     }
 
     // other headers
     for header in &unit.headers {
         if !redir || !header.is_name("Authorization") {
             if let Some(v) = header.value() {
-                write!(prelude, "{}: {}\r\n", header.name(), v)?;
+                if is_header_sensitive(header) {
+                    prelude.write_sensitive_header(header.name(), v)?;
+                } else {
+                    prelude.write_header(header.name(), v)?;
+                }
             }
         }
     }
 
     // finish
-    write!(prelude, "\r\n")?;
+    prelude.finish()?;
 
-    debug!("writing prelude: {}", String::from_utf8_lossy(&prelude));
+    debug!("writing prelude: {}", prelude);
     // write all to the wire
-    stream.write_all(&prelude[..])?;
+    stream.write_all(prelude.as_slice())?;
 
     Ok(())
+}
+
+fn is_header_sensitive(header: &Header) -> bool {
+    header.is_name("Authorization") || header.is_name("Cookie")
+}
+
+struct PreludeBuilder {
+    prelude: Vec<u8>,
+    // Sensitive information to be omitted in debug logging
+    sensitive_spans: Vec<Range<usize>>,
+}
+
+impl PreludeBuilder {
+    fn new() -> Self {
+        PreludeBuilder {
+            prelude: Vec::with_capacity(256),
+            sensitive_spans: Vec::new(),
+        }
+    }
+
+    fn write_request_line(&mut self, method: &str, path: &str, query: &str) -> io::Result<()> {
+        write!(self.prelude, "{} {}", method, path,)?;
+        if !query.is_empty() {
+            write!(self.prelude, "?{}", query)?;
+        }
+        write!(self.prelude, " HTTP/1.1\r\n")?;
+        Ok(())
+    }
+
+    fn write_header(&mut self, name: &str, value: impl Display) -> io::Result<()> {
+        write!(self.prelude, "{}: {}\r\n", name, value)
+    }
+
+    fn write_sensitive_header(&mut self, name: &str, value: impl Display) -> io::Result<()> {
+        write!(self.prelude, "{}: ", name)?;
+        let start = self.prelude.len();
+        write!(self.prelude, "{}", value)?;
+        let end = self.prelude.len();
+        self.sensitive_spans.push(start..end);
+        write!(self.prelude, "\r\n")?;
+        Ok(())
+    }
+
+    fn finish(&mut self) -> io::Result<()> {
+        write!(self.prelude, "\r\n")
+    }
+
+    fn as_slice(&self) -> &[u8] {
+        &self.prelude
+    }
+}
+
+impl fmt::Display for PreludeBuilder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut pos = 0;
+        for span in &self.sensitive_spans {
+            write!(
+                f,
+                "{}",
+                String::from_utf8_lossy(&self.prelude[pos..span.start])
+            )?;
+            write!(f, "***")?;
+            pos = span.end;
+        }
+        write!(
+            f,
+            "{}",
+            String::from_utf8_lossy(&self.prelude[pos..]).trim_end()
+        )?;
+        Ok(())
+    }
 }
 
 /// Investigate a response for "Set-Cookie" headers.
