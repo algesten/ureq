@@ -1,3 +1,4 @@
+use std::fmt;
 use std::sync::Arc;
 
 use url::Url;
@@ -6,6 +7,7 @@ use crate::pool::ConnectionPool;
 use crate::proxy::Proxy;
 use crate::request::Request;
 use crate::resolve::{ArcResolver, StdResolver};
+use crate::stream::TlsConnector;
 use std::time::Duration;
 
 #[cfg(feature = "cookies")]
@@ -28,7 +30,7 @@ pub struct AgentBuilder {
 }
 
 /// Config as built by AgentBuilder and then static for the lifetime of the Agent.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(crate) struct AgentConfig {
     pub proxy: Option<Proxy>,
     pub timeout_connect: Option<Duration>,
@@ -37,8 +39,13 @@ pub(crate) struct AgentConfig {
     pub timeout: Option<Duration>,
     pub redirects: u32,
     pub user_agent: String,
-    #[cfg(feature = "tls")]
-    pub tls_config: Option<TLSClientConfig>,
+    pub tls_config: Arc<dyn TlsConnector>,
+}
+
+impl fmt::Debug for AgentConfig {
+    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        todo!()
+    }
 }
 
 /// Agents keep state between requests.
@@ -215,8 +222,7 @@ impl AgentBuilder {
                 timeout: None,
                 redirects: 5,
                 user_agent: format!("ureq/{}", env!("CARGO_PKG_VERSION")),
-                #[cfg(feature = "tls")]
-                tls_config: None,
+                tls_config: crate::default_tls_config(),
             },
             max_idle_connections: DEFAULT_MAX_IDLE_CONNECTIONS,
             max_idle_connections_per_host: DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST,
@@ -472,9 +478,10 @@ impl AgentBuilder {
         self
     }
 
-    /// Set the TLS client config to use for the connection. See [`ClientConfig`](https://docs.rs/rustls/latest/rustls/struct.ClientConfig.html).
+    /// Configure TLS options for rustls to use when making HTTPS connections from this Agent.
     ///
-    /// Example:
+    /// This overrides any previous call to tls_config or tls_connector.
+    ///
     /// ```
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
@@ -497,10 +504,34 @@ impl AgentBuilder {
     ///     .build();
     /// # Ok(())
     /// # }
-    /// ```
     #[cfg(feature = "tls")]
     pub fn tls_config(mut self, tls_config: Arc<rustls::ClientConfig>) -> Self {
-        self.config.tls_config = Some(TLSClientConfig(tls_config));
+        self.config.tls_config = Arc::new(tls_config);
+        self
+    }
+
+    /// Configure TLS options for a backend other than rustls. The parameter can be a
+    /// any type which implements the [HttpsConnector] trait. If you enable the native-tls
+    /// feature, we provide `impl HttpsConnector for native_tls::TlsConnector` so you can pass
+    /// [`Arc<native_tls::TlsConnector>`](https://docs.rs/native-tls/0.2.7/native_tls/struct.TlsConnector.html).
+    ///
+    /// This overrides any previous call to tls_config or tls_connector.
+    ///
+    /// ```
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// use std::sync::Arc;
+    /// # #[cfg(feature = "native-tls")]
+    /// let tls_connector = Arc::new(native_tls::TlsConnector::new().unwrap());
+    /// # #[cfg(feature = "native-tls")]
+    /// let agent = ureq::builder()
+    ///     .tls_connector(tls_connector.clone())
+    ///     .build();
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn tls_connector<T: TlsConnector + 'static>(mut self, tls_config: Arc<T>) -> Self {
+        self.config.tls_config = tls_config;
         self
     }
 
@@ -534,17 +565,6 @@ impl AgentBuilder {
     pub fn cookie_store(mut self, cookie_store: CookieStore) -> Self {
         self.cookie_store = Some(cookie_store);
         self
-    }
-}
-
-#[cfg(feature = "tls")]
-#[derive(Clone)]
-pub(crate) struct TLSClientConfig(pub(crate) Arc<rustls::ClientConfig>);
-
-#[cfg(feature = "tls")]
-impl std::fmt::Debug for TLSClientConfig {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("TLSClientConfig").finish()
     }
 }
 
