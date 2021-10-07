@@ -9,7 +9,7 @@ use std::{fmt, io::Cursor};
 use chunked_transfer::Decoder as ChunkDecoder;
 
 #[cfg(feature = "tls")]
-use rustls::ClientSession;
+use rustls::ClientConnection;
 #[cfg(feature = "tls")]
 use rustls::StreamOwned;
 #[cfg(feature = "socks-proxy")]
@@ -29,7 +29,7 @@ pub(crate) struct Stream {
 enum Inner {
     Http(TcpStream),
     #[cfg(feature = "tls")]
-    Https(rustls::StreamOwned<rustls::ClientSession, TcpStream>),
+    Https(rustls::StreamOwned<rustls::ClientConnection, TcpStream>),
     Test(Box<dyn Read + Send + Sync>, Vec<u8>),
 }
 
@@ -140,7 +140,7 @@ impl Stream {
     }
 
     #[cfg(feature = "tls")]
-    fn from_tls_stream(t: StreamOwned<ClientSession, TcpStream>) -> Stream {
+    fn from_tls_stream(t: StreamOwned<ClientConnection, TcpStream>) -> Stream {
         Stream::logged_create(Stream {
             inner: BufReader::new(Inner::Https(t)),
         })
@@ -270,7 +270,7 @@ where
 
 #[cfg(feature = "tls")]
 fn read_https(
-    stream: &mut StreamOwned<ClientSession, TcpStream>,
+    stream: &mut StreamOwned<ClientConnection, TcpStream>,
     buf: &mut [u8],
 ) -> io::Result<usize> {
     match stream.read(buf) {
@@ -328,44 +328,48 @@ pub(crate) fn connect_http(unit: &Unit, hostname: &str) -> Result<Stream, Error>
     connect_host(unit, hostname, port).map(Stream::from_tcp_stream)
 }
 
-#[cfg(all(feature = "tls", feature = "native-certs"))]
-fn configure_certs(config: &mut rustls::ClientConfig) {
-    config.root_store =
-        rustls_native_certs::load_native_certs().expect("Could not load platform certs");
-}
-
-#[cfg(all(feature = "tls", not(feature = "native-certs")))]
-fn configure_certs(config: &mut rustls::ClientConfig) {
-    config
-        .root_store
-        .add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
-}
-
 #[cfg(feature = "tls")]
 pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error> {
     use once_cell::sync::Lazy;
-    use rustls::Session;
-    use std::sync::Arc;
+    use std::{convert::TryFrom, sync::Arc};
 
     static TLS_CONF: Lazy<Arc<rustls::ClientConfig>> = Lazy::new(|| {
-        let mut config = rustls::ClientConfig::new();
-        configure_certs(&mut config);
+        let mut root_store = rustls::RootCertStore::empty();
+        #[cfg(not(feature = "native-tls"))]
+        root_store.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
+            rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
+                ta.subject,
+                ta.spki,
+                ta.name_constraints,
+            )
+        }));
+        #[cfg(feature = "native-tls")]
+        root_store.add_server_trust_anchors(
+            rustls_native_certs::load_native_certs().expect("Could not load platform certs"),
+        );
+
+        let config = rustls::ClientConfig::builder()
+            .with_safe_defaults()
+            .with_root_certificates(root_store)
+            .with_no_client_auth();
         Arc::new(config)
     });
 
     let port = unit.url.port().unwrap_or(443);
 
-    let sni = webpki::DNSNameRef::try_from_ascii_str(hostname)
-        .map_err(|err| ErrorKind::Dns.new().src(err))?;
-    let tls_conf: &Arc<rustls::ClientConfig> = unit
+    let tls_conf: Arc<rustls::ClientConfig> = unit
         .agent
         .config
         .tls_config
         .as_ref()
-        .map(|c| &c.0)
-        .unwrap_or(&*TLS_CONF);
+        .map(|c| c.0.clone())
+        .unwrap_or(TLS_CONF.clone());
     let mut sock = connect_host(unit, hostname, port)?;
-    let mut sess = rustls::ClientSession::new(tls_conf, sni);
+    let mut sess = rustls::ClientConnection::new(
+        tls_conf,
+        rustls::ServerName::try_from(hostname).expect("invalid DNS name"),
+    )
+    .map_err(|e| ErrorKind::Io.new().src(e))?;
 
     sess.complete_io(&mut sock)
         .map_err(|err| ErrorKind::ConnectionFailed.new().src(err))?;
