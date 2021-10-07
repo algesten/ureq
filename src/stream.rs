@@ -363,7 +363,7 @@ pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error
         .tls_config
         .as_ref()
         .map(|c| c.0.clone())
-        .unwrap_or(TLS_CONF.clone());
+        .unwrap_or_else(|| TLS_CONF.clone());
     let mut sock = connect_host(unit, hostname, port)?;
     let mut sess = rustls::ClientConnection::new(
         tls_conf,
