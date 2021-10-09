@@ -1,4 +1,3 @@
-#[cfg(feature = "tls")]
 #[cfg(feature = "json")]
 #[test]
 fn agent_set_header() {
@@ -23,7 +22,6 @@ fn agent_set_header() {
     assert_eq!("value", json.headers.get("Header").unwrap());
 }
 
-#[cfg(feature = "tls")]
 const BADSSL_CLIENT_CERT_PEM: &str = r#"Bag Attributes
     localKeyID: 41 C3 6C 33 C7 E3 36 DD EA 4A 1F C0 B7 23 B8 E6 9C DC D8 0F
 subject=C = US, ST = California, L = San Francisco, O = BadSSL, CN = BadSSL Client Certificate
@@ -89,7 +87,6 @@ m0Wqhhi8/24Sy934t5Txgkfoltg8ahkx934WjP6WWRnSAu+cf+vW
 -----END RSA PRIVATE KEY-----
 "#;
 
-#[cfg(feature = "tls")]
 #[test]
 fn tls_client_certificate() {
     let certs = rustls_pemfile::certs(&mut BADSSL_CLIENT_CERT_PEM.as_bytes())

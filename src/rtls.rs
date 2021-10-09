@@ -10,7 +10,6 @@ use crate::{
 use rustls::Session;
 
 #[allow(deprecated)]
-#[cfg(feature = "tls")]
 fn is_close_notify(e: &std::io::Error) -> bool {
     if e.kind() != io::ErrorKind::ConnectionAborted {
         return false;
@@ -57,13 +56,13 @@ impl Write for RustlsStream {
     }
 }
 
-#[cfg(all(feature = "tls", feature = "native-certs"))]
+#[cfg(feature = "native-certs")]
 fn configure_certs(config: &mut rustls::ClientConfig) {
     config.root_store =
         rustls_native_certs::load_native_certs().expect("Could not load platform certs");
 }
 
-#[cfg(all(feature = "tls", not(feature = "native-certs")))]
+#[cfg(not(feature = "native-certs"))]
 fn configure_certs(config: &mut rustls::ClientConfig) {
     config
         .root_store

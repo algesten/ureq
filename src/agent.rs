@@ -217,10 +217,7 @@ impl AgentBuilder {
                 timeout: None,
                 redirects: 5,
                 user_agent: format!("ureq/{}", env!("CARGO_PKG_VERSION")),
-                #[cfg(not(feature = "tls"))]
-                tls_config: Arc::new(crate::stream::NoopTlsConnector),
-                #[cfg(feature = "tls")]
-                tls_config: crate::rtls::default_tls_config(),
+                tls_config: crate::default_tls_config(),
             },
             max_idle_connections: DEFAULT_MAX_IDLE_CONNECTIONS,
             max_idle_connections_per_host: DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST,
@@ -502,7 +499,12 @@ impl AgentBuilder {
     ///     .build();
     /// # Ok(())
     /// # }
-    #[cfg(any(feature = "tls"))]
+    #[cfg(any(
+        target_arch = "x86",
+        target_arch = "x86_64",
+        target_arch = "armv7",
+        target_arch = "aarch64"
+    ))]
     pub fn tls_config(mut self, tls_config: Arc<rustls::ClientConfig>) -> Self {
         self.config.tls_config = Arc::new(tls_config);
         self

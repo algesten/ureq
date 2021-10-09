@@ -236,7 +236,15 @@
 //!
 //! # HTTPS / TLS / SSL
 //!
-//! By default, ureq uses rustls. You can add native-tls support by enabling the native-tls feature:
+//! On platforms that support rustls, ureq uses rustls. On other platforms, it uses native-tls.
+//!
+//! You might want to use native-tls if you need to interoperate with servers that
+//! only support less-secure TLS configurations (rustls doesn't support TLS 1.0 and 1.1, for
+//! instance). You might also want to use it if you need to validate certificates for IP addresses,
+//! which are not currently supported in rustls.
+//!
+//! Using native-tls on platforms that otherwise default to rustls is done on a per-Agent basis.
+//! Here's an example of constructing an Agent that uses native-tls:
 //!
 //! ```no_run
 //! # #[cfg(feature = "native-tls")]
@@ -252,10 +260,6 @@
 //! # }
 //! # fn main() {}
 //! ```
-//!
-//! You might want to use native-tls if rustls is not supported on your platform, or if you need to
-//! interoperate with servers that only support less-secure ciphersuites and/or TLS versions older
-//! than 1.2. You can turn off TLS support entirely with `--no-default-features`.
 //!
 //! ## Trusted Roots
 //!
@@ -318,10 +322,42 @@ mod proxy;
 mod request;
 mod resolve;
 mod response;
-#[cfg(feature = "tls")]
-mod rtls;
 mod stream;
 mod unit;
+
+#[cfg(any(
+    target_arch = "x86",
+    target_arch = "x86_64",
+    target_arch = "armv7",
+    target_arch = "aarch64"
+))]
+mod rtls;
+#[cfg(any(
+    target_arch = "x86",
+    target_arch = "x86_64",
+    target_arch = "armv7",
+    target_arch = "aarch64"
+))]
+pub(crate) fn default_tls_config() -> std::sync::Arc<dyn TlsConnector> {
+    rtls::default_tls_config()
+}
+
+#[cfg(not(any(
+    target_arch = "x86",
+    target_arch = "x86_64",
+    target_arch = "armv7",
+    target_arch = "aarch64"
+)))]
+mod ntls;
+#[cfg(not(any(
+    target_arch = "x86",
+    target_arch = "x86_64",
+    target_arch = "armv7",
+    target_arch = "aarch64"
+)))]
+pub(crate) fn default_tls_config() -> std::sync::Arc<dyn TlsConnector> {
+    ntls::default_tls_config()
+}
 
 #[cfg(feature = "cookies")]
 mod cookies;
@@ -470,7 +506,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "tls")]
     fn connect_https_google() {
         let agent = Agent::new();
 
@@ -483,7 +518,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "tls")]
     fn connect_https_invalid_name() {
         let result = get("https://example.com{REQUEST_URI}/").call();
         let e = ErrorKind::Dns;

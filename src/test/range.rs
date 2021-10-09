@@ -1,11 +1,8 @@
-#[cfg(feature = "tls")]
 use std::io::Read;
 
-#[cfg(feature = "tls")]
 use super::super::*;
 
 #[test]
-#[cfg(feature = "tls")]
 fn read_range() {
     let resp = get("https://ureq.s3.eu-central-1.amazonaws.com/sherlock.txt")
         .set("Range", "bytes=1000-1999")

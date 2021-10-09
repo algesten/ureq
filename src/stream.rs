@@ -346,19 +346,6 @@ pub(crate) fn connect_http(unit: &Unit, hostname: &str) -> Result<Stream, Error>
     connect_host(unit, hostname, port).map(Stream::from_tcp_stream)
 }
 
-#[cfg(feature = "native-tls")]
-impl TlsConnector for native_tls::TlsConnector {
-    fn connect(
-        &self,
-        dns_name: &str,
-        tcp_stream: TcpStream,
-    ) -> Result<Box<dyn HttpsStream>, Error> {
-        let stream = native_tls::TlsConnector::connect(self, dns_name, tcp_stream)
-            .map_err(|e| ErrorKind::Dns.new().src(e))?;
-        Ok(Box::new(stream))
-    }
-}
-
 pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error> {
     let port = unit.url.port().unwrap_or(443);
 

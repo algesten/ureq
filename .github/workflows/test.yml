@@ -39,17 +39,12 @@ jobs:
         with:
           command: doc
           # Keep in sync with Cargo.toml's [package.metadata.docs.rs]
-          args: --no-default-features --no-deps --features "tls native-tls json charset cookies socks-proxy"
+          args: --no-default-features --no-deps --features "json charset cookies socks-proxy"
   build_and_test:
     name: Test
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        tls:
-          - ""
-          - tls
-          - native-tls
-          - "tls native-tls"
         feature:
           - ""
           - json
@@ -70,4 +65,4 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --no-default-features --features "${{ matrix.tls }} ${{ matrix.feature }}"
+          args: --no-default-features --features "${{ matrix.feature }}"
