@@ -203,7 +203,6 @@ impl fmt::Debug for Stream {
 }
 
 impl Stream {
-    #[cfg(any(feature = "tls", feature = "native-tls"))]
     fn new(t: impl Inner + Send + Sync + 'static) -> Stream {
         Stream::logged_create(Stream {
             inner: BufReader::new(Box::new(t)),
@@ -347,13 +346,6 @@ pub(crate) fn connect_http(unit: &Unit, hostname: &str) -> Result<Stream, Error>
     connect_host(unit, hostname, port).map(Stream::from_tcp_stream)
 }
 
-#[cfg(all(not(feature = "tls"), not(feature = "native-tls")))]
-pub(crate) fn connect_https(unit: &Unit, _hostname: &str) -> Result<Stream, Error> {
-    Err(ErrorKind::UnknownScheme
-        .msg("URL has 'https:' scheme but ureq was built without HTTP support")
-        .url(unit.url.clone()))
-}
-
 #[cfg(feature = "native-tls")]
 impl TlsConnector for native_tls::TlsConnector {
     fn connect(
@@ -367,7 +359,6 @@ impl TlsConnector for native_tls::TlsConnector {
     }
 }
 
-#[cfg(any(feature = "tls", feature = "native-tls"))]
 pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error> {
     let port = unit.url.port().unwrap_or(443);
 
