@@ -17,7 +17,7 @@
 //! Ureq is in pure Rust for safety and ease of understanding. It avoids using
 //! `unsafe` directly. It [uses blocking I/O][blocking] instead of async I/O, because that keeps
 //! the API simple and and keeps dependencies to a minimum. For TLS, ureq uses
-//! [rustls] or [native-tls](https://docs.rs/native-tls/).
+//! [rustls or native-tls](#tls).
 //!
 //! Version 2.0.0 was released recently and changed some APIs. See the [changelog] for details.
 //!
@@ -120,13 +120,14 @@
 //!
 //! `ureq = { version = "*", features = ["json", "charset"] }`
 //!
-//! * `tls` enables https. This is enabled by default.
 //! * `cookies` enables cookies.
 //! * `json` enables [Response::into_json()] and [Request::send_json()] via serde_json.
 //! * `charset` enables interpreting the charset part of the Content-Type header
 //!    (e.g.  `Content-Type: text/plain; charset=iso-8859-1`). Without this, the
 //!    library defaults to Rust's built in `utf-8`.
 //! * `socks-proxy` enables proxy config using the `socks4://`, `socks4a://`, `socks5://` and `socks://` (equal to `socks5://`) prefix.
+//! * `native-tls` enables an adapter so you can pass a native_tls::TlsConnector instance
+//!   to tls_connector. It's only necessary on platforms that use rustls by default.
 //!
 //! # Plain requests
 //!
@@ -244,10 +245,11 @@
 //! which are not currently supported in rustls.
 //!
 //! Using native-tls on platforms that otherwise default to rustls is done on a per-Agent basis.
-//! Here's an example of constructing an Agent that uses native-tls:
+//! Here's an example of constructing an Agent that uses native-tls. It requires the
+//! "native-tls-adapter" feature to be enabled.
 //!
 //! ```no_run
-//! # #[cfg(feature = "native-tls")]
+//! # #[cfg(feature = "native-tls-adapter")]
 //! # fn build() -> std::result::Result<(), ureq::Error> {
 //! # ureq::is_test(true);
 //!   use std::sync::Arc;
@@ -342,12 +344,15 @@ pub(crate) fn default_tls_config() -> std::sync::Arc<dyn TlsConnector> {
     rtls::default_tls_config()
 }
 
-#[cfg(not(any(
-    target_arch = "x86",
-    target_arch = "x86_64",
-    target_arch = "armv7",
-    target_arch = "aarch64"
-)))]
+#[cfg(any(
+    feature = "native-tls-adapter",
+    not(any(
+        target_arch = "x86",
+        target_arch = "x86_64",
+        target_arch = "armv7",
+        target_arch = "aarch64"
+    ))
+))]
 mod ntls;
 #[cfg(not(any(
     target_arch = "x86",

@@ -524,9 +524,9 @@ impl AgentBuilder {
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
     /// use std::sync::Arc;
-    /// # #[cfg(feature = "native-tls")]
+    /// # #[cfg(feature = "native-tls-adapter")]
     /// let tls_connector = Arc::new(native_tls::TlsConnector::new().unwrap());
-    /// # #[cfg(feature = "native-tls")]
+    /// # #[cfg(feature = "native-tls-adapter")]
     /// let agent = ureq::builder()
     ///     .tls_connector(tls_connector.clone())
     ///     .build();

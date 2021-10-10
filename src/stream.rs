@@ -79,13 +79,6 @@ impl Inner for TcpStream {
     }
 }
 
-#[cfg(feature = "native-tls")]
-impl HttpsStream for native_tls::TlsStream<TcpStream> {
-    fn socket(&self) -> Option<&TcpStream> {
-        Some(self.get_ref())
-    }
-}
-
 struct TestStream(Box<dyn Read + Send + Sync>, Vec<u8>);
 
 impl Inner for TestStream {

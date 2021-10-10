@@ -96,7 +96,6 @@ fn perform(
 
 struct AcceptAll {}
 
-#[cfg(feature = "tls")]
 impl ServerCertVerifier for AcceptAll {
     fn verify_server_cert(
         &self,
@@ -132,6 +131,7 @@ fn main2() -> Result<(), Error> {
 -k            Ignore certificate errors
 -m <time>     Max time for the entire request
 -ct <time>    Connection timeout
+--native-tls  Use native-tls
 
 Fetch url and copy it to stdout.
 "##,
@@ -159,13 +159,15 @@ Fetch url and copy it to stdout.
                 let wait_seconds: u64 = wait_string.parse().expect("invalid --wait flag");
                 wait = Duration::from_secs(wait_seconds);
             }
-            #[cfg(feature = "tls")]
             "-k" => {
                 let mut client_config = ClientConfig::new();
                 client_config
                     .dangerous()
                     .set_certificate_verifier(Arc::new(AcceptAll {}));
                 builder = builder.tls_config(Arc::new(client_config));
+            }
+            "--native-tls" => {
+                builder = builder.tls_connector(Arc::new(native_tls::TlsConnector::new().unwrap()));
             }
             "-m" => {
                 let t: f32 = args
