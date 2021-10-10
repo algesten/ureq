@@ -327,6 +327,7 @@ mod response;
 mod stream;
 mod unit;
 
+// Keep this list of platforms in sync with the list in Cargo.toml.
 #[cfg(any(
     target_arch = "x86",
     target_arch = "x86_64",

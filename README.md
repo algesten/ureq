@@ -226,7 +226,7 @@ and calling AgentBuilder::tls_connector():
 
 You might want to use native-tls if rustls is not supported on your platform, or if you need to
 interoperate with servers that only support less-secure ciphersuites and/or TLS versions older
-than 1.2. You can turn off TLS support entirely with `--no-default-features`.
+than 1.2.
 
 ### Trusted Roots
 

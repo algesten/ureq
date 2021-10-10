@@ -511,14 +511,11 @@ impl AgentBuilder {
     }
 
     /// Configure TLS options for a backend other than rustls. The parameter can be a
-    /// any type for which you implement the [HttpsConnector] trait. If you enable the native-tls
+    /// any type which implements the [HttpsConnector] trait. If you enable the native-tls
     /// feature, we provide `impl HttpsConnector for native_tls::TlsConnector` so you can pass
-    /// [`native_tls::TlsConnector`](https://docs.rs/native-tls/0.2.7/native_tls/struct.TlsConnector.html).
+    /// [`Arc<native_tls::TlsConnector>`](https://docs.rs/native-tls/0.2.7/native_tls/struct.TlsConnector.html).
     ///
     /// This overrides any previous call to tls_config or tls_connector.
-    ///
-    /// This configuration is available even if you turn off the `tls` feature (which controls
-    /// rustls integration). So you can bring your own TLS library without having to include rustls.
     ///
     /// ```
     /// # fn main() -> Result<(), ureq::Error> {

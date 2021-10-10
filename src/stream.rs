@@ -29,19 +29,6 @@ pub trait TlsConnector: Send + Sync {
     ) -> Result<Box<dyn HttpsStream>, crate::error::Error>;
 }
 
-pub(crate) struct NoopTlsConnector;
-
-impl TlsConnector for NoopTlsConnector {
-    fn connect(
-        &self,
-        _dns_name: &str,
-        _tcp_stream: TcpStream,
-    ) -> Result<Box<dyn HttpsStream>, Error> {
-        Err(ErrorKind::UnknownScheme
-            .msg("URL has 'https:' scheme but ureq was built without HTTP support"))
-    }
-}
-
 pub(crate) struct Stream {
     inner: BufReader<Box<dyn Inner + Send + Sync + 'static>>,
 }
