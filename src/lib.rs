@@ -246,10 +246,10 @@
 //!
 //! Using native-tls on platforms that otherwise default to rustls is done on a per-Agent basis.
 //! Here's an example of constructing an Agent that uses native-tls. It requires the
-//! "native-tls-adapter" feature to be enabled.
+//! "native-tls" feature to be enabled.
 //!
 //! ```no_run
-//! # #[cfg(feature = "native-tls-adapter")]
+//! # #[cfg(feature = "native-tls")]
 //! # fn build() -> std::result::Result<(), ureq::Error> {
 //! # ureq::is_test(true);
 //!   use std::sync::Arc;
@@ -327,42 +327,42 @@ mod response;
 mod stream;
 mod unit;
 
-// Keep this list of platforms in sync with the list in Cargo.toml.
-#[cfg(any(
-    target_arch = "x86",
-    target_arch = "x86_64",
-    target_arch = "armv7",
-    target_arch = "aarch64"
-))]
+// If we have rustls compiled, that is the default.
+#[cfg(feature = "tls")]
 mod rtls;
-#[cfg(any(
-    target_arch = "x86",
-    target_arch = "x86_64",
-    target_arch = "armv7",
-    target_arch = "aarch64"
-))]
+
+#[cfg(feature = "tls")]
 pub(crate) fn default_tls_config() -> std::sync::Arc<dyn TlsConnector> {
     rtls::default_tls_config()
 }
 
-#[cfg(any(
-    feature = "native-tls-adapter",
-    not(any(
-        target_arch = "x86",
-        target_arch = "x86_64",
-        target_arch = "armv7",
-        target_arch = "aarch64"
-    ))
-))]
+#[cfg(all(not(feature = "tls"), feature = "native-tls"))]
 mod ntls;
-#[cfg(not(any(
-    target_arch = "x86",
-    target_arch = "x86_64",
-    target_arch = "armv7",
-    target_arch = "aarch64"
-)))]
+
+#[cfg(all(not(feature = "tls"), feature = "native-tls"))]
 pub(crate) fn default_tls_config() -> std::sync::Arc<dyn TlsConnector> {
     ntls::default_tls_config()
+}
+
+#[cfg(all(not(feature = "tls"), not(feature = "native-tls")))]
+pub(crate) fn default_tls_config() -> std::sync::Arc<dyn TlsConnector> {
+    use crate::stream::HttpsStream;
+    use std::net::TcpStream;
+    use std::sync::Arc;
+
+    struct NoTlsConfig;
+
+    impl TlsConnector for NoTlsConfig {
+        fn connect(
+            &self,
+            _dns_name: &str,
+            _tcp_stream: TcpStream,
+        ) -> Result<Box<dyn HttpsStream>, crate::error::Error> {
+            panic!("No TLS backend. Use either feature 'tls' or 'native-tls'");
+        }
+    }
+
+    Arc::new(NoTlsConfig)
 }
 
 #[cfg(feature = "cookies")]
@@ -512,6 +512,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(any(feature = "tls", feature = "native-tls"))]
     fn connect_https_google() {
         let agent = Agent::new();
 

@@ -499,12 +499,7 @@ impl AgentBuilder {
     ///     .build();
     /// # Ok(())
     /// # }
-    #[cfg(any(
-        target_arch = "x86",
-        target_arch = "x86_64",
-        target_arch = "armv7",
-        target_arch = "aarch64"
-    ))]
+    #[cfg(feature = "tls")]
     pub fn tls_config(mut self, tls_config: Arc<rustls::ClientConfig>) -> Self {
         self.config.tls_config = Arc::new(tls_config);
         self
@@ -521,9 +516,9 @@ impl AgentBuilder {
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
     /// use std::sync::Arc;
-    /// # #[cfg(feature = "native-tls-adapter")]
+    /// # #[cfg(feature = "native-tls")]
     /// let tls_connector = Arc::new(native_tls::TlsConnector::new().unwrap());
-    /// # #[cfg(feature = "native-tls-adapter")]
+    /// # #[cfg(feature = "native-tls")]
     /// let agent = ureq::builder()
     ///     .tls_connector(tls_connector.clone())
     ///     .build();

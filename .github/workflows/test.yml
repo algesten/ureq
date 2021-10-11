@@ -6,7 +6,7 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
-    env: 
+    env:
       RUSTFLAGS: -D warnings
     steps:
     - uses: actions/checkout@v2
@@ -39,12 +39,16 @@ jobs:
         with:
           command: doc
           # Keep in sync with Cargo.toml's [package.metadata.docs.rs]
-          args: --no-default-features --no-deps --features "native-tls-adapter json charset cookies socks-proxy"
+          args: --no-default-features --no-deps --features "tls native-tls json charset cookies socks-proxy"
   build_and_test:
     name: Test
     runs-on: ubuntu-latest
     strategy:
       matrix:
+        tls:
+          - ""
+          - "tls"
+          - "native-tls"
         feature:
           - ""
           - json
@@ -66,4 +70,4 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --no-default-features --features "${{ matrix.feature }}"
+          args: --no-default-features --features "${{ matrix.tls }}" "${{ matrix.feature }}"

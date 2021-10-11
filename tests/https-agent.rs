@@ -1,4 +1,4 @@
-#[cfg(feature = "json")]
+#[cfg(all(feature = "json", any(feature = "tls", feature = "tls-native")))]
 #[test]
 fn agent_set_header() {
     use serde::Deserialize;
@@ -22,7 +22,10 @@ fn agent_set_header() {
     assert_eq!("value", json.headers.get("Header").unwrap());
 }
 
-const BADSSL_CLIENT_CERT_PEM: &str = r#"Bag Attributes
+#[test]
+#[cfg(any(feature = "tls", feature = "tls-native"))]
+fn tls_client_certificate() {
+    const BADSSL_CLIENT_CERT_PEM: &str = r#"Bag Attributes
     localKeyID: 41 C3 6C 33 C7 E3 36 DD EA 4A 1F C0 B7 23 B8 E6 9C DC D8 0F
 subject=C = US, ST = California, L = San Francisco, O = BadSSL, CN = BadSSL Client Certificate
 

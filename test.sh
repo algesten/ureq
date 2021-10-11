@@ -4,7 +4,7 @@ set -eu
 export RUST_BACKTRACE=1
 export RUSTFLAGS="-D dead_code -D unused-variables -D unused"
 
-for feature in "" json charset cookies socks-proxy native-tls-adapter ; do
+for feature in "" tls json charset cookies socks-proxy native-tls ; do
   if ! cargo test --no-default-features --features "${feature}" ; then
     echo Command failed: cargo test --no-default-features --features \"${tls} ${feature}\"
     exit 1
