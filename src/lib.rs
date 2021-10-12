@@ -126,8 +126,10 @@
 //!    (e.g.  `Content-Type: text/plain; charset=iso-8859-1`). Without this, the
 //!    library defaults to Rust's built in `utf-8`.
 //! * `socks-proxy` enables proxy config using the `socks4://`, `socks4a://`, `socks5://` and `socks://` (equal to `socks5://`) prefix.
-//! * `native-tls` enables an adapter so you can pass a native_tls::TlsConnector instance
-//!   to tls_connector. It's only necessary on platforms that use rustls by default.
+//! * `native-tls` enables an adapter so you can pass a `native_tls::TlsConnector` instance
+//!   to `AgentBuilder::tls_connector`. Due to the risk of diamond dependencies accidentally switching on an unwanted
+//!   TLS implementation, `native-tls` is never picked up as a default or used by the crate level
+//!   convencience calls (`ureq::get` etc) – it must be configured.
 //!
 //! # Plain requests
 //!
@@ -237,14 +239,14 @@
 //!
 //! # HTTPS / TLS / SSL
 //!
-//! On platforms that support rustls, ureq uses rustls. On other platforms, it uses native-tls.
+//! On platforms that support rustls, ureq uses rustls. On other platforms, native-tls can
+//! be manually configured using [`AgentBuilder::tls_connector`].
 //!
 //! You might want to use native-tls if you need to interoperate with servers that
 //! only support less-secure TLS configurations (rustls doesn't support TLS 1.0 and 1.1, for
 //! instance). You might also want to use it if you need to validate certificates for IP addresses,
 //! which are not currently supported in rustls.
 //!
-//! Using native-tls on platforms that otherwise default to rustls is done on a per-Agent basis.
 //! Here's an example of constructing an Agent that uses native-tls. It requires the
 //! "native-tls" feature to be enabled.
 //!
@@ -327,24 +329,25 @@ mod response;
 mod stream;
 mod unit;
 
-// If we have rustls compiled, that is the default.
+// rustls is our default tls engine. If the feature is on, it will be
+// used for the shortcut calls the top of the crate (`ureq::get` etc).
 #[cfg(feature = "tls")]
 mod rtls;
 
+// native-tls is a feature that must be configured via the AgentBuilder.
+// it is never picked up as a default (and never used by `ureq::get` etc).
+#[cfg(feature = "native-tls")]
+mod ntls;
+
+// If we have rustls compiled, that is the default.
 #[cfg(feature = "tls")]
 pub(crate) fn default_tls_config() -> std::sync::Arc<dyn TlsConnector> {
     rtls::default_tls_config()
 }
 
-#[cfg(all(not(feature = "tls"), feature = "native-tls"))]
-mod ntls;
-
-#[cfg(all(not(feature = "tls"), feature = "native-tls"))]
-pub(crate) fn default_tls_config() -> std::sync::Arc<dyn TlsConnector> {
-    ntls::default_tls_config()
-}
-
-#[cfg(all(not(feature = "tls"), not(feature = "native-tls")))]
+// Without rustls compiled, we just fail on https when using the shortcut
+// calls at the top of the crate (`ureq::get` etc).
+#[cfg(not(feature = "tls"))]
 pub(crate) fn default_tls_config() -> std::sync::Arc<dyn TlsConnector> {
     use crate::stream::HttpsStream;
     use std::net::TcpStream;
@@ -358,7 +361,7 @@ pub(crate) fn default_tls_config() -> std::sync::Arc<dyn TlsConnector> {
             _dns_name: &str,
             _tcp_stream: TcpStream,
         ) -> Result<Box<dyn HttpsStream>, crate::error::Error> {
-            panic!("No TLS backend. Use either feature 'tls' or 'native-tls'");
+            panic!("No TLS backend. Use feature 'tls' or AgentBuilder::tls_connector (native-tls is never configured as a default)");
         }
     }
 
@@ -512,9 +515,25 @@ mod tests {
     }
 
     #[test]
-    #[cfg(any(feature = "tls", feature = "native-tls"))]
-    fn connect_https_google() {
+    #[cfg(feature = "tls")]
+    fn connect_https_google_rustls() {
         let agent = Agent::new();
+
+        let resp = agent.get("https://www.google.com/").call().unwrap();
+        assert_eq!(
+            "text/html; charset=ISO-8859-1",
+            resp.header("content-type").unwrap()
+        );
+        assert_eq!("text/html", resp.content_type());
+    }
+
+    #[test]
+    #[cfg(feature = "native-tls")]
+    fn connect_https_google_native_tls() {
+        use std::sync::Arc;
+
+        let tls_config = native_tls::TlsConnector::new().unwrap();
+        let agent = builder().tls_connector(Arc::new(tls_config)).build();
 
         let resp = agent.get("https://www.google.com/").call().unwrap();
         assert_eq!(
