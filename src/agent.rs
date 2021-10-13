@@ -154,6 +154,11 @@ impl Agent {
         self.request("HEAD", path)
     }
 
+    /// Make a PATCH request from this agent.
+    pub fn patch(&self, path: &str) -> Request {
+        self.request("PATCH", path)
+    }
+
     /// Make a POST request from this agent.
     pub fn post(&self, path: &str) -> Request {
         self.request("POST", path)

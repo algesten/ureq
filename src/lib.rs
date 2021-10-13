@@ -401,6 +401,11 @@ pub fn head(path: &str) -> Request {
     request("HEAD", path)
 }
 
+/// Make a PATCH request.
+pub fn patch(path: &str) -> Request {
+    request("PATCH", path)
+}
+
 /// Make a POST request.
 pub fn post(path: &str) -> Request {
     request("POST", path)
