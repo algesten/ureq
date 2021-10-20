@@ -474,9 +474,21 @@ impl AgentBuilder {
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
     /// use std::sync::Arc;
-    /// let tls_config = Arc::new(rustls::ClientConfig::new());
+    /// let mut root_store = rustls::RootCertStore::empty();
+    /// root_store.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
+    ///     rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
+    ///         ta.subject,
+    ///         ta.spki,
+    ///         ta.name_constraints,
+    ///     )
+    /// }));
+    ///
+    /// let tls_config = rustls::ClientConfig::builder()
+    ///     .with_safe_defaults()
+    ///     .with_root_certificates(root_store)
+    ///     .with_no_client_auth();
     /// let agent = ureq::builder()
-    ///     .tls_config(tls_config.clone())
+    ///     .tls_config(Arc::new(tls_config))
     ///     .build();
     /// # Ok(())
     /// # }

@@ -92,17 +92,28 @@ m0Wqhhi8/24Sy934t5Txgkfoltg8ahkx934WjP6WWRnSAu+cf+vW
 #[cfg(feature = "tls")]
 #[test]
 fn tls_client_certificate() {
-    let mut tls_config = rustls::ClientConfig::new();
-
-    let certs = rustls_pemfile::certs(&mut BADSSL_CLIENT_CERT_PEM.as_bytes()).unwrap();
-    let key = rustls_pemfile::rsa_private_keys(&mut BADSSL_CLIENT_CERT_PEM.as_bytes())
-        .unwrap()[0]
+    let certs = rustls_pemfile::certs(&mut BADSSL_CLIENT_CERT_PEM.as_bytes())
+        .unwrap()
+        .into_iter()
+        .map(rustls::Certificate)
+        .collect();
+    let key = rustls_pemfile::rsa_private_keys(&mut BADSSL_CLIENT_CERT_PEM.as_bytes()).unwrap()[0]
         .clone();
 
-    tls_config.set_single_client_cert(certs, key).unwrap();
-    tls_config
-        .root_store
-        .add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
+    let mut root_store = rustls::RootCertStore::empty();
+    root_store.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
+        rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
+            ta.subject,
+            ta.spki,
+            ta.name_constraints,
+        )
+    }));
+
+    let tls_config = rustls::ClientConfig::builder()
+        .with_safe_defaults()
+        .with_root_certificates(root_store)
+        .with_single_cert(certs, rustls::PrivateKey(key))
+        .unwrap();
 
     let agent = ureq::builder()
         .tls_config(std::sync::Arc::new(tls_config))
