@@ -43,7 +43,7 @@ log = "0.4"
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }
 env_logger = "0.9"
-rustls = { version = "0.19", features = ["dangerous_configuration"] }
+rustls = { version = "0.20", features = ["dangerous_configuration"] }
 
 [[example]]
 name = "smoke-test"
