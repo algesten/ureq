@@ -94,8 +94,8 @@ m0Wqhhi8/24Sy934t5Txgkfoltg8ahkx934WjP6WWRnSAu+cf+vW
 fn tls_client_certificate() {
     let mut tls_config = rustls::ClientConfig::new();
 
-    let certs = rustls::internal::pemfile::certs(&mut BADSSL_CLIENT_CERT_PEM.as_bytes()).unwrap();
-    let key = rustls::internal::pemfile::rsa_private_keys(&mut BADSSL_CLIENT_CERT_PEM.as_bytes())
+    let certs = rustls_pemfile::certs(&mut BADSSL_CLIENT_CERT_PEM.as_bytes()).unwrap();
+    let key = rustls_pemfile::rsa_private_keys(&mut BADSSL_CLIENT_CERT_PEM.as_bytes())
         .unwrap()[0]
         .clone();
 
