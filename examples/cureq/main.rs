@@ -3,11 +3,13 @@ use std::fmt;
 use std::io;
 use std::thread;
 use std::time::Duration;
+use std::time::SystemTime;
 use std::{env, sync::Arc};
 
-use rustls::{
-    Certificate, ClientConfig, RootCertStore, ServerCertVerified, ServerCertVerifier, TLSError,
-};
+use rustls::client::ServerCertVerified;
+use rustls::client::ServerCertVerifier;
+use rustls::ServerName;
+use rustls::{Certificate, ClientConfig};
 use ureq;
 
 #[derive(Debug)]
@@ -99,11 +101,13 @@ struct AcceptAll {}
 impl ServerCertVerifier for AcceptAll {
     fn verify_server_cert(
         &self,
-        _roots: &RootCertStore,
-        _presented_certs: &[Certificate],
-        _dns_name: webpki::DNSNameRef<'_>,
+        _end_entity: &Certificate,
+        _intermediates: &[Certificate],
+        _server_name: &ServerName,
+        _scts: &mut dyn Iterator<Item = &[u8]>,
         _ocsp_response: &[u8],
-    ) -> Result<ServerCertVerified, TLSError> {
+        _now: SystemTime,
+    ) -> Result<ServerCertVerified, rustls::Error> {
         Ok(ServerCertVerified::assertion())
     }
 }
@@ -160,10 +164,10 @@ Fetch url and copy it to stdout.
                 wait = Duration::from_secs(wait_seconds);
             }
             "-k" => {
-                let mut client_config = ClientConfig::new();
-                client_config
-                    .dangerous()
-                    .set_certificate_verifier(Arc::new(AcceptAll {}));
+                let client_config = ClientConfig::builder()
+                    .with_safe_defaults()
+                    .with_custom_certificate_verifier(Arc::new(AcceptAll {}))
+                    .with_no_client_auth();
                 builder = builder.tls_config(Arc::new(client_config));
             }
             "--native-tls" => {

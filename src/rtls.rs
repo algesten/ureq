@@ -1,3 +1,4 @@
+use std::convert::TryFrom;
 use std::io::{self, Read, Write};
 use std::net::TcpStream;
 use std::sync::Arc;
@@ -7,7 +8,6 @@ use crate::{
     stream::{HttpsStream, TlsConnector},
     Error,
 };
-use rustls::Session;
 
 #[allow(deprecated)]
 fn is_close_notify(e: &std::io::Error) -> bool {
@@ -24,7 +24,7 @@ fn is_close_notify(e: &std::io::Error) -> bool {
     false
 }
 
-struct RustlsStream(rustls::StreamOwned<rustls::ClientSession, TcpStream>);
+struct RustlsStream(rustls::StreamOwned<rustls::ClientConnection, TcpStream>);
 
 impl HttpsStream for RustlsStream {
     fn socket(&self) -> Option<&TcpStream> {
@@ -57,16 +57,22 @@ impl Write for RustlsStream {
 }
 
 #[cfg(feature = "native-certs")]
-fn configure_certs(config: &mut rustls::ClientConfig) {
-    config.root_store =
-        rustls_native_certs::load_native_certs().expect("Could not load platform certs");
+fn root_certs() -> rustls::RootCertStore {
+    todo!("Need rustls_native_certs v0.6.0")
+    // rustls_native_certs::load_native_certs().expect("Could not load platform certs")
 }
 
 #[cfg(not(feature = "native-certs"))]
-fn configure_certs(config: &mut rustls::ClientConfig) {
-    config
-        .root_store
-        .add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
+fn root_certs(config: &mut rustls::ClientConfig) {
+    let mut root_store = rustls::RootCertStore::empty();
+    root_store.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
+        rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
+            ta.subject,
+            ta.spki,
+            ta.name_constraints,
+        )
+    }));
+    root_store
 }
 
 impl TlsConnector for Arc<rustls::ClientConfig> {
@@ -75,9 +81,12 @@ impl TlsConnector for Arc<rustls::ClientConfig> {
         dns_name: &str,
         mut tcp_stream: TcpStream,
     ) -> Result<Box<dyn HttpsStream>, Error> {
-        let sni = webpki::DNSNameRef::try_from_ascii_str(dns_name)
-            .map_err(|err| ErrorKind::Dns.new().src(err))?;
-        let mut sess = rustls::ClientSession::new(self, sni);
+        // TODO losing the source error here is not nice. But InvalidDnsNameError doesn't implement std::Error.
+        let sni = rustls::ServerName::try_from(dns_name)
+            .map_err(|err| ErrorKind::Dns.msg(&format!("{:?}", err)))?;
+
+        let mut sess = rustls::ClientConnection::new(self.clone(), sni)
+            .map_err(|e| ErrorKind::Io.new().src(e))?;
 
         sess.complete_io(&mut tcp_stream)
             .map_err(|err| ErrorKind::ConnectionFailed.new().src(err))?;
@@ -90,8 +99,10 @@ impl TlsConnector for Arc<rustls::ClientConfig> {
 pub fn default_tls_config() -> Arc<dyn TlsConnector> {
     use once_cell::sync::Lazy;
     static TLS_CONF: Lazy<Arc<dyn TlsConnector>> = Lazy::new(|| {
-        let mut config = rustls::ClientConfig::new();
-        configure_certs(&mut config);
+        let config = rustls::ClientConfig::builder()
+            .with_safe_defaults()
+            .with_root_certificates(root_certs())
+            .with_no_client_auth();
         Arc::new(Arc::new(config))
     });
     TLS_CONF.clone()

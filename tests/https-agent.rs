@@ -90,8 +90,6 @@ m0Wqhhi8/24Sy934t5Txgkfoltg8ahkx934WjP6WWRnSAu+cf+vW
 -----END RSA PRIVATE KEY-----
 "#;
 
-#[test]
-fn tls_client_certificate() {
     let certs = rustls_pemfile::certs(&mut BADSSL_CLIENT_CERT_PEM.as_bytes())
         .unwrap()
         .into_iter()
