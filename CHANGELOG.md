@@ -1,3 +1,8 @@
+# 2.3.0
+ * Upgarde to rustls 0.20 (#427).
+ * Make test mocks of Response more accurate by removing newline (#423).
+ * Redact sensitive headers when logging prelude (#414).
+
 # 2.2.0
  * Update to latest dependencies
  * Add SOCKS4 support (#410).
