@@ -109,7 +109,7 @@ You can control them when including ureq as a dependency.
 * `native-tls` enables an adapter so you can pass a `native_tls::TlsConnector` instance
   to `AgentBuilder::tls_connector`. Due to the risk of diamond dependencies accidentally switching on an unwanted
   TLS implementation, `native-tls` is never picked up as a default or used by the crate level
-  convencience calls (`ureq::get` etc) – it must be configured.
+  convenience calls (`ureq::get` etc) – it must be configured.
 
 ## Plain requests
 
