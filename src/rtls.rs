@@ -1,0 +1,109 @@
+use std::convert::TryFrom;
+use std::io::{self, Read, Write};
+use std::net::TcpStream;
+use std::sync::Arc;
+
+use crate::ErrorKind;
+use crate::{
+    stream::{HttpsStream, TlsConnector},
+    Error,
+};
+
+#[allow(deprecated)]
+fn is_close_notify(e: &std::io::Error) -> bool {
+    if e.kind() != io::ErrorKind::ConnectionAborted {
+        return false;
+    }
+
+    if let Some(msg) = e.get_ref() {
+        // :(
+
+        return msg.description().contains("CloseNotify");
+    }
+
+    false
+}
+
+struct RustlsStream(rustls::StreamOwned<rustls::ClientConnection, TcpStream>);
+
+impl HttpsStream for RustlsStream {
+    fn socket(&self) -> Option<&TcpStream> {
+        Some(self.0.get_ref())
+    }
+}
+
+// TODO: After upgrading to rustls 0.20 or higher, we can remove these Read
+// and Write impls, leaving only `impl TlsStream for rustls::StreamOwned...`.
+// Currently we need to implement Read in order to treat close_notify specially.
+// The next release of rustls will handle close_notify in a more intuitive way.
+impl Read for RustlsStream {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        match self.0.read(buf) {
+            Ok(size) => Ok(size),
+            Err(ref e) if is_close_notify(e) => Ok(0),
+            Err(e) => Err(e),
+        }
+    }
+}
+
+impl Write for RustlsStream {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.0.write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.0.flush()
+    }
+}
+
+#[cfg(feature = "native-certs")]
+fn root_certs() -> rustls::RootCertStore {
+    todo!("Need rustls_native_certs v0.6.0")
+    // rustls_native_certs::load_native_certs().expect("Could not load platform certs")
+}
+
+#[cfg(not(feature = "native-certs"))]
+fn root_certs(config: &mut rustls::ClientConfig) {
+    let mut root_store = rustls::RootCertStore::empty();
+    root_store.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
+        rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
+            ta.subject,
+            ta.spki,
+            ta.name_constraints,
+        )
+    }));
+    root_store
+}
+
+impl TlsConnector for Arc<rustls::ClientConfig> {
+    fn connect(
+        &self,
+        dns_name: &str,
+        mut tcp_stream: TcpStream,
+    ) -> Result<Box<dyn HttpsStream>, Error> {
+        // TODO losing the source error here is not nice. But InvalidDnsNameError doesn't implement std::Error.
+        let sni = rustls::ServerName::try_from(dns_name)
+            .map_err(|err| ErrorKind::Dns.msg(&format!("{:?}", err)))?;
+
+        let mut sess = rustls::ClientConnection::new(self.clone(), sni)
+            .map_err(|e| ErrorKind::Io.new().src(e))?;
+
+        sess.complete_io(&mut tcp_stream)
+            .map_err(|err| ErrorKind::ConnectionFailed.new().src(err))?;
+        let stream = rustls::StreamOwned::new(sess, tcp_stream);
+
+        Ok(Box::new(RustlsStream(stream)))
+    }
+}
+
+pub fn default_tls_config() -> Arc<dyn TlsConnector> {
+    use once_cell::sync::Lazy;
+    static TLS_CONF: Lazy<Arc<dyn TlsConnector>> = Lazy::new(|| {
+        let config = rustls::ClientConfig::builder()
+            .with_safe_defaults()
+            .with_root_certificates(root_certs())
+            .with_no_client_auth();
+        Arc::new(Arc::new(config))
+    });
+    TLS_CONF.clone()
+}

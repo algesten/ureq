@@ -64,7 +64,7 @@ impl fmt::Display for HeaderLine {
 
 #[derive(Clone, PartialEq)]
 /// Wrapper type for a header field.
-/// https://tools.ietf.org/html/rfc7230#section-3.2
+/// <https://tools.ietf.org/html/rfc7230#section-3.2>
 pub struct Header {
     // Line contains the unmodified bytes of single header field.
     // It does not contain the final CRLF.

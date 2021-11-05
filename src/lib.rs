@@ -16,8 +16,8 @@
 //!
 //! Ureq is in pure Rust for safety and ease of understanding. It avoids using
 //! `unsafe` directly. It [uses blocking I/O][blocking] instead of async I/O, because that keeps
-//! the API simple and keeps dependencies to a minimum. For TLS, ureq uses
-//! [rustls].
+//! the API simple and and keeps dependencies to a minimum. For TLS, ureq uses
+//! [rustls or native-tls](#tls).
 //!
 //! Version 2.0.0 was released recently and changed some APIs. See the [changelog] for details.
 //!
@@ -120,13 +120,16 @@
 //!
 //! `ureq = { version = "*", features = ["json", "charset"] }`
 //!
-//! * `tls` enables https. This is enabled by default.
 //! * `cookies` enables cookies.
 //! * `json` enables [Response::into_json()] and [Request::send_json()] via serde_json.
 //! * `charset` enables interpreting the charset part of the Content-Type header
 //!    (e.g.  `Content-Type: text/plain; charset=iso-8859-1`). Without this, the
 //!    library defaults to Rust's built in `utf-8`.
 //! * `socks-proxy` enables proxy config using the `socks4://`, `socks4a://`, `socks5://` and `socks://` (equal to `socks5://`) prefix.
+//! * `native-tls` enables an adapter so you can pass a `native_tls::TlsConnector` instance
+//!   to `AgentBuilder::tls_connector`. Due to the risk of diamond dependencies accidentally switching on an unwanted
+//!   TLS implementation, `native-tls` is never picked up as a default or used by the crate level
+//!   convencience calls (`ureq::get` etc) – it must be configured.
 //!
 //! # Plain requests
 //!
@@ -234,6 +237,45 @@
 //! # fn main() {}
 //! ```
 //!
+//! # HTTPS / TLS / SSL
+//!
+//! On platforms that support rustls, ureq uses rustls. On other platforms, native-tls can
+//! be manually configured using [`AgentBuilder::tls_connector`].
+//!
+//! You might want to use native-tls if you need to interoperate with servers that
+//! only support less-secure TLS configurations (rustls doesn't support TLS 1.0 and 1.1, for
+//! instance). You might also want to use it if you need to validate certificates for IP addresses,
+//! which are not currently supported in rustls.
+//!
+//! Here's an example of constructing an Agent that uses native-tls. It requires the
+//! "native-tls" feature to be enabled.
+//!
+//! ```no_run
+//! # #[cfg(feature = "native-tls")]
+//! # fn build() -> std::result::Result<(), ureq::Error> {
+//! # ureq::is_test(true);
+//!   use std::sync::Arc;
+//!   use ureq::Agent;
+//!
+//!   let agent = ureq::AgentBuilder::new()
+//!       .tls_connector(Arc::new(native_tls::TlsConnector::new().unwrap()))
+//!       .build();
+//! # Ok(())
+//! # }
+//! # fn main() {}
+//! ```
+//!
+//! ## Trusted Roots
+//!
+//! When you use rustls, ureq defaults to trusting [webpki-roots](https://docs.rs/webpki-roots/), a
+//! copy of the Mozilla Root program that is bundled into your program (and so won't update if your
+//! program isn't updated). You can alternately configure
+//! [rustls-native-certs](https://docs.rs/rustls-native-certs/) which extracts the roots from your
+//! OS' trust store. That means it will update when your OS is updated, and also that it will
+//! include locally installed roots.
+//!
+//! When you use native-tls, ureq will use your OS' certificate verifier and root store.
+//!
 //! # Blocking I/O for simplicity
 //!
 //! Ureq uses blocking I/O rather than Rust's newer [asynchronous (async) I/O][async]. Async I/O
@@ -287,6 +329,45 @@ mod response;
 mod stream;
 mod unit;
 
+// rustls is our default tls engine. If the feature is on, it will be
+// used for the shortcut calls the top of the crate (`ureq::get` etc).
+#[cfg(feature = "tls")]
+mod rtls;
+
+// native-tls is a feature that must be configured via the AgentBuilder.
+// it is never picked up as a default (and never used by `ureq::get` etc).
+#[cfg(feature = "native-tls")]
+mod ntls;
+
+// If we have rustls compiled, that is the default.
+#[cfg(feature = "tls")]
+pub(crate) fn default_tls_config() -> std::sync::Arc<dyn TlsConnector> {
+    rtls::default_tls_config()
+}
+
+// Without rustls compiled, we just fail on https when using the shortcut
+// calls at the top of the crate (`ureq::get` etc).
+#[cfg(not(feature = "tls"))]
+pub(crate) fn default_tls_config() -> std::sync::Arc<dyn TlsConnector> {
+    use crate::stream::HttpsStream;
+    use std::net::TcpStream;
+    use std::sync::Arc;
+
+    struct NoTlsConfig;
+
+    impl TlsConnector for NoTlsConfig {
+        fn connect(
+            &self,
+            _dns_name: &str,
+            _tcp_stream: TcpStream,
+        ) -> Result<Box<dyn HttpsStream>, crate::error::Error> {
+            panic!("No TLS backend. Use feature 'tls' or AgentBuilder::tls_connector (native-tls is never configured as a default)");
+        }
+    }
+
+    Arc::new(NoTlsConfig)
+}
+
 #[cfg(feature = "cookies")]
 mod cookies;
 
@@ -307,6 +388,7 @@ pub use crate::proxy::Proxy;
 pub use crate::request::{Request, RequestUrl};
 pub use crate::resolve::Resolver;
 pub use crate::response::Response;
+pub use crate::stream::TlsConnector;
 
 // re-export
 #[cfg(feature = "cookies")]
@@ -434,7 +516,7 @@ mod tests {
 
     #[test]
     #[cfg(feature = "tls")]
-    fn connect_https_google() {
+    fn connect_https_google_rustls() {
         let agent = Agent::new();
 
         let resp = agent.get("https://www.google.com/").call().unwrap();
@@ -446,7 +528,22 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "tls")]
+    #[cfg(feature = "native-tls")]
+    fn connect_https_google_native_tls() {
+        use std::sync::Arc;
+
+        let tls_config = native_tls::TlsConnector::new().unwrap();
+        let agent = builder().tls_connector(Arc::new(tls_config)).build();
+
+        let resp = agent.get("https://www.google.com/").call().unwrap();
+        assert_eq!(
+            "text/html; charset=ISO-8859-1",
+            resp.header("content-type").unwrap()
+        );
+        assert_eq!("text/html", resp.content_type());
+    }
+
+    #[test]
     fn connect_https_invalid_name() {
         let result = get("https://example.com{REQUEST_URI}/").call();
         let e = ErrorKind::Dns;
