@@ -3,6 +3,8 @@ use std::io::{self, Read, Write};
 use std::net::TcpStream;
 use std::sync::Arc;
 
+use once_cell::sync::Lazy;
+
 use crate::ErrorKind;
 use crate::{
     stream::{HttpsStream, TlsConnector},
@@ -63,7 +65,7 @@ fn root_certs() -> rustls::RootCertStore {
 }
 
 #[cfg(not(feature = "native-certs"))]
-fn root_certs(config: &mut rustls::ClientConfig) {
+fn root_certs() -> rustls::RootCertStore {
     let mut root_store = rustls::RootCertStore::empty();
     root_store.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
         rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
@@ -97,7 +99,6 @@ impl TlsConnector for Arc<rustls::ClientConfig> {
 }
 
 pub fn default_tls_config() -> Arc<dyn TlsConnector> {
-    use once_cell::sync::Lazy;
     static TLS_CONF: Lazy<Arc<dyn TlsConnector>> = Lazy::new(|| {
         let config = rustls::ClientConfig::builder()
             .with_safe_defaults()
