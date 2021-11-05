@@ -55,7 +55,6 @@ jobs:
           - charset
           - cookies
           - socks-proxy
-          - native-tls-adapter
     env:
       RUST_BACKTRACE: "1"
       RUSTFLAGS: "-D dead_code -D unused-variables -D unused"

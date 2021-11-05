@@ -129,7 +129,7 @@
 //! * `native-tls` enables an adapter so you can pass a `native_tls::TlsConnector` instance
 //!   to `AgentBuilder::tls_connector`. Due to the risk of diamond dependencies accidentally switching on an unwanted
 //!   TLS implementation, `native-tls` is never picked up as a default or used by the crate level
-//!   convencience calls (`ureq::get` etc) – it must be configured.
+//!   convenience calls (`ureq::get` etc) – it must be configured.
 //!
 //! # Plain requests
 //!
@@ -361,7 +361,8 @@ pub(crate) fn default_tls_config() -> std::sync::Arc<dyn TlsConnector> {
             _dns_name: &str,
             _tcp_stream: TcpStream,
         ) -> Result<Box<dyn HttpsStream>, crate::error::Error> {
-            panic!("No TLS backend. Use feature 'tls' or AgentBuilder::tls_connector (native-tls is never configured as a default)");
+            Err(ErrorKind::UnknownScheme
+                .msg("cannot make HTTPS request because no TLS backend is configured"))
         }
     }
 
