@@ -1,5 +1,5 @@
 # 2.3.0
- * Upgarde to rustls 0.20 (#427).
+ * Upgrade to rustls 0.20 (#427).
  * Make test mocks of Response more accurate by removing newline (#423).
  * Redact sensitive headers when logging prelude (#414).
 
