@@ -367,9 +367,10 @@ pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error
     let mut sock = connect_host(unit, hostname, port)?;
     let mut sess = rustls::ClientConnection::new(
         tls_conf,
-        rustls::ServerName::try_from(hostname).expect("invalid DNS name"),
+        rustls::ServerName::try_from(hostname).map_err(|_e| ErrorKind::Dns.new())?,
     )
     .map_err(|e| ErrorKind::Io.new().src(e))?;
+    // TODO rustls 0.20.1: Add src to ServerName error (0.20 didn't implement StdError trait for it)
 
     sess.complete_io(&mut sock)
         .map_err(|err| ErrorKind::ConnectionFailed.new().src(err))?;
