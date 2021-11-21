@@ -335,7 +335,7 @@ pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error
 
     static TLS_CONF: Lazy<Arc<rustls::ClientConfig>> = Lazy::new(|| {
         let mut root_store = rustls::RootCertStore::empty();
-        #[cfg(not(feature = "native-tls"))]
+        #[cfg(not(feature = "native-certs"))]
         root_store.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
             rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
                 ta.subject,
@@ -343,10 +343,13 @@ pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error
                 ta.name_constraints,
             )
         }));
-        #[cfg(feature = "native-tls")]
-        root_store.add_server_trust_anchors(
-            rustls_native_certs::load_native_certs().expect("Could not load platform certs"),
-        );
+        #[cfg(feature = "native-certs")]
+        for cert in rustls_native_certs::load_native_certs().expect("Could not load platform certs")
+        {
+            if let Err(e) = root_store.add(&rustls::Certificate(cert.0)) {
+                debug!("skipping bad platform cert: {}", e);
+            }
+        }
 
         let config = rustls::ClientConfig::builder()
             .with_safe_defaults()
