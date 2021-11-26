@@ -1,3 +1,6 @@
+# 2.3.2
+ * Fix regression in 2.3.x for feature native-certs (#441)
+
 # 2.3.1
  * Don't panic when given an invalid DNS name (#436).
  * Update to rustls-native-certs v0.6 (#432).
