@@ -246,7 +246,7 @@ fn connect_inner(
         debug!("sending request {} {}", method, url);
     }
 
-    let send_result = send_prelude(unit, &mut stream, !previous.is_empty());
+    let send_result = send_prelude(unit, &mut stream, previous);
 
     if let Err(err) = send_result {
         if is_recycled {
@@ -355,7 +355,7 @@ fn connect_socket(unit: &Unit, hostname: &str, use_pooled: bool) -> Result<(Stre
 
 /// Send request line + headers (all up until the body).
 #[allow(clippy::write_with_newline)]
-fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> io::Result<()> {
+fn send_prelude(unit: &Unit, stream: &mut Stream, previous: &[String]) -> io::Result<()> {
     // build into a buffer and send in one go.
     let mut prelude = PreludeBuilder::new();
 
@@ -366,16 +366,16 @@ fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> io::Result<()>
         unit.url.query().unwrap_or_default(),
     )?;
 
+    let scheme_default: u16 = match unit.url.scheme() {
+        "http" => 80,
+        "https" => 443,
+        _ => 0,
+    };
     // host header if not set by user.
     if !header::has_header(&unit.headers, "host") {
         let host = unit.url.host().unwrap();
         match unit.url.port() {
             Some(port) => {
-                let scheme_default: u16 = match unit.url.scheme() {
-                    "http" => 80,
-                    "https" => 443,
-                    _ => 0,
-                };
                 if scheme_default != 0 && scheme_default == port {
                     prelude.write_header("Host", host)?;
                 } else {
@@ -393,10 +393,31 @@ fn send_prelude(unit: &Unit, stream: &mut Stream, redir: bool) -> io::Result<()>
     if !header::has_header(&unit.headers, "accept") {
         prelude.write_header("Accept", "*/*")?;
     }
-
+    //Preserve Authorization in Same Host redirections
+    let host_s = unit.url.host_str().unwrap();
+    let preserve_auth = if !previous.is_empty() {
+        let prev_url = Url::parse(&previous[0]).unwrap();
+        if let Some(prev_host) = prev_url.host_str() {
+            if host_s == prev_host {
+                if prev_url.scheme() == unit.url.scheme() {
+                    let port = unit.url.port().unwrap_or(scheme_default);
+                    let prev_port = prev_url.port().unwrap_or(scheme_default);
+                    port == prev_port
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    } else {
+        true //Not in redirection
+    };
     // other headers
     for header in &unit.headers {
-        if !redir || !header.is_name("Authorization") {
+        if preserve_auth || !header.is_name("Authorization") {
             if let Some(v) = header.value() {
                 if is_header_sensitive(header) {
                     prelude.write_sensitive_header(header.name(), v)?;
