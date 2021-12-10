@@ -9,6 +9,7 @@ use url::Url;
 #[cfg(feature = "cookies")]
 use cookie::Cookie;
 
+use crate::agent::RedirectAuthHeaders;
 use crate::body::{self, BodySize, Payload, SizedReader};
 use crate::error::{Error, ErrorKind};
 use crate::header;
@@ -353,6 +354,17 @@ fn connect_socket(unit: &Unit, hostname: &str, use_pooled: bool) -> Result<(Stre
     Ok((stream?, false))
 }
 
+fn can_propagate_authorization_on_redirect(unit: &Unit, previous: &[String]) -> bool {
+    if let RedirectAuthHeaders::SameHost = unit.agent.config.redirect_auth_headers {
+        let host_s = unit.url.host_str().unwrap();
+        let prev_url = Url::parse(&previous[0]).unwrap();
+        let prev_host = prev_url.host_str().unwrap();
+        host_s == prev_host && prev_url.scheme() == "https" && unit.url.scheme() == "https"
+    } else {
+        false
+    }
+}
+
 /// Send request line + headers (all up until the body).
 #[allow(clippy::write_with_newline)]
 fn send_prelude(unit: &Unit, stream: &mut Stream, previous: &[String]) -> io::Result<()> {
@@ -393,28 +405,13 @@ fn send_prelude(unit: &Unit, stream: &mut Stream, previous: &[String]) -> io::Re
     if !header::has_header(&unit.headers, "accept") {
         prelude.write_header("Accept", "*/*")?;
     }
-    //Preserve Authorization in Same Host redirections
-    let host_s = unit.url.host_str().unwrap();
+
     let preserve_auth = if !previous.is_empty() {
-        let prev_url = Url::parse(&previous[0]).unwrap();
-        if let Some(prev_host) = prev_url.host_str() {
-            if host_s == prev_host {
-                if prev_url.scheme() == unit.url.scheme() {
-                    let port = unit.url.port().unwrap_or(scheme_default);
-                    let prev_port = prev_url.port().unwrap_or(scheme_default);
-                    port == prev_port
-                } else {
-                    false
-                }
-            } else {
-                false
-            }
-        } else {
-            false
-        }
+        can_propagate_authorization_on_redirect(unit, previous)
     } else {
         true //Not in redirection
     };
+
     // other headers
     for header in &unit.headers {
         if preserve_auth || !header.is_name("Authorization") {
