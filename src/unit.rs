@@ -378,16 +378,16 @@ fn send_prelude(unit: &Unit, stream: &mut Stream, previous: &[String]) -> io::Re
         unit.url.query().unwrap_or_default(),
     )?;
 
-    let scheme_default: u16 = match unit.url.scheme() {
-        "http" => 80,
-        "https" => 443,
-        _ => 0,
-    };
     // host header if not set by user.
     if !header::has_header(&unit.headers, "host") {
         let host = unit.url.host().unwrap();
         match unit.url.port() {
             Some(port) => {
+                let scheme_default: u16 = match unit.url.scheme() {
+                    "http" => 80,
+                    "https" => 443,
+                    _ => 0,
+                };
                 if scheme_default != 0 && scheme_default == port {
                     prelude.write_header("Host", host)?;
                 } else {
