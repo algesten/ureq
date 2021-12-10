@@ -14,6 +14,16 @@ use {
     cookie_store::CookieStore,
 };
 
+/// Specify the strategy for propagation of authorization headers during Redirects
+///
+/// Never is the default strategy and never send authorization headers in Redirects
+/// SameHost send the authorization header in Redirects only if the host of the Redirect is the same of the previous request, and both use the Https scheme
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RedirectAuthHeaders {
+    Never,
+    SameHost,
+}
+
 /// Accumulates options towards building an [Agent].
 #[derive(Debug)]
 pub struct AgentBuilder {
@@ -36,6 +46,7 @@ pub(crate) struct AgentConfig {
     pub timeout_write: Option<Duration>,
     pub timeout: Option<Duration>,
     pub redirects: u32,
+    pub redirect_auth_headers: RedirectAuthHeaders,
     pub user_agent: String,
     #[cfg(feature = "tls")]
     pub tls_config: Option<TLSClientConfig>,
@@ -214,6 +225,7 @@ impl AgentBuilder {
                 timeout_write: None,
                 timeout: None,
                 redirects: 5,
+                redirect_auth_headers: RedirectAuthHeaders::Never,
                 user_agent: format!("ureq/{}", env!("CARGO_PKG_VERSION")),
                 #[cfg(feature = "tls")]
                 tls_config: None,
@@ -436,6 +448,15 @@ impl AgentBuilder {
     /// ```
     pub fn redirects(mut self, n: u32) -> Self {
         self.config.redirects = n;
+        self
+    }
+
+    /// Set the strategy for propagation of authorization headers in redirects.
+    ///
+    /// Defaults to RedirectAuthHeaders::Never.
+    ///
+    pub fn set_redirect_auth_headers(mut self, v: RedirectAuthHeaders) -> Self {
+        self.config.redirect_auth_headers = v;
         self
     }
 
