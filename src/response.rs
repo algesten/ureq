@@ -53,7 +53,7 @@ const MAX_HEADER_COUNT: usize = 100;
 /// # }
 /// ```
 pub struct Response {
-    url: Option<Url>,
+    pub(crate) url: Option<Url>,
     status_line: String,
     index: ResponseStatusIndex,
     status: u16,
@@ -67,7 +67,7 @@ pub struct Response {
     /// previous to this one.
     ///
     /// If this response was not redirected, the history is empty.
-    pub(crate) history: Vec<String>,
+    pub(crate) history: Vec<Url>,
 }
 
 /// index into status_line where we split: HTTP/1.1 200 OK
@@ -502,7 +502,7 @@ impl Response {
 
     #[cfg(test)]
     pub fn history_from_previous(&mut self, previous: Response) {
-        let previous_url = previous.get_url().to_string();
+        let previous_url = previous.url.expect("previous url");
         self.history = previous.history;
         self.history.push(previous_url);
     }
@@ -941,7 +941,7 @@ mod tests {
         response2.set_url("http://2.example.com/".parse().unwrap());
         response2.history_from_previous(response1);
 
-        let hist: Vec<&str> = response2.history.iter().map(|r| &**r).collect();
+        let hist: Vec<String> = response2.history.iter().map(|r| r.to_string()).collect();
         assert_eq!(hist, ["http://1.example.com/", "http://2.example.com/"])
     }
 

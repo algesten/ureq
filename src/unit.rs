@@ -206,7 +206,7 @@ pub(crate) fn connect(
             _ => break resp,
         };
         debug!("redirect {} {} -> {}", resp.status(), url, new_url);
-        history.push(unit.url.to_string());
+        history.push(unit.url);
         body = Payload::Empty.into_read();
         unit.headers.retain(|h| h.name() != "Content-Length");
 
@@ -229,7 +229,7 @@ fn connect_inner(
     unit: &Unit,
     use_pooled: bool,
     body: SizedReader,
-    previous: &[String],
+    history: &[Url],
 ) -> Result<Response, Error> {
     let host = unit
         .url
@@ -247,7 +247,7 @@ fn connect_inner(
         debug!("sending request {} {}", method, url);
     }
 
-    let send_result = send_prelude(unit, &mut stream, previous);
+    let send_result = send_prelude(unit, &mut stream, history);
 
     if let Err(err) = send_result {
         if is_recycled {
@@ -255,7 +255,7 @@ fn connect_inner(
             // we try open a new connection, this time there will be
             // no connection in the pool. don't use it.
             // NOTE: this recurses at most once because `use_pooled` is `false`.
-            return connect_inner(unit, false, body, previous);
+            return connect_inner(unit, false, body, history);
         } else {
             // not a pooled connection, propagate the error.
             return Err(err.into());
@@ -284,7 +284,7 @@ fn connect_inner(
             debug!("retrying request {} {}: {}", method, url, err);
             let empty = Payload::Empty.into_read();
             // NOTE: this recurses at most once because `use_pooled` is `false`.
-            return connect_inner(unit, false, empty, previous);
+            return connect_inner(unit, false, empty, history);
         }
         Err(e) => return Err(e),
         Ok(resp) => resp,
@@ -354,11 +354,11 @@ fn connect_socket(unit: &Unit, hostname: &str, use_pooled: bool) -> Result<(Stre
     Ok((stream?, false))
 }
 
-fn can_propagate_authorization_on_redirect(unit: &Unit, previous: &[String]) -> bool {
+fn can_propagate_authorization_on_redirect(unit: &Unit, history: &[Url]) -> bool {
     if let RedirectAuthHeaders::SameHost = unit.agent.config.redirect_auth_headers {
         let host_s = unit.url.host_str().unwrap();
-        let prev_url = Url::parse(&previous[0]).unwrap();
-        let prev_host = prev_url.host_str().unwrap();
+        let prev_url = &history[0];
+        let prev_host = prev_url.host_str().expect("Host in previous Url");
         host_s == prev_host && prev_url.scheme() == "https" && unit.url.scheme() == "https"
     } else {
         false
@@ -367,7 +367,7 @@ fn can_propagate_authorization_on_redirect(unit: &Unit, previous: &[String]) -> 
 
 /// Send request line + headers (all up until the body).
 #[allow(clippy::write_with_newline)]
-fn send_prelude(unit: &Unit, stream: &mut Stream, previous: &[String]) -> io::Result<()> {
+fn send_prelude(unit: &Unit, stream: &mut Stream, history: &[Url]) -> io::Result<()> {
     // build into a buffer and send in one go.
     let mut prelude = PreludeBuilder::new();
 
@@ -406,8 +406,8 @@ fn send_prelude(unit: &Unit, stream: &mut Stream, previous: &[String]) -> io::Re
         prelude.write_header("Accept", "*/*")?;
     }
 
-    let preserve_auth = if !previous.is_empty() {
-        can_propagate_authorization_on_redirect(unit, previous)
+    let preserve_auth = if !history.is_empty() {
+        can_propagate_authorization_on_redirect(unit, history)
     } else {
         true //Not in redirection
     };
