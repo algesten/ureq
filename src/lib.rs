@@ -398,8 +398,25 @@ pub use crate::stream::TlsConnector;
 // re-export
 #[cfg(feature = "cookies")]
 pub use cookie::Cookie;
+
 #[cfg(feature = "json")]
-pub use serde_json::{to_value as serde_to_value, Map as SerdeMap, Value as SerdeValue};
+pub use {serde, serde_json};
+
+#[cfg(feature = "json")]
+#[deprecated(note = "use ureq::serde_json::Map instead")]
+pub type SerdeMap<K, V> = serde_json::Map<K, V>;
+
+#[cfg(feature = "json")]
+#[deprecated(note = "use ureq::serde_json::Value instead")]
+pub type SerdeValue = serde_json::Value;
+
+#[cfg(feature = "json")]
+#[deprecated(note = "use ureq::serde_json::to_value instead")]
+pub fn serde_to_value<T: serde::Serialize>(
+    value: T,
+) -> std::result::Result<serde_json::Value, serde_json::Error> {
+    serde_json::to_value(value)
+}
 
 use once_cell::sync::Lazy;
 use std::sync::atomic::{AtomicBool, Ordering};

@@ -35,7 +35,7 @@ fn content_length_on_json() {
     test::set_handler("/content_length_on_json", |_unit| {
         test::make_response(200, "OK", vec![], vec![])
     });
-    let mut json = SerdeMap::new();
+    let mut json = serde_json::Map::new();
     json.insert(
         "Hello".to_string(),
         serde_json::Value::String("World!!!".to_string()),
@@ -87,7 +87,7 @@ fn content_type_on_json() {
     test::set_handler("/content_type_on_json", |_unit| {
         test::make_response(200, "OK", vec![], vec![])
     });
-    let mut json = SerdeMap::new();
+    let mut json = serde_json::Map::new();
     json.insert(
         "Hello".to_string(),
         serde_json::Value::String("World!!!".to_string()),
@@ -106,7 +106,7 @@ fn content_type_not_overriden_on_json() {
     test::set_handler("/content_type_not_overriden_on_json", |_unit| {
         test::make_response(200, "OK", vec![], vec![])
     });
-    let mut json = SerdeMap::new();
+    let mut json = serde_json::Map::new();
     json.insert(
         "Hello".to_string(),
         serde_json::Value::String("World!!!".to_string()),
