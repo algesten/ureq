@@ -106,7 +106,7 @@ impl Request {
             &self.agent,
             &self.method,
             &url,
-            &self.headers,
+            self.headers,
             &reader,
             deadline,
         );

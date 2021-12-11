@@ -39,13 +39,13 @@ impl Unit {
         agent: &Agent,
         method: &str,
         url: &Url,
-        headers: &[Header],
+        mut headers: Vec<Header>,
         body: &SizedReader,
         deadline: Option<time::Instant>,
     ) -> Self {
         //
 
-        let (is_transfer_encoding_set, mut is_chunked) = get_header(headers, "transfer-encoding")
+        let (is_transfer_encoding_set, mut is_chunked) = get_header(&headers, "transfer-encoding")
             // if the user has set an encoding header, obey that.
             .map(|enc| {
                 let is_transfer_encoding_set = !enc.is_empty();
@@ -58,12 +58,12 @@ impl Unit {
             // otherwise, no chunking.
             .unwrap_or((false, false));
 
-        let extra_headers = {
+        let mut extra_headers = {
             let mut extra = vec![];
 
             // chunking and Content-Length headers are mutually exclusive
             // also don't write this if the user has set it themselves
-            if !is_chunked && get_header(headers, "content-length").is_none() {
+            if !is_chunked && get_header(&headers, "content-length").is_none() {
                 // if the payload is of known size (everything beside an unsized reader), set
                 // Content-Length,
                 // otherwise, use the chunked Transfer-Encoding (only if no other Transfer-Encoding
@@ -85,7 +85,7 @@ impl Unit {
             let username = url.username();
             let password = url.password().unwrap_or("");
             if (!username.is_empty() || !password.is_empty())
-                && get_header(headers, "authorization").is_none()
+                && get_header(&headers, "authorization").is_none()
             {
                 let encoded = base64::encode(&format!("{}:{}", username, password));
                 extra.push(Header::new("Authorization", &format!("Basic {}", encoded)));
@@ -97,11 +97,7 @@ impl Unit {
             extra
         };
 
-        let headers: Vec<_> = headers
-            .iter()
-            .chain(extra_headers.iter())
-            .cloned()
-            .collect();
+        headers.append(&mut extra_headers);
 
         Unit {
             agent: agent.clone(),
@@ -205,17 +201,32 @@ pub(crate) fn connect(
             }
             _ => break resp,
         };
+
+        let keep_auth_header = can_propagate_authorization_on_redirect(
+            &unit.agent.config.redirect_auth_headers,
+            url,
+            &new_url,
+        );
+
         debug!("redirect {} {} -> {}", resp.status(), url, new_url);
         history.push(unit.url);
         body = Payload::Empty.into_read();
-        unit.headers.retain(|h| h.name() != "Content-Length");
+
+        // reuse the previous header vec on redirects.
+        let mut headers = unit.headers;
+
+        // on redirects we don't want to keep "content-length". we also might want to
+        // strip away "authorization" to ensure credentials are not leaked.
+        headers.retain(|h| {
+            !h.is_name("content-length") && (!h.is_name("authorization") || keep_auth_header)
+        });
 
         // recreate the unit to get a new hostname and cookies for the new host.
         unit = Unit::new(
             &unit.agent,
             &new_method,
             &new_url,
-            &unit.headers,
+            headers,
             &body,
             unit.deadline,
         );
@@ -247,7 +258,7 @@ fn connect_inner(
         debug!("sending request {} {}", method, url);
     }
 
-    let send_result = send_prelude(unit, &mut stream, history);
+    let send_result = send_prelude(unit, &mut stream);
 
     if let Err(err) = send_result {
         if is_recycled {
@@ -354,19 +365,23 @@ fn connect_socket(unit: &Unit, hostname: &str, use_pooled: bool) -> Result<(Stre
     Ok((stream?, false))
 }
 
-fn can_propagate_authorization_on_redirect(unit: &Unit, history: &[Url]) -> bool {
-    match unit.agent.config.redirect_auth_headers {
+fn can_propagate_authorization_on_redirect(
+    redirect_auth_headers: &RedirectAuthHeaders,
+    prev_url: &Url,
+    url: &Url,
+) -> bool {
+    fn scheme_is_https(url: &Url) -> bool {
+        url.scheme() == "https" || (cfg!(test) && url.scheme() == "test")
+    }
+
+    match redirect_auth_headers {
         RedirectAuthHeaders::Never => false,
         RedirectAuthHeaders::SameHost => {
-            let host = unit.url.host_str();
-            let is_https = unit.url.scheme() == "https";
-
-            // This is fine because we only do this check on redirects where there
-            // must be a previous host.
-            let prev_url = &history[0];
+            let host = url.host_str();
+            let is_https = scheme_is_https(url);
 
             let prev_host = prev_url.host_str();
-            let prev_is_https = prev_url.scheme() == "https";
+            let prev_is_https = scheme_is_https(prev_url);
 
             host == prev_host && prev_is_https && is_https
         }
@@ -375,7 +390,7 @@ fn can_propagate_authorization_on_redirect(unit: &Unit, history: &[Url]) -> bool
 
 /// Send request line + headers (all up until the body).
 #[allow(clippy::write_with_newline)]
-fn send_prelude(unit: &Unit, stream: &mut Stream, history: &[Url]) -> io::Result<()> {
+fn send_prelude(unit: &Unit, stream: &mut Stream) -> io::Result<()> {
     // build into a buffer and send in one go.
     let mut prelude = PreludeBuilder::new();
 
@@ -414,21 +429,13 @@ fn send_prelude(unit: &Unit, stream: &mut Stream, history: &[Url]) -> io::Result
         prelude.write_header("Accept", "*/*")?;
     }
 
-    let preserve_auth = if !history.is_empty() {
-        can_propagate_authorization_on_redirect(unit, history)
-    } else {
-        true //Not in redirection
-    };
-
     // other headers
     for header in &unit.headers {
-        if preserve_auth || !header.is_name("Authorization") {
-            if let Some(v) = header.value() {
-                if is_header_sensitive(header) {
-                    prelude.write_sensitive_header(header.name(), v)?;
-                } else {
-                    prelude.write_header(header.name(), v)?;
-                }
+        if let Some(v) = header.value() {
+            if is_header_sensitive(header) {
+                prelude.write_sensitive_header(header.name(), v)?;
+            } else {
+                prelude.write_header(header.name(), v)?;
             }
         }
     }
