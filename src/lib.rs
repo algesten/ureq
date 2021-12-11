@@ -387,6 +387,7 @@ mod testserver;
 
 pub use crate::agent::Agent;
 pub use crate::agent::AgentBuilder;
+pub use crate::agent::RedirectAuthHeaders;
 pub use crate::error::{Error, ErrorKind, OrAnyStatus, Transport};
 pub use crate::header::Header;
 pub use crate::proxy::Proxy;
