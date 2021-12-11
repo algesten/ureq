@@ -220,3 +220,103 @@ fn too_many_redirects() {
     let resp = req.get("test://host/malicious_redirect_0").call().unwrap();
     assert_eq!(resp.get_url(), "test://host/malicious_redirect_10000");
 }
+
+#[test]
+fn redirect_no_keep_authorization() {
+    test::set_handler("/redir_no_keep_auth1", |unit| {
+        assert!(unit.has("authorization"));
+        test::make_response(
+            302,
+            "Go here",
+            vec!["Location: /redir_no_keep_auth2"],
+            vec![],
+        )
+    });
+    test::set_handler("/redir_no_keep_auth2", |unit| {
+        assert!(
+            !unit.has("authorization"),
+            "'Authorization' should not be kept on redirect"
+        );
+        test::make_response(200, "OK", vec!["x-foo: bar"], vec![])
+    });
+
+    let resp = get("test://host/redir_no_keep_auth1")
+        // should not be kept in second handler.
+        .set("authorization", "Bearer abc123")
+        .call()
+        .unwrap();
+
+    // ensure second handler runs
+    assert!(resp.has("x-foo"));
+    assert_eq!(resp.header("x-foo").unwrap(), "bar");
+}
+
+#[test]
+fn redirect_keep_auth_same_host() {
+    test::set_handler("/redirect_keep_auth_same_host1", |unit| {
+        assert!(unit.has("authorization"));
+        test::make_response(
+            302,
+            "Go here",
+            vec!["Location: /redirect_keep_auth_same_host2"],
+            vec![],
+        )
+    });
+    test::set_handler("/redirect_keep_auth_same_host2", |unit| {
+        assert!(
+            unit.has("authorization"),
+            "'Authorization' should have been kept on redirect"
+        );
+        test::make_response(200, "OK", vec!["x-foo: bar"], vec![])
+    });
+
+    let agent = builder()
+        .redirect_auth_headers(RedirectAuthHeaders::SameHost)
+        .build();
+
+    let resp = agent
+        .get("test://host/redirect_keep_auth_same_host1")
+        // should not be kept in second handler.
+        .set("authorization", "Bearer abc123")
+        .call()
+        .unwrap();
+
+    // ensure second handler runs
+    assert!(resp.has("x-foo"));
+    assert_eq!(resp.header("x-foo").unwrap(), "bar");
+}
+
+#[test]
+fn redirect_no_keep_auth_different_host() {
+    test::set_handler("/redirect_no_keep_auth_different_host1", |unit| {
+        assert!(unit.has("authorization"));
+        test::make_response(
+            302,
+            "Go here",
+            vec!["Location: test://host_different/redirect_no_keep_auth_different_host2"],
+            vec![],
+        )
+    });
+    test::set_handler("/redirect_no_keep_auth_different_host2", |unit| {
+        assert!(
+            !unit.has("authorization"),
+            "'Authorization' should not have been kept on redirect"
+        );
+        test::make_response(200, "OK", vec!["x-foo: bar"], vec![])
+    });
+
+    let agent = builder()
+        .redirect_auth_headers(RedirectAuthHeaders::SameHost)
+        .build();
+
+    let resp = agent
+        .get("test://host/redirect_no_keep_auth_different_host1")
+        // should not be kept in second handler.
+        .set("authorization", "Bearer abc123")
+        .call()
+        .unwrap();
+
+    // ensure second handler runs
+    assert!(resp.has("x-foo"));
+    assert_eq!(resp.header("x-foo").unwrap(), "bar");
+}
