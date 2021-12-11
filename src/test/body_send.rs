@@ -38,10 +38,10 @@ fn content_length_on_json() {
     let mut json = SerdeMap::new();
     json.insert(
         "Hello".to_string(),
-        SerdeValue::String("World!!!".to_string()),
+        serde_json::Value::String("World!!!".to_string()),
     );
     let resp = post("test://host/content_length_on_json")
-        .send_json(SerdeValue::Object(json))
+        .send_json(serde_json::Value::Object(json))
         .unwrap();
     let vec = resp.as_write_vec();
     let s = String::from_utf8_lossy(&vec);
@@ -90,10 +90,10 @@ fn content_type_on_json() {
     let mut json = SerdeMap::new();
     json.insert(
         "Hello".to_string(),
-        SerdeValue::String("World!!!".to_string()),
+        serde_json::Value::String("World!!!".to_string()),
     );
     let resp = post("test://host/content_type_on_json")
-        .send_json(SerdeValue::Object(json))
+        .send_json(serde_json::Value::Object(json))
         .unwrap();
     let vec = resp.as_write_vec();
     let s = String::from_utf8_lossy(&vec);
@@ -109,11 +109,11 @@ fn content_type_not_overriden_on_json() {
     let mut json = SerdeMap::new();
     json.insert(
         "Hello".to_string(),
-        SerdeValue::String("World!!!".to_string()),
+        serde_json::Value::String("World!!!".to_string()),
     );
     let resp = post("test://host/content_type_not_overriden_on_json")
         .set("content-type", "text/plain")
-        .send_json(SerdeValue::Object(json))
+        .send_json(serde_json::Value::Object(json))
         .unwrap();
     let vec = resp.as_write_vec();
     let s = String::from_utf8_lossy(&vec);
