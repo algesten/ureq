@@ -16,13 +16,17 @@ use {
     cookie_store::CookieStore,
 };
 
-/// Specify the strategy for propagation of authorization headers during Redirects
+/// Strategy for keeping `authorization` headers during redirects.
 ///
-/// Never is the default strategy and never send authorization headers in Redirects
-/// SameHost send the authorization header in Redirects only if the host of the Redirect is the same of the previous request, and both use the Https scheme
+/// `Never` is the default strategy and never preserves `authorization` header in redirects.
+/// `SameHost` send the authorization header in redirects only if the host of the redirect is
+/// the same of the previous request, and both use the `https` scheme.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RedirectAuthHeaders {
+    /// Never preserve the `authorization` header on redirect. This is the default.
     Never,
+    /// Preserve the `authorization` header when the redirect is to the same host. Must
+    /// be under the `https` scheme (though port can differ).
     SameHost,
 }
 
@@ -459,7 +463,7 @@ impl AgentBuilder {
 
     /// Set the strategy for propagation of authorization headers in redirects.
     ///
-    /// Defaults to RedirectAuthHeaders::Never.
+    /// Defaults to [`RedirectAuthHeaders::Never`].
     ///
     pub fn set_redirect_auth_headers(mut self, v: RedirectAuthHeaders) -> Self {
         self.config.redirect_auth_headers = v;
