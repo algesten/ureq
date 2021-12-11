@@ -465,7 +465,7 @@ impl AgentBuilder {
     ///
     /// Defaults to [`RedirectAuthHeaders::Never`].
     ///
-    pub fn set_redirect_auth_headers(mut self, v: RedirectAuthHeaders) -> Self {
+    pub fn redirect_auth_headers(mut self, v: RedirectAuthHeaders) -> Self {
         self.config.redirect_auth_headers = v;
         self
     }
