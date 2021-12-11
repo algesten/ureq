@@ -7,17 +7,12 @@ use crate::response::DEFAULT_CHARACTER_SET;
 #[cfg(feature = "charset")]
 use encoding_rs::Encoding;
 
-#[cfg(feature = "json")]
-use super::SerdeValue;
-
 /// The different kinds of bodies to send.
 ///
 /// *Internal API*
 pub(crate) enum Payload<'a> {
     Empty,
     Text(&'a str, String),
-    #[cfg(feature = "json")]
-    JSON(SerdeValue),
     Reader(Box<dyn Read + 'a>),
     Bytes(&'a [u8]),
 }
@@ -27,8 +22,6 @@ impl fmt::Debug for Payload<'_> {
         match self {
             Payload::Empty => write!(f, "Empty"),
             Payload::Text(t, _) => write!(f, "{}", t),
-            #[cfg(feature = "json")]
-            Payload::JSON(_) => write!(f, "JSON"),
             Payload::Reader(_) => write!(f, "Reader"),
             Payload::Bytes(v) => write!(f, "{:?}", v),
         }
@@ -85,13 +78,6 @@ impl<'a> Payload<'a> {
                 };
                 #[cfg(not(feature = "charset"))]
                 let bytes = text.as_bytes();
-                let len = bytes.len();
-                let cursor = Cursor::new(bytes);
-                SizedReader::new(BodySize::Known(len as u64), Box::new(cursor))
-            }
-            #[cfg(feature = "json")]
-            Payload::JSON(v) => {
-                let bytes = serde_json::to_vec(&v).expect("Bad JSON in payload");
                 let len = bytes.len();
                 let cursor = Cursor::new(bytes);
                 SizedReader::new(BodySize::Known(len as u64), Box::new(cursor))
