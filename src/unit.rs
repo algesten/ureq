@@ -355,13 +355,21 @@ fn connect_socket(unit: &Unit, hostname: &str, use_pooled: bool) -> Result<(Stre
 }
 
 fn can_propagate_authorization_on_redirect(unit: &Unit, history: &[Url]) -> bool {
-    if let RedirectAuthHeaders::SameHost = unit.agent.config.redirect_auth_headers {
-        let host_s = unit.url.host_str().unwrap();
-        let prev_url = &history[0];
-        let prev_host = prev_url.host_str().expect("Host in previous Url");
-        host_s == prev_host && prev_url.scheme() == "https" && unit.url.scheme() == "https"
-    } else {
-        false
+    match unit.agent.config.redirect_auth_headers {
+        RedirectAuthHeaders::Never => false,
+        RedirectAuthHeaders::SameHost => {
+            let host = unit.url.host_str();
+            let is_https = unit.url.scheme() == "https";
+
+            // This is fine because we only do this check on redirects where there
+            // must be a previous host.
+            let prev_url = &history[0];
+
+            let prev_host = prev_url.host_str();
+            let prev_is_https = prev_url.scheme() == "https";
+
+            host == prev_host && prev_is_https && is_https
+        }
     }
 }
 
