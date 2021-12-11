@@ -22,6 +22,7 @@ use {
 /// `SameHost` send the authorization header in redirects only if the host of the redirect is
 /// the same of the previous request, and both use the `https` scheme.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum RedirectAuthHeaders {
     /// Never preserve the `authorization` header on redirect. This is the default.
     Never,
