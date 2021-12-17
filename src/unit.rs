@@ -383,7 +383,10 @@ fn can_propagate_authorization_on_redirect(
             let prev_host = prev_url.host_str();
             let prev_is_https = scheme_is_https(prev_url);
 
-            host == prev_host && prev_is_https && is_https
+            let same_scheme_or_more_secure =
+                is_https == prev_is_https || (!prev_is_https && is_https);
+
+            host == prev_host && same_scheme_or_more_secure
         }
     }
 }
