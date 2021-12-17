@@ -20,14 +20,16 @@ use {
 ///
 /// `Never` is the default strategy and never preserves `authorization` header in redirects.
 /// `SameHost` send the authorization header in redirects only if the host of the redirect is
-/// the same of the previous request, and both use the `https` scheme.
+/// the same of the previous request, and both use the same scheme (or switch to a more secure one, i.e
+/// we can redirect from `http` to `https`, but not the reverse).
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum RedirectAuthHeaders {
     /// Never preserve the `authorization` header on redirect. This is the default.
     Never,
-    /// Preserve the `authorization` header when the redirect is to the same host. Must
-    /// be under the `https` scheme (though port can differ).
+    /// Preserve the `authorization` header when the redirect is to the same host. Both hosts must use
+    /// the same scheme (or switch to a more secure one, i.e we can redirect from `http` to `https`,
+    /// but not the reverse).
     SameHost,
 }
 
