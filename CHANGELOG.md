@@ -1,4 +1,15 @@
+# 2.4.0
+
+ * Enable `gzip` feature by default (#455)
+ * `gzip` and `brotli` feature flags to enable decompression (#453, #421)
+ * Middleware function on agent (#448)
+ * Agent option to preserve `Authorization` header on redirects (#445)
+ * Deprecate re-exported serde types (#446)
+ * Widen type of `send_json` to `impl Serializable` (#446)
+ * `native-tls` feature provides an alternative TLS backend (#449, #391)
+
 # 2.3.2
+ * Re-introduce the `ureq::patch` and `agent::patch` calls.
  * Fix regression in 2.3.x for feature native-certs (#441)
 
 # 2.3.1
