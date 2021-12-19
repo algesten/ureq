@@ -15,7 +15,7 @@ edition = "2018"
 features = ["tls", "native-tls", "json", "charset", "cookies", "socks-proxy"]
 
 [features]
-default = ["tls"]
+default = ["tls", "gzip"]
 tls = ["webpki", "webpki-roots", "rustls"]
 native-certs = ["rustls-native-certs"]
 json = ["serde", "serde_json"]
