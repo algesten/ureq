@@ -356,8 +356,8 @@ impl ErrorKind {
         Error::new(self, None)
     }
 
-    pub(crate) fn msg(self, s: &str) -> Error {
-        Error::new(self, Some(s.to_string()))
+    pub(crate) fn msg(self, s: impl Into<String>) -> Error {
+        Error::new(self, Some(s.into()))
     }
 }
 
@@ -382,7 +382,7 @@ impl From<Transport> for Error {
 impl From<ParseError> for Error {
     fn from(err: ParseError) -> Self {
         ErrorKind::InvalidUrl
-            .msg(&format!("failed to parse URL: {:?}", err))
+            .msg(format!("failed to parse URL: {:?}", err))
             .src(err)
     }
 }

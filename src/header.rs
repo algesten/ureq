@@ -143,7 +143,7 @@ impl Header {
         let value_raw = &bytes[self.index + 1..];
 
         if !valid_name(name_raw) || !valid_value(value_raw) {
-            Err(ErrorKind::BadHeader.msg(&format!("invalid header '{}'", self.line)))
+            Err(ErrorKind::BadHeader.msg(format!("invalid header '{}'", self.line)))
         } else {
             Ok(())
         }

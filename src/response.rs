@@ -548,7 +548,9 @@ fn parse_status_line(line: &str) -> Result<(ResponseStatusIndex, u16), Error> {
         return Err(BadStatus.msg("Status code was wrong length"));
     }
 
-    let status: u16 = status_str.parse().map_err(|_| BadStatus.new())?;
+    let status: u16 = status_str
+        .parse()
+        .map_err(|_| BadStatus.msg(format!("unable to parse status as u16 ({})", status_str)))?;
 
     Ok((
         ResponseStatusIndex {

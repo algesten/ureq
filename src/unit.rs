@@ -168,7 +168,10 @@ pub(crate) fn connect(
             break resp;
         }
         if history.len() + 1 >= unit.agent.config.redirects as usize {
-            return Err(ErrorKind::TooManyRedirects.new());
+            return Err(ErrorKind::TooManyRedirects.msg(format!(
+                "reached max redirects ({})",
+                unit.agent.config.redirects
+            )));
         }
         // the location header
         let location = match resp.header("location") {
@@ -181,7 +184,7 @@ pub(crate) fn connect(
         // join location header to current url in case it is relative
         let new_url = url.join(location).map_err(|e| {
             ErrorKind::InvalidUrl
-                .msg(&format!("Bad redirection: {}", location))
+                .msg(format!("Bad redirection: {}", location))
                 .src(e)
         })?;
 
@@ -340,7 +343,7 @@ fn extract_cookies(agent: &Agent, url: &Url) -> Option<Header> {
 fn connect_socket(unit: &Unit, hostname: &str, use_pooled: bool) -> Result<(Stream, bool), Error> {
     match unit.url.scheme() {
         "http" | "https" | "test" => (),
-        scheme => return Err(ErrorKind::UnknownScheme.msg(&format!("unknown scheme '{}'", scheme))),
+        scheme => return Err(ErrorKind::UnknownScheme.msg(format!("unknown scheme '{}'", scheme))),
     };
     if use_pooled {
         let pool = &unit.agent.state.pool;
@@ -360,7 +363,7 @@ fn connect_socket(unit: &Unit, hostname: &str, use_pooled: bool) -> Result<(Stre
         "http" => stream::connect_http(unit, hostname),
         "https" => stream::connect_https(unit, hostname),
         "test" => connect_test(unit),
-        scheme => Err(ErrorKind::UnknownScheme.msg(&format!("unknown scheme {}", scheme))),
+        scheme => Err(ErrorKind::UnknownScheme.msg(format!("unknown scheme {}", scheme))),
     };
     Ok((stream?, false))
 }

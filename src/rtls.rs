@@ -95,14 +95,20 @@ impl TlsConnector for Arc<rustls::ClientConfig> {
         dns_name: &str,
         mut tcp_stream: TcpStream,
     ) -> Result<Box<dyn HttpsStream>, Error> {
-        let sni =
-            rustls::ServerName::try_from(dns_name).map_err(|e| ErrorKind::Dns.new().src(e))?;
+        let sni = rustls::ServerName::try_from(dns_name).map_err(|e| {
+            ErrorKind::Dns
+                .msg(format!("dns server name failed ({})", dns_name))
+                .src(e)
+        })?;
 
         let mut sess = rustls::ClientConnection::new(self.clone(), sni)
-            .map_err(|e| ErrorKind::Io.new().src(e))?;
+            .map_err(|e| ErrorKind::Io.msg("tls connection creation failed").src(e))?;
 
-        sess.complete_io(&mut tcp_stream)
-            .map_err(|err| ErrorKind::ConnectionFailed.new().src(err))?;
+        sess.complete_io(&mut tcp_stream).map_err(|e| {
+            ErrorKind::ConnectionFailed
+                .msg("tls connection init failed")
+                .src(e)
+        })?;
         let stream = rustls::StreamOwned::new(sess, tcp_stream);
 
         Ok(Box::new(RustlsStream(stream)))

@@ -16,8 +16,13 @@ impl TlsConnector for native_tls::TlsConnector {
         dns_name: &str,
         tcp_stream: TcpStream,
     ) -> Result<Box<dyn HttpsStream>, Error> {
-        let stream = native_tls::TlsConnector::connect(self, dns_name, tcp_stream)
-            .map_err(|e| ErrorKind::Dns.new().src(e))?;
+        let stream =
+            native_tls::TlsConnector::connect(self, dns_name, tcp_stream).map_err(|e| {
+                ErrorKind::ConnectionFailed
+                    .msg("native_tls connect failed")
+                    .src(e)
+            })?;
+
         Ok(Box::new(stream))
     }
 }
