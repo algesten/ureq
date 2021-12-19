@@ -350,13 +350,14 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
     };
 
     // TODO: Find a way to apply deadline to DNS lookup.
-    let sock_addrs = unit
-        .resolver()
-        .resolve(&netloc)
-        .map_err(|e| ErrorKind::Dns.new().src(e))?;
+    let sock_addrs = unit.resolver().resolve(&netloc).map_err(|e| {
+        ErrorKind::Dns
+            .msg(format!("failed to resove dns ({})", netloc))
+            .src(e)
+    })?;
 
     if sock_addrs.is_empty() {
-        return Err(ErrorKind::Dns.msg(&format!("No ip address for {}", hostname)));
+        return Err(ErrorKind::Dns.msg(format!("No ip address for {}", hostname)));
     }
 
     let proto = proxy.as_ref().map(|proxy| proxy.proto);
@@ -621,5 +622,5 @@ pub(crate) fn connect_test(unit: &Unit) -> Result<Stream, Error> {
 
 #[cfg(not(test))]
 pub(crate) fn connect_test(unit: &Unit) -> Result<Stream, Error> {
-    Err(ErrorKind::UnknownScheme.msg(&format!("unknown scheme '{}'", unit.url.scheme())))
+    Err(ErrorKind::UnknownScheme.msg(format!("unknown scheme '{}'", unit.url.scheme())))
 }
