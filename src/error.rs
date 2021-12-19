@@ -87,6 +87,9 @@ pub enum Error {
 }
 
 impl Error {
+    /// Optionally turn this error into an underlying `Transport`.
+    ///
+    /// `None` if the underlying error is `Error::Status`.
     pub fn into_transport(self) -> Option<Transport> {
         match self {
             Error::Status(_, _) => None,
@@ -94,6 +97,9 @@ impl Error {
         }
     }
 
+    /// Optionally turn this error into an underlying `Response`.
+    ///
+    /// `None` if the underlying error is `Error::Transport`.
     pub fn into_response(self) -> Option<Response> {
         match self {
             Error::Status(_, r) => Some(r),
@@ -108,6 +114,33 @@ impl Error {
 /// * [`Transport::kind()`] provides a classification (same as for [`Error::kind`]).
 /// * [`Transport::message()`] might vary for the same classification to give more context.
 /// * [`Transport::source()`](std::error::Error::source) holds the underlying error with even more details.
+///
+/// ```
+/// use ureq::ErrorKind;
+/// use std::error::Error;
+/// use url::ParseError;
+///
+/// let result = ureq::get("broken/url").call();
+/// let error = result.unwrap_err().into_transport().unwrap();
+///
+/// // the display trait is a combo of the underlying classifications
+/// assert_eq!(error.to_string(),
+///     "Bad URL: failed to parse URL: RelativeUrlWithoutBase: relative URL without a base");
+///
+/// // classification
+/// assert_eq!(error.kind(), ErrorKind::InvalidUrl);
+/// assert_eq!(error.kind().to_string(), "Bad URL");
+///
+/// // higher level message
+/// assert_eq!(error.message(), Some("failed to parse URL: RelativeUrlWithoutBase"));
+///
+/// // boxed underlying error
+/// let source = error.source().unwrap();
+/// // downcast to original error
+/// let downcast = source.downcast_ref::<ParseError>().unwrap();
+///
+/// assert_eq!(downcast.to_string(), "relative URL without a base");
+/// ```
 #[derive(Debug)]
 pub struct Transport {
     kind: ErrorKind,
@@ -123,33 +156,6 @@ impl Transport {
     }
 
     /// Higher level error details, if there are any.
-    ///
-    /// ```
-    /// use ureq::ErrorKind;
-    /// use std::error::Error;
-    /// use url::ParseError;
-    ///
-    /// let result = ureq::get("broken/url").call();
-    /// let error = result.unwrap_err().into_transport().unwrap();
-    ///
-    /// // the display trait is a combo of the underlying classifications
-    /// assert_eq!(error.to_string(),
-    ///     "Bad URL: failed to parse URL: RelativeUrlWithoutBase: relative URL without a base");
-    ///
-    /// // classification
-    /// assert_eq!(error.kind(), ErrorKind::InvalidUrl);
-    /// assert_eq!(error.kind().to_string(), "Bad URL");
-    ///
-    /// // higher level message
-    /// assert_eq!(error.message(), Some("failed to parse URL: RelativeUrlWithoutBase"));
-    ///
-    /// // boxed underlying error
-    /// let source = error.source().unwrap();
-    /// // downcast to original error
-    /// let downcast = source.downcast_ref::<ParseError>().unwrap();
-    ///
-    /// assert_eq!(downcast.to_string(), "relative URL without a base");
-    /// ```
     pub fn message(&self) -> Option<&str> {
         self.message.as_deref()
     }
