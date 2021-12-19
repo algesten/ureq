@@ -139,7 +139,7 @@ impl Transport {
     /// // classification
     /// assert_eq!(error.kind(), ErrorKind::InvalidUrl);
     /// assert_eq!(error.kind().to_string(), "Bad URL");
-///
+    ///
     /// // higher level message
     /// assert_eq!(error.message(), Some("failed to parse URL: RelativeUrlWithoutBase"));
     ///

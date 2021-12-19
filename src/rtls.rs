@@ -95,11 +95,8 @@ impl TlsConnector for Arc<rustls::ClientConfig> {
         dns_name: &str,
         mut tcp_stream: TcpStream,
     ) -> Result<Box<dyn HttpsStream>, Error> {
-        let sni = rustls::ServerName::try_from(dns_name).map_err(|e| {
-            ErrorKind::Dns
-                .msg(format!("parsing '{}'", dns_name))
-                .src(e)
-        })?;
+        let sni = rustls::ServerName::try_from(dns_name)
+            .map_err(|e| ErrorKind::Dns.msg(format!("parsing '{}'", dns_name)).src(e))?;
 
         let mut sess = rustls::ClientConnection::new(self.clone(), sni)
             .map_err(|e| ErrorKind::Io.msg("tls connection creation failed").src(e))?;
