@@ -971,6 +971,38 @@ mod tests {
     }
 
     #[test]
+    fn chunked_transfer_broken_end() {
+        // A correct chunked encoding ends:
+        //
+        // 0\r\n
+        // \r\n
+        //
+        // However we have observed sites that omit the
+        // final \r\n. Curl handles that fine.
+        //
+        // https://github.com/algesten/ureq/issues/325
+        //
+        // This is from "curl --http1.1 --trace ./trace.txt <site>"
+        //
+        // 0060: 3e 3c 2f 68 74 6d 6c 3e                         ></html>
+        // <= Recv data, 5 bytes (0x5)
+        // 0000: 0d 0a 30 0d 0a                                  ..0..
+
+        let s = "HTTP/1.1 200 OK\r\n\
+                 Transfer-Encoding: Chunked\r\n\
+                 \r\n\
+                 3\r\n\
+                 hel\r\n\
+                 b\r\n\
+                 lo world!!!\r\n\
+                 0\r\n";
+        // missing last \r\n
+
+        let resp = s.parse::<Response>().unwrap();
+        assert_eq!("hello world!!!", resp.into_string().unwrap());
+    }
+
+    #[test]
     fn into_string_large() {
         const LEN: usize = INTO_STRING_LIMIT + 1;
         let s = format!(
