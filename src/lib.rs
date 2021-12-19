@@ -263,7 +263,7 @@
 //!   use ureq::Agent;
 //!
 //!   let agent = ureq::AgentBuilder::new()
-//!       .tls_connector(Arc::new(native_tls::TlsConnector::new().unwrap()))
+//!       .tls_connector(Arc::new(native_tls::TlsConnector::new()?))
 //!       .build();
 //! # Ok(())
 //! # }
@@ -487,7 +487,7 @@ pub fn request(method: &str, path: &str) -> Request {
 /// use url::Url;
 /// let agent = ureq::agent();
 ///
-/// let mut url: Url = "http://example.com/some-page".parse().unwrap();
+/// let mut url: Url = "http://example.com/some-page".parse()?;
 /// url.set_path("/robots.txt");
 /// let resp: ureq::Response = ureq::request_url("GET", &url)
 ///     .call()?;
