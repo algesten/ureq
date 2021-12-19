@@ -352,7 +352,7 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
     // TODO: Find a way to apply deadline to DNS lookup.
     let sock_addrs = unit.resolver().resolve(&netloc).map_err(|e| {
         ErrorKind::Dns
-            .msg(format!("failed to resove dns ({})", netloc))
+            .msg(format!("resolve dns name '{}'", netloc))
             .src(e)
     })?;
 
