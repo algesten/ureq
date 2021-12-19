@@ -376,7 +376,13 @@ impl Response {
     /// ```
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
-    /// use serde::{Deserialize, de::DeserializeOwned};
+    /// // This import requires the `derive` feature on `serde`.
+    /// // Put this in Cargo.toml: serde = { version = "1", features = ["derive"] }
+    /// use serde::{Deserialize};
+    ///
+    /// // An alternative way to is to use the `serde_derive` crate.
+    /// // Put this in Cargo.toml: serde_derive = "1"
+    /// // use serde_derive::{Deserialize};
     ///
     /// #[derive(Deserialize)]
     /// struct Message {
