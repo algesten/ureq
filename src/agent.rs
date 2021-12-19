@@ -1,3 +1,4 @@
+use std::fmt;
 use std::sync::Arc;
 
 use url::Url;
@@ -6,6 +7,7 @@ use crate::pool::ConnectionPool;
 use crate::proxy::Proxy;
 use crate::request::Request;
 use crate::resolve::{ArcResolver, StdResolver};
+use crate::stream::TlsConnector;
 use std::time::Duration;
 
 #[cfg(feature = "cookies")]
@@ -13,6 +15,23 @@ use {
     crate::cookies::{CookieStoreGuard, CookieTin},
     cookie_store::CookieStore,
 };
+
+/// Strategy for keeping `authorization` headers during redirects.
+///
+/// `Never` is the default strategy and never preserves `authorization` header in redirects.
+/// `SameHost` send the authorization header in redirects only if the host of the redirect is
+/// the same of the previous request, and both use the same scheme (or switch to a more secure one, i.e
+/// we can redirect from `http` to `https`, but not the reverse).
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum RedirectAuthHeaders {
+    /// Never preserve the `authorization` header on redirect. This is the default.
+    Never,
+    /// Preserve the `authorization` header when the redirect is to the same host. Both hosts must use
+    /// the same scheme (or switch to a more secure one, i.e we can redirect from `http` to `https`,
+    /// but not the reverse).
+    SameHost,
+}
 
 /// Accumulates options towards building an [Agent].
 #[derive(Debug)]
@@ -28,7 +47,7 @@ pub struct AgentBuilder {
 }
 
 /// Config as built by AgentBuilder and then static for the lifetime of the Agent.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(crate) struct AgentConfig {
     pub proxy: Option<Proxy>,
     pub timeout_connect: Option<Duration>,
@@ -36,9 +55,15 @@ pub(crate) struct AgentConfig {
     pub timeout_write: Option<Duration>,
     pub timeout: Option<Duration>,
     pub redirects: u32,
+    pub redirect_auth_headers: RedirectAuthHeaders,
     pub user_agent: String,
-    #[cfg(feature = "tls")]
-    pub tls_config: Option<TLSClientConfig>,
+    pub tls_config: Arc<dyn TlsConnector>,
+}
+
+impl fmt::Debug for AgentConfig {
+    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        todo!()
+    }
 }
 
 /// Agents keep state between requests.
@@ -154,6 +179,11 @@ impl Agent {
         self.request("HEAD", path)
     }
 
+    /// Make a PATCH request from this agent.
+    pub fn patch(&self, path: &str) -> Request {
+        self.request("PATCH", path)
+    }
+
     /// Make a POST request from this agent.
     pub fn post(&self, path: &str) -> Request {
         self.request("POST", path)
@@ -209,9 +239,9 @@ impl AgentBuilder {
                 timeout_write: None,
                 timeout: None,
                 redirects: 5,
+                redirect_auth_headers: RedirectAuthHeaders::Never,
                 user_agent: format!("ureq/{}", env!("CARGO_PKG_VERSION")),
-                #[cfg(feature = "tls")]
-                tls_config: None,
+                tls_config: crate::default_tls_config(),
             },
             max_idle_connections: DEFAULT_MAX_IDLE_CONNECTIONS,
             max_idle_connections_per_host: DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST,
@@ -434,6 +464,15 @@ impl AgentBuilder {
         self
     }
 
+    /// Set the strategy for propagation of authorization headers in redirects.
+    ///
+    /// Defaults to [`RedirectAuthHeaders::Never`].
+    ///
+    pub fn redirect_auth_headers(mut self, v: RedirectAuthHeaders) -> Self {
+        self.config.redirect_auth_headers = v;
+        self
+    }
+
     /// The user-agent header to associate with all requests from this agent by default.
     ///
     /// Defaults to `ureq/[VERSION]`. You can override the user-agent on an individual request by
@@ -467,23 +506,60 @@ impl AgentBuilder {
         self
     }
 
-    /// Set the TLS client config to use for the connection. See [`ClientConfig`](https://docs.rs/rustls/latest/rustls/struct.ClientConfig.html).
+    /// Configure TLS options for rustls to use when making HTTPS connections from this Agent.
     ///
-    /// Example:
+    /// This overrides any previous call to tls_config or tls_connector.
+    ///
     /// ```
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
     /// use std::sync::Arc;
-    /// let tls_config = Arc::new(rustls::ClientConfig::new());
+    /// let mut root_store = rustls::RootCertStore::empty();
+    /// root_store.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
+    ///     rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
+    ///         ta.subject,
+    ///         ta.spki,
+    ///         ta.name_constraints,
+    ///     )
+    /// }));
+    ///
+    /// let tls_config = rustls::ClientConfig::builder()
+    ///     .with_safe_defaults()
+    ///     .with_root_certificates(root_store)
+    ///     .with_no_client_auth();
     /// let agent = ureq::builder()
-    ///     .tls_config(tls_config.clone())
+    ///     .tls_config(Arc::new(tls_config))
+    ///     .build();
+    /// # Ok(())
+    /// # }
+    #[cfg(feature = "tls")]
+    pub fn tls_config(mut self, tls_config: Arc<rustls::ClientConfig>) -> Self {
+        self.config.tls_config = Arc::new(tls_config);
+        self
+    }
+
+    /// Configure TLS options for a backend other than rustls. The parameter can be a
+    /// any type which implements the [HttpsConnector] trait. If you enable the native-tls
+    /// feature, we provide `impl HttpsConnector for native_tls::TlsConnector` so you can pass
+    /// [`Arc<native_tls::TlsConnector>`](https://docs.rs/native-tls/0.2.7/native_tls/struct.TlsConnector.html).
+    ///
+    /// This overrides any previous call to tls_config or tls_connector.
+    ///
+    /// ```
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// use std::sync::Arc;
+    /// # #[cfg(feature = "native-tls")]
+    /// let tls_connector = Arc::new(native_tls::TlsConnector::new().unwrap());
+    /// # #[cfg(feature = "native-tls")]
+    /// let agent = ureq::builder()
+    ///     .tls_connector(tls_connector.clone())
     ///     .build();
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(feature = "tls")]
-    pub fn tls_config(mut self, tls_config: Arc<rustls::ClientConfig>) -> Self {
-        self.config.tls_config = Some(TLSClientConfig(tls_config));
+    pub fn tls_connector<T: TlsConnector + 'static>(mut self, tls_config: Arc<T>) -> Self {
+        self.config.tls_config = tls_config;
         self
     }
 
@@ -517,17 +593,6 @@ impl AgentBuilder {
     pub fn cookie_store(mut self, cookie_store: CookieStore) -> Self {
         self.cookie_store = Some(cookie_store);
         self
-    }
-}
-
-#[cfg(feature = "tls")]
-#[derive(Clone)]
-pub(crate) struct TLSClientConfig(pub(crate) Arc<rustls::ClientConfig>);
-
-#[cfg(feature = "tls")]
-impl std::fmt::Debug for TLSClientConfig {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("TLSClientConfig").finish()
     }
 }
 

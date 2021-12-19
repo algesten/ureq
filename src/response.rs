@@ -59,7 +59,7 @@ const MAX_HEADER_COUNT: usize = 100;
 /// # }
 /// ```
 pub struct Response {
-    url: Option<Url>,
+    pub(crate) url: Option<Url>,
     status_line: String,
     index: ResponseStatusIndex,
     status: u16,
@@ -71,9 +71,8 @@ pub struct Response {
     /// The redirect history of this response, if any. The history starts with
     /// the first response received and ends with the response immediately
     /// previous to this one.
-    ///
+    pub(crate) history: Vec<Url>,
     /// If this response was not redirected, the history is empty.
-    pub(crate) history: Vec<String>,
     /// The Content-Length value. The header itself may have been removed due to
     /// the automatic decompression system.
     length: Option<usize>,
@@ -120,7 +119,7 @@ impl Response {
     /// # }
     /// ```
     pub fn new(status: u16, status_text: &str, body: &str) -> Result<Response, Error> {
-        let r = format!("HTTP/1.1 {} {}\r\n\r\n{}\n", status, status_text, body);
+        let r = format!("HTTP/1.1 {} {}\r\n\r\n{}", status, status_text, body);
         (r.as_ref() as &str).parse()
     }
 
@@ -518,8 +517,8 @@ impl Response {
     }
 
     #[cfg(test)]
-    pub fn to_write_vec(self) -> Vec<u8> {
-        self.stream.to_write_vec()
+    pub fn as_write_vec(&self) -> &[u8] {
+        self.stream.as_write_vec()
     }
 
     #[cfg(test)]
@@ -529,7 +528,7 @@ impl Response {
 
     #[cfg(test)]
     pub fn history_from_previous(&mut self, previous: Response) {
-        let previous_url = previous.get_url().to_string();
+        let previous_url = previous.url.expect("previous url");
         self.history = previous.history;
         self.history.push(previous_url);
     }
@@ -1000,7 +999,7 @@ mod tests {
         response2.set_url("http://2.example.com/".parse().unwrap());
         response2.history_from_previous(response1);
 
-        let hist: Vec<&str> = response2.history.iter().map(|r| &**r).collect();
+        let hist: Vec<String> = response2.history.iter().map(|r| r.to_string()).collect();
         assert_eq!(hist, ["http://1.example.com/", "http://2.example.com/"])
     }
 

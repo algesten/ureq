@@ -12,7 +12,7 @@ HTTPS, and charset decoding.
 Ureq is in pure Rust for safety and ease of understanding. It avoids using
 `unsafe` directly. It [uses blocking I/O][blocking] instead of async I/O, because that keeps
 the API simple and and keeps dependencies to a minimum. For TLS, ureq uses
-[rustls].
+[rustls or native-tls](#tls).
 
 Version 2.0.0 was released recently and changed some APIs. See the [changelog] for details.
 
@@ -101,6 +101,7 @@ You can control them when including ureq as a dependency.
 `ureq = { version = "*", features = ["json", "charset"] }`
 
 * `tls` enables https. This is enabled by default.
+* `native-certs` makes the default TLS implementation use the OS' trust store (see TLS doc below).
 * `cookies` enables cookies.
 * `json` enables [Response::into_json()] and [Request::send_json()] via serde_json.
 * `charset` enables interpreting the charset part of the Content-Type header
@@ -109,6 +110,11 @@ You can control them when including ureq as a dependency.
 * `socks-proxy` enables proxy config using the `socks4://`, `socks4a://`, `socks5://` and `socks://` (equal to `socks5://`) prefix.
 * `gzip` enables automatically requesting gzip-compressed responses and decompressing them.
 * `brotli` enables automatically requesting Brotli-compressed responses and decompressing them.
+* `native-tls` enables an adapter so you can pass a `native_tls::TlsConnector` instance
+  to `AgentBuilder::tls_connector`. Due to the risk of diamond dependencies accidentally switching on an unwanted
+  TLS implementation, `native-tls` is never picked up as a default or used by the crate level
+  convenience calls (`ureq::get` etc) – it must be configured on the agent. The `native-certs` feature
+  does nothing for `native-tls`.
 
 ## Plain requests
 
@@ -212,6 +218,40 @@ fn proxy_example_2() -> std::result::Result<(), ureq::Error> {
     Ok(())
 }
 ```
+
+## HTTPS / TLS / SSL
+
+On platforms that support rustls, ureq uses rustls. On other platforms, native-tls can
+be manually configured using [`AgentBuilder::tls_connector`].
+
+You might want to use native-tls if you need to interoperate with servers that
+only support less-secure TLS configurations (rustls doesn't support TLS 1.0 and 1.1, for
+instance). You might also want to use it if you need to validate certificates for IP addresses,
+which are not currently supported in rustls.
+
+Here's an example of constructing an Agent that uses native-tls. It requires the
+"native-tls" feature to be enabled.
+
+```rust
+  use std::sync::Arc;
+  use ureq::Agent;
+
+  let agent = ureq::AgentBuilder::new()
+      .tls_connector(Arc::new(native_tls::TlsConnector::new().unwrap()))
+      .build();
+```
+
+### Trusted Roots
+
+When you use rustls (`tls` feature), ureq defaults to trusting
+[webpki-roots](https://docs.rs/webpki-roots/), a
+copy of the Mozilla Root program that is bundled into your program (and so won't update if your
+program isn't updated). You can alternately configure
+[rustls-native-certs](https://docs.rs/rustls-native-certs/) which extracts the roots from your
+OS' trust store. That means it will update when your OS is updated, and also that it will
+include locally installed roots.
+
+When you use `native-tls`, ureq will use your OS' certificate verifier and root store.
 
 ## Blocking I/O for simplicity
 

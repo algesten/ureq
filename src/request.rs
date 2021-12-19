@@ -9,9 +9,6 @@ use crate::unit::{self, Unit};
 use crate::Response;
 use crate::{agent::Agent, error::Error};
 
-#[cfg(feature = "json")]
-use super::SerdeValue;
-
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Request instances are builders that creates a request.
@@ -30,7 +27,6 @@ pub struct Request {
     agent: Agent,
     method: String,
     url: String,
-    error_on_non_2xx: bool,
     headers: Vec<Header>,
     timeout: Option<time::Duration>,
 }
@@ -52,7 +48,6 @@ impl Request {
             method,
             url,
             headers: vec![],
-            error_on_non_2xx: true,
             timeout: None,
         }
     }
@@ -135,7 +130,7 @@ impl Request {
             &self.agent,
             &self.method,
             &url,
-            &self.headers,
+            self.headers,
             &reader,
             deadline,
         );
@@ -166,11 +161,15 @@ impl Request {
     /// # }
     /// ```
     #[cfg(feature = "json")]
-    pub fn send_json(mut self, data: SerdeValue) -> Result<Response> {
+    pub fn send_json(mut self, data: impl serde::Serialize) -> Result<Response> {
         if self.header("Content-Type").is_none() {
             self = self.set("Content-Type", "application/json");
         }
-        self.do_call(Payload::JSON(data))
+
+        let json_bytes = serde_json::to_vec(&data)
+            .expect("Failed to serialze data passed to send_json into JSON");
+
+        self.do_call(Payload::Bytes(&json_bytes))
     }
 
     /// Send data as bytes.
