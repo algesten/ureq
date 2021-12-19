@@ -97,7 +97,7 @@ impl TlsConnector for Arc<rustls::ClientConfig> {
     ) -> Result<Box<dyn HttpsStream>, Error> {
         let sni = rustls::ServerName::try_from(dns_name).map_err(|e| {
             ErrorKind::Dns
-                .msg(format!("dns server name failed ({})", dns_name))
+                .msg(format!("parsing '{}'", dns_name))
                 .src(e)
         })?;
 
