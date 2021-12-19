@@ -86,14 +86,79 @@ pub enum Error {
     Transport(Transport),
 }
 
-// Any error that is not a status code error. For instance, DNS name not found,
-// connection refused, or malformed response.
+impl Error {
+    pub fn into_transport(self) -> Option<Transport> {
+        match self {
+            Error::Status(_, _) => None,
+            Error::Transport(t) => Some(t),
+        }
+    }
+
+    pub fn into_response(self) -> Option<Response> {
+        match self {
+            Error::Status(_, r) => Some(r),
+            Error::Transport(_) => None,
+        }
+    }
+}
+
+/// Error that is not a status code error. For instance, DNS name not found,
+/// connection refused, or malformed response.
+///
+/// * [`Transport::kind()`] provides a classification (same as for [`Error::kind`]).
+/// * [`Transport::message()`] might vary for the same classification to give more context.
+/// * [`Transport::source()`](std::error::Error::source) holds the underlying error with even more details.
 #[derive(Debug)]
 pub struct Transport {
     kind: ErrorKind,
     message: Option<String>,
     url: Option<Url>,
     source: Option<Box<dyn error::Error + Send + Sync + 'static>>,
+}
+
+impl Transport {
+    /// The type of error that happened while processing the request.
+    pub fn kind(&self) -> ErrorKind {
+        self.kind
+    }
+
+    /// Higher level error details, if there are any.
+    ///
+    /// ```
+    /// use ureq::ErrorKind;
+    /// use std::error::Error;
+    /// use url::ParseError;
+    ///
+    /// let result = ureq::get("broken/url").call();
+    /// let error = result.unwrap_err().into_transport().unwrap();
+    ///
+    /// // the display trait is a combo of the underlying classifications
+    /// assert_eq!(error.to_string(),
+    ///     "Bad URL: failed to parse URL: RelativeUrlWithoutBase: relative URL without a base");
+    ///
+    /// // classification
+    /// assert_eq!(error.kind(), ErrorKind::InvalidUrl);
+    /// assert_eq!(error.kind().to_string(), "Bad URL");
+
+    /// // higher level message
+    /// assert_eq!(error.message(), Some("failed to parse URL: RelativeUrlWithoutBase"));
+    ///
+    /// // boxed underlying error
+    /// let source = error.source().unwrap();
+    /// // downcast to original error
+    /// let downcast = source.downcast_ref::<ParseError>().unwrap();
+    ///
+    /// assert_eq!(downcast.to_string(), "relative URL without a base");
+    /// ```
+    pub fn message(&self) -> Option<&str> {
+        self.message.as_deref()
+    }
+
+    /// The url that failed. This can be interesting in cases of redirect where
+    /// the original url worked, but a later redirected to url fails.
+    pub fn url(&self) -> Option<&Url> {
+        self.url.as_ref()
+    }
 }
 
 /// Extension to [`Result<Response, Error>`] for handling all status codes as [`Response`].
