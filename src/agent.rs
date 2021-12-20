@@ -1,6 +1,6 @@
 use std::fmt;
 use std::sync::Arc;
-
+use std::time::Duration;
 use url::Url;
 
 use crate::pool::ConnectionPool;
@@ -8,7 +8,6 @@ use crate::proxy::Proxy;
 use crate::request::Request;
 use crate::resolve::{ArcResolver, StdResolver};
 use crate::stream::TlsConnector;
-use std::time::Duration;
 
 #[cfg(feature = "cookies")]
 use {
@@ -34,7 +33,6 @@ pub enum RedirectAuthHeaders {
 }
 
 /// Accumulates options towards building an [Agent].
-#[derive(Debug)]
 pub struct AgentBuilder {
     config: AgentConfig,
     max_idle_connections: usize,
@@ -103,7 +101,6 @@ pub struct Agent {
 /// Container of the state
 ///
 /// *Internal API*.
-#[derive(Debug)]
 pub(crate) struct AgentState {
     /// Reused connections between requests.
     pub(crate) pool: ConnectionPool,
@@ -593,6 +590,44 @@ impl AgentBuilder {
     pub fn cookie_store(mut self, cookie_store: CookieStore) -> Self {
         self.cookie_store = Some(cookie_store);
         self
+    }
+}
+
+#[cfg(feature = "tls")]
+#[derive(Clone)]
+pub(crate) struct TLSClientConfig(pub(crate) Arc<rustls::ClientConfig>);
+
+#[cfg(feature = "tls")]
+impl fmt::Debug for TLSClientConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TLSClientConfig").finish()
+    }
+}
+
+impl fmt::Debug for AgentBuilder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AgentBuilder")
+            .field("config", &self.config)
+            .field("max_idle_connections", &self.max_idle_connections)
+            .field(
+                "max_idle_connections_per_host",
+                &self.max_idle_connections_per_host,
+            )
+            .field("resolver", &self.resolver)
+            // self.cookies missing because it's feature flagged.
+            // self.middleware missing because we don't want to force Debug on Middleware trait.
+            .finish_non_exhaustive()
+    }
+}
+
+impl fmt::Debug for AgentState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AgentState")
+            .field("pool", &self.pool)
+            .field("resolver", &self.resolver)
+            // self.cookie_tin missing because it's feature flagged.
+            // self.middleware missing because we don't want to force Debug on Middleware trait.
+            .finish_non_exhaustive()
     }
 }
 
