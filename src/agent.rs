@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use url::Url;
 
+use crate::middleware::Middleware;
 use crate::pool::ConnectionPool;
 use crate::proxy::Proxy;
 use crate::request::Request;
@@ -42,6 +43,7 @@ pub struct AgentBuilder {
     #[cfg(feature = "cookies")]
     cookie_store: Option<CookieStore>,
     resolver: ArcResolver,
+    middleware: Option<Vec<Arc<dyn Middleware + Send + Sync>>>,
 }
 
 /// Config as built by AgentBuilder and then static for the lifetime of the Agent.
@@ -109,6 +111,7 @@ pub(crate) struct AgentState {
     #[cfg(feature = "cookies")]
     pub(crate) cookie_tin: CookieTin,
     pub(crate) resolver: ArcResolver,
+    pub(crate) middleware: Option<Vec<Arc<dyn Middleware + Send + Sync>>>,
 }
 
 impl Agent {
@@ -245,6 +248,7 @@ impl AgentBuilder {
             resolver: StdResolver.into(),
             #[cfg(feature = "cookies")]
             cookie_store: None,
+            middleware: None,
         }
     }
 
@@ -264,6 +268,7 @@ impl AgentBuilder {
                 #[cfg(feature = "cookies")]
                 cookie_tin: CookieTin::new(self.cookie_store.unwrap_or_else(CookieStore::default)),
                 resolver: self.resolver,
+                middleware: self.middleware,
             }),
         }
     }
@@ -589,6 +594,18 @@ impl AgentBuilder {
     #[cfg(feature = "cookies")]
     pub fn cookie_store(mut self, cookie_store: CookieStore) -> Self {
         self.cookie_store = Some(cookie_store);
+        self
+    }
+
+    /// Add middleware handler to this agent.
+    ///
+    /// All requests made by the agent will use this middleware. Middleware is invoked
+    /// in the order they are added to the builder.
+    pub fn middleware(mut self, m: impl Middleware + Send + Sync + 'static) -> Self {
+        if self.middleware.is_none() {
+            self.middleware = Some(vec![]);
+        }
+        self.middleware.as_mut().unwrap().push(Arc::new(m));
         self
     }
 }

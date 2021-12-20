@@ -5,6 +5,7 @@ use url::{form_urlencoded, ParseError, Url};
 
 use crate::body::Payload;
 use crate::header::{self, Header};
+use crate::middleware::{MiddlewareNext, Next};
 use crate::unit::{self, Unit};
 use crate::Response;
 use crate::{agent::Agent, error::Error};
@@ -117,6 +118,8 @@ impl Request {
         #[cfg(any(feature = "gzip", feature = "brotli"))]
         self.add_accept_encoding();
 
+        let agent = &self.agent;
+
         let deadline = match self.timeout.or(self.agent.config.timeout) {
             None => None,
             Some(timeout) => {
@@ -125,16 +128,38 @@ impl Request {
             }
         };
 
-        let reader = payload.into_read();
-        let unit = Unit::new(
-            &self.agent,
-            &self.method,
-            &url,
-            self.headers,
-            &reader,
-            deadline,
-        );
-        let response = unit::connect(unit, true, reader).map_err(|e| e.url(url.clone()))?;
+        let request_fn = |req: Request| {
+            let reader = payload.into_read();
+            let unit = Unit::new(
+                &req.agent,
+                &req.method,
+                &url,
+                req.headers,
+                &reader,
+                deadline,
+            );
+
+            unit::connect(unit, true, reader).map_err(|e| e.url(url.clone()))
+        };
+
+        // This clone is quite cheap since either we are cloning the Optional::None or a Vec<Arc<dyn Middleware>>.
+        let maybe_middleware = agent.state.middleware.clone();
+
+        let response = if let Some(middleware) = maybe_middleware {
+            // The request_fn is the final target in the middleware chain doing the actual invocation.
+            let mut chain = MiddlewareNext::new(Next::End(Box::new(request_fn)));
+
+            // Build middleware in reverse order.
+            for mw in middleware.into_iter().rev() {
+                chain = MiddlewareNext::new(Next::Chain(mw, Box::new(chain)));
+            }
+
+            // Run middleware chain
+            chain.handle(self)?
+        } else {
+            // Run the request_fn without any further indirection.
+            request_fn(self)?
+        };
 
         if response.status() >= 400 {
             Err(Error::Status(response.status(), response))
