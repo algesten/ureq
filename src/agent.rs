@@ -157,7 +157,7 @@ impl Agent {
     /// use {url::Url, ureq::Response};
     /// let agent = ureq::agent();
     ///
-    /// let mut url: Url = "http://example.com/some-page".parse().unwrap();
+    /// let mut url: Url = "http://example.com/some-page".parse()?;
     /// url.set_path("/robots.txt");
     /// let resp: Response = agent
     ///     .request_url("GET", &url)
@@ -216,7 +216,7 @@ impl Agent {
     ///
     /// // Saves (persistent) cookies
     /// let mut file = File::create("cookies.json")?;
-    /// agent.cookie_store().save_json(&mut file).unwrap();
+    /// agent.cookie_store().save_json(&mut file)?;
     /// # Ok(())
     /// # }
     /// ```
@@ -550,7 +550,7 @@ impl AgentBuilder {
     /// # ureq::is_test(true);
     /// use std::sync::Arc;
     /// # #[cfg(feature = "native-tls")]
-    /// let tls_connector = Arc::new(native_tls::TlsConnector::new().unwrap());
+    /// let tls_connector = Arc::new(native_tls::TlsConnector::new()?);
     /// # #[cfg(feature = "native-tls")]
     /// let agent = ureq::builder()
     ///     .tls_connector(tls_connector.clone())
@@ -580,7 +580,7 @@ impl AgentBuilder {
     /// let read = BufReader::new(file);
     ///
     /// // Read persisted cookies from cookies.json
-    /// let my_store = CookieStore::load_json(read).unwrap();
+    /// let my_store = CookieStore::load_json(read)?;
     ///
     /// // Cookies will be used for requests done through agent.
     /// let agent = ureq::builder()

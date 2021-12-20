@@ -424,7 +424,7 @@ impl Request {
     /// let req = ureq::get("http://httpbin.org/get")
     ///     .query("foo", "bar");
     ///
-    /// assert_eq!(req.request_url().unwrap().host(), "httpbin.org");
+    /// assert_eq!(req.request_url()?.host(), "httpbin.org");
     /// # Ok(())
     /// # }
     /// ```
@@ -490,7 +490,7 @@ impl RequestUrl {
     ///     .query("foo", "42")
     ///     .query("foo", "43");
     ///
-    /// assert_eq!(req.request_url().unwrap().query_pairs(), vec![
+    /// assert_eq!(req.request_url()?.query_pairs(), vec![
     ///     ("foo", "42"),
     ///     ("foo", "43")
     /// ]);

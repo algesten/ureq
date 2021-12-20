@@ -116,6 +116,7 @@ impl Error {
 /// * [`Transport::source()`](std::error::Error::source) holds the underlying error with even more details.
 ///
 /// ```
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// use ureq::ErrorKind;
 /// use std::error::Error;
 /// use url::ParseError;
@@ -137,9 +138,11 @@ impl Error {
 /// // boxed underlying error
 /// let source = error.source().unwrap();
 /// // downcast to original error
-/// let downcast = source.downcast_ref::<ParseError>().unwrap();
+/// let downcast: &ParseError = source.downcast_ref().unwrap();
 ///
 /// assert_eq!(downcast.to_string(), "relative URL without a base");
+/// # Ok(())
+/// # }
 /// ```
 #[derive(Debug)]
 pub struct Transport {
