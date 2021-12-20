@@ -43,7 +43,7 @@ pub struct AgentBuilder {
     #[cfg(feature = "cookies")]
     cookie_store: Option<CookieStore>,
     resolver: ArcResolver,
-    middleware: Option<Vec<Arc<dyn Middleware + Send + Sync>>>,
+    middleware: Vec<Arc<dyn Middleware + Send + Sync>>,
 }
 
 /// Config as built by AgentBuilder and then static for the lifetime of the Agent.
@@ -111,7 +111,7 @@ pub(crate) struct AgentState {
     #[cfg(feature = "cookies")]
     pub(crate) cookie_tin: CookieTin,
     pub(crate) resolver: ArcResolver,
-    pub(crate) middleware: Option<Vec<Arc<dyn Middleware + Send + Sync>>>,
+    pub(crate) middleware: Vec<Arc<dyn Middleware + Send + Sync>>,
 }
 
 impl Agent {
@@ -248,7 +248,7 @@ impl AgentBuilder {
             resolver: StdResolver.into(),
             #[cfg(feature = "cookies")]
             cookie_store: None,
-            middleware: None,
+            middleware: vec![],
         }
     }
 
@@ -602,10 +602,7 @@ impl AgentBuilder {
     /// All requests made by the agent will use this middleware. Middleware is invoked
     /// in the order they are added to the builder.
     pub fn middleware(mut self, m: impl Middleware + Send + Sync + 'static) -> Self {
-        if self.middleware.is_none() {
-            self.middleware = Some(vec![]);
-        }
-        self.middleware.as_mut().unwrap().push(Arc::new(m));
+        self.middleware.push(Arc::new(m));
         self
     }
 }
