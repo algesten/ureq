@@ -281,7 +281,10 @@ fn connect_inner(
     body::send_body(body, unit.is_chunked, &mut stream)?;
 
     // start reading the response to process cookies and redirects.
-    let result = Response::do_from_request(unit.clone(), stream);
+    // TODO: this unit.clone() bothers me. At this stage, we're not
+    // going to use the unit (much) anymore, and it should be possible
+    // to have ownership of it and pass it into the Response.
+    let result = Response::do_from_stream(stream, Some(unit.clone()));
 
     // https://tools.ietf.org/html/rfc7230#section-6.3.1
     // When an inbound connection is closed prematurely, a client MAY
