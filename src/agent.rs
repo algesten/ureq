@@ -536,8 +536,8 @@ impl AgentBuilder {
     }
 
     /// Configure TLS options for a backend other than rustls. The parameter can be a
-    /// any type which implements the [HttpsConnector] trait. If you enable the native-tls
-    /// feature, we provide `impl HttpsConnector for native_tls::TlsConnector` so you can pass
+    /// any type which implements the [`TlsConnector`] trait. If you enable the native-tls
+    /// feature, we provide `impl TlsConnector for native_tls::TlsConnector` so you can pass
     /// [`Arc<native_tls::TlsConnector>`](https://docs.rs/native-tls/0.2.7/native_tls/struct.TlsConnector.html).
     ///
     /// This overrides any previous call to tls_config or tls_connector.
