@@ -498,13 +498,15 @@ impl Response {
         let compression =
             get_header(&headers, "content-encoding").and_then(Compression::from_header_value);
 
+        // remove Content-Encoding and length due to automatic decompression
         if compression.is_some() {
-            headers.retain(|h| h.name() != "content-encoding" && h.name() != "content-length");
-            // remove Content-Encoding and length due to automatic decompression
+            headers.retain(|h| !h.is_name("content-encoding") && !h.is_name("content-length"));
         }
 
+        let url = unit.as_ref().map(|u| u.url.clone());
+
         Ok(Response {
-            url: None,
+            url,
             status_line,
             index,
             status,
@@ -515,13 +517,6 @@ impl Response {
             length,
             compression,
         })
-    }
-
-    pub(crate) fn do_from_request(unit: Unit, stream: Stream) -> Result<Response, Error> {
-        let url = Some(unit.url.clone());
-        let mut resp = Response::do_from_stream(stream, Some(unit))?;
-        resp.url = url;
-        Ok(resp)
     }
 
     #[cfg(test)]
