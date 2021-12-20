@@ -134,27 +134,18 @@ pub trait Middleware {
 }
 
 /// Continuation of a [`Middleware`] chain.
-pub struct MiddlewareNext<'a>(Next<'a>);
-
-impl<'a> MiddlewareNext<'a> {
-    pub(crate) fn new(n: Next<'a>) -> Self {
-        MiddlewareNext(n)
-    }
-}
-
-pub(crate) enum Next<'a> {
-    /// Chained middleware. The Box around the next MiddlewareNext is to break the recursive datatype.
-    Chain(Arc<dyn Middleware>, Box<MiddlewareNext<'a>>),
-    /// End of the middleware chain doing the actual request invocation.
-    End(Box<dyn FnOnce(Request) -> Result<Response, Error> + 'a>),
+pub struct MiddlewareNext<'a> {
+    pub(crate) chain: Box<dyn Iterator<Item = Arc<dyn Middleware + Send + Sync + 'static>>>,
+    pub(crate) request_fn: Box<dyn FnOnce(Request) -> Result<Response, Error> + 'a>,
 }
 
 impl<'a> MiddlewareNext<'a> {
     /// Continue the middleware chain by providing (a possibly amended) [`Request`].
-    pub fn handle(self, request: Request) -> Result<Response, Error> {
-        match self.0 {
-            Next::Chain(mw, next) => mw.handle(request, *next),
-            Next::End(request_fn) => request_fn(request),
+    pub fn handle(mut self, request: Request) -> Result<Response, Error> {
+        if let Some(step) = self.chain.next() {
+            step.handle(request, self)
+        } else {
+            (self.request_fn)(request)
         }
     }
 }
