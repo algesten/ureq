@@ -5,7 +5,7 @@ use url::{form_urlencoded, ParseError, Url};
 
 use crate::body::Payload;
 use crate::header::{self, Header};
-use crate::middleware::{MiddlewareNext, Next};
+use crate::middleware::MiddlewareNext;
 use crate::unit::{self, Unit};
 use crate::Response;
 use crate::{agent::Agent, error::Error};
@@ -118,8 +118,6 @@ impl Request {
         #[cfg(any(feature = "gzip", feature = "brotli"))]
         self.add_accept_encoding();
 
-        let agent = &self.agent;
-
         let deadline = match self.timeout.or(self.agent.config.timeout) {
             None => None,
             Some(timeout) => {
@@ -142,20 +140,17 @@ impl Request {
             unit::connect(unit, true, reader).map_err(|e| e.url(url.clone()))
         };
 
-        let response = if !agent.state.middleware.is_empty() {
-            // This clone is quite cheap since either we are cloning a Vec<Arc<dyn Middleware>>.
-            let middleware = agent.state.middleware.clone();
+        let response = if !self.agent.state.middleware.is_empty() {
+            let middleware = self.agent.state.middleware.clone();
 
-            // The request_fn is the final target in the middleware chain doing the actual invocation.
-            let mut chain = MiddlewareNext::new(Next::End(Box::new(request_fn)));
+            let chain = Box::new(middleware.into_iter());
 
-            // Build middleware in reverse order.
-            for mw in middleware.into_iter().rev() {
-                chain = MiddlewareNext::new(Next::Chain(mw, Box::new(chain)));
-            }
+            let request_fn = Box::new(request_fn);
 
-            // Run middleware chain
-            chain.handle(self)?
+            let next = MiddlewareNext { chain, request_fn };
+
+            // // Run middleware chain
+            next.handle(self)?
         } else {
             // Run the request_fn without any further indirection.
             request_fn(self)?
