@@ -142,10 +142,10 @@ impl Request {
             unit::connect(unit, true, reader).map_err(|e| e.url(url.clone()))
         };
 
-        // This clone is quite cheap since either we are cloning the Optional::None or a Vec<Arc<dyn Middleware>>.
-        let maybe_middleware = agent.state.middleware.clone();
+        let response = if !agent.state.middleware.is_empty() {
+            // This clone is quite cheap since either we are cloning a Vec<Arc<dyn Middleware>>.
+            let middleware = agent.state.middleware.clone();
 
-        let response = if let Some(middleware) = maybe_middleware {
             // The request_fn is the final target in the middleware chain doing the actual invocation.
             let mut chain = MiddlewareNext::new(Next::End(Box::new(request_fn)));
 
