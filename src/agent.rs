@@ -216,7 +216,7 @@ impl Agent {
     ///
     /// // Saves (persistent) cookies
     /// let mut file = File::create("cookies.json")?;
-    /// agent.cookie_store().save_json(&mut file)?;
+    /// agent.cookie_store().save_json(&mut file).unwrap();
     /// # Ok(())
     /// # }
     /// ```
@@ -546,7 +546,7 @@ impl AgentBuilder {
     /// This overrides any previous call to tls_config or tls_connector.
     ///
     /// ```
-    /// # fn main() -> Result<(), ureq::Error> {
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # ureq::is_test(true);
     /// use std::sync::Arc;
     /// # #[cfg(feature = "native-tls")]
@@ -580,7 +580,7 @@ impl AgentBuilder {
     /// let read = BufReader::new(file);
     ///
     /// // Read persisted cookies from cookies.json
-    /// let my_store = CookieStore::load_json(read)?;
+    /// let my_store = CookieStore::load_json(read).unwrap();
     ///
     /// // Cookies will be used for requests done through agent.
     /// let agent = ureq::builder()
