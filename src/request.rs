@@ -7,8 +7,8 @@ use crate::body::Payload;
 use crate::header::{self, Header};
 use crate::middleware::MiddlewareNext;
 use crate::unit::{self, Unit};
-use crate::Response;
 use crate::{agent::Agent, error::Error};
+use crate::{Middleware, Response};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -141,9 +141,13 @@ impl Request {
         };
 
         let response = if !self.agent.state.middleware.is_empty() {
-            let middleware = self.agent.state.middleware.clone();
-
-            let chain = Box::new(middleware.into_iter());
+            // Clone agent to get a local copy with same lifetime as Payload
+            let agent = self.agent.clone();
+            let chain = &mut agent
+                .state
+                .middleware
+                .iter()
+                .map(|mw| mw.as_ref() as &dyn Middleware);
 
             let request_fn = Box::new(request_fn);
 
