@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::{Error, Request, Response};
 
 /// Chained processing of request (and response).
@@ -135,13 +133,21 @@ pub trait Middleware {
 
 /// Continuation of a [`Middleware`] chain.
 pub struct MiddlewareNext<'a> {
-    pub(crate) chain: Box<dyn Iterator<Item = Arc<dyn Middleware + Send + Sync + 'static>>>,
+    pub(crate) chain: &'a mut (dyn Iterator<Item = &'a dyn Middleware>),
+    // Since request_fn consumes the Payload<'a>, we must have an FnOnce.
+    //
+    // It's possible to get rid of this Box if we make MiddlewareNext generic
+    // over some type variable, i.e. MiddlewareNext<'a, R> where R: FnOnce...
+    // however that would "leak" to Middleware::handle introducing a complicated
+    // type signature that is totally irrelevant for someone implementing a middleware.
+    //
+    // So in the name of having a sane external API, we accept this Box.
     pub(crate) request_fn: Box<dyn FnOnce(Request) -> Result<Response, Error> + 'a>,
 }
 
 impl<'a> MiddlewareNext<'a> {
     /// Continue the middleware chain by providing (a possibly amended) [`Request`].
-    pub fn handle(mut self, request: Request) -> Result<Response, Error> {
+    pub fn handle(self, request: Request) -> Result<Response, Error> {
         if let Some(step) = self.chain.next() {
             step.handle(request, self)
         } else {
