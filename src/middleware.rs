@@ -126,7 +126,7 @@ use crate::{Error, Request, Response};
 ///
 /// # Ok(()) }
 /// ```
-pub trait Middleware {
+pub trait Middleware: Send + Sync + 'static {
     /// Handle of the middleware logic.
     fn handle(&self, request: Request, next: MiddlewareNext) -> Result<Response, Error>;
 }
@@ -158,7 +158,7 @@ impl<'a> MiddlewareNext<'a> {
 
 impl<F> Middleware for F
 where
-    F: Fn(Request, MiddlewareNext) -> Result<Response, Error>,
+    F: Fn(Request, MiddlewareNext) -> Result<Response, Error> + Send + Sync + 'static,
 {
     fn handle(&self, request: Request, next: MiddlewareNext) -> Result<Response, Error> {
         (self)(request, next)
