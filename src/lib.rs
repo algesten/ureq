@@ -356,7 +356,6 @@ pub(crate) fn default_tls_config() -> std::sync::Arc<dyn TlsConnector> {
 // calls at the top of the crate (`ureq::get` etc).
 #[cfg(not(feature = "tls"))]
 pub(crate) fn default_tls_config() -> std::sync::Arc<dyn TlsConnector> {
-    use crate::stream::HttpsStream;
     use std::net::TcpStream;
     use std::sync::Arc;
 
@@ -367,7 +366,7 @@ pub(crate) fn default_tls_config() -> std::sync::Arc<dyn TlsConnector> {
             &self,
             _dns_name: &str,
             _tcp_stream: TcpStream,
-        ) -> Result<Box<dyn HttpsStream>, crate::error::Error> {
+        ) -> Result<Box<dyn ReadWrite>, crate::error::Error> {
             Err(ErrorKind::UnknownScheme
                 .msg("cannot make HTTPS request because no TLS backend is configured"))
         }
@@ -398,7 +397,7 @@ pub use crate::proxy::Proxy;
 pub use crate::request::{Request, RequestUrl};
 pub use crate::resolve::Resolver;
 pub use crate::response::Response;
-pub use crate::stream::TlsConnector;
+pub use crate::stream::{ReadWrite, TlsConnector};
 
 // re-export
 #[cfg(feature = "cookies")]
