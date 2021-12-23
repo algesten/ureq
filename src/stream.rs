@@ -17,7 +17,8 @@ use crate::{error::Error, proxy::Proto};
 use crate::error::ErrorKind;
 use crate::unit::Unit;
 
-pub trait HttpsStream: Read + Write + Send + Sync + 'static {
+/// Trait for things implementing [std::io::Read] + [std::io::Write]. Used in [TlsConnector].
+pub trait ReadWrite: Read + Write + Send + Sync + 'static {
     fn socket(&self) -> Option<&TcpStream>;
 }
 
@@ -26,7 +27,7 @@ pub trait TlsConnector: Send + Sync {
         &self,
         dns_name: &str,
         tcp_stream: TcpStream,
-    ) -> Result<Box<dyn HttpsStream>, crate::error::Error>;
+    ) -> Result<Box<dyn ReadWrite>, crate::error::Error>;
 }
 
 pub(crate) struct Stream {
@@ -41,19 +42,19 @@ trait Inner: Read + Write {
     }
 }
 
-impl<T: HttpsStream + ?Sized> HttpsStream for Box<T> {
+impl<T: ReadWrite + ?Sized> ReadWrite for Box<T> {
     fn socket(&self) -> Option<&TcpStream> {
-        HttpsStream::socket(self.as_ref())
+        ReadWrite::socket(self.as_ref())
     }
 }
 
-impl<T: HttpsStream> Inner for T {
+impl<T: ReadWrite> Inner for T {
     fn is_poolable(&self) -> bool {
         true
     }
 
     fn socket(&self) -> Option<&TcpStream> {
-        HttpsStream::socket(self)
+        ReadWrite::socket(self)
     }
 }
 
