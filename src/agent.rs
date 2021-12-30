@@ -1,14 +1,14 @@
 use std::fmt;
 use std::sync::Arc;
-
+use std::time::Duration;
 use url::Url;
 
+use crate::middleware::Middleware;
 use crate::pool::ConnectionPool;
 use crate::proxy::Proxy;
 use crate::request::Request;
 use crate::resolve::{ArcResolver, StdResolver};
 use crate::stream::TlsConnector;
-use std::time::Duration;
 
 #[cfg(feature = "cookies")]
 use {
@@ -34,7 +34,6 @@ pub enum RedirectAuthHeaders {
 }
 
 /// Accumulates options towards building an [Agent].
-#[derive(Debug)]
 pub struct AgentBuilder {
     config: AgentConfig,
     max_idle_connections: usize,
@@ -44,6 +43,7 @@ pub struct AgentBuilder {
     #[cfg(feature = "cookies")]
     cookie_store: Option<CookieStore>,
     resolver: ArcResolver,
+    middleware: Vec<Box<dyn Middleware>>,
 }
 
 /// Config as built by AgentBuilder and then static for the lifetime of the Agent.
@@ -103,7 +103,6 @@ pub struct Agent {
 /// Container of the state
 ///
 /// *Internal API*.
-#[derive(Debug)]
 pub(crate) struct AgentState {
     /// Reused connections between requests.
     pub(crate) pool: ConnectionPool,
@@ -112,6 +111,7 @@ pub(crate) struct AgentState {
     #[cfg(feature = "cookies")]
     pub(crate) cookie_tin: CookieTin,
     pub(crate) resolver: ArcResolver,
+    pub(crate) middleware: Vec<Box<dyn Middleware>>,
 }
 
 impl Agent {
@@ -157,7 +157,7 @@ impl Agent {
     /// use {url::Url, ureq::Response};
     /// let agent = ureq::agent();
     ///
-    /// let mut url: Url = "http://example.com/some-page".parse().unwrap();
+    /// let mut url: Url = "http://example.com/some-page".parse()?;
     /// url.set_path("/robots.txt");
     /// let resp: Response = agent
     ///     .request_url("GET", &url)
@@ -248,6 +248,7 @@ impl AgentBuilder {
             resolver: StdResolver.into(),
             #[cfg(feature = "cookies")]
             cookie_store: None,
+            middleware: vec![],
         }
     }
 
@@ -267,6 +268,7 @@ impl AgentBuilder {
                 #[cfg(feature = "cookies")]
                 cookie_tin: CookieTin::new(self.cookie_store.unwrap_or_else(CookieStore::default)),
                 resolver: self.resolver,
+                middleware: self.middleware,
             }),
         }
     }
@@ -539,18 +541,18 @@ impl AgentBuilder {
     }
 
     /// Configure TLS options for a backend other than rustls. The parameter can be a
-    /// any type which implements the [HttpsConnector] trait. If you enable the native-tls
-    /// feature, we provide `impl HttpsConnector for native_tls::TlsConnector` so you can pass
+    /// any type which implements the [`TlsConnector`] trait. If you enable the native-tls
+    /// feature, we provide `impl TlsConnector for native_tls::TlsConnector` so you can pass
     /// [`Arc<native_tls::TlsConnector>`](https://docs.rs/native-tls/0.2.7/native_tls/struct.TlsConnector.html).
     ///
     /// This overrides any previous call to tls_config or tls_connector.
     ///
     /// ```
-    /// # fn main() -> Result<(), ureq::Error> {
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # ureq::is_test(true);
     /// use std::sync::Arc;
     /// # #[cfg(feature = "native-tls")]
-    /// let tls_connector = Arc::new(native_tls::TlsConnector::new().unwrap());
+    /// let tls_connector = Arc::new(native_tls::TlsConnector::new()?);
     /// # #[cfg(feature = "native-tls")]
     /// let agent = ureq::builder()
     ///     .tls_connector(tls_connector.clone())
@@ -593,6 +595,53 @@ impl AgentBuilder {
     pub fn cookie_store(mut self, cookie_store: CookieStore) -> Self {
         self.cookie_store = Some(cookie_store);
         self
+    }
+
+    /// Add middleware handler to this agent.
+    ///
+    /// All requests made by the agent will use this middleware. Middleware is invoked
+    /// in the order they are added to the builder.
+    pub fn middleware(mut self, m: impl Middleware) -> Self {
+        self.middleware.push(Box::new(m));
+        self
+    }
+}
+
+#[cfg(feature = "tls")]
+#[derive(Clone)]
+pub(crate) struct TLSClientConfig(pub(crate) Arc<rustls::ClientConfig>);
+
+#[cfg(feature = "tls")]
+impl fmt::Debug for TLSClientConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TLSClientConfig").finish()
+    }
+}
+
+impl fmt::Debug for AgentBuilder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AgentBuilder")
+            .field("config", &self.config)
+            .field("max_idle_connections", &self.max_idle_connections)
+            .field(
+                "max_idle_connections_per_host",
+                &self.max_idle_connections_per_host,
+            )
+            .field("resolver", &self.resolver)
+            // self.cookies missing because it's feature flagged.
+            // self.middleware missing because we don't want to force Debug on Middleware trait.
+            .finish_non_exhaustive()
+    }
+}
+
+impl fmt::Debug for AgentState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AgentState")
+            .field("pool", &self.pool)
+            .field("resolver", &self.resolver)
+            // self.cookie_tin missing because it's feature flagged.
+            // self.middleware missing because we don't want to force Debug on Middleware trait.
+            .finish_non_exhaustive()
     }
 }
 

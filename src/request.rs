@@ -5,6 +5,7 @@ use url::{form_urlencoded, ParseError, Url};
 
 use crate::body::Payload;
 use crate::header::{self, Header};
+use crate::middleware::MiddlewareNext;
 use crate::unit::{self, Unit};
 use crate::Response;
 use crate::{agent::Agent, error::Error};
@@ -125,16 +126,35 @@ impl Request {
             }
         };
 
-        let reader = payload.into_read();
-        let unit = Unit::new(
-            &self.agent,
-            &self.method,
-            &url,
-            self.headers,
-            &reader,
-            deadline,
-        );
-        let response = unit::connect(unit, true, reader).map_err(|e| e.url(url.clone()))?;
+        let request_fn = |req: Request| {
+            let reader = payload.into_read();
+            let unit = Unit::new(
+                &req.agent,
+                &req.method,
+                &url,
+                req.headers,
+                &reader,
+                deadline,
+            );
+
+            unit::connect(unit, true, reader).map_err(|e| e.url(url.clone()))
+        };
+
+        let response = if !self.agent.state.middleware.is_empty() {
+            // Clone agent to get a local copy with same lifetime as Payload
+            let agent = self.agent.clone();
+            let chain = &mut agent.state.middleware.iter().map(|mw| mw.as_ref());
+
+            let request_fn = Box::new(request_fn);
+
+            let next = MiddlewareNext { chain, request_fn };
+
+            // // Run middleware chain
+            next.handle(self)?
+        } else {
+            // Run the request_fn without any further indirection.
+            request_fn(self)?
+        };
 
         if response.status() >= 400 {
             Err(Error::Status(response.status(), response))
@@ -424,7 +444,7 @@ impl Request {
     /// let req = ureq::get("http://httpbin.org/get")
     ///     .query("foo", "bar");
     ///
-    /// assert_eq!(req.request_url().unwrap().host(), "httpbin.org");
+    /// assert_eq!(req.request_url()?.host(), "httpbin.org");
     /// # Ok(())
     /// # }
     /// ```
@@ -490,7 +510,7 @@ impl RequestUrl {
     ///     .query("foo", "42")
     ///     .query("foo", "43");
     ///
-    /// assert_eq!(req.request_url().unwrap().query_pairs(), vec![
+    /// assert_eq!(req.request_url()?.query_pairs(), vec![
     ///     ("foo", "42"),
     ///     ("foo", "43")
     /// ]);

@@ -1,6 +1,6 @@
 [package]
 name = "ureq"
-version = "2.3.1"
+version = "2.4.0"
 authors = ["Martin Algesten <martin@algesten.se>", "Jacob Hoffman-Andrews <ureq@hoffman-andrews.com>"]
 description = "Simple, safe HTTP client"
 license = "MIT/Apache-2.0"
@@ -15,7 +15,7 @@ edition = "2018"
 features = ["tls", "native-tls", "json", "charset", "cookies", "socks-proxy"]
 
 [features]
-default = ["tls"]
+default = ["tls", "gzip"]
 tls = ["webpki", "webpki-roots", "rustls"]
 native-certs = ["rustls-native-certs"]
 json = ["serde", "serde_json"]
@@ -39,7 +39,7 @@ cookie_store = { version = "0.15", optional = true, default-features = false, fe
 log = "0.4"
 webpki = { version = "0.22", optional = true }
 webpki-roots = { version = "0.22", optional = true }
-rustls = { version = "0.20", optional = true }
+rustls = { version = ">=0.20.1", optional = true }
 rustls-native-certs = { version = "0.6", optional = true }
 native-tls = { version = "0.2", optional = true }
 flate2 = { version = "1.0.22", optional = true }

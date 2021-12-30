@@ -133,8 +133,8 @@
 //!   TLS implementation, `native-tls` is never picked up as a default or used by the crate level
 //!   convenience calls (`ureq::get` etc) – it must be configured on the agent. The `native-certs` feature
 //!   does nothing for `native-tls`.
-//! * `gzip` enables automatically requesting gzip-compressed responses and decompressing them.
-//! * `brotli` enables automatically requesting Brotli-compressed responses and decompressing them.
+//! * `gzip` enables requests of gzip-compressed responses and decompresses them. This is enabled by default.
+//! * `brotli` enables requests brotli-compressed responses and decompresses them.
 //!
 //! # Plain requests
 //!
@@ -257,13 +257,13 @@
 //!
 //! ```no_run
 //! # #[cfg(feature = "native-tls")]
-//! # fn build() -> std::result::Result<(), ureq::Error> {
+//! # fn build() -> std::result::Result<(), Box<dyn std::error::Error>> {
 //! # ureq::is_test(true);
 //!   use std::sync::Arc;
 //!   use ureq::Agent;
 //!
 //!   let agent = ureq::AgentBuilder::new()
-//!       .tls_connector(Arc::new(native_tls::TlsConnector::new().unwrap()))
+//!       .tls_connector(Arc::new(native_tls::TlsConnector::new()?))
 //!       .build();
 //! # Ok(())
 //! # }
@@ -327,6 +327,7 @@ mod agent;
 mod body;
 mod error;
 mod header;
+mod middleware;
 mod pool;
 mod proxy;
 mod request;
@@ -392,6 +393,7 @@ pub use crate::agent::AgentBuilder;
 pub use crate::agent::RedirectAuthHeaders;
 pub use crate::error::{Error, ErrorKind, OrAnyStatus, Transport};
 pub use crate::header::Header;
+pub use crate::middleware::{Middleware, MiddlewareNext};
 pub use crate::proxy::Proxy;
 pub use crate::request::{Request, RequestUrl};
 pub use crate::resolve::Resolver;
@@ -487,7 +489,7 @@ pub fn request(method: &str, path: &str) -> Request {
 /// use url::Url;
 /// let agent = ureq::agent();
 ///
-/// let mut url: Url = "http://example.com/some-page".parse().unwrap();
+/// let mut url: Url = "http://example.com/some-page".parse()?;
 /// url.set_path("/robots.txt");
 /// let resp: ureq::Response = ureq::request_url("GET", &url)
 ///     .call()?;

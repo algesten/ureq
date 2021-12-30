@@ -242,14 +242,15 @@ impl Response {
     ///
     /// ```
     /// use std::io::Read;
-    /// # fn main() -> Result<(), ureq::Error> {
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # ureq::is_test(true);
     /// let resp = ureq::get("http://httpbin.org/bytes/100")
     ///     .call()?;
     ///
     /// assert!(resp.has("Content-Length"));
-    /// let len = resp.header("Content-Length")
-    ///     .and_then(|s| s.parse::<usize>().ok()).unwrap();
+    /// let len: usize = resp.header("Content-Length")
+    ///     .unwrap()
+    ///     .parse()?;
     ///
     /// let mut bytes: Vec<u8> = Vec::with_capacity(len);
     /// resp.into_reader()
@@ -497,13 +498,15 @@ impl Response {
         let compression =
             get_header(&headers, "content-encoding").and_then(Compression::from_header_value);
 
+        // remove Content-Encoding and length due to automatic decompression
         if compression.is_some() {
-            headers.retain(|h| h.name() != "content-encoding" && h.name() != "content-length");
-            // remove Content-Encoding and length due to automatic decompression
+            headers.retain(|h| !h.is_name("content-encoding") && !h.is_name("content-length"));
         }
 
+        let url = unit.as_ref().map(|u| u.url.clone());
+
         Ok(Response {
-            url: None,
+            url,
             status_line,
             index,
             status,
@@ -514,13 +517,6 @@ impl Response {
             length,
             compression,
         })
-    }
-
-    pub(crate) fn do_from_request(unit: Unit, stream: Stream) -> Result<Response, Error> {
-        let url = Some(unit.url.clone());
-        let mut resp = Response::do_from_stream(stream, Some(unit))?;
-        resp.url = url;
-        Ok(resp)
     }
 
     #[cfg(test)]
@@ -632,15 +628,18 @@ impl FromStr for Response {
     ///
     /// Example:
     /// ```
+    /// # fn main() -> Result<(), ureq::Error> {
     /// let s = "HTTP/1.1 200 OK\r\n\
     ///     X-Forwarded-For: 1.2.3.4\r\n\
     ///     Content-Type: text/plain\r\n\
     ///     \r\n\
     ///     Hello World!!!";
-    /// let resp = s.parse::<ureq::Response>().unwrap();
+    /// let resp: ureq::Response = s.parse()?;
     /// assert!(resp.has("X-Forwarded-For"));
-    /// let body = resp.into_string().unwrap();
+    /// let body = resp.into_string()?;
     /// assert_eq!(body, "Hello World!!!");
+    /// # Ok(())
+    /// # }
     /// ```
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let stream = Stream::from_vec(s.as_bytes().to_owned());
