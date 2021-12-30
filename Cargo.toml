@@ -26,6 +26,11 @@ gzip = ["flate2"]
 brotli = ["brotli-decompressor"]
 
 [dependencies]
+# We don't depend directly on proc-macro-hack, but our dependencies do.
+# And proc-macro-hack <0.5.9 breaks when built with -Z minimal-versions.
+# So we force 0.5.9 to allow building with -Z minimal-versions in our tests.
+# https://github.com/dtolnay/proc-macro-hack/issues/60
+proc-macro-hack = "0.5.9"
 base64 = "0.13"
 chunked_transfer = "1.2"
 cookie = { version = "0.15", default-features = false, optional = true}
