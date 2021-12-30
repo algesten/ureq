@@ -257,7 +257,7 @@
 //!
 //! ```no_run
 //! # #[cfg(feature = "native-tls")]
-//! # fn build() -> std::result::Result<(), ureq::Error> {
+//! # fn build() -> std::result::Result<(), Box<dyn std::error::Error>> {
 //! # ureq::is_test(true);
 //!   use std::sync::Arc;
 //!   use ureq::Agent;
@@ -327,6 +327,7 @@ mod agent;
 mod body;
 mod error;
 mod header;
+mod middleware;
 mod pool;
 mod proxy;
 mod request;
@@ -392,6 +393,7 @@ pub use crate::agent::AgentBuilder;
 pub use crate::agent::RedirectAuthHeaders;
 pub use crate::error::{Error, ErrorKind, OrAnyStatus, Transport};
 pub use crate::header::Header;
+pub use crate::middleware::{Middleware, MiddlewareNext};
 pub use crate::proxy::Proxy;
 pub use crate::request::{Request, RequestUrl};
 pub use crate::resolve::Resolver;

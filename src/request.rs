@@ -5,6 +5,7 @@ use url::{form_urlencoded, ParseError, Url};
 
 use crate::body::Payload;
 use crate::header::{self, Header};
+use crate::middleware::MiddlewareNext;
 use crate::unit::{self, Unit};
 use crate::Response;
 use crate::{agent::Agent, error::Error};
@@ -125,16 +126,35 @@ impl Request {
             }
         };
 
-        let reader = payload.into_read();
-        let unit = Unit::new(
-            &self.agent,
-            &self.method,
-            &url,
-            self.headers,
-            &reader,
-            deadline,
-        );
-        let response = unit::connect(unit, true, reader).map_err(|e| e.url(url.clone()))?;
+        let request_fn = |req: Request| {
+            let reader = payload.into_read();
+            let unit = Unit::new(
+                &req.agent,
+                &req.method,
+                &url,
+                req.headers,
+                &reader,
+                deadline,
+            );
+
+            unit::connect(unit, true, reader).map_err(|e| e.url(url.clone()))
+        };
+
+        let response = if !self.agent.state.middleware.is_empty() {
+            // Clone agent to get a local copy with same lifetime as Payload
+            let agent = self.agent.clone();
+            let chain = &mut agent.state.middleware.iter().map(|mw| mw.as_ref());
+
+            let request_fn = Box::new(request_fn);
+
+            let next = MiddlewareNext { chain, request_fn };
+
+            // // Run middleware chain
+            next.handle(self)?
+        } else {
+            // Run the request_fn without any further indirection.
+            request_fn(self)?
+        };
 
         if response.status() >= 400 {
             Err(Error::Status(response.status(), response))
