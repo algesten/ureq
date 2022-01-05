@@ -54,6 +54,7 @@ pub(crate) struct AgentConfig {
     pub timeout_read: Option<Duration>,
     pub timeout_write: Option<Duration>,
     pub timeout: Option<Duration>,
+    pub no_delay: Option<bool>,
     pub redirects: u32,
     pub redirect_auth_headers: RedirectAuthHeaders,
     pub user_agent: String,
@@ -238,6 +239,7 @@ impl AgentBuilder {
                 timeout_read: None,
                 timeout_write: None,
                 timeout: None,
+                no_delay: None,
                 redirects: 5,
                 redirect_auth_headers: RedirectAuthHeaders::Never,
                 user_agent: format!("ureq/{}", env!("CARGO_PKG_VERSION")),
@@ -430,6 +432,26 @@ impl AgentBuilder {
     /// ```
     pub fn timeout(mut self, timeout: Duration) -> Self {
         self.config.timeout = Some(timeout);
+        self
+    }
+
+    /// Whether no_delay will be set on the tcp socket.
+    /// Setting this to true disables Nagle's algorithm.
+    ///
+    /// Defaults to true.
+    ///
+    /// ```
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// let agent = ureq::builder()
+    ///     .no_delay(false)
+    ///     .build();
+    /// let result = agent.get("http://httpbin.org/get").call();
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn no_delay(mut self, no_delay: bool) -> Self {
+        self.config.no_delay = Some(no_delay);
         self
     }
 
