@@ -54,7 +54,7 @@ pub(crate) struct AgentConfig {
     pub timeout_read: Option<Duration>,
     pub timeout_write: Option<Duration>,
     pub timeout: Option<Duration>,
-    pub no_delay: Option<bool>,
+    pub no_delay: bool,
     pub redirects: u32,
     pub redirect_auth_headers: RedirectAuthHeaders,
     pub user_agent: String,
@@ -239,7 +239,7 @@ impl AgentBuilder {
                 timeout_read: None,
                 timeout_write: None,
                 timeout: None,
-                no_delay: None,
+                no_delay: true,
                 redirects: 5,
                 redirect_auth_headers: RedirectAuthHeaders::Never,
                 user_agent: format!("ureq/{}", env!("CARGO_PKG_VERSION")),
@@ -451,7 +451,7 @@ impl AgentBuilder {
     /// # }
     /// ```
     pub fn no_delay(mut self, no_delay: bool) -> Self {
-        self.config.no_delay = Some(no_delay);
+        self.config.no_delay = no_delay;
         self
     }
 
