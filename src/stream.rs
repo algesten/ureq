@@ -407,6 +407,8 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         panic!("shouldn't happen: failed to connect to all IPs, but no error");
     };
 
+    stream.set_nodelay(unit.agent.config.no_delay)?;
+
     if let Some(deadline) = unit.deadline {
         stream.set_read_timeout(Some(time_until_deadline(deadline)?))?;
     } else {
