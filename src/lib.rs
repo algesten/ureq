@@ -400,6 +400,9 @@ pub use crate::resolve::Resolver;
 pub use crate::response::Response;
 pub use crate::stream::TlsConnector;
 
+#[cfg(feature = "digest-auth")]
+pub use middleware::digest::DigestAuthMiddleware;
+
 // re-export
 #[cfg(feature = "cookies")]
 pub use cookie::Cookie;

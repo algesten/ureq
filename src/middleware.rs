@@ -164,3 +164,68 @@ where
         (self)(request, next)
     }
 }
+
+#[cfg(feature = "digest-auth")]
+pub mod digest {
+    use super::*;
+    use crate::{Request, Response};
+    use digest_auth::{AuthContext, WwwAuthenticateHeader};
+    use std::{borrow::Cow, str::FromStr};
+
+    /// Provides simple digest authentication powered by the `digest_auth` crate.
+    ///
+    /// Any 401 response handled by this middleware is retried once with the
+    /// credentials provided on construction. If authentication fails or the middleware
+    /// is unable to generate an answer to the server challenge (such as a different authentication
+    /// scheme or a malformed challenge) the response is silently passed on.
+    pub struct DigestAuthMiddleware {
+        username: Cow<'static, str>,
+        password: Cow<'static, str>,
+    }
+
+    impl DigestAuthMiddleware {
+        pub fn new(username: Cow<'static, str>, password: Cow<'static, str>) -> Self {
+            Self { username, password }
+        }
+
+        fn construct_answer_to_challenge(
+            &self,
+            request: &Request,
+            response: &Response,
+        ) -> Option<String> {
+            let challenge_string = response.header("www-authenticate")?;
+            let mut challenge = WwwAuthenticateHeader::from_str(&challenge_string).ok()?;
+            let path = request.request_url().ok()?.path().to_string();
+            let context = AuthContext::new(
+                self.username.as_ref(),
+                self.password.as_ref(),
+                Cow::from(path),
+            );
+            let answer = challenge
+                .respond(&context)
+                .as_ref()
+                .map(ToString::to_string)
+                .ok()?;
+            Some(answer)
+        }
+    }
+
+    impl Middleware for DigestAuthMiddleware {
+        fn handle(&self, request: Request, next: MiddlewareNext) -> Result<Response, Error> {
+            // Prevent infinite recursion when doing a nested request below.
+            if request.header("Authorization").is_some() {
+                return next.handle(request);
+            }
+
+            let response = next.handle(request.clone())?;
+            if let (401, Some(challenge_answer)) = (
+                response.status(),
+                self.construct_answer_to_challenge(&request, &response),
+            ) {
+                request.set("Authorization", &challenge_answer).call()
+            } else {
+                Ok(response)
+            }
+        }
+    }
+}

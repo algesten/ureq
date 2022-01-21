@@ -9,6 +9,8 @@ use std::sync::{Arc, Mutex};
 mod agent_test;
 mod body_read;
 mod body_send;
+#[cfg(feature = "digest-auth")]
+mod digest;
 mod query_string;
 mod range;
 mod redirect;

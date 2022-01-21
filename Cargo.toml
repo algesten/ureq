@@ -24,6 +24,7 @@ cookies = ["cookie", "cookie_store"]
 socks-proxy = ["socks"]
 gzip = ["flate2"]
 brotli = ["brotli-decompressor"]
+digest-auth = ["digest_auth"]
 
 [dependencies]
 base64 = "0.13"
@@ -44,6 +45,7 @@ rustls-native-certs = { version = "0.6", optional = true }
 native-tls = { version = "0.2", optional = true }
 flate2 = { version = "1.0.22", optional = true }
 brotli-decompressor = { version = "2.3.2", optional = true }
+digest_auth = { version = "0.3.0", optional = true }
 
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }
