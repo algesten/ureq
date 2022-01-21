@@ -34,8 +34,5 @@ fn invalid_credentials() {
         .middleware(digest_auth_middleware)
         .build();
     let result = agent.get(&test_url).call();
-    match result {
-        Err(Error::Status(401, _)) => (),
-        _ => panic!("Expected 401 error, received {:?}", result),
-    }
+    assert!(matches!(result, Err(Error::Status(401, _))), "Expected 401 error, received {:?}", result);
 }
