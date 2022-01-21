@@ -177,10 +177,10 @@ pub mod digest {
     /// Requests that receive a HTTP 401 response are retried once by this middleware with the
     /// credentials provided on construction. The retry only happens under these conditions:
     /// - there is no prior "authorization" header on the request set by the caller or other
-    ///   middleware, and
+    ///   middleware, and;
     /// - the server provides HTTP Digest auth challenge in the "www-authenticate" header.
     ///
-    /// In other cases, this middle ware acts as a no-op forwarder of requests and responses.
+    /// In other cases, this middleware acts as a no-op forwarder of requests and responses.
     ///
     /// ```
     /// let arbitrary_username = "MyUsername";
@@ -226,7 +226,7 @@ pub mod digest {
     impl Middleware for DigestAuthMiddleware {
         fn handle(&self, request: Request, next: MiddlewareNext) -> Result<Response, Error> {
             // Prevent infinite recursion when doing a nested request below.
-            if request.header("Authorization").is_some() {
+            if request.header("authorization").is_some() {
                 return next.handle(request);
             }
 
@@ -235,7 +235,7 @@ pub mod digest {
                 response.status(),
                 self.construct_answer_to_challenge(&request, &response),
             ) {
-                request.set("Authorization", &challenge_answer).call()
+                request.set("authorization", &challenge_answer).call()
             } else {
                 Ok(response)
             }
