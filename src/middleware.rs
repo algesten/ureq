@@ -177,7 +177,19 @@ pub mod digest {
     /// Any 401 response handled by this middleware is retried once with the
     /// credentials provided on construction. If authentication fails or the middleware
     /// is unable to generate an answer to the server challenge (such as a different authentication
-    /// scheme or a malformed challenge) the response is silently passed on.
+    /// scheme or a malformed challenge) the response is silently passed on to the rest
+    /// of the middleware chain.
+    ///
+    /// ```
+    /// let arbitrary_username = "MyUsername";
+    /// let arbitrary_password = "MyPassword";
+    /// let digest_auth_middleware =
+    ///     ureq::DigestAuthMiddleware::new(arbitrary_username.into(), arbitrary_password.into());
+    /// # let url = String::new();
+    ///
+    /// let agent = ureq::AgentBuilder::new().middleware(digest_auth_middleware).build();
+    /// agent.get(&url).call();
+    /// ```
     pub struct DigestAuthMiddleware {
         username: Cow<'static, str>,
         password: Cow<'static, str>,
