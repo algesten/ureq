@@ -201,12 +201,11 @@ pub mod digest {
                 self.password.as_ref(),
                 Cow::from(path),
             );
-            let answer = challenge
+            challenge
                 .respond(&context)
                 .as_ref()
                 .map(ToString::to_string)
-                .ok()?;
-            Some(answer)
+                .ok()
         }
     }
 
