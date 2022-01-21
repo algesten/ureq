@@ -174,11 +174,13 @@ pub mod digest {
 
     /// Provides simple digest authentication powered by the `digest_auth` crate.
     ///
-    /// Any 401 response handled by this middleware is retried once with the
-    /// credentials provided on construction. If authentication fails or the middleware
-    /// is unable to generate an answer to the server challenge (such as a different authentication
-    /// scheme or a malformed challenge) the response is silently passed on to the rest
-    /// of the middleware chain.
+    /// Requests that receive a HTTP 401 response are retried once by this middleware with the
+    /// credentials provided on construction. The retry only happens under these conditions:
+    /// - there is no prior "authorization" header on the request set by the caller or other
+    ///   middleware, and
+    /// - the server provides HTTP Digest auth challenge in the "www-authenticate" header.
+    ///
+    /// In other cases, this middle ware acts as a no-op forwarder of requests and responses.
     ///
     /// ```
     /// let arbitrary_username = "MyUsername";
