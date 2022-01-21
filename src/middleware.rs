@@ -186,7 +186,7 @@ pub mod digest {
     /// let arbitrary_username = "MyUsername";
     /// let arbitrary_password = "MyPassword";
     /// let digest_auth_middleware =
-    ///     ureq::DigestAuthMiddleware::new(arbitrary_username.into(), arbitrary_password.into());
+    ///     ureq::DigestAuthMiddleware::new(arbitrary_username, arbitrary_password);
     /// # let url = String::new();
     ///
     /// let agent = ureq::AgentBuilder::new().middleware(digest_auth_middleware).build();
@@ -198,8 +198,14 @@ pub mod digest {
     }
 
     impl DigestAuthMiddleware {
-        pub fn new(username: Cow<'static, str>, password: Cow<'static, str>) -> Self {
-            Self { username, password }
+        pub fn new(
+            username: impl Into<Cow<'static, str>>,
+            password: impl Into<Cow<'static, str>>,
+        ) -> Self {
+            Self {
+                username: username.into(),
+                password: password.into(),
+            }
         }
 
         fn construct_answer_to_challenge(
@@ -208,7 +214,7 @@ pub mod digest {
             response: &Response,
         ) -> Option<String> {
             let challenge_string = response.header("www-authenticate")?;
-            let mut challenge = WwwAuthenticateHeader::from_str(&challenge_string).ok()?;
+            let mut challenge = WwwAuthenticateHeader::from_str(challenge_string).ok()?;
             let path = request.request_url().ok()?.path().to_string();
             let context = AuthContext::new(
                 self.username.as_ref(),
