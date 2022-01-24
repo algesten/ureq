@@ -39,7 +39,7 @@ jobs:
         with:
           command: doc
           # Keep in sync with Cargo.toml's [package.metadata.docs.rs]
-          args: --no-default-features --no-deps --features "tls native-tls json charset cookies socks-proxy"
+          args: --no-default-features --no-deps --features "tls native-tls json charset cookies socks-proxy digest-auth"
   build_and_test:
     name: Test
     runs-on: ubuntu-latest
@@ -56,6 +56,7 @@ jobs:
           - cookies
           - socks-proxy
           - native-certs
+          - digest-auth
     env:
       RUST_BACKTRACE: "1"
       RUSTFLAGS: "-D dead_code -D unused-variables -D unused"
