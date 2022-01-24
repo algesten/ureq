@@ -1,5 +1,5 @@
 use std::io::{self, Read};
-use std::sync::{Arc};
+use std::sync::Arc;
 use std::time::Duration;
 use std::{env, error, fmt, result};
 
@@ -54,7 +54,9 @@ fn main() -> Result<()> {
     env_logger::init();
 
     let agent = ureq::builder()
-        .tls_connector(Arc::new(mbedtls_connector::MbedTlsConnector::new(mbedtls::ssl::config::AuthMode::None)))
+        .tls_connector(Arc::new(mbedtls_connector::MbedTlsConnector::new(
+            mbedtls::ssl::config::AuthMode::None,
+        )))
         .timeout_connect(Duration::from_secs(5))
         .timeout(Duration::from_secs(20))
         .build();

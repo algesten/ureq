@@ -5,16 +5,16 @@ use ureq::{Error, ReadWrite, TlsConnector};
 use std::net::TcpStream;
 use std::sync::{Arc, Mutex};
 
+use mbedtls::rng::CtrDrbg;
 use mbedtls::ssl::config::{Endpoint, Preset, Transport};
 use mbedtls::ssl::{Config, Context};
-use mbedtls::rng::CtrDrbg;
 
 fn entropy_new() -> mbedtls::rng::OsEntropy {
     mbedtls::rng::OsEntropy::new()
 }
 
 pub struct MbedTlsConnector {
-    context:  Arc<Mutex<Context>>
+    context: Arc<Mutex<Context>>,
 }
 
 #[derive(Debug)]
@@ -33,7 +33,9 @@ impl std::error::Error for MbedTlsError {
 
 #[allow(dead_code)]
 pub(crate) fn default_tls_config() -> std::sync::Arc<dyn TlsConnector> {
-    Arc::new(MbedTlsConnector::new(mbedtls::ssl::config::AuthMode::Required))
+    Arc::new(MbedTlsConnector::new(
+        mbedtls::ssl::config::AuthMode::Required,
+    ))
 }
 
 impl MbedTlsConnector {
@@ -45,50 +47,46 @@ impl MbedTlsConnector {
         config.set_authmode(mode);
         let ctx = Context::new(Arc::new(config));
         MbedTlsConnector {
-            context: Arc::new(Mutex::new(ctx))
+            context: Arc::new(Mutex::new(ctx)),
         }
     }
 }
 
 impl TlsConnector for MbedTlsConnector {
-    fn connect(
-        &self,
-        _dns_name: &str,
-        tcp_stream: TcpStream,
-    ) -> Result<Box<dyn ReadWrite>, Error> {
-
+    fn connect(&self, _dns_name: &str, tcp_stream: TcpStream) -> Result<Box<dyn ReadWrite>, Error> {
         let mut ctx = self.context.lock().unwrap();
         match ctx.establish(tcp_stream, None) {
             Err(_) => {
                 let io_err = io::Error::new(io::ErrorKind::InvalidData, MbedTlsError);
                 return Err(io_err.into());
             }
-            Ok(()) => Ok(MbedTlsStream::new(self))
+            Ok(()) => Ok(MbedTlsStream::new(self)),
         }
     }
 }
 
 struct MbedTlsStream {
-    context:  Arc<Mutex<Context>>
-    //tcp_stream: TcpStream,
+    context: Arc<Mutex<Context>>, //tcp_stream: TcpStream,
 }
 
 impl MbedTlsStream {
     pub fn new(mtc: &MbedTlsConnector) -> Box<MbedTlsStream> {
         Box::new(MbedTlsStream {
-            context: mtc.context.clone()
+            context: mtc.context.clone(),
         })
     }
 }
 
-
 impl ReadWrite for MbedTlsStream {
+    // no obvious way to get socket back out of mbedtls context
+    // context.io() returns Any, which is hard to turn back into
+    // TcpStream reference, and what is lifetime of reference?
     fn socket(&self) -> Option<&TcpStream> {
         None
     }
 }
 
-impl io::Read for MbedTlsStream  {
+impl io::Read for MbedTlsStream {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let mut ctx = self.context.lock().unwrap();
         ctx.read(buf)
@@ -106,7 +104,6 @@ impl io::Write for MbedTlsStream {
         ctx.flush()
     }
 }
-
 
 /*
  * Local Variables:
