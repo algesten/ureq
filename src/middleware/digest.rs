@@ -1,6 +1,6 @@
-use crate::{Request, Response, Error, Middleware, MiddlewareNext};
+use crate::{Error, Middleware, MiddlewareNext, Request, Response};
 use digest_auth::{AuthContext, WwwAuthenticateHeader};
-use std::{borrow::Cow, str::FromStr};
+use std::str::FromStr;
 
 /// Provides simple digest authentication powered by the `digest_auth` crate.
 ///
@@ -23,15 +23,12 @@ use std::{borrow::Cow, str::FromStr};
 /// agent.get(&url).call();
 /// ```
 pub struct DigestAuthMiddleware {
-    username: Cow<'static, str>,
-    password: Cow<'static, str>,
+    username: String,
+    password: String,
 }
 
 impl DigestAuthMiddleware {
-    pub fn new(
-        username: impl Into<Cow<'static, str>>,
-        password: impl Into<Cow<'static, str>>,
-    ) -> Self {
+    pub fn new(username: &str, password: &str) -> Self {
         Self {
             username: username.into(),
             password: password.into(),
@@ -45,12 +42,9 @@ impl DigestAuthMiddleware {
     ) -> Option<String> {
         let challenge_string = response.header("www-authenticate")?;
         let mut challenge = WwwAuthenticateHeader::from_str(challenge_string).ok()?;
-        let path = request.request_url().ok()?.path().to_string();
-        let context = AuthContext::new(
-            self.username.as_ref(),
-            self.password.as_ref(),
-            Cow::from(path),
-        );
+        let url = request.request_url().ok()?;
+        let path = url.path();
+        let context = AuthContext::new(&self.username, &self.password, path);
         challenge
             .respond(&context)
             .as_ref()
@@ -77,4 +71,3 @@ impl Middleware for DigestAuthMiddleware {
         }
     }
 }
-
