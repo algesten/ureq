@@ -35,7 +35,7 @@ impl DigestAuthMiddleware {
         }
     }
 
-    fn construct_answer_to_challenge(
+    fn respond_to_challenge(
         &self,
         request: &Request,
         response: &Response,
@@ -63,7 +63,7 @@ impl Middleware for DigestAuthMiddleware {
         let response = next.handle(request.clone())?;
         if let (401, Some(challenge_answer)) = (
             response.status(),
-            self.construct_answer_to_challenge(&request, &response),
+            self.respond_to_challenge(&request, &response),
         ) {
             request.set("authorization", &challenge_answer).call()
         } else {
