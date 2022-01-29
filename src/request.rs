@@ -4,6 +4,7 @@ use std::{fmt, time};
 use url::{form_urlencoded, ParseError, Url};
 
 use crate::body::Payload;
+use crate::body::ResendBody;
 use crate::header::{self, Header};
 use crate::middleware::MiddlewareNext;
 use crate::unit::{self, Unit};
@@ -30,6 +31,7 @@ pub struct Request {
     url: String,
     headers: Vec<Header>,
     timeout: Option<time::Duration>,
+    resend_buffer_size: usize,
 }
 
 impl fmt::Debug for Request {
@@ -50,6 +52,7 @@ impl Request {
             url,
             headers: vec![],
             timeout: None,
+            resend_buffer_size: 0,
         }
     }
 
@@ -126,8 +129,10 @@ impl Request {
             }
         };
 
+        let resend_buffer_size = self.resend_buffer_size;
+
         let request_fn = |req: Request| {
-            let reader = payload.into_read();
+            let reader = payload.into_read(resend_buffer_size);
             let unit = Unit::new(
                 &req.agent,
                 &req.method,
@@ -153,7 +158,7 @@ impl Request {
             next.handle(self)?
         } else {
             // Run the request_fn without any further indirection.
-            request_fn(self)?
+            request_fn(self).map(|(r, _)| r)?
         };
 
         if response.status() >= 400 {
@@ -450,6 +455,22 @@ impl Request {
     /// ```
     pub fn request_url(&self) -> Result<RequestUrl> {
         Ok(RequestUrl::new(self.parse_url()?))
+    }
+
+    /// Set a buffer size for outgoing body data.
+    ///
+    /// In some situations, such as responding to 307/308 redirects, ureq needs
+    /// to re-send the outgoing body data. Normally body data is not buffered,
+    /// but can be by setting a size here.
+    ///
+    /// Notice that the buffer size must be large enough to hold the _entire_
+    /// outgoing body for this to function.
+    pub fn resend_buffer_size(&mut self, size: usize) {
+        self.resend_buffer_size = size;
+    }
+
+    pub fn resend(self, body: ResendBody) -> Result<Response> {
+        todo!()
     }
 }
 

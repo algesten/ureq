@@ -10,6 +10,7 @@ use url::Url;
 use cookie::Cookie;
 
 use crate::agent::RedirectAuthHeaders;
+use crate::body::ResendBody;
 use crate::body::{self, BodySize, Payload, SizedReader};
 use crate::error::{Error, ErrorKind};
 use crate::header;
@@ -158,10 +159,10 @@ pub(crate) fn connect(
     mut unit: Unit,
     use_pooled: bool,
     mut body: SizedReader,
-) -> Result<Response, Error> {
+) -> Result<(Response, Option<ResendBody>), Error> {
     let mut history = vec![];
     let mut resp = loop {
-        let resp = connect_inner(&unit, use_pooled, body, &history)?;
+        let resp = connect_inner(&unit, use_pooled, &mut body, &history)?;
 
         // handle redirects
         if !(300..399).contains(&resp.status()) || unit.agent.config.redirects == 0 {
@@ -213,7 +214,15 @@ pub(crate) fn connect(
 
         debug!("redirect {} {} -> {}", resp.status(), url, new_url);
         history.push(unit.url);
-        body = Payload::Empty.into_read();
+
+        match (resp.status(), body.can_rewind()) {
+            (307 | 308, true) => {
+                body.rewind();
+            }
+            _ => {
+                body = Payload::Empty.into_read(0);
+            }
+        }
 
         // reuse the previous header vec on redirects.
         let mut headers = unit.headers;
@@ -235,14 +244,21 @@ pub(crate) fn connect(
         );
     };
     resp.history = history;
-    Ok(resp)
+
+    let rewind = if body.can_rewind() {
+        Some(ResendBody::new(body))
+    } else {
+        None
+    };
+
+    Ok((resp, rewind))
 }
 
 /// Perform a connection. Does not follow redirects.
 fn connect_inner(
     unit: &Unit,
     use_pooled: bool,
-    body: SizedReader,
+    body: &mut SizedReader,
     history: &[Url],
 ) -> Result<Response, Error> {
     let host = unit
@@ -299,9 +315,9 @@ fn connect_inner(
     let resp = match result {
         Err(err) if err.connection_closed() && retryable && is_recycled => {
             debug!("retrying request {} {}: {}", method, url, err);
-            let empty = Payload::Empty.into_read();
+            let mut empty = Payload::Empty.into_read(0);
             // NOTE: this recurses at most once because `use_pooled` is `false`.
-            return connect_inner(unit, false, empty, history);
+            return connect_inner(unit, false, &mut empty, history);
         }
         Err(e) => return Err(e),
         Ok(resp) => resp,

@@ -45,6 +45,16 @@ pub(crate) enum BodySize {
     Known(u64),
 }
 
+pub struct ResendBody<'a> {
+    sized_reader: SizedReader<'a>,
+}
+
+impl<'a> ResendBody<'a> {
+    pub(crate) fn new(body: SizedReader<'a>) -> Self {
+        ResendBody { sized_reader: body }
+    }
+}
+
 /// Payloads are turned into this type where we can hold both a size and the reader.
 ///
 /// *Internal API*
@@ -60,18 +70,26 @@ impl fmt::Debug for SizedReader<'_> {
 }
 
 impl<'a> SizedReader<'a> {
-    fn new(size: BodySize, reader: Box<dyn Read + 'a>) -> Self {
+    fn new(size: BodySize, buffer_size: usize, reader: Box<dyn Read + 'a>) -> Self {
         SizedReader {
             size,
-            reader: RewindReader::new(0, reader),
+            reader: RewindReader::new(buffer_size, reader),
         }
+    }
+
+    pub fn can_rewind(&self) -> bool {
+        self.reader.can_rewind()
+    }
+
+    pub fn rewind(&mut self) {
+        self.reader.rewind();
     }
 }
 
 impl<'a> Payload<'a> {
-    pub fn into_read(self) -> SizedReader<'a> {
+    pub fn into_read(self, buffer_size: usize) -> SizedReader<'a> {
         match self {
-            Payload::Empty => SizedReader::new(BodySize::Empty, Box::new(empty())),
+            Payload::Empty => SizedReader::new(BodySize::Empty, buffer_size, Box::new(empty())),
             Payload::Text(text, _charset) => {
                 #[cfg(feature = "charset")]
                 let bytes = {
@@ -84,13 +102,13 @@ impl<'a> Payload<'a> {
                 let bytes = text.as_bytes();
                 let len = bytes.len();
                 let cursor = Cursor::new(bytes);
-                SizedReader::new(BodySize::Known(len as u64), Box::new(cursor))
+                SizedReader::new(BodySize::Known(len as u64), buffer_size, Box::new(cursor))
             }
-            Payload::Reader(read) => SizedReader::new(BodySize::Unknown, read),
+            Payload::Reader(read) => SizedReader::new(BodySize::Unknown, buffer_size, read),
             Payload::Bytes(bytes) => {
                 let len = bytes.len();
                 let cursor = Cursor::new(bytes);
-                SizedReader::new(BodySize::Known(len as u64), Box::new(cursor))
+                SizedReader::new(BodySize::Known(len as u64), buffer_size, Box::new(cursor))
             }
         }
     }
@@ -142,7 +160,7 @@ fn copy_chunked<R: Read, W: Write>(reader: &mut R, writer: &mut W) -> io::Result
 
 /// Helper to send a body, either as chunked or not.
 pub(crate) fn send_body(
-    mut body: SizedReader,
+    body: &mut SizedReader,
     do_chunk: bool,
     stream: &mut Stream,
 ) -> io::Result<()> {

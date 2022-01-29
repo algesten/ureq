@@ -1,3 +1,4 @@
+use crate::body::ResendBody;
 use crate::{Error, Request, Response};
 
 /// Chained processing of request (and response).
@@ -142,7 +143,8 @@ pub struct MiddlewareNext<'a> {
     // type signature that is totally irrelevant for someone implementing a middleware.
     //
     // So in the name of having a sane external API, we accept this Box.
-    pub(crate) request_fn: Box<dyn FnOnce(Request) -> Result<Response, Error> + 'a>,
+    pub(crate) request_fn:
+        Box<dyn FnOnce(Request) -> Result<(Response, Option<ResendBody<'a>>), Error> + 'a>,
 }
 
 impl<'a> MiddlewareNext<'a> {
@@ -151,7 +153,7 @@ impl<'a> MiddlewareNext<'a> {
         if let Some(step) = self.chain.next() {
             step.handle(request, self)
         } else {
-            (self.request_fn)(request)
+            (self.request_fn)(request).map(|(r, _)| r)
         }
     }
 }
