@@ -333,6 +333,7 @@ mod proxy;
 mod request;
 mod resolve;
 mod response;
+mod rewind;
 mod stream;
 mod unit;
 

@@ -1,3 +1,4 @@
+use crate::rewind::RewindReader;
 use crate::stream::Stream;
 use std::fmt;
 use std::io::{self, copy, empty, Cursor, Read, Write};
@@ -49,7 +50,7 @@ pub(crate) enum BodySize {
 /// *Internal API*
 pub(crate) struct SizedReader<'a> {
     pub size: BodySize,
-    pub reader: Box<dyn Read + 'a>,
+    pub reader: RewindReader<Box<dyn Read + 'a>>,
 }
 
 impl fmt::Debug for SizedReader<'_> {
@@ -60,7 +61,10 @@ impl fmt::Debug for SizedReader<'_> {
 
 impl<'a> SizedReader<'a> {
     fn new(size: BodySize, reader: Box<dyn Read + 'a>) -> Self {
-        SizedReader { size, reader }
+        SizedReader {
+            size,
+            reader: RewindReader::new(0, reader),
+        }
     }
 }
 
