@@ -37,8 +37,10 @@ pub(crate) struct Stream {
 trait Inner: Read + Write {
     fn is_poolable(&self) -> bool;
     fn socket(&self) -> Option<&TcpStream>;
-    fn as_write_vec(&self) -> &[u8] {
-        panic!("as_write_vec on non Test stream");
+
+    /// The bytes written to the stream as a Vec<u8>. This is used for tests only.
+    fn written_bytes(&self) -> Vec<u8> {
+        panic!("written_bytes on non Test stream");
     }
 }
 
@@ -76,8 +78,10 @@ impl Inner for TestStream {
     fn socket(&self) -> Option<&TcpStream> {
         None
     }
-    fn as_write_vec(&self) -> &[u8] {
-        &self.1
+
+    /// For tests only
+    fn written_bytes(&self) -> Vec<u8> {
+        self.1.clone()
     }
 }
 
@@ -274,8 +278,8 @@ impl Stream {
     }
 
     #[cfg(test)]
-    pub fn as_write_vec(&self) -> &[u8] {
-        self.inner.get_ref().as_write_vec()
+    pub fn written_bytes(&self) -> Vec<u8> {
+        self.inner.get_ref().written_bytes()
     }
 }
 
