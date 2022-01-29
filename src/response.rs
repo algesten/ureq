@@ -520,8 +520,9 @@ impl Response {
     }
 
     #[cfg(test)]
-    pub fn as_write_vec(&self) -> &[u8] {
-        self.stream.as_write_vec()
+    pub fn into_written_bytes(self) -> Vec<u8> {
+        // Deliberately consume `self` so that any access to `self.stream` must be non-shared.
+        self.stream.written_bytes()
     }
 
     #[cfg(test)]
