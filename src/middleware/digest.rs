@@ -35,11 +35,7 @@ impl DigestAuthMiddleware {
         }
     }
 
-    fn respond_to_challenge(
-        &self,
-        request: &Request,
-        response: &Response,
-    ) -> Option<String> {
+    fn respond_to_challenge(&self, request: &Request, response: &Response) -> Option<String> {
         let challenge_string = response.header("www-authenticate")?;
         let mut challenge = WwwAuthenticateHeader::from_str(challenge_string).ok()?;
         let url = request.request_url().ok()?;
