@@ -3,6 +3,7 @@ use std::str::FromStr;
 use std::{fmt, io::BufRead};
 
 use chunked_transfer::Decoder as ChunkDecoder;
+use sync_wrapper::SyncWrapper;
 use url::Url;
 
 use crate::error::{Error, ErrorKind::BadStatus};
@@ -67,7 +68,7 @@ pub struct Response {
     // Boxed to avoid taking up too much size.
     unit: Option<Box<Unit>>,
     // Boxed to avoid taking up too much size.
-    stream: Box<Stream>,
+    stream: SyncWrapper<Box<Stream>>,
     /// The redirect history of this response, if any. The history starts with
     /// the first response received and ends with the response immediately
     /// previous to this one.
@@ -292,7 +293,7 @@ impl Response {
             self.length
         };
 
-        let stream = self.stream;
+        let stream = self.stream.into_inner();
         let unit = self.unit;
         if let Some(unit) = &unit {
             let result = stream.set_read_timeout(unit.agent.config.timeout_read);
@@ -512,7 +513,7 @@ impl Response {
             status,
             headers,
             unit: unit.map(Box::new),
-            stream: Box::new(stream.into()),
+            stream: SyncWrapper::new(Box::new(stream.into())),
             history: vec![],
             length,
             compression,
@@ -522,7 +523,7 @@ impl Response {
     #[cfg(test)]
     pub fn into_written_bytes(self) -> Vec<u8> {
         // Deliberately consume `self` so that any access to `self.stream` must be non-shared.
-        self.stream.written_bytes()
+        self.stream.into_inner().written_bytes()
     }
 
     #[cfg(test)]

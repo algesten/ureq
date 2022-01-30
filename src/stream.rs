@@ -18,7 +18,7 @@ use crate::error::ErrorKind;
 use crate::unit::Unit;
 
 /// Trait for things implementing [std::io::Read] + [std::io::Write]. Used in [TlsConnector].
-pub trait ReadWrite: Read + Write + Send + Sync + 'static {
+pub trait ReadWrite: Read + Write + Send + 'static {
     fn socket(&self) -> Option<&TcpStream>;
 }
 
@@ -31,7 +31,7 @@ pub trait TlsConnector: Send + Sync {
 }
 
 pub(crate) struct Stream {
-    inner: BufReader<Box<dyn Inner + Send + Sync + 'static>>,
+    inner: BufReader<Box<dyn Inner + Send + 'static>>,
 }
 
 trait Inner: Read + Write {
@@ -188,7 +188,7 @@ impl fmt::Debug for Stream {
 }
 
 impl Stream {
-    fn new(t: impl Inner + Send + Sync + 'static) -> Stream {
+    fn new(t: impl Inner + Send + 'static) -> Stream {
         Stream::logged_create(Stream {
             inner: BufReader::new(Box::new(t)),
         })
