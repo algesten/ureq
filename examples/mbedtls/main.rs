@@ -68,7 +68,7 @@ fn main() -> Result<()> {
 
 /*
  * Local Variables:
- * compile-command: "cargo build --example mbedtls-req --features=\"mbedtls\""
+ * compile-command: "cargo build --example mbedtls-req"
  * mode: rust
  * End:
  */

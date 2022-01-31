@@ -45,21 +45,13 @@ rustls-native-certs = { version = "0.6", optional = true }
 native-tls = { version = "0.2", optional = true }
 flate2 = { version = "1.0.22", optional = true }
 brotli-decompressor = { version = "2.3.2", optional = true }
-mbedtls = { version = "0.8.1", optional = true }
 
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }
 env_logger = "0.9"
 rustls = { version = "0.20", features = ["dangerous_configuration"] }
 rustls-pemfile = { version = "0.2" }
-
-[[example]]
-name = "smoke-test"
-
-[[example]]
-name = "mbedtls-req"
-required-features = ["mbedtls"]
-
+mbedtls = { version = "0.8.1" }
 
 [[example]]
 name = "cureq"
