@@ -107,7 +107,7 @@ impl io::Write for MbedTlsStream {
 
 /*
  * Local Variables:
- * compile-command: "cd ../.. && cargo build --example mbedtls-req --features=\"mbedtls\""
+ * compile-command: "cd ../.. && cargo build --example mbedtls-req"
  * mode: rust
  * End:
  */
