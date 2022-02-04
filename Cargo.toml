@@ -16,7 +16,7 @@ features = ["tls", "native-tls", "json", "charset", "cookies", "socks-proxy"]
 
 [features]
 default = ["tls", "gzip"]
-tls = ["webpki", "webpki-roots", "rustls"]
+tls = ["webpki", "rustls", "native-certs"]
 native-certs = ["rustls-native-certs"]
 json = ["serde", "serde_json"]
 charset = ["encoding_rs"]
@@ -35,11 +35,11 @@ socks = { version = "0.3", optional = true }
 serde = { version = "1", optional = true }
 serde_json = { version = "1", optional = true }
 encoding_rs = { version = "0.8", optional = true }
-sync_wrapper = { version = "0.1" } 
+sync_wrapper = { version = "0.1" }
 cookie_store = { version = "0.15", optional = true, default-features = false, features = ["preserve_order"] }
 log = "0.4"
 webpki = { version = "0.22", optional = true }
-webpki-roots = { version = "0.22", optional = true }
+webpki-roots = { version = "0.22", optional = true } # webpki-roots uses the MPL-2.0 copy-left license, so it is opt-in
 rustls = { version = "0.20.1", optional = true }
 rustls-native-certs = { version = "0.6", optional = true }
 native-tls = { version = "0.2", optional = true }

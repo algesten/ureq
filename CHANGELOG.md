@@ -1,5 +1,7 @@
-# 2.4.0
+# UNRELEASED
+ * Make `native-certs` the default when using the `tls` feature, and make `webpki-roots` opt-in.
 
+# 2.4.0
  * Enable `gzip` feature by default (#455)
  * `gzip` and `brotli` feature flags to enable decompression (#453, #421)
  * Middleware function on agent (#448)

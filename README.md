@@ -244,14 +244,13 @@ Here's an example of constructing an Agent that uses native-tls. It requires the
 ### Trusted Roots
 
 When you use rustls (`tls` feature), ureq defaults to trusting
-[webpki-roots](https://docs.rs/webpki-roots/), a
-copy of the Mozilla Root program that is bundled into your program (and so won't update if your
-program isn't updated). You can alternately configure
 [rustls-native-certs](https://docs.rs/rustls-native-certs/) which extracts the roots from your
 OS' trust store. That means it will update when your OS is updated, and also that it will
-include locally installed roots.
+include locally installed roots. Thus ureq will use your OS' certificate verifier and root store.
 
-When you use `native-tls`, ureq will use your OS' certificate verifier and root store.
+Alternatively, you can opt-in to using [webpki-roots](https://docs.rs/webpki-roots/), a
+copy of the Mozilla Root program that is bundled into your program (and so won't update if your
+program isn't updated). Just enable the `"webpki-roots"` feature in `ureq` to use this instead.
 
 ## Blocking I/O for simplicity
 

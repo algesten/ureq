@@ -58,7 +58,7 @@ impl Write for RustlsStream {
     }
 }
 
-#[cfg(feature = "native-certs")]
+#[cfg(not(feature = "webpki-roots"))]
 fn root_certs() -> rustls::RootCertStore {
     let mut root_store = rustls::RootCertStore::empty();
 
@@ -76,7 +76,7 @@ fn root_certs() -> rustls::RootCertStore {
     root_store
 }
 
-#[cfg(not(feature = "native-certs"))]
+#[cfg(feature = "webpki-roots")]
 fn root_certs() -> rustls::RootCertStore {
     let mut root_store = rustls::RootCertStore::empty();
     root_store.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
