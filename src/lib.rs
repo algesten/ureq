@@ -338,7 +338,7 @@ mod unit;
 
 // rustls is our default tls engine. If the feature is on, it will be
 // used for the shortcut calls the top of the crate (`ureq::get` etc).
-#[cfg(feature = "tls")]
+#[cfg(feature = "rustls")]
 mod rtls;
 
 // native-tls is a feature that must be configured via the AgentBuilder.
@@ -347,14 +347,14 @@ mod rtls;
 mod ntls;
 
 // If we have rustls compiled, that is the default.
-#[cfg(feature = "tls")]
+#[cfg(feature = "rustls")]
 pub(crate) fn default_tls_config() -> std::sync::Arc<dyn TlsConnector> {
     rtls::default_tls_config()
 }
 
 // Without rustls compiled, we just fail on https when using the shortcut
 // calls at the top of the crate (`ureq::get` etc).
-#[cfg(not(feature = "tls"))]
+#[cfg(not(feature = "rustls"))]
 pub(crate) fn default_tls_config() -> std::sync::Arc<dyn TlsConnector> {
     use std::net::TcpStream;
     use std::sync::Arc;
