@@ -56,3 +56,7 @@ mbedtls = { version = "0.8.1" }
 [[example]]
 name = "cureq"
 required-features = ["charset", "cookies", "socks-proxy", "native-tls"]
+
+[[example]]
+name = "tls_config"
+required-features = ["tls", "native-tls"]
