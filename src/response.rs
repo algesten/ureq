@@ -152,7 +152,7 @@ impl Response {
     /// The header value for the given name, or None if not found.
     ///
     /// For historical reasons, the HTTP spec allows for header values
-    /// to be encoded using encodigs like iso-8859-1. Such encodings
+    /// to be encoded using encodings like iso-8859-1. Such encodings
     /// means the values are not possible to interpret as utf-8.
     ///
     /// In case the header value can't be read as utf-8, this function
