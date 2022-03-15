@@ -24,6 +24,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// # }
 /// ```
 #[derive(Clone)]
+#[must_use = "Requests do nothing until consumed by `call()`"]
 pub struct Request {
     agent: Agent,
     method: String,
