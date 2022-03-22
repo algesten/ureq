@@ -36,7 +36,7 @@ serde = { version = "1", optional = true }
 serde_json = { version = "1", optional = true }
 encoding_rs = { version = "0.8", optional = true }
 sync_wrapper = { version = "0.1" } 
-cookie_store = { version = "0.15", optional = true, default-features = false, features = ["preserve_order"] }
+cookie_store = { version = "0.16", optional = true, default-features = false, features = ["preserve_order"] }
 log = "0.4"
 webpki = { version = "0.22", optional = true }
 webpki-roots = { version = "0.22", optional = true }
