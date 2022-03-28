@@ -1,6 +1,9 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    any::Any,
+    sync::{Arc, Mutex},
+};
 
-use ureq::{Error, Middleware, MiddlewareNext, Request, Response};
+use ureq::{Error, Middleware, MiddlewareRequestNext, MiddlewareResponseNext, Request, Response};
 
 // Some state that could be shared with the main application.
 #[derive(Debug, Default)]
@@ -37,30 +40,38 @@ pub fn main() -> Result<(), Error> {
 }
 
 impl Middleware for CounterMiddleware {
-    fn handle(&self, request: Request, next: MiddlewareNext) -> Result<Response, Error> {
-        // Get state before request to increase request counter.
-        // Extra brackets to release the lock while continuing the chain.
-        {
-            let mut state = self.0.lock().unwrap();
+    fn handle_request(
+        &self,
+        request: Request,
+        next: MiddlewareRequestNext,
+    ) -> Result<Request, Error> {
+        let mut state = self.0.lock().unwrap();
+        state.request_count += 1;
 
-            state.request_count += 1;
-        } // release lock
+        // First argument is passed into handle_response, as a `Box<dyn Any + Send>`.
+        // This example does not need it, so just pass in `()`
+        next.handle((), request)
+    }
 
-        // Continue the middleware chain
-        let response = next.handle(request)?;
+    fn handle_response(
+        &self,
+        response: Response,
+        req_state: Box<dyn Any + Send>,
+        next: MiddlewareResponseNext,
+    ) -> Result<Response, Error> {
+        // State give in `handle`.
+        let () = *req_state.downcast().unwrap();
 
-        // Get state after response to increase byte count.
-        // Extra brackets not necessary, but there for symmetry with first lock.
-        {
-            let mut state = self.0.lock().unwrap();
+        let response = next.handle(response)?;
 
-            let len = response
-                .header("Content-Length")
-                .and_then(|s| s.parse::<u64>().ok())
-                .unwrap();
+        let mut state = self.0.lock().unwrap();
 
-            state.total_bytes += len;
-        } // release lock
+        let len = response
+            .header("Content-Length")
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap();
+
+        state.total_bytes += len;
 
         Ok(response)
     }

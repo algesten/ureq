@@ -392,9 +392,12 @@ pub use crate::agent::AgentBuilder;
 pub use crate::agent::RedirectAuthHeaders;
 pub use crate::error::{Error, ErrorKind, OrAnyStatus, Transport};
 pub use crate::header::Header;
-pub use crate::middleware::{Middleware, MiddlewareNext};
+pub use crate::middleware::{
+    Middleware, MiddlewareRequestNext, MiddlewareResponseNext, RequestMiddleware,
+    ResponseMiddleware,
+};
 pub use crate::proxy::Proxy;
-pub use crate::request::{Request, RequestUrl};
+pub use crate::request::{Request, RequestStream, RequestUrl};
 pub use crate::resolve::Resolver;
 pub use crate::response::Response;
 pub use crate::stream::{ReadWrite, TlsConnector};

@@ -1,11 +1,13 @@
+use std::any::Any;
 use std::io::Read;
 use std::{fmt, time};
 
 use url::{form_urlencoded, ParseError, Url};
 
-use crate::body::Payload;
+use crate::body::{ChunkWriter, Payload};
 use crate::header::{self, Header};
-use crate::middleware::MiddlewareNext;
+use crate::middleware::{execute_request_middleware, execute_response_middleware};
+use crate::stream::Stream;
 use crate::unit::{self, Unit};
 use crate::Response;
 use crate::{agent::Agent, error::Error};
@@ -127,41 +129,95 @@ impl Request {
             }
         };
 
-        let request_fn = |req: Request| {
-            let reader = payload.into_read();
-            let unit = Unit::new(
-                &req.agent,
-                &req.method,
-                &url,
-                req.headers,
-                &reader,
-                deadline,
-            );
+        let agent = self.agent.clone();
+        let (altered_req, middleware_states) =
+            execute_request_middleware(&agent.state.middleware, self)?;
 
-            unit::connect(unit, true, reader).map_err(|e| e.url(url.clone()))
-        };
+        let reader = payload.into_read();
+        let unit = Unit::new(
+            &altered_req.agent,
+            &altered_req.method,
+            &altered_req.parse_url()?,
+            altered_req.headers,
+            reader.size,
+            deadline,
+        );
 
-        let response = if !self.agent.state.middleware.is_empty() {
-            // Clone agent to get a local copy with same lifetime as Payload
-            let agent = self.agent.clone();
-            let chain = &mut agent.state.middleware.iter().map(|mw| mw.as_ref());
+        let response = unit::connect(unit, true, reader).map_err(|e| e.url(url.clone()))?;
 
-            let request_fn = Box::new(request_fn);
-
-            let next = MiddlewareNext { chain, request_fn };
-
-            // // Run middleware chain
-            next.handle(self)?
-        } else {
-            // Run the request_fn without any further indirection.
-            request_fn(self)?
-        };
+        let response =
+            execute_response_middleware(&agent.state.middleware, middleware_states, response)?;
 
         if response.status() >= 400 {
             Err(Error::Status(response.status(), response))
         } else {
             Ok(response)
         }
+    }
+
+    /// Begins sending a request and returns a [`RequestStream`] object to
+    /// write the request body.
+    ///
+    /// Provides an alternative API to specify the request body; rather than having to
+    /// create a [`std::io::Read`] object with the body, this allows you to write the
+    /// body to the returned [`RequestStream`], which implements [`std::io::Write`].
+    ///
+    /// After finished writing, call [`RequestStream::finish`] to complete the request
+    /// and read the response.  If `finish` is not called, the stream will be closed
+    /// and the server will likely reject the request as incomplete.
+    ///
+    /// Caveats:
+    ///
+    /// * Requests are always sent using chunked encoding; as such, the `Transfer-Encoding`
+    ///   header is always set to `chunked` regardless of the previous value.
+    /// * Redirects are never followed, since the body cannot be "re-read".
+    pub fn call_writer(mut self) -> Result<RequestStream> {
+        // force chunked encoding
+        header::add_header(
+            &mut self.headers,
+            Header::new("Transfer-Encoding", "chunked"),
+        );
+
+        for h in &self.headers {
+            h.validate()?;
+        }
+
+        #[cfg(any(feature = "gzip", feature = "brotli"))]
+        self.add_accept_encoding();
+
+        let deadline = match self.timeout.or(self.agent.config.timeout) {
+            None => None,
+            Some(timeout) => {
+                let now = time::Instant::now();
+                Some(now.checked_add(timeout).unwrap())
+            }
+        };
+
+        let agent = self.agent.clone();
+
+        let (altered_req, middleware_states) =
+            execute_request_middleware(&agent.state.middleware, self)?;
+
+        let url = altered_req.parse_url()?;
+        let unit = Unit::new(
+            &altered_req.agent,
+            &altered_req.method,
+            &url,
+            altered_req.headers,
+            crate::body::BodySize::Unknown,
+            deadline,
+        );
+
+        let stream = unit::connect_inner_begin(&unit, true)
+            .map_err(|e| e.url(url.clone()))?
+            .0;
+
+        Ok(RequestStream {
+            stream: ChunkWriter::new(stream),
+            unit,
+            agent,
+            middleware_states,
+        })
     }
 
     /// Send data a json value.
@@ -523,6 +579,40 @@ impl RequestUrl {
             .iter()
             .map(|(k, v)| (k.as_str(), v.as_str()))
             .collect()
+    }
+}
+
+/// Write stream returned by [`Request::call_writer`].
+///
+/// Write the request body to this stream, then call [`RequestStream::finish`] to
+/// finish the request and start reading the response.
+///
+/// If the request is dropped without finishing, the stream will disconnect, and
+/// the server will likely reject the request as incomplete.
+///
+/// Writes are buffered before being sent out as chunks. `flush` will explicitly write a chunk
+/// and also flush the stream.
+pub struct RequestStream {
+    unit: Unit,
+    stream: ChunkWriter<Stream>,
+    agent: Agent,
+    middleware_states: Vec<Option<Box<dyn Any + Send>>>,
+}
+impl RequestStream {
+    /// Finishes writing the request and begins reading the response.
+    pub fn finish(self) -> Result<Response> {
+        let stream = self.stream.finish()?;
+        let resp = unit::connect_inner_end(&self.unit, stream)?;
+        execute_response_middleware(&self.agent.state.middleware, self.middleware_states, resp)
+    }
+}
+impl std::io::Write for RequestStream {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.stream.write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.stream.flush()
     }
 }
 

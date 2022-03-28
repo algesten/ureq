@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use crate::test;
 
 use super::super::*;
@@ -118,4 +120,37 @@ fn content_type_not_overriden_on_json() {
     let vec = resp.into_written_bytes();
     let s = String::from_utf8_lossy(&vec);
     assert!(s.contains("\r\ncontent-type: text/plain\r\n"));
+}
+
+#[test]
+fn request_writer() {
+    test::set_handler("/request_writer", |_unit| {
+        test::make_response(200, "OK", vec![], vec![])
+    });
+    let mut writer = post("test://host/request_writer").call_writer().unwrap();
+
+    writer.write_all("Hello World!!!".as_bytes()).unwrap();
+
+    let resp = writer.finish().unwrap();
+    let vec = resp.into_written_bytes();
+    let s = String::from_utf8_lossy(&vec);
+    assert!(s.contains("Transfer-Encoding: chunked\r\n"));
+}
+
+#[test]
+fn request_writer_try_to_use_encoding() {
+    test::set_handler("/request_writer_try_to_use_encoding", |_unit| {
+        test::make_response(200, "OK", vec![], vec![])
+    });
+    let mut writer = post("test://host/request_writer_try_to_use_encoding")
+        .set("Transfer-Encoding", "identity")
+        .call_writer()
+        .unwrap();
+
+    writer.write_all("Hello World!!!".as_bytes()).unwrap();
+
+    let resp = writer.finish().unwrap();
+    let vec = resp.into_written_bytes();
+    let s = String::from_utf8_lossy(&vec);
+    assert!(s.contains("Transfer-Encoding: chunked\r\n"));
 }

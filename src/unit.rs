@@ -40,7 +40,7 @@ impl Unit {
         method: &str,
         url: &Url,
         mut headers: Vec<Header>,
-        body: &SizedReader,
+        body_size: BodySize,
         deadline: Option<time::Instant>,
     ) -> Self {
         //
@@ -68,7 +68,7 @@ impl Unit {
                 // Content-Length,
                 // otherwise, use the chunked Transfer-Encoding (only if no other Transfer-Encoding
                 // has been set
-                match body.size {
+                match body_size {
                     BodySize::Known(size) => {
                         extra.push(Header::new("Content-Length", &format!("{}", size)))
                     }
@@ -230,7 +230,7 @@ pub(crate) fn connect(
             &new_method,
             &new_url,
             headers,
-            &body,
+            body.size,
             unit.deadline,
         );
     };
@@ -245,7 +245,7 @@ fn connect_inner(
     body: SizedReader,
     history: &[Url],
 ) -> Result<Response, Error> {
-    let host = unit
+    /*let host = unit
         .url
         .host_str()
         // This unwrap is ok because Request::parse_url() ensure there is always a host present.
@@ -274,7 +274,9 @@ fn connect_inner(
             // not a pooled connection, propagate the error.
             return Err(err.into());
         }
-    }
+    }*/
+
+    let (mut stream, is_recycled) = connect_inner_begin(unit, use_pooled)?;
     let retryable = unit.is_retryable(&body);
 
     // send the body (which can be empty now depending on redirects)
@@ -298,7 +300,7 @@ fn connect_inner(
     // up to N+1 total tries, where N is max_idle_connections_per_host.
     let resp = match result {
         Err(err) if err.connection_closed() && retryable && is_recycled => {
-            debug!("retrying request {} {}: {}", method, url, err);
+            debug!("retrying request {} {}: {}", unit.method, unit.url, err);
             let empty = Payload::Empty.into_read();
             // NOTE: this recurses at most once because `use_pooled` is `false`.
             return connect_inner(unit, false, empty, history);
@@ -311,9 +313,53 @@ fn connect_inner(
     #[cfg(feature = "cookies")]
     save_cookies(unit, &resp);
 
-    debug!("response {} to {} {}", resp.status(), method, url);
+    debug!("response {} to {} {}", resp.status(), unit.method, unit.url);
 
     // release the response
+    Ok(resp)
+}
+
+/// Perform a connection. Does not follow redirects.
+pub(crate) fn connect_inner_begin(unit: &Unit, use_pooled: bool) -> Result<(Stream, bool), Error> {
+    let host = unit
+        .url
+        .host_str()
+        // This unwrap is ok because Request::parse_url() ensure there is always a host present.
+        .unwrap();
+    let url = &unit.url;
+    let method = &unit.method;
+    // open socket
+    let (mut stream, is_recycled) = connect_socket(unit, host, use_pooled)?;
+
+    if is_recycled {
+        debug!("sending request (reused connection) {} {}", method, url);
+    } else {
+        debug!("sending request {} {}", method, url);
+    }
+
+    let send_result = send_prelude(unit, &mut stream);
+
+    if let Err(err) = send_result {
+        if is_recycled {
+            debug!("retrying request early {} {}: {}", method, url, err);
+            // we try open a new connection, this time there will be
+            // no connection in the pool. don't use it.
+            // NOTE: this recurses at most once because `use_pooled` is `false`.
+            return connect_inner_begin(unit, false);
+        } else {
+            // not a pooled connection, propagate the error.
+            return Err(err.into());
+        }
+    }
+
+    Ok((stream, is_recycled))
+}
+
+pub(crate) fn connect_inner_end(unit: &Unit, stream: Stream) -> Result<Response, Error> {
+    let resp = Response::do_from_stream(stream, Some(unit.clone()))?;
+    #[cfg(feature = "cookies")]
+    save_cookies(unit, &resp);
+    debug!("response {} to {} {}", resp.status(), unit.method, unit.url);
     Ok(resp)
 }
 

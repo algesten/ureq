@@ -37,7 +37,7 @@ impl Default for Payload<'_> {
 /// The size of the body.
 ///
 /// *Internal API*
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) enum BodySize {
     Empty,
     Unknown,
@@ -96,6 +96,73 @@ const CHUNK_MAX_SIZE: usize = 0x4000; // Maximum size of a TLS fragment
 const CHUNK_HEADER_MAX_SIZE: usize = 6; // four hex digits plus "\r\n"
 const CHUNK_FOOTER_SIZE: usize = 2; // "\r\n"
 const CHUNK_MAX_PAYLOAD_SIZE: usize = CHUNK_MAX_SIZE - CHUNK_HEADER_MAX_SIZE - CHUNK_FOOTER_SIZE;
+
+/// Write wrapper that wraps the stream in chunk framing.
+///
+/// Written data is cached into a buffer. When the buffer gets full (or flush is called),
+/// the chunk header+footer is spliced in and a single write call writes the chunk.
+/// For that to work, it leaves a section at the beginning and end of the buffer
+/// available to write the chunk header/footer.
+pub(crate) struct ChunkWriter<W: Write> {
+    wrapped: W,
+    buffer: Vec<u8>,
+}
+impl<W: Write> ChunkWriter<W> {
+    pub(crate) fn new(wrapped: W) -> Self {
+        let mut buffer = Vec::with_capacity(CHUNK_MAX_SIZE);
+        buffer.extend(0..CHUNK_HEADER_MAX_SIZE as u8);
+
+        Self { wrapped, buffer }
+    }
+
+    pub(crate) fn finish(mut self) -> io::Result<W> {
+        self.end_chunk()?;
+        self.wrapped.write_all("0\r\n\r\n".as_bytes())?;
+        Ok(self.wrapped)
+    }
+
+    fn end_chunk(&mut self) -> io::Result<()> {
+        debug_assert!(self.buffer.len() >= CHUNK_HEADER_MAX_SIZE);
+        if self.buffer.len() <= CHUNK_HEADER_MAX_SIZE {
+            return Ok(());
+        }
+
+        let data_len = self.buffer.len().saturating_sub(CHUNK_HEADER_MAX_SIZE);
+        let header = format!("{:x}\r\n", data_len);
+        debug_assert!(header.len() <= CHUNK_HEADER_MAX_SIZE);
+
+        let header_offset = CHUNK_HEADER_MAX_SIZE - header.len();
+        self.buffer[header_offset..CHUNK_HEADER_MAX_SIZE].copy_from_slice(header.as_bytes());
+        self.buffer.extend("\r\n".as_bytes());
+
+        self.wrapped.write_all(&self.buffer[header_offset..])?;
+
+        self.buffer.clear();
+        self.buffer.extend(0..CHUNK_HEADER_MAX_SIZE as u8);
+
+        Ok(())
+    }
+}
+impl<W: Write> Write for ChunkWriter<W> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        debug_assert!(self.buffer.len() >= CHUNK_HEADER_MAX_SIZE);
+        let buf_remaining = CHUNK_MAX_SIZE.saturating_sub(self.buffer.len() + CHUNK_FOOTER_SIZE);
+
+        let num_write = buf.len().min(buf_remaining);
+        self.buffer.extend_from_slice(&buf[0..num_write]);
+
+        if self.buffer.len() >= CHUNK_MAX_SIZE - CHUNK_FOOTER_SIZE {
+            self.flush()?;
+        }
+        Ok(num_write)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.end_chunk()?;
+        self.wrapped.flush()?;
+        Ok(())
+    }
+}
 
 // copy_chunks() improves over chunked_transfer's Encoder + io::copy with the
 // following performance optimizations:
@@ -173,5 +240,28 @@ mod tests {
         dest_expected.extend_from_slice(b"0\r\n\r\n");
 
         assert_eq!(dest, dest_expected);
+    }
+
+    #[test]
+    fn test_chunked_writer() {
+        let mut stream = ChunkWriter::new(std::io::Cursor::new(vec![]));
+
+        stream.write_all(&vec![33; CHUNK_MAX_PAYLOAD_SIZE]).unwrap();
+        stream.write_all(b"hello world").unwrap();
+        stream.flush().unwrap();
+        stream.write_all(b"test message").unwrap();
+
+        let contents = stream.finish().unwrap().into_inner();
+
+        let mut dest_expected = Vec::<u8>::new();
+        dest_expected.extend_from_slice(format!("{:x}\r\n", CHUNK_MAX_PAYLOAD_SIZE).as_bytes());
+        dest_expected.resize(dest_expected.len() + CHUNK_MAX_PAYLOAD_SIZE, 33);
+        dest_expected.extend_from_slice(b"\r\n");
+
+        dest_expected.extend_from_slice(b"b\r\nhello world\r\n");
+        dest_expected.extend_from_slice(b"c\r\ntest message\r\n");
+        dest_expected.extend_from_slice(b"0\r\n\r\n");
+
+        assert_eq!(contents, dest_expected);
     }
 }
