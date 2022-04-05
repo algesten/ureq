@@ -336,6 +336,8 @@ pub enum ErrorKind {
     UnknownScheme,
     /// DNS lookup failed.
     Dns,
+    /// Insecure request attempted with https only set
+    InsecureRequestHttpsOnly,
     /// Connection to server failed.
     ConnectionFailed,
     /// Too many redirects.
@@ -402,6 +404,9 @@ impl fmt::Display for ErrorKind {
             ErrorKind::InvalidUrl => write!(f, "Bad URL"),
             ErrorKind::UnknownScheme => write!(f, "Unknown Scheme"),
             ErrorKind::Dns => write!(f, "Dns Failed"),
+            ErrorKind::InsecureRequestHttpsOnly => {
+                write!(f, "Insecure request attempted with https_only set")
+            }
             ErrorKind::ConnectionFailed => write!(f, "Connection Failed"),
             ErrorKind::TooManyRedirects => write!(f, "Too Many Redirects"),
             ErrorKind::BadStatus => write!(f, "Bad Status"),

@@ -54,6 +54,7 @@ pub(crate) struct AgentConfig {
     pub timeout_read: Option<Duration>,
     pub timeout_write: Option<Duration>,
     pub timeout: Option<Duration>,
+    pub https_only: bool,
     pub no_delay: bool,
     pub redirects: u32,
     pub redirect_auth_headers: RedirectAuthHeaders,
@@ -239,6 +240,7 @@ impl AgentBuilder {
                 timeout_read: None,
                 timeout_write: None,
                 timeout: None,
+                https_only: false,
                 no_delay: true,
                 redirects: 5,
                 redirect_auth_headers: RedirectAuthHeaders::Never,
@@ -290,6 +292,21 @@ impl AgentBuilder {
     /// ```
     pub fn proxy(mut self, proxy: Proxy) -> Self {
         self.config.proxy = Some(proxy);
+        self
+    }
+
+    /// Enforce the client to only perform HTTPS requests.
+    /// This setting also makes the client refuse HTTPS to HTTP redirects.
+    /// Default is false
+    ///
+    /// Example:
+    /// ```
+    /// let agent = ureq::AgentBuilder::new()
+    ///     .https_only(true)
+    ///     .build();
+    /// ```
+    pub fn https_only(mut self, enforce: bool) -> Self {
+        self.config.https_only = enforce;
         self
     }
 
