@@ -349,9 +349,8 @@ fn connect_socket(unit: &Unit, hostname: &str, use_pooled: bool) -> Result<(Stre
         scheme => return Err(ErrorKind::UnknownScheme.msg(format!("unknown scheme '{}'", scheme))),
     };
     if unit.url.scheme() != "https" && unit.agent.config.https_only {
-        return Err(ErrorKind::InsecureRequestHttpsOnly.msg(format!(
-            "can't perform non https request with https_only set"
-        )));
+        return Err(ErrorKind::InsecureRequestHttpsOnly
+            .msg("can't perform non https request with https_only set"));
     }
     if use_pooled {
         let pool = &unit.agent.state.pool;
