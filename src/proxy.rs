@@ -4,6 +4,7 @@ use crate::error::{Error, ErrorKind};
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Proto {
     HTTPConnect,
+    HTTPSConnect,
     SOCKS4,
     SOCKS4A,
     SOCKS5,
@@ -90,6 +91,7 @@ impl Proxy {
         let proto = if proxy_parts.len() == 2 {
             match proxy_parts.next() {
                 Some("http") => Proto::HTTPConnect,
+                Some("https") => Proto::HTTPSConnect,
                 Some("socks4") => Proto::SOCKS4,
                 Some("socks4a") => Proto::SOCKS4A,
                 Some("socks") => Proto::SOCKS5,

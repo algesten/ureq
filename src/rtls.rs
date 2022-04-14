@@ -7,7 +7,7 @@ use once_cell::sync::Lazy;
 
 use crate::ErrorKind;
 use crate::{
-    stream::{ReadWrite, TlsConnector},
+    stream::{ReadWrite, Stream, TlsConnector},
     Error,
 };
 
@@ -26,11 +26,11 @@ fn is_close_notify(e: &std::io::Error) -> bool {
     false
 }
 
-struct RustlsStream(rustls::StreamOwned<rustls::ClientConnection, TcpStream>);
+struct RustlsStream(rustls::StreamOwned<rustls::ClientConnection, Stream>);
 
 impl ReadWrite for RustlsStream {
     fn socket(&self) -> Option<&TcpStream> {
-        Some(self.0.get_ref())
+        self.0.get_ref().socket()
     }
 }
 
@@ -90,11 +90,7 @@ fn root_certs() -> rustls::RootCertStore {
 }
 
 impl TlsConnector for Arc<rustls::ClientConfig> {
-    fn connect(
-        &self,
-        dns_name: &str,
-        mut tcp_stream: TcpStream,
-    ) -> Result<Box<dyn ReadWrite>, Error> {
+    fn connect(&self, dns_name: &str, mut tcp_stream: Stream) -> Result<Box<dyn ReadWrite>, Error> {
         let sni = rustls::ServerName::try_from(dns_name)
             .map_err(|e| ErrorKind::Dns.msg(format!("parsing '{}'", dns_name)).src(e))?;
 

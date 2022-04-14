@@ -1,6 +1,6 @@
 use crate::error::Error;
 use crate::error::ErrorKind;
-use crate::stream::{ReadWrite, TlsConnector};
+use crate::stream::{ReadWrite, Stream, TlsConnector};
 
 use std::net::TcpStream;
 use std::sync::Arc;
@@ -11,7 +11,7 @@ pub(crate) fn default_tls_config() -> std::sync::Arc<dyn TlsConnector> {
 }
 
 impl TlsConnector for native_tls::TlsConnector {
-    fn connect(&self, dns_name: &str, tcp_stream: TcpStream) -> Result<Box<dyn ReadWrite>, Error> {
+    fn connect(&self, dns_name: &str, tcp_stream: Stream) -> Result<Box<dyn ReadWrite>, Error> {
         let stream =
             native_tls::TlsConnector::connect(self, dns_name, tcp_stream).map_err(|e| {
                 ErrorKind::ConnectionFailed
@@ -24,8 +24,8 @@ impl TlsConnector for native_tls::TlsConnector {
 }
 
 #[cfg(feature = "native-tls")]
-impl ReadWrite for native_tls::TlsStream<TcpStream> {
+impl ReadWrite for native_tls::TlsStream<Stream> {
     fn socket(&self) -> Option<&TcpStream> {
-        Some(self.get_ref())
+        self.get_ref().socket()
     }
 }

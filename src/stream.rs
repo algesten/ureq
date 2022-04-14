@@ -11,6 +11,8 @@ use chunked_transfer::Decoder as ChunkDecoder;
 #[cfg(feature = "socks-proxy")]
 use socks::{TargetAddr, ToTargetAddr};
 
+#[cfg(not(feature = "native-tls"))]
+use crate::default_tls_config;
 use crate::proxy::Proxy;
 use crate::{error::Error, proxy::Proto};
 
@@ -18,7 +20,7 @@ use crate::error::ErrorKind;
 use crate::unit::Unit;
 
 /// Trait for things implementing [std::io::Read] + [std::io::Write]. Used in [TlsConnector].
-pub trait ReadWrite: Read + Write + Send + 'static {
+pub trait ReadWrite: Read + Write + Send + Sync + 'static {
     fn socket(&self) -> Option<&TcpStream>;
 }
 
@@ -26,12 +28,12 @@ pub trait TlsConnector: Send + Sync {
     fn connect(
         &self,
         dns_name: &str,
-        tcp_stream: TcpStream,
+        tcp_stream: Stream,
     ) -> Result<Box<dyn ReadWrite>, crate::error::Error>;
 }
 
-pub(crate) struct Stream {
-    inner: BufReader<Box<dyn Inner + Send + 'static>>,
+pub struct Stream {
+    inner: BufReader<Box<dyn Inner + Send + Sync + 'static>>,
 }
 
 trait Inner: Read + Write {
@@ -188,7 +190,7 @@ impl fmt::Debug for Stream {
 }
 
 impl Stream {
-    fn new(t: impl Inner + Send + 'static) -> Stream {
+    fn new(t: impl Inner + Send + Sync + 'static) -> Stream {
         Stream::logged_create(Stream {
             inner: BufReader::new(Box::new(t)),
         })
@@ -328,7 +330,7 @@ pub(crate) fn connect_http(unit: &Unit, hostname: &str) -> Result<Stream, Error>
     //
     let port = unit.url.port().unwrap_or(80);
 
-    connect_host(unit, hostname, port).map(Stream::from_tcp_stream)
+    connect_host(unit, hostname, port)
 }
 
 pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error> {
@@ -341,7 +343,7 @@ pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error
     Ok(Stream::new(https_stream))
 }
 
-pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<TcpStream, Error> {
+pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Stream, Error> {
     let connect_deadline: Option<Instant> =
         if let Some(timeout_connect) = unit.agent.config.timeout_connect {
             Instant::now().checked_add(timeout_connect)
@@ -380,7 +382,10 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         debug!("connecting to {} at {}", netloc, &sock_addr);
 
         // connect with a configured timeout.
-        let stream = if None != proto && Some(Proto::HTTPConnect) != proto {
+        let stream = if None != proto
+            && Some(Proto::HTTPConnect) != proto
+            && Some(Proto::HTTPSConnect) != proto
+        {
             connect_socks(
                 unit,
                 proxy.clone().unwrap(),
@@ -404,7 +409,7 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         }
     }
 
-    let mut stream = if let Some(stream) = any_stream {
+    let stream = if let Some(stream) = any_stream {
         stream
     } else if let Some(e) = any_err {
         return Err(ErrorKind::ConnectionFailed.msg("Connect error").src(e));
@@ -426,8 +431,33 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         stream.set_write_timeout(unit.agent.config.timeout_write)?;
     }
 
-    if proto == Some(Proto::HTTPConnect) {
-        if let Some(ref proxy) = proxy {
+    if proto == Some(Proto::HTTPSConnect) || proto == Some(Proto::HTTPConnect) {
+        if let Some((mut stream, proxy)) = match (proto, proxy) {
+            (Some(Proto::HTTPSConnect), Some(ref proxy)) => {
+                let tls_conf;
+                #[cfg(feature = "native-tls")]
+                {
+                    tls_conf = native_tls::TlsConnector::new().unwrap();
+                }
+                #[cfg(not(feature = "native-tls"))]
+                {
+                    tls_conf = default_tls_config();
+                }
+                let proxy_conn = tls_conf
+                    .connect(&proxy.server, Stream::from_tcp_stream(stream))
+                    .unwrap();
+                Some((Stream::new(proxy_conn), proxy))
+            }
+            (Some(Proto::HTTPConnect), Some(ref proxy)) => {
+                Some((Stream::from_tcp_stream(stream), proxy))
+            }
+            _ => {
+                return Err(Error::new(
+                    ErrorKind::ProxyConnect,
+                    Some("No proxy defined, but proto set".into()),
+                ));
+            }
+        } {
             write!(stream, "{}", proxy.connect(hostname, port)).unwrap();
             stream.flush()?;
 
@@ -443,10 +473,12 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
             }
 
             Proxy::verify_response(&proxy_response)?;
+            return Ok(stream);
         }
+        panic!("should not reach here");
     }
 
-    Ok(stream)
+    Ok(Stream::from_tcp_stream(stream))
 }
 
 #[cfg(feature = "socks-proxy")]
