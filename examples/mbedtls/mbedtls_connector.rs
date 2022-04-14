@@ -1,6 +1,6 @@
 use std::fmt;
 use std::io;
-use ureq::{Error, ReadWrite, TlsConnector};
+use ureq::{Error, ReadWrite, Stream, TlsConnector};
 
 use std::net::TcpStream;
 use std::sync::{Arc, Mutex};
@@ -53,7 +53,7 @@ impl MbedTlsConnector {
 }
 
 impl TlsConnector for MbedTlsConnector {
-    fn connect(&self, _dns_name: &str, tcp_stream: TcpStream) -> Result<Box<dyn ReadWrite>, Error> {
+    fn connect(&self, _dns_name: &str, tcp_stream: Stream) -> Result<Box<dyn ReadWrite>, Error> {
         let mut ctx = self.context.lock().unwrap();
         match ctx.establish(tcp_stream, None) {
             Err(_) => {

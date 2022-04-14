@@ -3,7 +3,7 @@ use std::io;
 use std::net::TcpStream;
 use std::sync::Arc;
 
-use ureq::{Error, ReadWrite, TlsConnector};
+use ureq::{Error, ReadWrite, Stream, TlsConnector};
 
 pub fn main() -> Result<(), Error> {
     let pass = PassThrough {
@@ -31,7 +31,7 @@ struct PassThrough {
 }
 
 impl TlsConnector for PassThrough {
-    fn connect(&self, _dns_name: &str, tcp_stream: TcpStream) -> Result<Box<dyn ReadWrite>, Error> {
+    fn connect(&self, _dns_name: &str, tcp_stream: Stream) -> Result<Box<dyn ReadWrite>, Error> {
         if self.handshake_fail {
             let io_err = io::Error::new(io::ErrorKind::InvalidData, PassThroughError);
             return Err(io_err.into());
@@ -41,11 +41,11 @@ impl TlsConnector for PassThrough {
     }
 }
 
-struct CustomTlsStream(TcpStream);
+struct CustomTlsStream(Stream);
 
 impl ReadWrite for CustomTlsStream {
     fn socket(&self) -> Option<&TcpStream> {
-        Some(&self.0)
+        self.0.socket()
     }
 }
 

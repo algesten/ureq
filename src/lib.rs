@@ -396,7 +396,7 @@ pub use crate::proxy::Proxy;
 pub use crate::request::{Request, RequestUrl};
 pub use crate::resolve::Resolver;
 pub use crate::response::Response;
-pub use crate::stream::{ReadWrite, TlsConnector};
+pub use crate::stream::{ReadWrite, Stream, TlsConnector};
 
 // re-export
 #[cfg(feature = "cookies")]

@@ -267,7 +267,7 @@ impl Stream {
         Ok(())
     }
 
-    pub(crate) fn socket(&self) -> Option<&TcpStream> {
+    pub fn socket(&self) -> Option<&TcpStream> {
         self.inner.get_ref().socket()
     }
 
