@@ -1,4 +1,5 @@
 use std::fmt;
+use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 use url::Url;
@@ -46,8 +47,25 @@ pub struct AgentBuilder {
     middleware: Vec<Box<dyn Middleware>>,
 }
 
-/// Config as built by AgentBuilder and then static for the lifetime of the Agent.
 #[derive(Clone)]
+pub(crate) struct TlsConfig(Arc<dyn TlsConnector>);
+
+impl fmt::Debug for TlsConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TlsConfig").finish()
+    }
+}
+
+impl Deref for TlsConfig {
+    type Target = Arc<dyn TlsConnector>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+/// Config as built by AgentBuilder and then static for the lifetime of the Agent.
+#[derive(Clone, Debug)]
 pub(crate) struct AgentConfig {
     pub proxy: Option<Proxy>,
     pub timeout_connect: Option<Duration>,
@@ -59,13 +77,7 @@ pub(crate) struct AgentConfig {
     pub redirects: u32,
     pub redirect_auth_headers: RedirectAuthHeaders,
     pub user_agent: String,
-    pub tls_config: Arc<dyn TlsConnector>,
-}
-
-impl fmt::Debug for AgentConfig {
-    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        todo!()
-    }
+    pub tls_config: TlsConfig,
 }
 
 /// Agents keep state between requests.
@@ -245,7 +257,7 @@ impl AgentBuilder {
                 redirects: 5,
                 redirect_auth_headers: RedirectAuthHeaders::Never,
                 user_agent: format!("ureq/{}", env!("CARGO_PKG_VERSION")),
-                tls_config: crate::default_tls_config(),
+                tls_config: TlsConfig(crate::default_tls_config()),
             },
             max_idle_connections: DEFAULT_MAX_IDLE_CONNECTIONS,
             max_idle_connections_per_host: DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST,
@@ -575,7 +587,7 @@ impl AgentBuilder {
     /// # }
     #[cfg(feature = "tls")]
     pub fn tls_config(mut self, tls_config: Arc<rustls::ClientConfig>) -> Self {
-        self.config.tls_config = Arc::new(tls_config);
+        self.config.tls_config = TlsConfig(Arc::new(tls_config));
         self
     }
 
@@ -600,7 +612,7 @@ impl AgentBuilder {
     /// # }
     /// ```
     pub fn tls_connector<T: TlsConnector + 'static>(mut self, tls_config: Arc<T>) -> Self {
-        self.config.tls_config = tls_config;
+        self.config.tls_config = TlsConfig(tls_config);
         self
     }
 
@@ -694,5 +706,21 @@ mod tests {
     fn agent_implements_send_and_sync() {
         let _agent: Box<dyn Send> = Box::new(AgentBuilder::new().build());
         let _agent: Box<dyn Sync> = Box::new(AgentBuilder::new().build());
+    }
+
+    #[test]
+    fn agent_config_debug() {
+        let agent = AgentBuilder::new().build();
+        assert_eq!(
+            format!("{:?}", agent),
+            "Agent { config: AgentConfig { \
+            proxy: None, timeout_connect: Some(30s), timeout_read: None, \
+            timeout_write: None, timeout: None, https_only: false, \
+            no_delay: true, redirects: 5, redirect_auth_headers: Never, \
+            user_agent: \"ureq/2.4.0\", tls_config: TlsConfig \
+         }, state: AgentState { pool: ConnectionPool { \
+            max_idle: 100, max_idle_per_host: 1, connections: 0 \
+         }, resolver: ArcResolver(...), .. } }"
+        );
     }
 }
