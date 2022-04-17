@@ -279,6 +279,14 @@ impl<R: Read + Sized + Into<Stream>> Read for PoolReturnRead<R> {
     }
 }
 
+impl<R: Read + Sized + Into<Stream>> Drop for PoolReturnRead<R> {
+    fn drop(&mut self) {
+        // trigger for connection return
+        let mut buf = [0_u8; 16];
+        self.read(&mut buf).ok();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
