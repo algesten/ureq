@@ -237,7 +237,7 @@ Here's an example of constructing an Agent that uses native-tls. It requires the
   use ureq::Agent;
 
   let agent = ureq::AgentBuilder::new()
-      .tls_connector(Arc::new(native_tls::TlsConnector::new().unwrap()))
+      .tls_connector(Arc::new(native_tls::TlsConnector::new()?))
       .build();
 ```
 
