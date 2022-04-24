@@ -11,7 +11,7 @@ HTTPS, and charset decoding.
 
 Ureq is in pure Rust for safety and ease of understanding. It avoids using
 `unsafe` directly. It [uses blocking I/O][blocking] instead of async I/O, because that keeps
-the API simple and and keeps dependencies to a minimum. For TLS, ureq uses
+the API simple and keeps dependencies to a minimum. For TLS, ureq uses
 [rustls or native-tls](#https--tls--ssl).
 
 Version 2.0.0 was released recently and changed some APIs. See the [changelog] for details.
