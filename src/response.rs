@@ -436,7 +436,7 @@ impl Response {
         use crate::stream::io_err_timeout;
         use std::error::Error;
 
-        let reader = self.into_reader();
+        let reader = io::BufReader::new(self.into_reader());
         serde_json::from_reader(reader).map_err(|e| {
             // This is to unify TimedOut io::Error in the API.
             // We make a clone of the original error since serde_json::Error doesn't
