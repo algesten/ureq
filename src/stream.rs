@@ -151,6 +151,15 @@ impl BufRead for DeadlineStream {
 
 impl Read for DeadlineStream {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        // If the stream's BufReader has any buffered bytes, return those first.
+        // This avoids calling `fill_buf()` on DeadlineStream unnecessarily,
+        // since that call always does a syscall. This ensures DeadlineStream
+        // can pass through the efficiency we gain by using a BufReader in Stream.
+        if !self.stream.inner.buffer().is_empty() {
+            let n = self.stream.inner.buffer().read(buf)?;
+            self.stream.inner.consume(n);
+            return Ok(n);
+        }
         // All reads on a DeadlineStream use the BufRead impl. This ensures
         // that we have a chance to set the correct timeout before each recv
         // syscall.
