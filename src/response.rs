@@ -692,7 +692,7 @@ fn read_next_line(reader: &mut impl BufRead, context: &str) -> io::Result<Header
 }
 
 /// Limits a `Read` to a content size (as set by a "Content-Length" header).
-struct LimitedRead<R> {
+pub(crate) struct LimitedRead<R> {
     reader: R,
     limit: usize,
     position: usize,
@@ -706,16 +706,19 @@ impl<R: Read> LimitedRead<R> {
             position: 0,
         }
     }
+
+    pub(crate) fn remaining(&self) -> usize {
+        self.limit - self.position
+    }
 }
 
 impl<R: Read> Read for LimitedRead<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let left = self.limit - self.position;
-        if left == 0 {
+        if self.remaining() == 0 {
             return Ok(0);
         }
-        let from = if left < buf.len() {
-            &mut buf[0..left]
+        let from = if self.remaining() < buf.len() {
+            &mut buf[0..self.remaining()]
         } else {
             buf
         };

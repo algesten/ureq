@@ -3,9 +3,11 @@ use std::collections::{HashMap, VecDeque};
 use std::io::{self, Read};
 use std::sync::Mutex;
 
+use crate::response::LimitedRead;
 use crate::stream::Stream;
 use crate::{Proxy, Agent};
 
+use chunked_transfer::Decoder;
 use log::debug;
 use url::Url;
 
@@ -269,12 +271,33 @@ impl<R: Read + Sized + Into<Stream>> PoolReturnRead<R> {
     }
 }
 
-impl<R: Read + Sized + Into<Stream>> Read for PoolReturnRead<R> {
+// Done allows a reader to indicate it is done (next read will return Ok(0))
+// without actually performing a read. This is useful so LimitedRead can
+// inform PoolReturnRead to return a stream to the pool even if the user
+// never read past the end of the response (For instance because their
+// application is handling length information on its own).
+pub(crate) trait Done {
+    fn done(&self) -> bool;
+}
+
+impl<R: Read> Done for LimitedRead<R> {
+    fn done(&self) -> bool {
+        self.remaining() == 0
+    }
+}
+
+impl<R: Read> Done for Decoder<R> {
+    fn done(&self) -> bool {
+        false
+    }
+}
+
+impl<R: Read + Sized + Done + Into<Stream>> Read for PoolReturnRead<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let amount = self.do_read(buf)?;
         // only if the underlying reader is exhausted can we send a new
         // request to the same socket. hence, we only return it now.
-        if amount == 0 {
+        if amount == 0 || self.reader.as_ref().map(|r| r.done()).unwrap_or_default() {
             self.return_connection()?;
         }
         Ok(amount)
