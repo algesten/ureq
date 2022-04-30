@@ -144,7 +144,7 @@ impl ConnectionPool {
                         streams.len(),
                         stream
                     );
-                    remove_first_match(&mut inner.lru, &key)
+                    remove_first_match(&mut inner.lru, key)
                         .expect("invariant failed: key in recycle but not in lru");
                 }
             }
