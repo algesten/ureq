@@ -284,7 +284,7 @@ fn connect_inner(
     // TODO: this unit.clone() bothers me. At this stage, we're not
     // going to use the unit (much) anymore, and it should be possible
     // to have ownership of it and pass it into the Response.
-    let result = Response::do_from_stream(stream, Some(unit.clone()));
+    let result = Response::do_from_stream(stream, unit.clone());
 
     // https://tools.ietf.org/html/rfc7230#section-6.3.1
     // When an inbound connection is closed prematurely, a client MAY

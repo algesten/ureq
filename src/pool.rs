@@ -4,8 +4,7 @@ use std::io::{self, Read};
 use std::sync::Mutex;
 
 use crate::stream::Stream;
-use crate::unit::Unit;
-use crate::Proxy;
+use crate::{Proxy, Agent};
 
 use log::debug;
 use url::Url;
@@ -123,7 +122,7 @@ impl ConnectionPool {
         }
     }
 
-    fn add(&self, key: PoolKey, stream: Stream) {
+    fn add(&self, key: &PoolKey, stream: Stream) {
         if self.noop() {
             return;
         }
@@ -151,7 +150,7 @@ impl ConnectionPool {
                 vacant_entry.insert(vec![stream].into());
             }
         }
-        inner.lru.push_back(key);
+        inner.lru.push_back(key.clone());
         if inner.lru.len() > self.max_idle_connections {
             drop(inner);
             self.remove_oldest()
@@ -219,28 +218,32 @@ impl PoolKey {
     }
 }
 
-/// Read wrapper that returns the stream to the pool once the
+/// Read wrapper that returns a stream to the pool once the
 /// read is exhausted (reached a 0).
 ///
 /// *Internal API*
 pub(crate) struct PoolReturnRead<R: Read + Sized + Into<Stream>> {
-    // unit that contains the agent where we want to return the reader.
-    unit: Option<Box<Unit>>,
-    // wrapped reader around the same stream
+    // the agent where we want to return the stream.
+    agent: Agent,
+    // wrapped reader around the same stream. It's an Option because we `take()` it
+    // upon returning the stream to the Agent.
     reader: Option<R>,
+    // Key under which to store the stream when we're done.
+    key: PoolKey,
 }
 
 impl<R: Read + Sized + Into<Stream>> PoolReturnRead<R> {
-    pub fn new(unit: Option<Box<Unit>>, reader: R) -> Self {
+    pub fn new(agent: &Agent, url: &Url, reader: R) -> Self {
         PoolReturnRead {
-            unit,
+            agent: agent.clone(),
+            key: PoolKey::new(url, agent.config.proxy.clone()),
             reader: Some(reader),
         }
     }
 
     fn return_connection(&mut self) -> io::Result<()> {
         // guard we only do this once.
-        if let (Some(unit), Some(reader)) = (self.unit.take(), self.reader.take()) {
+        if let Some(reader) = self.reader.take() {
             // bring back stream here to either go into pool or dealloc
             let mut stream = reader.into();
             if !stream.is_poolable() {
@@ -252,8 +255,7 @@ impl<R: Read + Sized + Into<Stream>> PoolReturnRead<R> {
             stream.reset()?;
 
             // insert back into pool
-            let key = PoolKey::new(&unit.url, unit.agent.config.proxy.clone());
-            unit.agent.state.pool.add(key, stream);
+            self.agent.state.pool.add(&self.key, stream);
         }
 
         Ok(())
@@ -303,7 +305,7 @@ mod tests {
             proxy: None,
         });
         for key in poolkeys.clone() {
-            pool.add(key, Stream::from_vec(vec![]))
+            pool.add(&key, Stream::from_vec(vec![]))
         }
         assert_eq!(pool.len(), pool.max_idle_connections);
 
@@ -328,7 +330,7 @@ mod tests {
         };
 
         for _ in 0..pool.max_idle_connections_per_host * 2 {
-            pool.add(poolkey.clone(), Stream::from_vec(vec![]))
+            pool.add(&poolkey, Stream::from_vec(vec![]))
         }
         assert_eq!(pool.len(), pool.max_idle_connections_per_host);
 
@@ -345,23 +347,19 @@ mod tests {
         // Each insertion should result in an additional entry in the pool.
         let pool = ConnectionPool::new_with_limits(10, 1);
         let url = Url::parse("zzz:///example.com").unwrap();
+        let pool_key = PoolKey::new(&url, None);
 
-        pool.add(PoolKey::new(&url, None), Stream::from_vec(vec![]));
+        pool.add(&pool_key, Stream::from_vec(vec![]));
         assert_eq!(pool.len(), 1);
 
-        pool.add(
-            PoolKey::new(&url, Some(Proxy::new("localhost:9999").unwrap())),
-            Stream::from_vec(vec![]),
-        );
-        assert_eq!(pool.len(), 2);
+        let pool_key = PoolKey::new(&url, Some(Proxy::new("localhost:9999").unwrap()));
 
-        pool.add(
-            PoolKey::new(
-                &url,
-                Some(Proxy::new("user:password@localhost:9999").unwrap()),
-            ),
-            Stream::from_vec(vec![]),
-        );
+        pool.add(&pool_key, Stream::from_vec(vec![]));
+        assert_eq!(pool.len(), 2);
+            
+        let pool_key = PoolKey::new(&url, Some(Proxy::new("user:password@localhost:9999").unwrap()));
+
+        pool.add(&pool_key, Stream::from_vec(vec![]));
         assert_eq!(pool.len(), 3);
     }
 }
