@@ -385,4 +385,24 @@ mod tests {
         pool.add(&pool_key, Stream::from_vec(vec![]));
         assert_eq!(pool.len(), 3);
     }
+
+    // Test that a stream gets returned to the pool if it was wrapped in a LimitedRead, and
+    // user reads the exact right number of bytes (but never gets a read of 0 bytes).
+    #[test]
+    fn read_exact() {
+        let url = Url::parse("https:///example.com").unwrap();
+
+        let mut out_buf = [0u8; 500];
+        let long_vec = vec![0u8; 1000];
+
+        let agent = Agent::new();
+        let stream = Stream::from_vec_poolable(long_vec);
+        let limited_read = LimitedRead::new(stream, 500);
+
+        let mut pool_return_read = PoolReturnRead::new(&agent, &url, limited_read);
+
+        pool_return_read.read_exact(&mut out_buf).unwrap();
+
+        assert_eq!(agent.state.pool.len(), 1);
+    }
 }

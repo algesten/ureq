@@ -699,7 +699,7 @@ pub(crate) struct LimitedRead<R> {
 }
 
 impl<R: Read> LimitedRead<R> {
-    fn new(reader: R, limit: usize) -> Self {
+    pub(crate) fn new(reader: R, limit: usize) -> Self {
         LimitedRead {
             reader,
             limit,
