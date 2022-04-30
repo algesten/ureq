@@ -12,7 +12,7 @@ use crate::header::{get_all_headers, get_header, Header, HeaderLine};
 use crate::pool::PoolReturnRead;
 use crate::stream::{DeadlineStream, Stream};
 use crate::unit::Unit;
-use crate::{stream, ErrorKind, Agent};
+use crate::{stream, Agent, ErrorKind};
 
 #[cfg(feature = "json")]
 use serde::de::DeserializeOwned;
@@ -293,18 +293,24 @@ impl Response {
 
         let stream = self.stream.into_inner();
         let unit = self.unit;
-            let result = stream.set_read_timeout(unit.agent.config.timeout_read);
-            if let Err(e) = result {
-                return Box::new(ErrorReader(e)) as Box<dyn Read + Send>;
-            }
+        let result = stream.set_read_timeout(unit.agent.config.timeout_read);
+        if let Err(e) = result {
+            return Box::new(ErrorReader(e)) as Box<dyn Read + Send>;
+        }
         let deadline = unit.deadline;
         let stream = DeadlineStream::new(*stream, deadline);
 
         let body_reader: Box<dyn Read + Send> = match (use_chunked, limit_bytes) {
-            (true, _) => Box::new(PoolReturnRead::new(&unit.agent, &unit.url, ChunkDecoder::new(stream))),
-            (false, Some(len)) => {
-                Box::new(PoolReturnRead::new(&unit.agent, &unit.url, LimitedRead::new(stream, len)))
-            }
+            (true, _) => Box::new(PoolReturnRead::new(
+                &unit.agent,
+                &unit.url,
+                ChunkDecoder::new(stream),
+            )),
+            (false, Some(len)) => Box::new(PoolReturnRead::new(
+                &unit.agent,
+                &unit.url,
+                LimitedRead::new(stream, len),
+            )),
             (false, None) => Box::new(stream),
         };
 
@@ -640,8 +646,18 @@ impl FromStr for Response {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let stream = Stream::from_vec(s.as_bytes().to_owned());
         let request_url = "https://example.com".parse().unwrap();
-        let request_reader = SizedReader{size: crate::body::BodySize::Empty, reader: Box::new(std::io::empty())};
-        let unit = Unit::new(&Agent::new(), "GET", &request_url, vec![], &request_reader, None);
+        let request_reader = SizedReader {
+            size: crate::body::BodySize::Empty,
+            reader: Box::new(std::io::empty()),
+        };
+        let unit = Unit::new(
+            &Agent::new(),
+            "GET",
+            &request_url,
+            vec![],
+            &request_reader,
+            None,
+        );
         Self::do_from_stream(stream, unit)
     }
 }

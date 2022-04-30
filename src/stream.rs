@@ -201,7 +201,11 @@ impl Stream {
 
     pub(crate) fn from_vec(v: Vec<u8>) -> Stream {
         Stream::logged_create(Stream {
-            inner: BufReader::new(Box::new(TestStream(Box::new(Cursor::new(v)), vec![], false))),
+            inner: BufReader::new(Box::new(TestStream(
+                Box::new(Cursor::new(v)),
+                vec![],
+                false,
+            ))),
         })
     }
 

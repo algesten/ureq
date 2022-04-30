@@ -5,7 +5,7 @@ use std::sync::Mutex;
 
 use crate::response::LimitedRead;
 use crate::stream::Stream;
-use crate::{Proxy, Agent};
+use crate::{Agent, Proxy};
 
 use chunked_transfer::Decoder;
 use log::debug;
@@ -379,8 +379,11 @@ mod tests {
 
         pool.add(&pool_key, Stream::from_vec(vec![]));
         assert_eq!(pool.len(), 2);
-            
-        let pool_key = PoolKey::new(&url, Some(Proxy::new("user:password@localhost:9999").unwrap()));
+
+        let pool_key = PoolKey::new(
+            &url,
+            Some(Proxy::new("user:password@localhost:9999").unwrap()),
+        );
 
         pool.add(&pool_key, Stream::from_vec(vec![]));
         assert_eq!(pool.len(), 3);
