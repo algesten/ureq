@@ -49,6 +49,14 @@ impl ReadWrite for CustomTlsStream {
     }
 }
 
+impl fmt::Debug for CustomTlsStream {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("CustomTlsStream")
+            .field("socket", &self.0)
+            .finish()
+    }
+}
+
 impl io::Read for CustomTlsStream {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.0.read(buf)

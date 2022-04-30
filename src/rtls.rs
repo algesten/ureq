@@ -1,4 +1,5 @@
 use std::convert::TryFrom;
+use std::fmt;
 use std::io::{self, Read, Write};
 use std::net::TcpStream;
 use std::sync::Arc;
@@ -31,6 +32,14 @@ struct RustlsStream(rustls::StreamOwned<rustls::ClientConnection, TcpStream>);
 impl ReadWrite for RustlsStream {
     fn socket(&self) -> Option<&TcpStream> {
         Some(self.0.get_ref())
+    }
+}
+
+impl fmt::Debug for RustlsStream {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("RustlsStream")
+            .field("socket", self.0.get_ref())
+            .finish()
     }
 }
 
