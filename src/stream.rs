@@ -20,58 +20,52 @@ use crate::unit::Unit;
 /// Trait for things implementing [std::io::Read] + [std::io::Write]. Used in [TlsConnector].
 pub trait ReadWrite: Read + Write + Send + 'static {
     fn socket(&self) -> Option<&TcpStream>;
+    fn is_poolable(&self) -> bool;
+
+    /// The bytes written to the stream as a Vec<u8>. This is used for tests only.
+    #[cfg(test)]
+    fn written_bytes(&self) -> Vec<u8> {
+        panic!("written_bytes on non Test stream");
+    }
+}
+
+impl ReadWrite for TcpStream {
+    fn socket(&self) -> Option<&TcpStream> {
+        Some(self)
+    }
+    fn is_poolable(&self) -> bool {
+        true
+    }
 }
 
 pub trait TlsConnector: Send + Sync {
     fn connect(
         &self,
         dns_name: &str,
-        tcp_stream: TcpStream,
+        io: Box<dyn ReadWrite>,
     ) -> Result<Box<dyn ReadWrite>, crate::error::Error>;
 }
 
 pub(crate) struct Stream {
-    inner: BufReader<Box<dyn Inner + Send + 'static>>,
-}
-
-trait Inner: Read + Write {
-    fn is_poolable(&self) -> bool;
-    fn socket(&self) -> Option<&TcpStream>;
-
-    /// The bytes written to the stream as a Vec<u8>. This is used for tests only.
-    fn written_bytes(&self) -> Vec<u8> {
-        panic!("written_bytes on non Test stream");
-    }
+    inner: BufReader<Box<dyn ReadWrite>>,
 }
 
 impl<T: ReadWrite + ?Sized> ReadWrite for Box<T> {
     fn socket(&self) -> Option<&TcpStream> {
         ReadWrite::socket(self.as_ref())
     }
-}
-
-impl<T: ReadWrite> Inner for T {
     fn is_poolable(&self) -> bool {
-        true
+        ReadWrite::is_poolable(self.as_ref())
     }
-
-    fn socket(&self) -> Option<&TcpStream> {
-        ReadWrite::socket(self)
-    }
-}
-
-impl Inner for TcpStream {
-    fn is_poolable(&self) -> bool {
-        true
-    }
-    fn socket(&self) -> Option<&TcpStream> {
-        Some(self)
+    #[cfg(test)]
+    fn written_bytes(&self) -> Vec<u8> {
+        ReadWrite::written_bytes(self.as_ref())
     }
 }
 
 struct TestStream(Box<dyn Read + Send + Sync>, Vec<u8>, bool);
 
-impl Inner for TestStream {
+impl ReadWrite for TestStream {
     fn is_poolable(&self) -> bool {
         self.2
     }
@@ -79,7 +73,7 @@ impl Inner for TestStream {
         None
     }
 
-    /// For tests only
+    #[cfg(test)]
     fn written_bytes(&self) -> Vec<u8> {
         self.1.clone()
     }
@@ -188,7 +182,7 @@ impl fmt::Debug for Stream {
 }
 
 impl Stream {
-    fn new(t: impl Inner + Send + 'static) -> Stream {
+    fn new(t: impl ReadWrite) -> Stream {
         Stream::logged_create(Stream {
             inner: BufReader::new(Box::new(t)),
         })
@@ -348,7 +342,7 @@ pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error
     let sock = connect_host(unit, hostname, port)?;
 
     let tls_conf = &unit.agent.config.tls_config;
-    let https_stream = tls_conf.connect(hostname, sock)?;
+    let https_stream = tls_conf.connect(hostname, Box::new(sock))?;
     Ok(Stream::new(https_stream))
 }
 

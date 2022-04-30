@@ -31,21 +31,28 @@ struct PassThrough {
 }
 
 impl TlsConnector for PassThrough {
-    fn connect(&self, _dns_name: &str, tcp_stream: TcpStream) -> Result<Box<dyn ReadWrite>, Error> {
+    fn connect(
+        &self,
+        _dns_name: &str,
+        io: Box<dyn ReadWrite>,
+    ) -> Result<Box<dyn ReadWrite>, Error> {
         if self.handshake_fail {
             let io_err = io::Error::new(io::ErrorKind::InvalidData, PassThroughError);
             return Err(io_err.into());
         }
 
-        Ok(Box::new(CustomTlsStream(tcp_stream)))
+        Ok(Box::new(CustomTlsStream(io)))
     }
 }
 
-struct CustomTlsStream(TcpStream);
+struct CustomTlsStream(Box<dyn ReadWrite>);
 
 impl ReadWrite for CustomTlsStream {
     fn socket(&self) -> Option<&TcpStream> {
-        Some(&self.0)
+        self.0.socket()
+    }
+    fn is_poolable(&self) -> bool {
+        self.0.is_poolable()
     }
 }
 

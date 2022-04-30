@@ -26,11 +26,14 @@ fn is_close_notify(e: &std::io::Error) -> bool {
     false
 }
 
-struct RustlsStream(rustls::StreamOwned<rustls::ClientConnection, TcpStream>);
+struct RustlsStream(rustls::StreamOwned<rustls::ClientConnection, Box<dyn ReadWrite>>);
 
 impl ReadWrite for RustlsStream {
     fn socket(&self) -> Option<&TcpStream> {
-        Some(self.0.get_ref())
+        self.0.get_ref().socket()
+    }
+    fn is_poolable(&self) -> bool {
+        self.0.get_ref().is_poolable()
     }
 }
 
@@ -93,7 +96,7 @@ impl TlsConnector for Arc<rustls::ClientConfig> {
     fn connect(
         &self,
         dns_name: &str,
-        mut tcp_stream: TcpStream,
+        mut io: Box<dyn ReadWrite>,
     ) -> Result<Box<dyn ReadWrite>, Error> {
         let sni = rustls::ServerName::try_from(dns_name)
             .map_err(|e| ErrorKind::Dns.msg(format!("parsing '{}'", dns_name)).src(e))?;
@@ -101,12 +104,12 @@ impl TlsConnector for Arc<rustls::ClientConfig> {
         let mut sess = rustls::ClientConnection::new(self.clone(), sni)
             .map_err(|e| ErrorKind::Io.msg("tls connection creation failed").src(e))?;
 
-        sess.complete_io(&mut tcp_stream).map_err(|e| {
+        sess.complete_io(&mut io).map_err(|e| {
             ErrorKind::ConnectionFailed
                 .msg("tls connection init failed")
                 .src(e)
         })?;
-        let stream = rustls::StreamOwned::new(sess, tcp_stream);
+        let stream = rustls::StreamOwned::new(sess, io);
 
         Ok(Box::new(RustlsStream(stream)))
     }

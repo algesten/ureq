@@ -53,15 +53,42 @@ impl MbedTlsConnector {
 }
 
 impl TlsConnector for MbedTlsConnector {
-    fn connect(&self, _dns_name: &str, tcp_stream: TcpStream) -> Result<Box<dyn ReadWrite>, Error> {
+    fn connect(
+        &self,
+        _dns_name: &str,
+        io: Box<dyn ReadWrite>,
+    ) -> Result<Box<dyn ReadWrite>, Error> {
         let mut ctx = self.context.lock().unwrap();
-        match ctx.establish(tcp_stream, None) {
+        let sync = SyncIo(Mutex::new(io));
+        match ctx.establish(sync, None) {
             Err(_) => {
                 let io_err = io::Error::new(io::ErrorKind::InvalidData, MbedTlsError);
                 return Err(io_err.into());
             }
             Ok(()) => Ok(MbedTlsStream::new(self)),
         }
+    }
+}
+
+/// Internal wrapper to make Box<dyn ReadWrite> implement Sync
+struct SyncIo(Mutex<Box<dyn ReadWrite>>);
+
+impl io::Read for SyncIo {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let mut lock = self.0.lock().unwrap();
+        lock.read(buf)
+    }
+}
+
+impl io::Write for SyncIo {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let mut lock = self.0.lock().unwrap();
+        lock.write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        let mut lock = self.0.lock().unwrap();
+        lock.flush()
     }
 }
 
@@ -83,6 +110,9 @@ impl ReadWrite for MbedTlsStream {
     // TcpStream reference, and what is lifetime of reference?
     fn socket(&self) -> Option<&TcpStream> {
         None
+    }
+    fn is_poolable(&self) -> bool {
+        true
     }
 }
 
