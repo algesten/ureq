@@ -1006,7 +1006,20 @@ mod tests {
         );
         let v = cow.to_vec();
         let s = Stream::from_vec(v);
-        let resp = Response::do_from_stream(s.into(), None).unwrap();
+        let request_url = "https://example.com".parse().unwrap();
+        let request_reader = SizedReader {
+            size: crate::body::BodySize::Empty,
+            reader: Box::new(std::io::empty()),
+        };
+        let unit = Unit::new(
+            &Agent::new(),
+            "GET",
+            &request_url,
+            vec![],
+            &request_reader,
+            None,
+        );
+        let resp = Response::do_from_stream(s.into(), unit).unwrap();
         assert_eq!(resp.status(), 200);
         assert_eq!(resp.header("x-geo-header"), None);
     }
