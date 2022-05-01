@@ -69,6 +69,12 @@ struct MbedTlsStream {
     context: Arc<Mutex<Context>>, //tcp_stream: TcpStream,
 }
 
+impl fmt::Debug for MbedTlsStream {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("MbedTlsStream").finish()
+    }
+}
+
 impl MbedTlsStream {
     pub fn new(mtc: &MbedTlsConnector) -> Box<MbedTlsStream> {
         Box::new(MbedTlsStream {

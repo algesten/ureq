@@ -29,12 +29,3 @@ impl ReadWrite for native_tls::TlsStream<TcpStream> {
         Some(self.get_ref())
     }
 }
-
-#[cfg(feature = "native-tls")]
-impl fmt::Debug for native_tls::TlsStream<TcpStream> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("native_tls::TlsStream")
-            .field("socket", self.get_ref())
-            .finish()
-    }
-}
