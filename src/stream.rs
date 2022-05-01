@@ -18,7 +18,7 @@ use crate::error::ErrorKind;
 use crate::unit::Unit;
 
 /// Trait for things implementing [std::io::Read] + [std::io::Write]. Used in [TlsConnector].
-pub trait ReadWrite: Read + Write + Send + 'static {
+pub trait ReadWrite: Read + Write + Send + fmt::Debug + 'static {
     fn socket(&self) -> Option<&TcpStream>;
     fn is_poolable(&self) -> bool;
 
@@ -42,7 +42,7 @@ pub trait TlsConnector: Send + Sync {
     fn connect(
         &self,
         dns_name: &str,
-        io: Box<dyn ReadWrite>,
+        io: Box<dyn ReadWrite + Sync>,
     ) -> Result<Box<dyn ReadWrite>, crate::error::Error>;
 }
 
@@ -92,6 +92,12 @@ impl Write for TestStream {
 
     fn flush(&mut self) -> io::Result<()> {
         Ok(())
+    }
+}
+
+impl fmt::Debug for TestStream {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("TestStream").finish()
     }
 }
 
@@ -175,7 +181,7 @@ pub(crate) fn io_err_timeout(error: String) -> io::Error {
 impl fmt::Debug for Stream {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.inner.get_ref().socket() {
-            Some(s) => write!(f, "{:?}", s),
+            Some(_) => write!(f, "Stream({:?})", self.inner.get_ref()),
             None => write!(f, "Stream(Test)"),
         }
     }
