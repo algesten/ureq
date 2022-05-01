@@ -1,4 +1,5 @@
 use std::convert::TryFrom;
+use std::fmt;
 use std::io::{self, Read, Write};
 use std::net::TcpStream;
 use std::sync::Arc;
@@ -26,7 +27,7 @@ fn is_close_notify(e: &std::io::Error) -> bool {
     false
 }
 
-struct RustlsStream(rustls::StreamOwned<rustls::ClientConnection, Box<dyn ReadWrite>>);
+struct RustlsStream(rustls::StreamOwned<rustls::ClientConnection, Box<dyn ReadWrite + Sync>>);
 
 impl ReadWrite for RustlsStream {
     fn socket(&self) -> Option<&TcpStream> {
@@ -96,7 +97,7 @@ impl TlsConnector for Arc<rustls::ClientConfig> {
     fn connect(
         &self,
         dns_name: &str,
-        mut io: Box<dyn ReadWrite>,
+        mut io: Box<dyn ReadWrite + Sync>,
     ) -> Result<Box<dyn ReadWrite>, Error> {
         let sni = rustls::ServerName::try_from(dns_name)
             .map_err(|e| ErrorKind::Dns.msg(format!("parsing '{}'", dns_name)).src(e))?;
@@ -124,4 +125,10 @@ pub fn default_tls_config() -> Arc<dyn TlsConnector> {
         Arc::new(Arc::new(config))
     });
     TLS_CONF.clone()
+}
+
+impl fmt::Debug for RustlsStream {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("RustlsStream").finish()
+    }
 }

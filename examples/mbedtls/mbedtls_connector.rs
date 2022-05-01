@@ -56,11 +56,10 @@ impl TlsConnector for MbedTlsConnector {
     fn connect(
         &self,
         _dns_name: &str,
-        io: Box<dyn ReadWrite>,
+        io: Box<dyn ReadWrite + Sync>,
     ) -> Result<Box<dyn ReadWrite>, Error> {
         let mut ctx = self.context.lock().unwrap();
-        let sync = SyncIo(Mutex::new(io));
-        match ctx.establish(sync, None) {
+        match ctx.establish(io, None) {
             Err(_) => {
                 let io_err = io::Error::new(io::ErrorKind::InvalidData, MbedTlsError);
                 return Err(io_err.into());
@@ -70,30 +69,14 @@ impl TlsConnector for MbedTlsConnector {
     }
 }
 
-/// Internal wrapper to make Box<dyn ReadWrite> implement Sync
-struct SyncIo(Mutex<Box<dyn ReadWrite>>);
-
-impl io::Read for SyncIo {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let mut lock = self.0.lock().unwrap();
-        lock.read(buf)
-    }
-}
-
-impl io::Write for SyncIo {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let mut lock = self.0.lock().unwrap();
-        lock.write(buf)
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        let mut lock = self.0.lock().unwrap();
-        lock.flush()
-    }
-}
-
 struct MbedTlsStream {
     context: Arc<Mutex<Context>>, //tcp_stream: TcpStream,
+}
+
+impl fmt::Debug for MbedTlsStream {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MbedTlsStream").finish()
+    }
 }
 
 impl MbedTlsStream {
