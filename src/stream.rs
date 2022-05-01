@@ -42,7 +42,7 @@ pub trait TlsConnector: Send + Sync {
     fn connect(
         &self,
         dns_name: &str,
-        io: Box<dyn ReadWrite + Sync>,
+        io: Box<dyn ReadWrite>,
     ) -> Result<Box<dyn ReadWrite>, crate::error::Error>;
 }
 

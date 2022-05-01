@@ -27,7 +27,7 @@ fn is_close_notify(e: &std::io::Error) -> bool {
     false
 }
 
-struct RustlsStream(rustls::StreamOwned<rustls::ClientConnection, Box<dyn ReadWrite + Sync>>);
+struct RustlsStream(rustls::StreamOwned<rustls::ClientConnection, Box<dyn ReadWrite>>);
 
 impl ReadWrite for RustlsStream {
     fn socket(&self) -> Option<&TcpStream> {
@@ -97,7 +97,7 @@ impl TlsConnector for Arc<rustls::ClientConfig> {
     fn connect(
         &self,
         dns_name: &str,
-        mut io: Box<dyn ReadWrite + Sync>,
+        mut io: Box<dyn ReadWrite>,
     ) -> Result<Box<dyn ReadWrite>, Error> {
         let sni = rustls::ServerName::try_from(dns_name)
             .map_err(|e| ErrorKind::Dns.msg(format!("parsing '{}'", dns_name)).src(e))?;

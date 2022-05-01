@@ -34,7 +34,7 @@ impl TlsConnector for PassThrough {
     fn connect(
         &self,
         _dns_name: &str,
-        io: Box<dyn ReadWrite + Sync>,
+        io: Box<dyn ReadWrite>,
     ) -> Result<Box<dyn ReadWrite>, Error> {
         if self.handshake_fail {
             let io_err = io::Error::new(io::ErrorKind::InvalidData, PassThroughError);

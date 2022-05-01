@@ -364,7 +364,7 @@ pub(crate) fn default_tls_config() -> std::sync::Arc<dyn TlsConnector> {
         fn connect(
             &self,
             _dns_name: &str,
-            _io: Box<dyn ReadWrite + Sync>,
+            _io: Box<dyn ReadWrite>,
         ) -> Result<Box<dyn ReadWrite>, crate::error::Error> {
             Err(ErrorKind::UnknownScheme
                 .msg("cannot make HTTPS request because no TLS backend is configured"))
