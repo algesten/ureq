@@ -56,16 +56,38 @@ impl TlsConnector for MbedTlsConnector {
     fn connect(
         &self,
         _dns_name: &str,
-        io: Box<dyn ReadWrite + Sync>,
+        io: Box<dyn ReadWrite>,
     ) -> Result<Box<dyn ReadWrite>, Error> {
         let mut ctx = self.context.lock().unwrap();
-        match ctx.establish(io, None) {
+        let sync = SyncIo(Mutex::new(io));
+        match ctx.establish(sync, None) {
             Err(_) => {
                 let io_err = io::Error::new(io::ErrorKind::InvalidData, MbedTlsError);
                 return Err(io_err.into());
             }
             Ok(()) => Ok(MbedTlsStream::new(self)),
         }
+    }
+}
+
+struct SyncIo(Mutex<Box<dyn ReadWrite>>);
+
+impl io::Read for SyncIo {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let mut lock = self.0.lock().unwrap();
+        lock.read(buf)
+    }
+}
+
+impl io::Write for SyncIo {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let mut lock = self.0.lock().unwrap();
+        lock.write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        let mut lock = self.0.lock().unwrap();
+        lock.flush()
     }
 }
 
