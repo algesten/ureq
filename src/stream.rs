@@ -69,11 +69,11 @@ impl Inner for TcpStream {
     }
 }
 
-struct TestStream(Box<dyn Read + Send + Sync>, Vec<u8>);
+struct TestStream(Box<dyn Read + Send + Sync>, Vec<u8>, bool);
 
 impl Inner for TestStream {
     fn is_poolable(&self) -> bool {
-        false
+        self.2
     }
     fn socket(&self) -> Option<&TcpStream> {
         None
@@ -201,7 +201,18 @@ impl Stream {
 
     pub(crate) fn from_vec(v: Vec<u8>) -> Stream {
         Stream::logged_create(Stream {
-            inner: BufReader::new(Box::new(TestStream(Box::new(Cursor::new(v)), vec![]))),
+            inner: BufReader::new(Box::new(TestStream(
+                Box::new(Cursor::new(v)),
+                vec![],
+                false,
+            ))),
+        })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn from_vec_poolable(v: Vec<u8>) -> Stream {
+        Stream::logged_create(Stream {
+            inner: BufReader::new(Box::new(TestStream(Box::new(Cursor::new(v)), vec![], true))),
         })
     }
 

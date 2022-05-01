@@ -6,12 +6,13 @@ use chunked_transfer::Decoder as ChunkDecoder;
 use sync_wrapper::SyncWrapper;
 use url::Url;
 
+use crate::body::SizedReader;
 use crate::error::{Error, ErrorKind::BadStatus};
 use crate::header::{get_all_headers, get_header, Header, HeaderLine};
 use crate::pool::PoolReturnRead;
 use crate::stream::{DeadlineStream, Stream};
 use crate::unit::Unit;
-use crate::{stream, ErrorKind};
+use crate::{stream, Agent, ErrorKind};
 
 #[cfg(feature = "json")]
 use serde::de::DeserializeOwned;
@@ -60,13 +61,13 @@ const MAX_HEADER_COUNT: usize = 100;
 /// # }
 /// ```
 pub struct Response {
-    pub(crate) url: Option<Url>,
+    pub(crate) url: Url,
     status_line: String,
     index: ResponseStatusIndex,
     status: u16,
     headers: Vec<Header>,
     // Boxed to avoid taking up too much size.
-    unit: Option<Box<Unit>>,
+    unit: Box<Unit>,
     // Boxed to avoid taking up too much size.
     stream: SyncWrapper<Box<Stream>>,
     /// The redirect history of this response, if any. The history starts with
@@ -93,14 +94,11 @@ impl fmt::Debug for Response {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "Response[status: {}, status_text: {}",
+            "Response[status: {}, status_text: {}, url: {}]",
             self.status(),
             self.status_text(),
-        )?;
-        if let Some(url) = &self.url {
-            write!(f, ", url: {}", url)?;
-        }
-        write!(f, "]")
+            self.url,
+        )
     }
 }
 
@@ -128,7 +126,7 @@ impl Response {
     /// The URL we ended up at. This can differ from the request url when
     /// we have followed redirects.
     pub fn get_url(&self) -> &str {
-        self.url.as_ref().map(|s| &s[..]).unwrap_or("")
+        &self.url[..]
     }
 
     /// The http version: `HTTP/1.1`
@@ -270,7 +268,7 @@ impl Response {
             .map(|c| c.eq_ignore_ascii_case("close"))
             .unwrap_or(false);
 
-        let is_head = self.unit.as_ref().map(|u| u.is_head()).unwrap_or(false);
+        let is_head = self.unit.is_head();
         let has_no_body = is_head
             || match self.status {
                 204 | 304 => true,
@@ -295,20 +293,24 @@ impl Response {
 
         let stream = self.stream.into_inner();
         let unit = self.unit;
-        if let Some(unit) = &unit {
-            let result = stream.set_read_timeout(unit.agent.config.timeout_read);
-            if let Err(e) = result {
-                return Box::new(ErrorReader(e)) as Box<dyn Read + Send>;
-            }
+        let result = stream.set_read_timeout(unit.agent.config.timeout_read);
+        if let Err(e) = result {
+            return Box::new(ErrorReader(e)) as Box<dyn Read + Send>;
         }
-        let deadline = unit.as_ref().and_then(|u| u.deadline);
+        let deadline = unit.deadline;
         let stream = DeadlineStream::new(*stream, deadline);
 
         let body_reader: Box<dyn Read + Send> = match (use_chunked, limit_bytes) {
-            (true, _) => Box::new(PoolReturnRead::new(unit, ChunkDecoder::new(stream))),
-            (false, Some(len)) => {
-                Box::new(PoolReturnRead::new(unit, LimitedRead::new(stream, len)))
-            }
+            (true, _) => Box::new(PoolReturnRead::new(
+                &unit.agent,
+                &unit.url,
+                ChunkDecoder::new(stream),
+            )),
+            (false, Some(len)) => Box::new(PoolReturnRead::new(
+                &unit.agent,
+                &unit.url,
+                LimitedRead::new(stream, len),
+            )),
             (false, None) => Box::new(stream),
         };
 
@@ -467,11 +469,10 @@ impl Response {
     /// let resp = ureq::Response::do_from_read(read);
     ///
     /// assert_eq!(resp.status(), 401);
-    pub(crate) fn do_from_stream(stream: Stream, unit: Option<Unit>) -> Result<Response, Error> {
+    pub(crate) fn do_from_stream(stream: Stream, unit: Unit) -> Result<Response, Error> {
         //
         // HTTP/1.1 200 OK\r\n
-        let mut stream =
-            stream::DeadlineStream::new(stream, unit.as_ref().and_then(|u| u.deadline));
+        let mut stream = stream::DeadlineStream::new(stream, unit.deadline);
 
         // The status line we can ignore non-utf8 chars and parse as_str_lossy().
         let status_line = read_next_line(&mut stream, "the status line")?.into_string_lossy();
@@ -504,7 +505,7 @@ impl Response {
             headers.retain(|h| !h.is_name("content-encoding") && !h.is_name("content-length"));
         }
 
-        let url = unit.as_ref().map(|u| u.url.clone());
+        let url = unit.url.clone();
 
         Ok(Response {
             url,
@@ -512,7 +513,7 @@ impl Response {
             index,
             status,
             headers,
-            unit: unit.map(Box::new),
+            unit: Box::new(unit),
             stream: SyncWrapper::new(Box::new(stream.into())),
             history: vec![],
             length,
@@ -528,14 +529,13 @@ impl Response {
 
     #[cfg(test)]
     pub fn set_url(&mut self, url: Url) {
-        self.url = Some(url);
+        self.url = url;
     }
 
     #[cfg(test)]
     pub fn history_from_previous(&mut self, previous: Response) {
-        let previous_url = previous.url.expect("previous url");
         self.history = previous.history;
-        self.history.push(previous_url);
+        self.history.push(previous.url);
     }
 }
 
@@ -645,7 +645,20 @@ impl FromStr for Response {
     /// ```
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let stream = Stream::from_vec(s.as_bytes().to_owned());
-        Self::do_from_stream(stream, None)
+        let request_url = "https://example.com".parse().unwrap();
+        let request_reader = SizedReader {
+            size: crate::body::BodySize::Empty,
+            reader: Box::new(std::io::empty()),
+        };
+        let unit = Unit::new(
+            &Agent::new(),
+            "GET",
+            &request_url,
+            vec![],
+            &request_reader,
+            None,
+        );
+        Self::do_from_stream(stream, unit)
     }
 }
 
@@ -695,30 +708,33 @@ fn read_next_line(reader: &mut impl BufRead, context: &str) -> io::Result<Header
 }
 
 /// Limits a `Read` to a content size (as set by a "Content-Length" header).
-struct LimitedRead<R> {
+pub(crate) struct LimitedRead<R> {
     reader: R,
     limit: usize,
     position: usize,
 }
 
 impl<R: Read> LimitedRead<R> {
-    fn new(reader: R, limit: usize) -> Self {
+    pub(crate) fn new(reader: R, limit: usize) -> Self {
         LimitedRead {
             reader,
             limit,
             position: 0,
         }
     }
+
+    pub(crate) fn remaining(&self) -> usize {
+        self.limit - self.position
+    }
 }
 
 impl<R: Read> Read for LimitedRead<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let left = self.limit - self.position;
-        if left == 0 {
+        if self.remaining() == 0 {
             return Ok(0);
         }
-        let from = if left < buf.len() {
-            &mut buf[0..left]
+        let from = if self.remaining() < buf.len() {
+            &mut buf[0..self.remaining()]
         } else {
             buf
         };
@@ -990,7 +1006,20 @@ mod tests {
         );
         let v = cow.to_vec();
         let s = Stream::from_vec(v);
-        let resp = Response::do_from_stream(s.into(), None).unwrap();
+        let request_url = "https://example.com".parse().unwrap();
+        let request_reader = SizedReader {
+            size: crate::body::BodySize::Empty,
+            reader: Box::new(std::io::empty()),
+        };
+        let unit = Unit::new(
+            &Agent::new(),
+            "GET",
+            &request_url,
+            vec![],
+            &request_reader,
+            None,
+        );
+        let resp = Response::do_from_stream(s.into(), unit).unwrap();
         assert_eq!(resp.status(), 200);
         assert_eq!(resp.header("x-geo-header"), None);
     }
