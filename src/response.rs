@@ -1,4 +1,4 @@
-use std::io::{self, Read};
+use std::io::{self, Cursor, Read};
 use std::str::FromStr;
 use std::{fmt, io::BufRead};
 
@@ -33,6 +33,11 @@ const INTO_STRING_LIMIT: usize = 10 * 1_024 * 1_024;
 // https://curl.se/libcurl/c/CURLOPT_HEADERFUNCTION.html
 const MAX_HEADER_SIZE: usize = 100 * 1_024;
 const MAX_HEADER_COUNT: usize = 100;
+
+enum ResponseStream {
+    Stream(Box<Stream>),
+    Buffer(Vec<u8>),
+}
 
 /// Response instances are created as results of firing off requests.
 ///
@@ -69,7 +74,7 @@ pub struct Response {
     // Boxed to avoid taking up too much size.
     unit: Box<Unit>,
     // Boxed to avoid taking up too much size.
-    stream: SyncWrapper<Box<Stream>>,
+    stream: SyncWrapper<ResponseStream>,
     /// The redirect history of this response, if any. The history starts with
     /// the first response received and ends with the response immediately
     /// previous to this one.
@@ -103,6 +108,28 @@ impl fmt::Debug for Response {
 }
 
 impl Response {
+    pub fn partial_body(&mut self) -> io::Result<&[u8]> {
+        let res = match self.stream.get_mut() {
+            ResponseStream::Stream(stream) => stream.fill_buf()?,
+            ResponseStream::Buffer(vec) => vec,
+        };
+
+        Ok(res)
+    }
+
+    pub fn partial_body_as_string(&mut self) -> io::Result<String> {
+        let buf = self.partial_body()?.to_vec();
+
+        let mut reader: Box<dyn Read> = match self.compression {
+            None => Box::<&[u8]>::new(buf.as_ref()),
+            Some(c) => c.wrap_reader(Box::new(Cursor::new(buf))),
+        };
+
+        let mut result = Vec::new();
+        reader.read_to_end(&mut result)?;
+        Ok(String::from_utf8_lossy(&result).to_string())
+    }
+
     /// Construct a response with a status, status text and a string body.
     ///
     /// This is hopefully useful for unit tests.
@@ -260,8 +287,7 @@ impl Response {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn into_reader(self) -> impl Read + Send {
-        //
+    pub fn into_reader(self) -> Box<dyn Read + Send> {
         let is_http10 = self.http_version().eq_ignore_ascii_case("HTTP/1.0");
         let is_close = self
             .header("connection")
@@ -293,30 +319,37 @@ impl Response {
 
         let stream = self.stream.into_inner();
         let unit = self.unit;
-        let result = stream.set_read_timeout(unit.agent.config.timeout_read);
-        if let Err(e) = result {
-            return Box::new(ErrorReader(e)) as Box<dyn Read + Send>;
-        }
-        let deadline = unit.deadline;
-        let stream = DeadlineStream::new(*stream, deadline);
+        let stream: Box<dyn Read + Send> = match stream {
+            ResponseStream::Buffer(vec) => Box::new(Cursor::new(vec)),
+            ResponseStream::Stream(stream) => {
+                let result = stream.set_read_timeout(unit.agent.config.timeout_read);
+                if let Err(e) = result {
+                    return Box::new(ErrorReader(e)) as Box<dyn Read + Send>;
+                }
+                let deadline = unit.deadline;
+                let stream = DeadlineStream::new(*stream, deadline);
 
-        let body_reader: Box<dyn Read + Send> = match (use_chunked, limit_bytes) {
-            (true, _) => Box::new(PoolReturnRead::new(
-                &unit.agent,
-                &unit.url,
-                ChunkDecoder::new(stream),
-            )),
-            (false, Some(len)) => Box::new(PoolReturnRead::new(
-                &unit.agent,
-                &unit.url,
-                LimitedRead::new(stream, len),
-            )),
-            (false, None) => Box::new(stream),
+                let body_reader: Box<dyn Read + Send> = match (use_chunked, limit_bytes) {
+                    (true, _) => Box::new(PoolReturnRead::new(
+                        &unit.agent,
+                        &unit.url,
+                        ChunkDecoder::new(stream),
+                    )),
+                    (false, Some(len)) => Box::new(PoolReturnRead::new(
+                        &unit.agent,
+                        &unit.url,
+                        LimitedRead::new(stream, len),
+                    )),
+                    (false, None) => Box::new(stream),
+                };
+
+                body_reader
+            }
         };
 
         match self.compression {
-            None => body_reader,
-            Some(c) => c.wrap_reader(body_reader),
+            None => stream,
+            Some(c) => c.wrap_reader(stream),
         }
     }
 
@@ -350,7 +383,7 @@ impl Response {
     /// Content-Type header, or the Content-Type header does not specify a charset, into_string()
     /// uses `utf-8`.
     ///
-    /// I.e. `Content-Length: text/plain; charset=iso-8859-1` would be decoded in latin-1.
+    /// I.e. `Content-Type: text/plain; charset=iso-8859-1` would be decoded in latin-1.
     ///
     pub fn into_string(self) -> io::Result<String> {
         #[cfg(feature = "charset")]
@@ -466,7 +499,7 @@ impl Response {
     ///
     /// let text = "HTTP/1.1 401 Authorization Required\r\n\r\nPlease log in\n";
     /// let read = Cursor::new(text.to_string().into_bytes());
-    /// let resp = ureq::Response::do_from_read(read);
+    /// let resp = ureq::Response::do_from_read(read); // This does not exist anymore
     ///
     /// assert_eq!(resp.status(), 401);
     pub(crate) fn do_from_stream(stream: Stream, unit: Unit) -> Result<Response, Error> {
@@ -497,6 +530,17 @@ impl Response {
 
         let length = get_header(&headers, "content-length").and_then(|v| v.parse::<usize>().ok());
 
+        // Prefetch data
+        let data = stream.fill_buf()?;
+
+        let stream = if length.is_some() && data.len() == length.unwrap() {
+            let data = Vec::from(data);
+            drop(stream);
+            ResponseStream::Buffer(data)
+        } else {
+            ResponseStream::Stream(Box::new(stream.into()))
+        };
+
         let compression =
             get_header(&headers, "content-encoding").and_then(Compression::from_header_value);
 
@@ -514,7 +558,7 @@ impl Response {
             status,
             headers,
             unit: Box::new(unit),
-            stream: SyncWrapper::new(Box::new(stream.into())),
+            stream: SyncWrapper::new(stream),
             history: vec![],
             length,
             compression,
@@ -524,7 +568,10 @@ impl Response {
     #[cfg(test)]
     pub fn into_written_bytes(self) -> Vec<u8> {
         // Deliberately consume `self` so that any access to `self.stream` must be non-shared.
-        self.stream.into_inner().written_bytes()
+        match self.stream.into_inner() {
+            ResponseStream::Stream(stream) => stream.written_bytes(),
+            ResponseStream::Buffer(vec) => vec,
+        }
     }
 
     #[cfg(test)]
@@ -879,6 +926,36 @@ mod tests {
                  \r\n";
         let resp = s.parse::<Response>().unwrap();
         assert_eq!("hello world!!!", resp.into_string().unwrap());
+    }
+
+    #[test]
+    fn buffer_without_stream() {
+        let agent = crate::agent();
+        // Short response
+        let mut res = agent
+            .get("https://msevents.microsoft.com/runtime.js")
+            .call()
+            .unwrap();
+        let stream = res.stream.get_mut();
+        drop(stream);
+        println!("Prefetched {}", res.partial_body().len());
+        let stream = res.stream.get_mut();
+        assert!(matches!(stream, ResponseStream::Buffer(_)));
+    }
+
+    #[test]
+    fn buffer_with_stream() {
+        let agent = crate::agent();
+        // Long response
+        let mut res = agent
+            .get("https://www.robolinkmarket.com/Data/EditorFiles/datasheet/kolban-ESP32.pdf")
+            .call()
+            .unwrap();
+        let stream = res.stream.get_mut();
+        drop(stream);
+        println!("Prefetched {}", res.partial_body().len());
+        let stream = res.stream.get_mut();
+        assert!(matches!(stream, ResponseStream::Stream(_)));
     }
 
     #[test]

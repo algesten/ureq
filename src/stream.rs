@@ -22,7 +22,7 @@ pub trait ReadWrite: Read + Write + Send + fmt::Debug + 'static {
     fn socket(&self) -> Option<&TcpStream>;
     fn is_poolable(&self) -> bool;
 
-    /// The bytes written to the stream as a Vec<u8>. This is used for tests only.
+    /// The bytes written to the stream as a Vec<u8>.
     #[cfg(test)]
     fn written_bytes(&self) -> Vec<u8> {
         panic!("written_bytes on non Test stream");

@@ -128,3 +128,24 @@ fn brotli_text() {
     let text = resp.into_string().unwrap();
     assert_eq!(text, "hello world ".repeat(14).trim_end());
 }
+
+#[cfg(feature = "brotli")]
+#[test]
+fn brotli_long_text() {
+    test::set_handler("/brotli_long_text", |_unit| {
+        test::make_response(
+            200,
+            "OK",
+            vec!["content-length: 13", "content-encoding: br"],
+            vec![
+                0xF1, 0xF8, 0xFF, 0x01, 0x20, 0x01, 0x13, 0x8F, 0x05, 0x92, 0x7B, 0x03, 0x00,
+            ],
+        )
+    });
+    // echo -n INPUT | brotli -Z -f | hexdump -ve '1/1 "0x%.2X,"'
+    let resp = get("test://host/brotli_long_text").call().unwrap();
+    assert_eq!(resp.header("content-encoding"), None);
+    assert_eq!(resp.header("content-length"), None);
+    let text = resp.into_string().unwrap();
+    assert_eq!(text, "0".repeat(1024 * 16));
+}

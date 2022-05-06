@@ -11,23 +11,52 @@ use super::super::*;
 
 // Handler that answers with a simple HTTP response, and times
 // out idle connections after 2 seconds.
-fn idle_timeout_handler(mut stream: TcpStream) -> io::Result<()> {
+fn idle_timeout_handler_short(mut stream: TcpStream) -> io::Result<()> {
     read_request(&stream);
     stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 8\r\n\r\nresponse")?;
     stream.set_read_timeout(Some(Duration::from_secs(2)))?;
     Ok(())
 }
 
-// Handler that answers with a simple HTTP response, and times
+// Handler that answers with a long HTTP response, and times
+// out idle connections after 2 seconds.
+fn idle_timeout_handler(mut stream: TcpStream) -> io::Result<()> {
+    read_request(&stream);
+    let response = format!("HTTP/1.1 200 OK\r\nContent-Length: 16384\r\n\r\n{}", "A".repeat(16384));
+    stream.write_all(response.as_bytes())?;
+    stream.set_read_timeout(Some(Duration::from_secs(2)))?;
+    Ok(())
+}
+
+// Handler that answers with a long HTTP response, and times
 // out idle connections after 2 seconds, sending an HTTP 408 response
 fn idle_timeout_handler_408(mut stream: TcpStream) -> io::Result<()> {
     read_request(&stream);
-    stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 8\r\n\r\nresponse")?;
+    let response = format!("HTTP/1.1 200 OK\r\nContent-Length: 16384\r\n\r\n{}", "A".repeat(16384));
+    stream.write_all(response.as_bytes())?;
     let twosec = Duration::from_secs(2);
     stream.set_read_timeout(Some(twosec))?;
     thread::sleep(twosec);
     stream.write_all(b"HTTP/1.1 408 Request Timeout\r\nContent-Length: 7\r\n\r\ntimeout")?;
     Ok(())
+}
+
+#[test]
+fn free_connection_reuse() {
+    let testserver = TestServer::new(idle_timeout_handler_short);
+    let url = format!("http://localhost:{}", testserver.port);
+    let agent = Agent::new();
+    let resp = agent.get(&url).call().unwrap();
+
+    // use up the connection so it gets returned to the pool
+    assert_eq!(resp.status(), 200);
+    resp.into_string().unwrap();
+
+    assert!(agent.state.pool.len() == 0);
+
+    let resp = agent.get(&url).call().unwrap();
+    assert_eq!(resp.status(), 200);
+
 }
 
 #[test]
