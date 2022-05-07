@@ -287,7 +287,7 @@ impl Response {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn into_reader(self) -> Box<dyn Read + Send> {
+    pub fn into_reader(self) -> impl Read + Send {
         let is_http10 = self.http_version().eq_ignore_ascii_case("HTTP/1.0");
         let is_close = self
             .header("connection")
@@ -938,7 +938,6 @@ mod tests {
             .unwrap();
         let stream = res.stream.get_mut();
         drop(stream);
-        println!("Prefetched {}", res.partial_body().len());
         let stream = res.stream.get_mut();
         assert!(matches!(stream, ResponseStream::Buffer(_)));
     }
@@ -953,7 +952,6 @@ mod tests {
             .unwrap();
         let stream = res.stream.get_mut();
         drop(stream);
-        println!("Prefetched {}", res.partial_body().len());
         let stream = res.stream.get_mut();
         assert!(matches!(stream, ResponseStream::Stream(_)));
     }
