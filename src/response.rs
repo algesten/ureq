@@ -1,9 +1,9 @@
 use std::io::{self, Read};
 use std::str::FromStr;
+use std::sync::Mutex;
 use std::{fmt, io::BufRead};
 
 use chunked_transfer::Decoder as ChunkDecoder;
-use sync_wrapper::SyncWrapper;
 use url::Url;
 
 use crate::body::SizedReader;
@@ -69,7 +69,7 @@ pub struct Response {
     // Boxed to avoid taking up too much size.
     unit: Box<Unit>,
     // Boxed to avoid taking up too much size.
-    stream: SyncWrapper<Box<Stream>>,
+    stream: Mutex<Box<Stream>>,
     /// The redirect history of this response, if any. The history starts with
     /// the first response received and ends with the response immediately
     /// previous to this one.
@@ -291,7 +291,7 @@ impl Response {
             self.length
         };
 
-        let stream = self.stream.into_inner();
+        let stream = self.stream.into_inner().unwrap();
         let unit = self.unit;
         let result = stream.set_read_timeout(unit.agent.config.timeout_read);
         if let Err(e) = result {
@@ -514,7 +514,7 @@ impl Response {
             status,
             headers,
             unit: Box::new(unit),
-            stream: SyncWrapper::new(Box::new(stream.into())),
+            stream: Mutex::new(Box::new(stream.into())),
             history: vec![],
             length,
             compression,
@@ -524,7 +524,7 @@ impl Response {
     #[cfg(test)]
     pub fn into_written_bytes(self) -> Vec<u8> {
         // Deliberately consume `self` so that any access to `self.stream` must be non-shared.
-        self.stream.into_inner().written_bytes()
+        self.stream.into_inner().unwrap().written_bytes()
     }
 
     #[cfg(test)]
