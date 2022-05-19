@@ -382,6 +382,37 @@ impl Request {
         self
     }
 
+    /// Set multi query parameters.
+    ///
+    /// For example, to set `?format=json&dest=/login`
+    ///
+    /// ```
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// 
+    /// let query = vec![
+    ///     ("format", "json"),
+    ///     ("dest", "/login"),
+    /// ];
+    /// 
+    /// let resp = ureq::get("http://httpbin.org/get")
+    ///     .query_vec(query)
+    ///     .call()?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn query_vec(mut self, queries: Vec<(&str, &str)>) -> Self {
+        if let Ok(mut url) = self.parse_url() {
+            for (param, value) in queries {
+                url.query_pairs_mut().append_pair(param, value);
+            }
+
+            // replace url
+            self.url = url.to_string();
+        }
+        self
+    }
+
     /// Returns the value of the request method. Something like `GET`, `POST`, `PUT` etc.
     ///
     /// ```
