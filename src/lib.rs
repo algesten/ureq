@@ -377,6 +377,9 @@ pub(crate) fn default_tls_config() -> std::sync::Arc<dyn TlsConnector> {
 #[cfg(feature = "cookies")]
 mod cookies;
 
+#[cfg(feature = "http-compat")]
+mod http_compat;
+
 #[cfg(feature = "json")]
 pub use serde_json::json;
 use url::Url;
