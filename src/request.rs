@@ -3,13 +3,13 @@ use std::{fmt, time};
 
 use url::{form_urlencoded, ParseError, Url};
 
+use crate::agent::Agent;
 use crate::body::Payload;
+use crate::error::{Error, ErrorKind};
 use crate::header::{self, Header};
 use crate::middleware::MiddlewareNext;
 use crate::unit::{self, Unit};
 use crate::Response;
-use crate::agent::Agent;
-use crate::error::{Error, ErrorKind};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -126,7 +126,12 @@ impl Request {
                 let now = time::Instant::now();
                 match now.checked_add(timeout) {
                     Some(dl) => Some(dl),
-                    None => return Err(Error::new(ErrorKind::Io, Some("Request deadline overflowed".to_string())))
+                    None => {
+                        return Err(Error::new(
+                            ErrorKind::Io,
+                            Some("Request deadline overflowed".to_string()),
+                        ))
+                    }
                 }
             }
         };
