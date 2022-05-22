@@ -398,22 +398,28 @@ impl Request {
     /// ```
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
-    /// 
+    ///
     /// let query = vec![
     ///     ("format", "json"),
     ///     ("dest", "/login"),
     /// ];
-    /// 
+    ///
     /// let resp = ureq::get("http://httpbin.org/get")
-    ///     .query_vec(query)
+    ///     .query_pairs(query)
     ///     .call()?;
     /// # Ok(())
     /// # }
     /// ```
-    pub fn query_vec(mut self, queries: Vec<(&str, &str)>) -> Self {
+    pub fn query_pairs<'a, P>(mut self, pairs: P) -> Self
+    where
+        P: IntoIterator<Item = (&'a str, &'a str)>,
+    {
         if let Ok(mut url) = self.parse_url() {
-            for (param, value) in queries {
-                url.query_pairs_mut().append_pair(param, value);
+            {
+                let mut query_pairs = url.query_pairs_mut();
+                for (param, value) in pairs {
+                    query_pairs.append_pair(param, value);
+                }
             }
 
             // replace url
