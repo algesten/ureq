@@ -1,28 +1,28 @@
 use std::fmt;
-use std::io::Result as IoResult;
+use std::io;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::Arc;
 
 /// A custom resolver to override the default DNS behavior.
 pub trait Resolver: Send + Sync {
-    fn resolve(&self, netloc: &str) -> IoResult<Vec<SocketAddr>>;
+    fn resolve(&self, netloc: &str) -> io::Result<Vec<SocketAddr>>;
 }
 
 #[derive(Debug)]
 pub(crate) struct StdResolver;
 
 impl Resolver for StdResolver {
-    fn resolve(&self, netloc: &str) -> IoResult<Vec<SocketAddr>> {
+    fn resolve(&self, netloc: &str) -> io::Result<Vec<SocketAddr>> {
         ToSocketAddrs::to_socket_addrs(netloc).map(|iter| iter.collect())
     }
 }
 
 impl<F> Resolver for F
 where
-    F: Fn(&str) -> IoResult<Vec<SocketAddr>>,
+    F: Fn(&str) -> io::Result<Vec<SocketAddr>>,
     F: Send + Sync,
 {
-    fn resolve(&self, netloc: &str) -> IoResult<Vec<SocketAddr>> {
+    fn resolve(&self, netloc: &str) -> io::Result<Vec<SocketAddr>> {
         self(netloc)
     }
 }
