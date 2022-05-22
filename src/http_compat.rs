@@ -1,41 +1,33 @@
 use std::io::Read;
-use bytes::Bytes;
 use http::Method;
 use crate::{Agent, Error};
 
-pub struct UreqBody(Bytes);
-
-impl From<Bytes> for UreqBody {
-    #[inline]
-    fn from(bytes: Bytes) -> Self {
-        Self(bytes)
-    }
-}
+pub struct UreqBody(Vec<u8>);
 
 impl From<()> for UreqBody {
     fn from(_: ()) -> Self {
-        Self(Bytes::new())
+        Self(Vec::new())
     }
 }
 
 impl From<Vec<u8>> for UreqBody {
     #[inline]
     fn from(buffer: Vec<u8>) -> Self {
-        Self(buffer.into())
+        Self(buffer)
     }
 }
 
 impl From<&'static [u8]> for UreqBody {
     #[inline]
     fn from(slice: &'static [u8]) -> Self {
-        Self(Bytes::from_static(slice))
+        Self(Vec::from(slice))
     }
 }
 
 impl From<String> for UreqBody {
     #[inline]
     fn from(buffer: String) -> Self {
-        buffer.into_bytes().into()
+        Self(buffer.into_bytes())
     }
 }
 
@@ -47,7 +39,29 @@ impl From<&'static str> for UreqBody {
 }
 
 impl Agent {
-    pub fn send_http<T: Into<UreqBody>>(&self, request: http::Request<T>) -> Result<http::Response<Bytes>, Error> {
+    /// Send requests using the `http::Request<T>` type.
+    ///
+    /// This supports any body type `T` for which there exists a `UreqBody::from` impl:
+    ///
+    /// - `impl From<()> for UreqBody`
+    /// - `impl From<Vec<u8>> for UreqBody`
+    /// - `impl From<&'static [u8]> for UreqBody`
+    /// - `impl From<String> for UreqBody`
+    /// - `impl From<&'static str> for UreqBody`
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn example(agent: ureq::Agent) {
+    /// let request = http::Request::builder()
+    ///     .method(http::Method::GET)
+    ///     .uri(http::Uri::from_static("http://example.com"))
+    ///     .body("Hello, world!")
+    ///     .unwrap();
+    /// let response: http::Response<Vec<u8>> = agent.send_http(request).unwrap();
+    /// # }
+    /// ```
+    pub fn send_http<T: Into<UreqBody>>(&self, request: http::Request<T>) -> Result<http::Response<Vec<u8>>, Error> {
         // Convert the http::Request to ureq::Request and execute it
         let (parts, body) = request.map(T::into).into_parts();
         let method = parts.method.as_str();
@@ -71,9 +85,8 @@ impl Agent {
             .unwrap_or(0);
         let mut buffer = Vec::with_capacity(body_len);
         response.into_reader().read_to_end(&mut buffer)?;
-        let bytes = Bytes::from(buffer);
 
-        let http_response = builder.body(bytes)?;
+        let http_response = builder.body(buffer)?;
         Ok(http_response)
     }
 }
