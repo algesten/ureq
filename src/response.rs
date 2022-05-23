@@ -1,4 +1,5 @@
 use std::io::{self, Read};
+use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Mutex;
 use std::{fmt, io::BufRead};
@@ -70,6 +71,8 @@ pub struct Response {
     unit: Box<Unit>,
     // Boxed to avoid taking up too much size.
     stream: Mutex<Box<Stream>>,
+    /// The socket address of the server that sent the response.
+    remote_addr: SocketAddr,
     /// The redirect history of this response, if any. The history starts with
     /// the first response received and ends with the response immediately
     /// previous to this one.
@@ -222,6 +225,11 @@ impl Response {
     /// ```
     pub fn charset(&self) -> &str {
         charset_from_content_type(self.header("content-type"))
+    }
+
+    /// The socket address of the server that sent the response.
+    pub fn remote_addr(&self) -> SocketAddr {
+        self.remote_addr
     }
 
     /// Turn this response into a `impl Read` of the body.
@@ -470,6 +478,7 @@ impl Response {
     ///
     /// assert_eq!(resp.status(), 401);
     pub(crate) fn do_from_stream(stream: Stream, unit: Unit) -> Result<Response, Error> {
+        let remote_addr = stream.remote_addr;
         //
         // HTTP/1.1 200 OK\r\n
         let mut stream = stream::DeadlineStream::new(stream, unit.deadline);
@@ -515,6 +524,7 @@ impl Response {
             headers,
             unit: Box::new(unit),
             stream: Mutex::new(Box::new(stream.into())),
+            remote_addr,
             history: vec![],
             length,
             compression,
