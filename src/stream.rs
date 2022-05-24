@@ -1,6 +1,7 @@
 use log::debug;
 use std::io::{self, BufRead, BufReader, Read, Write};
-use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, TcpStream};
+use std::net::SocketAddr;
+use std::net::TcpStream;
 use std::time::Duration;
 use std::time::Instant;
 use std::{fmt, io::Cursor};
@@ -656,6 +657,7 @@ pub(crate) fn connect_test(unit: &Unit) -> Result<Stream, Error> {
 }
 
 pub(crate) fn remote_addr_for_test() -> SocketAddr {
+    use std::net::{Ipv4Addr, SocketAddrV4};
     SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 0).into()
 }
 
