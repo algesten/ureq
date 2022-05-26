@@ -2,39 +2,54 @@ use crate::{Agent, Error};
 use http::Method;
 use std::io::Read;
 
-pub struct UreqBody(Vec<u8>);
+const CONTENT_OCTET: &str = "application/octet-stream";
+const CONTENT_STRING: &str = "text/plain; charset=utf-8";
+
+pub struct UreqBody {
+    body: Vec<u8>,
+    content_type: Option<String>,
+}
 
 impl From<()> for UreqBody {
     fn from(_: ()) -> Self {
-        Self(Vec::new())
+        Self {
+            body: Vec::new(),
+            content_type: None,
+        }
     }
 }
 
 impl From<Vec<u8>> for UreqBody {
     #[inline]
     fn from(buffer: Vec<u8>) -> Self {
-        Self(buffer)
+        Self {
+            body: buffer,
+            content_type: Some(CONTENT_OCTET.to_string()),
+        }
     }
 }
 
 impl From<&'static [u8]> for UreqBody {
     #[inline]
     fn from(slice: &'static [u8]) -> Self {
-        Self(Vec::from(slice))
+        Vec::from(slice).into()
     }
 }
 
 impl From<String> for UreqBody {
     #[inline]
     fn from(buffer: String) -> Self {
-        Self(buffer.into_bytes())
+        Self {
+            body: buffer.into_bytes(),
+            content_type: Some(CONTENT_STRING.to_string()),
+        }
     }
 }
 
 impl From<&'static str> for UreqBody {
     #[inline]
     fn from(slice: &'static str) -> Self {
-        slice.as_bytes().into()
+        String::from(slice).into()
     }
 }
 
@@ -69,7 +84,19 @@ impl Agent {
         let (parts, body) = request.map(T::into).into_parts();
         let method = parts.method.as_str();
         let url = parts.uri.to_string();
-        let response = self.request(method, &url).send(body.0)?;
+        let UreqBody { body, content_type } = body;
+
+        let mut urequest = self.request(method, &url);
+        if let Some(content_type) = content_type {
+            urequest.set("Content-Type", &content_type);
+        }
+
+        // Copy headers from http::Request to ureq::Request
+        for (name, value) in parts.headers {
+            urequest.set(name.as_str(), value.to_str()?);
+        }
+
+        let response = urequest.send(body)?;
 
         // Construct the http::Response from the ureq::Response
         let mut builder = http::Response::builder();
