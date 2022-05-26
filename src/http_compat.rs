@@ -1,6 +1,6 @@
-use std::io::Read;
-use http::Method;
 use crate::{Agent, Error};
+use http::Method;
+use std::io::Read;
 
 pub struct UreqBody(Vec<u8>);
 
@@ -61,7 +61,10 @@ impl Agent {
     /// let response: http::Response<Vec<u8>> = agent.send_http(request).unwrap();
     /// # }
     /// ```
-    pub fn send_http<T: Into<UreqBody>>(&self, request: http::Request<T>) -> Result<http::Response<Vec<u8>>, Error> {
+    pub fn send_http<T: Into<UreqBody>>(
+        &self,
+        request: http::Request<T>,
+    ) -> Result<http::Response<Vec<u8>>, Error> {
         // Convert the http::Request to ureq::Request and execute it
         let (parts, body) = request.map(T::into).into_parts();
         let method = parts.method.as_str();
@@ -80,7 +83,8 @@ impl Agent {
         }
 
         // We need to read the whole body now, otherwise the socket will be dropped with the ureq::Response
-        let body_len = response.header("Content-Length")
+        let body_len = response
+            .header("Content-Length")
             .and_then(|s| s.parse::<usize>().ok())
             .unwrap_or(0);
         let mut buffer = Vec::with_capacity(body_len);
