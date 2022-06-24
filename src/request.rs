@@ -586,7 +586,9 @@ impl Request {
     ///
     /// Example:
     /// ```
-    /// let tls_config = std::sync::Arc::new(rustls::ClientConfig::new());
+    /// let root_store = rustls::RootCertStore::empty();
+    /// let tls_config = rustls::ClientConfig::builder().with_safe_defaults().with_root_certificates(root_store).with_no_client_auth();
+    /// let tls_config = std::sync::Arc::new(tls_config);
     /// let req = ureq::post("https://cool.server")
     ///     .set_tls_config(tls_config.clone());
     /// ```
