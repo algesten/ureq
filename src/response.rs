@@ -1,6 +1,7 @@
-use std::io::{self, Read};
+use std::io::{self, Cursor, Read};
 use std::str::FromStr;
 use std::sync::Mutex;
+use std::time::Duration;
 use std::{fmt, io::BufRead};
 
 use chunked_transfer::Decoder as ChunkDecoder;
@@ -69,7 +70,7 @@ pub struct Response {
     // Boxed to avoid taking up too much size.
     unit: Box<Unit>,
     // Boxed to avoid taking up too much size.
-    stream: Mutex<Box<Stream>>,
+    stream: Mutex<ResponseStream>,
     /// The redirect history of this response, if any. The history starts with
     /// the first response received and ends with the response immediately
     /// previous to this one.
@@ -81,6 +82,34 @@ pub struct Response {
     length: Option<usize>,
     /// The compression type of the response body.
     compression: Option<Compression>,
+}
+
+enum ResponseStream {
+    /// A streaming response.
+    Stream(Box<Stream>),
+    /// A fully prebuffered response.
+    Buffered(Cursor<Vec<u8>>),
+    /// Used temporarily when prebuffering a response.
+    Empty,
+}
+
+impl ResponseStream {
+    fn set_read_timeout(&self, timeout: Option<Duration>) -> io::Result<()> {
+        if let ResponseStream::Stream(stream) = self {
+            stream.set_read_timeout(timeout)
+        } else {
+            Ok(())
+        }
+    }
+
+    #[cfg(test)]
+    fn written_bytes(self) -> Vec<u8> {
+        match self {
+            ResponseStream::Stream(stream) => stream.written_bytes(),
+            ResponseStream::Buffered(buffer) => buffer.into_inner(),
+            _ => unreachable!(),
+        }
+    }
 }
 
 /// index into status_line where we split: HTTP/1.1 200 OK
@@ -261,6 +290,22 @@ impl Response {
     /// # }
     /// ```
     pub fn into_reader(self) -> impl Read + Send {
+        let stream = self.take_stream();
+        self.make_reader(stream)
+    }
+
+    /// Replaces `Response::stream` with ResponseStream::Empty and returns the result.
+    fn take_stream(&self) -> ResponseStream {
+        let mut stream = self.stream.lock().unwrap();
+        assert!(
+            !matches!(*stream, ResponseStream::Empty),
+            "ResponseStream already taken"
+        );
+        std::mem::replace(&mut *stream, ResponseStream::Empty)
+    }
+
+    /// Constructs a reader given the headers in this Response and the provided ResponseStream.
+    fn make_reader(&self, stream: ResponseStream) -> Box<dyn Read + Send> {
         //
         let is_http10 = self.http_version().eq_ignore_ascii_case("HTTP/1.0");
         let is_close = self
@@ -291,27 +336,37 @@ impl Response {
             self.length
         };
 
-        let stream = self.stream.into_inner().unwrap();
-        let unit = self.unit;
+        let unit = &self.unit;
         let result = stream.set_read_timeout(unit.agent.config.timeout_read);
         if let Err(e) = result {
             return Box::new(ErrorReader(e)) as Box<dyn Read + Send>;
         }
         let deadline = unit.deadline;
-        let stream = DeadlineStream::new(*stream, deadline);
 
-        let body_reader: Box<dyn Read + Send> = match (use_chunked, limit_bytes) {
-            (true, _) => Box::new(PoolReturnRead::new(
-                &unit.agent,
-                &unit.url,
-                ChunkDecoder::new(stream),
-            )),
-            (false, Some(len)) => Box::new(PoolReturnRead::new(
-                &unit.agent,
-                &unit.url,
-                LimitedRead::new(stream, len),
-            )),
-            (false, None) => Box::new(stream),
+        let body_reader: Box<dyn Read + Send> = match stream {
+            ResponseStream::Stream(stream) => {
+                let stream = DeadlineStream::new(*stream, deadline);
+
+                match (use_chunked, limit_bytes) {
+                    (true, _) => Box::new(PoolReturnRead::new(
+                        &unit.agent,
+                        &unit.url,
+                        ChunkDecoder::new(stream),
+                    )),
+                    (false, Some(len)) => Box::new(PoolReturnRead::new(
+                        &unit.agent,
+                        &unit.url,
+                        LimitedRead::new(stream, len),
+                    )),
+                    (false, None) => Box::new(stream),
+                }
+            }
+            ResponseStream::Buffered(buffer) => match (use_chunked, limit_bytes) {
+                (true, _) => Box::new(ChunkDecoder::new(buffer)),
+                (false, Some(len)) => Box::new(LimitedRead::new(buffer, len)),
+                (false, None) => Box::new(buffer),
+            },
+            _ => unreachable!(),
         };
 
         match self.compression {
@@ -507,18 +562,44 @@ impl Response {
 
         let url = unit.url.clone();
 
-        Ok(Response {
+        // Prefetch data if it's small enough to be buffered in one go.
+        let peeked_len = stream.fill_buf()?.len();
+        let is_fully_buffered = Some(peeked_len) == length;
+
+        let resp = Response {
             url,
             status_line,
             index,
             status,
             headers,
             unit: Box::new(unit),
-            stream: Mutex::new(Box::new(stream.into())),
+            stream: Mutex::new(ResponseStream::Empty),
             history: vec![],
             length,
             compression,
-        })
+        };
+
+        let boxed_stream = ResponseStream::Stream(Box::new(stream.into()));
+
+        let rstream = if is_fully_buffered {
+            // We must read the data through the PoolReturnRead to properly return the stream
+            // to the pool once read to end. This also ensures we handle chunked responses correctly.
+            let mut reader = resp.make_reader(boxed_stream);
+
+            let mut buf = vec![0; peeked_len];
+            reader.read_exact(&mut buf)?;
+
+            ResponseStream::Buffered(Cursor::new(buf))
+        } else {
+            boxed_stream
+        };
+
+        {
+            let mut to_replace = resp.stream.lock().unwrap();
+            *to_replace = rstream;
+        }
+
+        Ok(resp)
     }
 
     #[cfg(test)]
