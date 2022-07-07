@@ -81,7 +81,7 @@ fn content_type_on_json() {
 #[test]
 #[cfg(feature = "json")]
 fn content_type_not_overriden_on_json() {
-    let recorder = Recoder::register("/content_type_not_overriden_on_json");
+    let recorder = Recorder::register("/content_type_not_overriden_on_json");
     let mut json = serde_json::Map::new();
     json.insert(
         "Hello".to_string(),

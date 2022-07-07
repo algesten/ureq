@@ -998,7 +998,7 @@ mod tests {
             OK",
         );
         let v = cow.to_vec();
-        let s = Stream::from_vec(v);
+        let s = Stream::new(ReadOnlyStream::new(v));
         let request_url = "https://example.com".parse().unwrap();
         let request_reader = SizedReader {
             size: crate::body::BodySize::Empty,
