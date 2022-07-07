@@ -50,7 +50,7 @@ impl<T: ReadWrite + ?Sized> ReadWrite for Box<T> {
 // after the provided deadline, and sets timeouts on the underlying
 // TcpStream to ensure read() doesn't block beyond the deadline.
 // When the From trait is used to turn a DeadlineStream back into a
-// Stream (by PoolReturningRead), the timeouts are removed.
+// Stream (by PoolReturnRead), the timeouts are removed.
 pub(crate) struct DeadlineStream {
     stream: Stream,
     deadline: Option<Instant>,
@@ -182,6 +182,10 @@ impl Stream {
     fn logged_create(stream: Stream) -> Stream {
         debug!("created stream: {:?}", stream);
         stream
+    }
+
+    pub(crate) fn buffer(&self) -> &[u8] {
+        self.inner.buffer()
     }
 
     fn from_tcp_stream(t: TcpStream) -> Stream {

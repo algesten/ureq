@@ -1,4 +1,4 @@
-use std::io::{self, Read};
+use std::io::{self, Cursor, Read};
 use std::str::FromStr;
 use std::{fmt, io::BufRead};
 
@@ -67,8 +67,7 @@ pub struct Response {
     headers: Vec<Header>,
     // Boxed to avoid taking up too much size.
     unit: Box<Unit>,
-    // Boxed to avoid taking up too much size.
-    stream: Box<Stream>,
+    reader: Box<dyn Read + Send + Sync + 'static>,
     /// The redirect history of this response, if any. The history starts with
     /// the first response received and ends with the response immediately
     /// previous to this one.
@@ -259,7 +258,11 @@ impl Response {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn into_reader(self) -> impl Read + Send {
+    pub fn into_reader(self) -> Box<dyn Read + Send> {
+        self.reader
+    }
+
+    fn stream_to_reader(&self, stream: Stream) -> Box<dyn Read + Send + Sync + 'static> {
         //
         let is_http10 = self.http_version().eq_ignore_ascii_case("HTTP/1.0");
         let is_close = self
@@ -290,26 +293,34 @@ impl Response {
             self.length
         };
 
-        let stream = self.stream;
-        let unit = self.unit;
+        let unit = &self.unit;
         let result = stream.set_read_timeout(unit.agent.config.timeout_read);
         if let Err(e) = result {
-            return Box::new(ErrorReader(e)) as Box<dyn Read + Send>;
+            return Box::new(ErrorReader(e)) as Box<dyn Read + Send + Sync + 'static>;
         }
         let deadline = unit.deadline;
-        let stream = DeadlineStream::new(*stream, deadline);
+        let buffer_len = stream.buffer().len();
+        let stream = DeadlineStream::new(stream, deadline);
 
-        let body_reader: Box<dyn Read + Send> = match (use_chunked, limit_bytes) {
+        let body_reader: Box<dyn Read + Send + Sync> = match (use_chunked, limit_bytes) {
             (true, _) => Box::new(PoolReturnRead::new(
                 &unit.agent,
                 &unit.url,
                 ChunkDecoder::new(stream),
             )),
-            (false, Some(len)) => Box::new(PoolReturnRead::new(
-                &unit.agent,
-                &unit.url,
-                LimitedRead::new(stream, len),
-            )),
+            (false, Some(len)) => {
+                let mut pooler =
+                    PoolReturnRead::new(&unit.agent, &unit.url, LimitedRead::new(stream, len));
+                if len <= buffer_len {
+                    let mut buf = [0u8].repeat(len);
+                    pooler
+                        .read_exact(&mut buf)
+                        .expect("failed to read exact buffer length from stream");
+                    Box::new(Cursor::new(buf))
+                } else {
+                    Box::new(pooler)
+                }
+            }
             (false, None) => Box::new(stream),
         };
 
@@ -505,19 +516,22 @@ impl Response {
         }
 
         let url = unit.url.clone();
+        let stream: Stream = stream.into();
 
-        Ok(Response {
+        let mut response = Response {
             url,
             status_line,
             index,
             status,
             headers,
             unit: Box::new(unit),
-            stream: Box::new(stream.into()),
+            reader: Box::new(Cursor::new(vec![])),
             history: vec![],
             length,
             compression,
-        })
+        };
+        response.reader = response.stream_to_reader(stream);
+        Ok(response)
     }
 
     #[cfg(test)]
@@ -554,7 +568,10 @@ impl Compression {
 
     /// Wrap the raw reader with a decompressing reader
     #[allow(unused_variables)] // when no features enabled, reader is unused (unreachable)
-    fn wrap_reader(self, reader: Box<dyn Read + Send>) -> Box<dyn Read + Send> {
+    fn wrap_reader(
+        self,
+        reader: Box<dyn Read + Send + Sync + 'static>,
+    ) -> Box<dyn Read + Send + Sync + 'static> {
         match self {
             #[cfg(feature = "brotli")]
             Compression::Brotli => Box::new(BrotliDecoder::new(reader, 4096)),
