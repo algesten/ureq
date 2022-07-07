@@ -9,7 +9,7 @@ use crate::body::SizedReader;
 use crate::error::{Error, ErrorKind::BadStatus};
 use crate::header::{get_all_headers, get_header, Header, HeaderLine};
 use crate::pool::PoolReturnRead;
-use crate::stream::{DeadlineStream, Stream, ReadOnlyStream};
+use crate::stream::{DeadlineStream, ReadOnlyStream, Stream};
 use crate::unit::Unit;
 use crate::{stream, Agent, ErrorKind};
 

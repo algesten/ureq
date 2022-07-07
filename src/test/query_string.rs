@@ -1,5 +1,5 @@
-use crate::get;
 use super::Recorder;
+use crate::get;
 
 #[test]
 fn no_query_string() {

@@ -1,11 +1,11 @@
-use crate::ReadWrite;
 use crate::error::Error;
-use crate::stream::{Stream, ReadOnlyStream};
+use crate::stream::{ReadOnlyStream, Stream};
 use crate::unit::Unit;
+use crate::ReadWrite;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::fmt;
-use std::io::{Write, Cursor, Read, self};
+use std::io::{self, Cursor, Read, Write};
 use std::net::TcpStream;
 use std::sync::{Arc, Mutex};
 
@@ -72,16 +72,14 @@ pub(crate) fn resolve_handler(unit: &Unit) -> Result<Stream, Error> {
 
 #[derive(Default, Clone)]
 pub(crate) struct Recorder {
-    contents: Arc<Mutex<Vec<u8>>>
+    contents: Arc<Mutex<Vec<u8>>>,
 }
 
 impl Recorder {
     fn register(path: &str) -> Self {
         let recorder = Recorder::default();
         let recorder2 = recorder.clone();
-        set_handler(path, move |_unit| {
-            Ok(recorder.stream())
-        });
+        set_handler(path, move |_unit| Ok(recorder.stream()));
         recorder2
     }
 
@@ -91,7 +89,9 @@ impl Recorder {
     }
 
     fn contains(&self, s: &str) -> bool {
-        std::str::from_utf8(&self.contents.lock().unwrap()).unwrap().contains(s)
+        std::str::from_utf8(&self.contents.lock().unwrap())
+            .unwrap()
+            .contains(s)
     }
 
     fn stream(&self) -> Stream {
@@ -110,11 +110,18 @@ impl Write for Recorder {
     }
 }
 
-pub(crate) struct TestStream(Box<dyn Read + Send + Sync>, Box<dyn Write + Send + Sync>, bool);
+pub(crate) struct TestStream(
+    Box<dyn Read + Send + Sync>,
+    Box<dyn Write + Send + Sync>,
+    bool,
+);
 
 impl TestStream {
     #[cfg(test)]
-    pub(crate) fn new(response: impl Read + Send + Sync + 'static, recorder: impl Write + Send + Sync + 'static) -> Self {
+    pub(crate) fn new(
+        response: impl Read + Send + Sync + 'static,
+        recorder: impl Write + Send + Sync + 'static,
+    ) -> Self {
         Self(Box::new(response), Box::new(recorder), false)
     }
 }
