@@ -20,15 +20,11 @@ use crate::unit::Unit;
 /// Trait for things implementing [std::io::Read] + [std::io::Write]. Used in [TlsConnector].
 pub trait ReadWrite: Read + Write + Send + Sync + fmt::Debug + 'static {
     fn socket(&self) -> Option<&TcpStream>;
-    fn is_poolable(&self) -> bool;
 }
 
 impl ReadWrite for TcpStream {
     fn socket(&self) -> Option<&TcpStream> {
         Some(self)
-    }
-    fn is_poolable(&self) -> bool {
-        true
     }
 }
 
@@ -47,9 +43,6 @@ pub(crate) struct Stream {
 impl<T: ReadWrite + ?Sized> ReadWrite for Box<T> {
     fn socket(&self) -> Option<&TcpStream> {
         ReadWrite::socket(self.as_ref())
-    }
-    fn is_poolable(&self) -> bool {
-        ReadWrite::is_poolable(self.as_ref())
     }
 }
 
@@ -168,10 +161,6 @@ impl ReadWrite for ReadOnlyStream {
     fn socket(&self) -> Option<&std::net::TcpStream> {
         None
     }
-
-    fn is_poolable(&self) -> bool {
-        true
-    }
 }
 
 impl fmt::Debug for Stream {
@@ -239,9 +228,6 @@ impl Stream {
             Some(socket) => Stream::serverclosed_stream(socket),
             None => Ok(false),
         }
-    }
-    pub fn is_poolable(&self) -> bool {
-        self.inner.get_ref().is_poolable()
     }
 
     pub(crate) fn reset(&mut self) -> io::Result<()> {
@@ -656,10 +642,6 @@ mod tests {
 
     impl ReadWrite for ReadRecorder {
         fn socket(&self) -> Option<&TcpStream> {
-            unimplemented!()
-        }
-
-        fn is_poolable(&self) -> bool {
             unimplemented!()
         }
     }

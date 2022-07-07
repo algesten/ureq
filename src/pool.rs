@@ -248,10 +248,6 @@ impl<R: Read + Sized + Into<Stream>> PoolReturnRead<R> {
         if let Some(reader) = self.reader.take() {
             // bring back stream here to either go into pool or dealloc
             let mut stream = reader.into();
-            if !stream.is_poolable() {
-                // just let it deallocate
-                return Ok(());
-            }
 
             // ensure stream can be reused
             stream.reset()?;
@@ -338,10 +334,6 @@ mod tests {
     impl ReadWrite for NoopStream {
         fn socket(&self) -> Option<&std::net::TcpStream> {
             None
-        }
-
-        fn is_poolable(&self) -> bool {
-            true
         }
     }
 

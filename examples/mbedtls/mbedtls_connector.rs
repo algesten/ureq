@@ -116,9 +116,6 @@ impl ReadWrite for MbedTlsStream {
     fn socket(&self) -> Option<&TcpStream> {
         None
     }
-    fn is_poolable(&self) -> bool {
-        true
-    }
 }
 
 impl io::Read for MbedTlsStream {

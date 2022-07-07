@@ -120,9 +120,6 @@ impl TestStream {
 }
 
 impl ReadWrite for TestStream {
-    fn is_poolable(&self) -> bool {
-        self.2
-    }
     fn socket(&self) -> Option<&TcpStream> {
         None
     }
