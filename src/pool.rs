@@ -306,7 +306,44 @@ impl<R: Read + Sized + Done + Into<Stream>> Read for PoolReturnRead<R> {
 
 #[cfg(test)]
 mod tests {
+    use crate::ReadWrite;
+
     use super::*;
+
+    #[derive(Debug)]
+    struct NoopStream;
+
+    impl NoopStream {
+        fn stream() -> Stream {
+            Stream::new(NoopStream)
+        }
+    }
+
+    impl Read for NoopStream {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            Ok(buf.len())
+        }
+    }
+
+    impl std::io::Write for NoopStream {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl ReadWrite for NoopStream {
+        fn socket(&self) -> Option<&std::net::TcpStream> {
+            None
+        }
+
+        fn is_poolable(&self) -> bool {
+            true
+        }
+    }
 
     #[test]
     fn poolkey_new() {
@@ -328,7 +365,7 @@ mod tests {
             proxy: None,
         });
         for key in poolkeys.clone() {
-            pool.add(&key, Stream::from_vec(vec![]))
+            pool.add(&key, NoopStream::stream());
         }
         assert_eq!(pool.len(), pool.max_idle_connections);
 
@@ -353,7 +390,7 @@ mod tests {
         };
 
         for _ in 0..pool.max_idle_connections_per_host * 2 {
-            pool.add(&poolkey, Stream::from_vec(vec![]))
+            pool.add(&poolkey, NoopStream::stream())
         }
         assert_eq!(pool.len(), pool.max_idle_connections_per_host);
 
@@ -372,12 +409,12 @@ mod tests {
         let url = Url::parse("zzz:///example.com").unwrap();
         let pool_key = PoolKey::new(&url, None);
 
-        pool.add(&pool_key, Stream::from_vec(vec![]));
+        pool.add(&pool_key, NoopStream::stream());
         assert_eq!(pool.len(), 1);
 
         let pool_key = PoolKey::new(&url, Some(Proxy::new("localhost:9999").unwrap()));
 
-        pool.add(&pool_key, Stream::from_vec(vec![]));
+        pool.add(&pool_key, NoopStream::stream());
         assert_eq!(pool.len(), 2);
 
         let pool_key = PoolKey::new(
@@ -385,7 +422,7 @@ mod tests {
             Some(Proxy::new("user:password@localhost:9999").unwrap()),
         );
 
-        pool.add(&pool_key, Stream::from_vec(vec![]));
+        pool.add(&pool_key, NoopStream::stream());
         assert_eq!(pool.len(), 3);
     }
 
@@ -396,10 +433,9 @@ mod tests {
         let url = Url::parse("https:///example.com").unwrap();
 
         let mut out_buf = [0u8; 500];
-        let long_vec = vec![0u8; 1000];
 
         let agent = Agent::new();
-        let stream = Stream::from_vec_poolable(long_vec);
+        let stream = NoopStream::stream();
         let limited_read = LimitedRead::new(stream, 500);
 
         let mut pool_return_read = PoolReturnRead::new(&agent, &url, limited_read);

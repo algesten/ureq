@@ -1,7 +1,7 @@
 use crate::test;
 use std::io::Read;
 
-use super::super::*;
+use super::{super::*, Recorder};
 
 #[test]
 fn header_passing() {
@@ -116,13 +116,9 @@ fn body_as_reader() {
 
 #[test]
 fn escape_path() {
-    test::set_handler("/escape_path%20here", |_unit| {
-        test::make_response(200, "OK", vec![], vec![])
-    });
-    let resp = get("test://host/escape_path here").call().unwrap();
-    let vec = resp.into_written_bytes();
-    let s = String::from_utf8_lossy(&vec);
-    assert!(s.contains("GET /escape_path%20here HTTP/1.1"))
+    let recorder = Recorder::register("/escape_path%20here");
+    get("test://host/escape_path here").call().unwrap();
+    assert!(recorder.contains("GET /escape_path%20here HTTP/1.1"))
 }
 
 #[test]
@@ -194,22 +190,14 @@ pub fn header_with_spaces_before_value() {
 
 #[test]
 pub fn host_no_port() {
-    test::set_handler("/host_no_port", |_| {
-        test::make_response(200, "OK", vec![], vec![])
-    });
-    let resp = get("test://myhost/host_no_port").call().unwrap();
-    let vec = resp.into_written_bytes();
-    let s = String::from_utf8_lossy(&vec);
-    assert!(s.contains("\r\nHost: myhost\r\n"));
+    let recorder = Recorder::register("/host_no_port");
+    get("test://myhost/host_no_port").call().unwrap();
+    assert!(recorder.contains("\r\nHost: myhost\r\n"));
 }
 
 #[test]
 pub fn host_with_port() {
-    test::set_handler("/host_with_port", |_| {
-        test::make_response(200, "OK", vec![], vec![])
-    });
-    let resp = get("test://myhost:234/host_with_port").call().unwrap();
-    let vec = resp.into_written_bytes();
-    let s = String::from_utf8_lossy(&vec);
-    assert!(s.contains("\r\nHost: myhost:234\r\n"));
+    let recorder = Recorder::register("/host_with_port");
+    get("test://myhost:234/host_with_port").call().unwrap();
+    assert!(recorder.contains("\r\nHost: myhost:234\r\n"));
 }

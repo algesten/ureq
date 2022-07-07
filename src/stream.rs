@@ -21,12 +21,6 @@ use crate::unit::Unit;
 pub trait ReadWrite: Read + Write + Send + Sync + fmt::Debug + 'static {
     fn socket(&self) -> Option<&TcpStream>;
     fn is_poolable(&self) -> bool;
-
-    /// The bytes written to the stream as a Vec<u8>. This is used for tests only.
-    #[cfg(test)]
-    fn written_bytes(&self) -> Vec<u8> {
-        panic!("written_bytes on non Test stream");
-    }
 }
 
 impl ReadWrite for TcpStream {
@@ -56,48 +50,6 @@ impl<T: ReadWrite + ?Sized> ReadWrite for Box<T> {
     }
     fn is_poolable(&self) -> bool {
         ReadWrite::is_poolable(self.as_ref())
-    }
-    #[cfg(test)]
-    fn written_bytes(&self) -> Vec<u8> {
-        ReadWrite::written_bytes(self.as_ref())
-    }
-}
-
-struct TestStream(Box<dyn Read + Send + Sync>, Vec<u8>, bool);
-
-impl ReadWrite for TestStream {
-    fn is_poolable(&self) -> bool {
-        self.2
-    }
-    fn socket(&self) -> Option<&TcpStream> {
-        None
-    }
-
-    #[cfg(test)]
-    fn written_bytes(&self) -> Vec<u8> {
-        self.1.clone()
-    }
-}
-
-impl Read for TestStream {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.0.read(buf)
-    }
-}
-
-impl Write for TestStream {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.1.write(buf)
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
-}
-
-impl fmt::Debug for TestStream {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("TestStream").finish()
     }
 }
 
@@ -187,6 +139,41 @@ pub(crate) fn io_err_timeout(error: String) -> io::Error {
     io::Error::new(io::ErrorKind::TimedOut, error)
 }
 
+#[derive(Debug)]
+pub(crate) struct ReadOnlyStream(Cursor<Vec<u8>>);
+
+impl ReadOnlyStream {
+    pub(crate) fn new(v: Vec<u8>) -> Self {
+        Self(Cursor::new(v))
+    }
+}
+
+impl Read for ReadOnlyStream {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.0.read(buf)
+    }
+}
+
+impl std::io::Write for ReadOnlyStream {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+impl ReadWrite for ReadOnlyStream {
+    fn socket(&self) -> Option<&std::net::TcpStream> {
+        None
+    }
+
+    fn is_poolable(&self) -> bool {
+        true
+    }
+}
+
 impl fmt::Debug for Stream {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.inner.get_ref().socket() {
@@ -197,7 +184,7 @@ impl fmt::Debug for Stream {
 }
 
 impl Stream {
-    fn new(t: impl ReadWrite) -> Stream {
+    pub(crate) fn new(t: impl ReadWrite) -> Stream {
         Stream::logged_create(Stream {
             inner: BufReader::new(Box::new(t)),
         })
@@ -206,23 +193,6 @@ impl Stream {
     fn logged_create(stream: Stream) -> Stream {
         debug!("created stream: {:?}", stream);
         stream
-    }
-
-    pub(crate) fn from_vec(v: Vec<u8>) -> Stream {
-        Stream::logged_create(Stream {
-            inner: BufReader::new(Box::new(TestStream(
-                Box::new(Cursor::new(v)),
-                vec![],
-                false,
-            ))),
-        })
-    }
-
-    #[cfg(test)]
-    pub(crate) fn from_vec_poolable(v: Vec<u8>) -> Stream {
-        Stream::logged_create(Stream {
-            inner: BufReader::new(Box::new(TestStream(Box::new(Cursor::new(v)), vec![], true))),
-        })
     }
 
     fn from_tcp_stream(t: TcpStream) -> Stream {
@@ -295,11 +265,6 @@ impl Stream {
         } else {
             Ok(())
         }
-    }
-
-    #[cfg(test)]
-    pub fn written_bytes(&self) -> Vec<u8> {
-        self.inner.get_ref().written_bytes()
     }
 }
 
