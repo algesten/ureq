@@ -31,7 +31,4 @@ impl ReadWrite for native_tls::TlsStream<Box<dyn ReadWrite>> {
     fn socket(&self) -> Option<&TcpStream> {
         self.get_ref().socket()
     }
-    fn is_poolable(&self) -> bool {
-        self.get_ref().is_poolable()
-    }
 }

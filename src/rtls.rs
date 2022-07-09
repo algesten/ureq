@@ -33,9 +33,6 @@ impl ReadWrite for RustlsStream {
     fn socket(&self) -> Option<&TcpStream> {
         self.0.get_ref().socket()
     }
-    fn is_poolable(&self) -> bool {
-        self.0.get_ref().is_poolable()
-    }
 }
 
 // TODO: After upgrading to rustls 0.20 or higher, we can remove these Read

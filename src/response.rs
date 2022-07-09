@@ -9,7 +9,7 @@ use crate::body::SizedReader;
 use crate::error::{Error, ErrorKind::BadStatus};
 use crate::header::{get_all_headers, get_header, Header, HeaderLine};
 use crate::pool::PoolReturnRead;
-use crate::stream::{DeadlineStream, Stream};
+use crate::stream::{DeadlineStream, ReadOnlyStream, Stream};
 use crate::unit::Unit;
 use crate::{stream, Agent, ErrorKind};
 
@@ -521,12 +521,6 @@ impl Response {
     }
 
     #[cfg(test)]
-    pub fn into_written_bytes(self) -> Vec<u8> {
-        // Deliberately consume `self` so that any access to `self.stream` must be non-shared.
-        self.stream.written_bytes()
-    }
-
-    #[cfg(test)]
     pub fn set_url(&mut self, url: Url) {
         self.url = url;
     }
@@ -643,7 +637,7 @@ impl FromStr for Response {
     /// # }
     /// ```
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let stream = Stream::from_vec(s.as_bytes().to_owned());
+        let stream = Stream::new(ReadOnlyStream::new(s.into()));
         let request_url = "https://example.com".parse().unwrap();
         let request_reader = SizedReader {
             size: crate::body::BodySize::Empty,
@@ -1004,7 +998,7 @@ mod tests {
             OK",
         );
         let v = cow.to_vec();
-        let s = Stream::from_vec(v);
+        let s = Stream::new(ReadOnlyStream::new(v));
         let request_url = "https://example.com".parse().unwrap();
         let request_reader = SizedReader {
             size: crate::body::BodySize::Empty,

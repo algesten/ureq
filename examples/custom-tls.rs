@@ -52,9 +52,6 @@ impl ReadWrite for CustomTlsStream {
     fn socket(&self) -> Option<&TcpStream> {
         self.0.socket()
     }
-    fn is_poolable(&self) -> bool {
-        self.0.is_poolable()
-    }
 }
 
 impl io::Read for CustomTlsStream {
