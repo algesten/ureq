@@ -311,7 +311,7 @@ impl Response {
                 let mut pooler =
                     PoolReturnRead::new(&unit.agent, &unit.url, LimitedRead::new(stream, len));
                 if len <= buffer_len {
-                    let mut buf = [0u8].repeat(len);
+                    let mut buf = vec![0; len];
                     pooler
                         .read_exact(&mut buf)
                         .expect("failed to read exact buffer length from stream");
