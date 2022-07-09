@@ -258,7 +258,7 @@ impl Response {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn into_reader(self) -> Box<dyn Read + Send> {
+    pub fn into_reader(self) -> Box<dyn Read + Send + Sync + 'static> {
         self.reader
     }
 
