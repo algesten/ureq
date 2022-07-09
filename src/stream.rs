@@ -60,6 +60,10 @@ impl DeadlineStream {
     pub(crate) fn new(stream: Stream, deadline: Option<Instant>) -> Self {
         DeadlineStream { stream, deadline }
     }
+
+    pub(crate) fn inner_ref(&self) -> &Stream {
+        &self.stream
+    }
 }
 
 impl From<DeadlineStream> for Stream {

@@ -262,7 +262,7 @@ impl Response {
         self.reader
     }
 
-    fn stream_to_reader(&self, stream: Stream) -> Box<dyn Read + Send + Sync + 'static> {
+    fn stream_to_reader(&self, stream: DeadlineStream) -> Box<dyn Read + Send + Sync + 'static> {
         //
         let is_http10 = self.http_version().eq_ignore_ascii_case("HTTP/1.0");
         let is_close = self
@@ -294,13 +294,12 @@ impl Response {
         };
 
         let unit = &self.unit;
-        let result = stream.set_read_timeout(unit.agent.config.timeout_read);
+        let inner = stream.inner_ref();
+        let result = inner.set_read_timeout(unit.agent.config.timeout_read);
         if let Err(e) = result {
             return Box::new(ErrorReader(e)) as Box<dyn Read + Send + Sync + 'static>;
         }
-        let deadline = unit.deadline;
-        let buffer_len = stream.buffer().len();
-        let stream = DeadlineStream::new(stream, deadline);
+        let buffer_len = inner.buffer().len();
 
         let body_reader: Box<dyn Read + Send + Sync> = match (use_chunked, limit_bytes) {
             (true, _) => Box::new(PoolReturnRead::new(
@@ -516,7 +515,6 @@ impl Response {
         }
 
         let url = unit.url.clone();
-        let stream: Stream = stream.into();
 
         let mut response = Response {
             url,
