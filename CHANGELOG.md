@@ -1,3 +1,15 @@
+# 2.5.0
+ * Add tcp no_delay option (#465)
+ * Rework public TLS traits
+ * Warn if requests aren't sent (#490)
+ * Fixes for returning stream to pool (#509)
+ * Avoid extra syscalls when content is buffered (#508)
+ * Remove dep on sync_wrapper (#514, #528)
+ * Error instead of panic on large deadlines (#517)
+ * Make ReadWrite trait simpler (used in bespoke TLS impls) (#530)
+ * Buffer short response bodies (#531)
+ * Update cookie/cookie_store dep
+
 # 2.4.0
 
  * Enable `gzip` feature by default (#455)
