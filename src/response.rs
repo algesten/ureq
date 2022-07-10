@@ -3,6 +3,7 @@ use std::str::FromStr;
 use std::{fmt, io::BufRead};
 
 use chunked_transfer::Decoder as ChunkDecoder;
+use log::debug;
 use url::Url;
 
 use crate::body::SizedReader;
@@ -302,25 +303,40 @@ impl Response {
         let buffer_len = inner.buffer().len();
 
         let body_reader: Box<dyn Read + Send + Sync> = match (use_chunked, limit_bytes) {
-            (true, _) => Box::new(PoolReturnRead::new(
-                &unit.agent,
-                &unit.url,
-                ChunkDecoder::new(stream),
-            )),
+            // Chunked responses have an unknown length, but do have an end of body
+            // marker. When we encounter the marker, we can return the underlying stream
+            // to the connection pool.
+            (true, _) => {
+                debug!("Chunked body in response");
+                Box::new(PoolReturnRead::new(
+                    &unit.agent,
+                    &unit.url,
+                    ChunkDecoder::new(stream),
+                ))
+            }
+            // Responses with a content-length header means we should limit the reading
+            // of the body to the number of bytes in the header. Once done, we can
+            // return the underlying stream to the connection pool.
             (false, Some(len)) => {
                 let mut pooler =
                     PoolReturnRead::new(&unit.agent, &unit.url, LimitedRead::new(stream, len));
+
                 if len <= buffer_len {
+                    debug!("Body entirely buffered (length: {})", len);
                     let mut buf = vec![0; len];
                     pooler
                         .read_exact(&mut buf)
                         .expect("failed to read exact buffer length from stream");
                     Box::new(Cursor::new(buf))
                 } else {
+                    debug!("Streaming body until content-length: {}", len);
                     Box::new(pooler)
                 }
             }
-            (false, None) => Box::new(stream),
+            (false, None) => {
+                debug!("Body of unknown size - read until socket close");
+                Box::new(stream)
+            }
         };
 
         match self.compression {
