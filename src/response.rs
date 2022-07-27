@@ -257,22 +257,22 @@ impl Response {
     }
 
     fn stream_to_reader(
+        unit: &Unit,
         stream: DeadlineStream,
-        method: &str,
-        url: &Url,
         status: u16,
         http_version: &str,
         headers: &[Header],
         compression: Option<Compression>,
-        agent: &Agent,
     ) -> Box<dyn Read + Send + Sync + 'static> {
         //
+        let agent = &unit.agent;
+        let url = &unit.url;
         let is_http10 = http_version.eq_ignore_ascii_case("HTTP/1.0");
         let is_close = get_header(headers, "connection")
             .map(|c| c.eq_ignore_ascii_case("close"))
             .unwrap_or(false);
 
-        let is_head = method.eq_ignore_ascii_case("HEAD");
+        let is_head = unit.method.eq_ignore_ascii_case("HEAD");
         let has_no_body = is_head
             || match status {
                 204 | 304 => true,
@@ -524,16 +524,8 @@ impl Response {
 
         let http_version = &status_line.as_str()[0..index.http_version];
 
-        let reader = Response::stream_to_reader(
-            stream,
-            &unit.method,
-            &unit.url,
-            status,
-            http_version,
-            &headers,
-            compression,
-            &unit.agent,
-        );
+        let reader =
+            Response::stream_to_reader(&unit, stream, status, http_version, &headers, compression);
 
         Ok(Response {
             url: unit.url,
