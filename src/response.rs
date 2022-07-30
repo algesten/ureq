@@ -375,7 +375,7 @@ impl Response {
     /// Content-Type header, or the Content-Type header does not specify a charset, into_string()
     /// uses `utf-8`.
     ///
-    /// I.e. `Content-Length: text/plain; charset=iso-8859-1` would be decoded in latin-1.
+    /// I.e. `Content-Type: text/plain; charset=iso-8859-1` would be decoded in latin-1.
     ///
     pub fn into_string(self) -> io::Result<String> {
         #[cfg(feature = "charset")]
