@@ -218,10 +218,10 @@ pub(crate) fn connect(
         // reuse the previous header vec on redirects.
         let mut headers = unit.headers;
 
-        // on redirects we don't want to keep "content-length". we also might want to
+        // on redirects we don't want to keep "content-length" and "cookie". we also might want to
         // strip away "authorization" to ensure credentials are not leaked.
         headers.retain(|h| {
-            !h.is_name("content-length") && (!h.is_name("authorization") || keep_auth_header)
+            !h.is_name("content-length") && !h.is_name("cookie") && (!h.is_name("authorization") || keep_auth_header)
         });
 
         // recreate the unit to get a new hostname and cookies for the new host.
