@@ -320,3 +320,57 @@ fn redirect_no_keep_auth_different_host() {
     assert!(resp.has("x-foo"));
     assert_eq!(resp.header("x-foo").unwrap(), "bar");
 }
+
+#[cfg(feature = "cookies")]
+#[test]
+fn redirect_updates_cookie() {
+    test::set_handler("/issue_cookie", |_| {
+        test::make_response(
+            200,
+            "OK",
+            vec!["Set-Cookie: foo=should_not_exist_after_redirection; path=/;"],
+            vec![],
+        )
+    });
+    test::set_handler("/redirect_updates_cookie", |unit| {
+        assert!(unit
+            .all("Cookie")
+            .contains(&"foo=should_not_exist_after_redirection"));
+        test::make_response(
+            302,
+            "Go here with updating cookie",
+            vec![
+                "Location: test://host/redirect_updates_cookie_check",
+                "Set-Cookie: foo=should_exist_after_redirection; path=/;",
+            ],
+            vec![],
+        )
+    });
+    test::set_handler("/redirect_updates_cookie_check", |unit| {
+        assert!(!unit
+            .all("Cookie")
+            .contains(&"foo=should_not_exist_after_redirection"));
+        assert!(unit
+            .all("Cookie")
+            .contains(&"foo=should_exist_after_redirection"));
+
+        test::make_response(200, "OK", vec!["x-foo: bar"], vec![])
+    });
+
+    let agent = builder()
+        .redirect_auth_headers(RedirectAuthHeaders::SameHost)
+        .build();
+
+    // get cookie
+    agent.get("test://host/issue_cookie").call().unwrap();
+
+    // update cookie
+    let resp = agent
+        .get("test://host/redirect_updates_cookie")
+        .call()
+        .unwrap();
+
+    // ensure second handler runs
+    assert!(resp.has("x-foo"));
+    assert_eq!(resp.header("x-foo").unwrap(), "bar");
+}
