@@ -69,7 +69,7 @@ pub struct Response {
     headers: Vec<Header>,
     // Boxed to avoid taking up too much size.
     unit: Box<Unit>,
-    reader: Box<dyn Read + Send + Sync + 'static>,
+    reader: Reader,
     /// The socket address of the server that sent the response.
     remote_addr: SocketAddr,
     /// The redirect history of this response, if any. The history starts with
@@ -83,6 +83,26 @@ pub struct Response {
     length: Option<usize>,
     /// The compression type of the response body.
     compression: Option<Compression>,
+}
+
+/// Implementations of reader that contain the response body or an error
+enum Reader {
+    /// The response was short enough to be buffered directly in a Vec
+    Buffered(Box<Cursor<Vec<u8>>>),
+    /// The response is either too large to be buffered or it is compressed
+    Connection(Box<dyn Read + Send + Sync + 'static>),
+    /// There was an error which is present instead of the content
+    Error(ErrorReader),
+}
+
+impl Read for Reader {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        match self {
+            Reader::Buffered(r) => r.read(buf),
+            Reader::Connection(r) => r.read(buf),
+            Reader::Error(r) => r.read(buf),
+        }
+    }
 }
 
 /// index into status_line where we split: HTTP/1.1 200 OK
@@ -268,10 +288,43 @@ impl Response {
     /// # }
     /// ```
     pub fn into_reader(self) -> Box<dyn Read + Send + Sync + 'static> {
-        self.reader
+        match self.reader {
+            Reader::Buffered(buffer) => buffer,
+            Reader::Connection(conn) => conn,
+            Reader::Error(e) => Box::new(e),
+        }
     }
 
-    fn stream_to_reader(&self, stream: DeadlineStream) -> Box<dyn Read + Send + Sync + 'static> {
+    /// Obtain the body if it is buffered directly in this struct.
+    ///
+    /// If this returns `Some` it is guaranteed to contain the whole
+    /// non-compressed response body. If this function returns `None` other
+    /// methods such as `into_reader` must be used to obtain the body.
+    ///
+    /// Example:
+    ///
+    /// ```
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # ureq::is_test(true);
+    /// let resp = ureq::get("http://httpbin.org/bytes/100")
+    ///     .call()?;
+    ///
+    /// let body = resp.buffered_body();
+    ///
+    /// assert!(body.is_some());
+    /// assert_eq!(body.unwrap().len(), 100);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn buffered_body(&self) -> Option<&[u8]> {
+        match &self.reader {
+            Reader::Buffered(buf) => Some(buf.get_ref()),
+            Reader::Connection(_) => None,
+            Reader::Error(_) => None,
+        }
+    }
+
+    fn stream_to_reader(&self, stream: DeadlineStream) -> Reader {
         //
         let is_http10 = self.http_version().eq_ignore_ascii_case("HTTP/1.0");
         let is_close = self
@@ -306,21 +359,21 @@ impl Response {
         let inner = stream.inner_ref();
         let result = inner.set_read_timeout(unit.agent.config.timeout_read);
         if let Err(e) = result {
-            return Box::new(ErrorReader(e)) as Box<dyn Read + Send + Sync + 'static>;
+            return Reader::Error(ErrorReader(e));
         }
         let buffer_len = inner.buffer().len();
 
-        let body_reader: Box<dyn Read + Send + Sync> = match (use_chunked, limit_bytes) {
+        let body_reader: Reader = match (use_chunked, limit_bytes) {
             // Chunked responses have an unknown length, but do have an end of body
             // marker. When we encounter the marker, we can return the underlying stream
             // to the connection pool.
             (true, _) => {
                 debug!("Chunked body in response");
-                Box::new(PoolReturnRead::new(
+                Reader::Connection(Box::new(PoolReturnRead::new(
                     &unit.agent,
                     &unit.url,
                     ChunkDecoder::new(stream),
-                ))
+                )))
             }
             // Responses with a content-length header means we should limit the reading
             // of the body to the number of bytes in the header. Once done, we can
@@ -335,15 +388,15 @@ impl Response {
                     pooler
                         .read_exact(&mut buf)
                         .expect("failed to read exact buffer length from stream");
-                    Box::new(Cursor::new(buf))
+                    Reader::Buffered(Box::new(Cursor::new(buf)))
                 } else {
                     debug!("Streaming body until content-length: {}", len);
-                    Box::new(pooler)
+                    Reader::Connection(Box::new(pooler))
                 }
             }
             (false, None) => {
                 debug!("Body of unknown size - read until socket close");
-                Box::new(stream)
+                Reader::Connection(Box::new(stream))
             }
         };
 
@@ -548,7 +601,7 @@ impl Response {
             status,
             headers,
             unit: Box::new(unit),
-            reader: Box::new(Cursor::new(vec![])),
+            reader: Reader::Buffered(Box::new(Cursor::new(vec![]))),
             remote_addr,
             history: vec![],
             length,
@@ -592,15 +645,12 @@ impl Compression {
 
     /// Wrap the raw reader with a decompressing reader
     #[allow(unused_variables)] // when no features enabled, reader is unused (unreachable)
-    fn wrap_reader(
-        self,
-        reader: Box<dyn Read + Send + Sync + 'static>,
-    ) -> Box<dyn Read + Send + Sync + 'static> {
+    fn wrap_reader(self, reader: Reader) -> Reader {
         match self {
             #[cfg(feature = "brotli")]
-            Compression::Brotli => Box::new(BrotliDecoder::new(reader, 4096)),
+            Compression::Brotli => Reader::Connection(Box::new(BrotliDecoder::new(reader, 4096))),
             #[cfg(feature = "gzip")]
-            Compression::Gzip => Box::new(GzDecoder::new(reader)),
+            Compression::Gzip => Reader::Connection(Box::new(GzDecoder::new(reader))),
         }
     }
 }
@@ -848,9 +898,14 @@ mod tests {
     fn content_type_without_charset() {
         let s = "HTTP/1.1 200 OK\r\n\
                  Content-Type: application/json\r\n\
+                 Content-Length: 2\r\n\
                  \r\n\
                  OK";
         let resp = s.parse::<Response>().unwrap();
+        assert_eq!(
+            "OK",
+            std::str::from_utf8(resp.buffered_body().unwrap()).unwrap()
+        );
         assert_eq!("application/json", resp.content_type());
     }
 
@@ -928,6 +983,7 @@ mod tests {
             "A".repeat(LEN),
         );
         let result = s.parse::<Response>().unwrap();
+        assert!(result.buffered_body().is_none());
         let err = result
             .into_string()
             .expect_err("didn't error with too-long body");
