@@ -1,17 +1,17 @@
-use std::io::{self, Read};
+use std::io::{self, Cursor, Read};
 use std::net::SocketAddr;
 use std::str::FromStr;
-use std::sync::Mutex;
 use std::{fmt, io::BufRead};
 
 use chunked_transfer::Decoder as ChunkDecoder;
+use log::debug;
 use url::Url;
 
 use crate::body::SizedReader;
 use crate::error::{Error, ErrorKind::BadStatus};
 use crate::header::{get_all_headers, get_header, Header, HeaderLine};
 use crate::pool::PoolReturnRead;
-use crate::stream::{DeadlineStream, Stream};
+use crate::stream::{DeadlineStream, ReadOnlyStream, Stream};
 use crate::unit::Unit;
 use crate::{stream, Agent, ErrorKind};
 
@@ -69,8 +69,7 @@ pub struct Response {
     headers: Vec<Header>,
     // Boxed to avoid taking up too much size.
     unit: Box<Unit>,
-    // Boxed to avoid taking up too much size.
-    stream: Mutex<Box<Stream>>,
+    reader: Box<dyn Read + Send + Sync + 'static>,
     /// The socket address of the server that sent the response.
     remote_addr: SocketAddr,
     /// The redirect history of this response, if any. The history starts with
@@ -268,7 +267,11 @@ impl Response {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn into_reader(self) -> impl Read + Send {
+    pub fn into_reader(self) -> Box<dyn Read + Send + Sync + 'static> {
+        self.reader
+    }
+
+    fn stream_to_reader(&self, stream: DeadlineStream) -> Box<dyn Read + Send + Sync + 'static> {
         //
         let is_http10 = self.http_version().eq_ignore_ascii_case("HTTP/1.0");
         let is_close = self
@@ -299,27 +302,49 @@ impl Response {
             self.length
         };
 
-        let stream = self.stream.into_inner().unwrap();
-        let unit = self.unit;
-        let result = stream.set_read_timeout(unit.agent.config.timeout_read);
+        let unit = &self.unit;
+        let inner = stream.inner_ref();
+        let result = inner.set_read_timeout(unit.agent.config.timeout_read);
         if let Err(e) = result {
-            return Box::new(ErrorReader(e)) as Box<dyn Read + Send>;
+            return Box::new(ErrorReader(e)) as Box<dyn Read + Send + Sync + 'static>;
         }
-        let deadline = unit.deadline;
-        let stream = DeadlineStream::new(*stream, deadline);
+        let buffer_len = inner.buffer().len();
 
-        let body_reader: Box<dyn Read + Send> = match (use_chunked, limit_bytes) {
-            (true, _) => Box::new(PoolReturnRead::new(
-                &unit.agent,
-                &unit.url,
-                ChunkDecoder::new(stream),
-            )),
-            (false, Some(len)) => Box::new(PoolReturnRead::new(
-                &unit.agent,
-                &unit.url,
-                LimitedRead::new(stream, len),
-            )),
-            (false, None) => Box::new(stream),
+        let body_reader: Box<dyn Read + Send + Sync> = match (use_chunked, limit_bytes) {
+            // Chunked responses have an unknown length, but do have an end of body
+            // marker. When we encounter the marker, we can return the underlying stream
+            // to the connection pool.
+            (true, _) => {
+                debug!("Chunked body in response");
+                Box::new(PoolReturnRead::new(
+                    &unit.agent,
+                    &unit.url,
+                    ChunkDecoder::new(stream),
+                ))
+            }
+            // Responses with a content-length header means we should limit the reading
+            // of the body to the number of bytes in the header. Once done, we can
+            // return the underlying stream to the connection pool.
+            (false, Some(len)) => {
+                let mut pooler =
+                    PoolReturnRead::new(&unit.agent, &unit.url, LimitedRead::new(stream, len));
+
+                if len <= buffer_len {
+                    debug!("Body entirely buffered (length: {})", len);
+                    let mut buf = vec![0; len];
+                    pooler
+                        .read_exact(&mut buf)
+                        .expect("failed to read exact buffer length from stream");
+                    Box::new(Cursor::new(buf))
+                } else {
+                    debug!("Streaming body until content-length: {}", len);
+                    Box::new(pooler)
+                }
+            }
+            (false, None) => {
+                debug!("Body of unknown size - read until socket close");
+                Box::new(stream)
+            }
         };
 
         match self.compression {
@@ -358,7 +383,7 @@ impl Response {
     /// Content-Type header, or the Content-Type header does not specify a charset, into_string()
     /// uses `utf-8`.
     ///
-    /// I.e. `Content-Length: text/plain; charset=iso-8859-1` would be decoded in latin-1.
+    /// I.e. `Content-Type: text/plain; charset=iso-8859-1` would be decoded in latin-1.
     ///
     pub fn into_string(self) -> io::Result<String> {
         #[cfg(feature = "charset")]
@@ -516,25 +541,21 @@ impl Response {
 
         let url = unit.url.clone();
 
-        Ok(Response {
+        let mut response = Response {
             url,
             status_line,
             index,
             status,
             headers,
             unit: Box::new(unit),
-            stream: Mutex::new(Box::new(stream.into())),
+            reader: Box::new(Cursor::new(vec![])),
             remote_addr,
             history: vec![],
             length,
             compression,
-        })
-    }
-
-    #[cfg(test)]
-    pub fn into_written_bytes(self) -> Vec<u8> {
-        // Deliberately consume `self` so that any access to `self.stream` must be non-shared.
-        self.stream.into_inner().unwrap().written_bytes()
+        };
+        response.reader = response.stream_to_reader(stream);
+        Ok(response)
     }
 
     #[cfg(test)]
@@ -571,7 +592,10 @@ impl Compression {
 
     /// Wrap the raw reader with a decompressing reader
     #[allow(unused_variables)] // when no features enabled, reader is unused (unreachable)
-    fn wrap_reader(self, reader: Box<dyn Read + Send>) -> Box<dyn Read + Send> {
+    fn wrap_reader(
+        self,
+        reader: Box<dyn Read + Send + Sync + 'static>,
+    ) -> Box<dyn Read + Send + Sync + 'static> {
         match self {
             #[cfg(feature = "brotli")]
             Compression::Brotli => Box::new(BrotliDecoder::new(reader, 4096)),
@@ -654,7 +678,8 @@ impl FromStr for Response {
     /// # }
     /// ```
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let stream = Stream::from_vec(s.as_bytes().to_owned());
+        let remote_addr = "0.0.0.0:0".parse().unwrap();
+        let stream = Stream::new(ReadOnlyStream::new(s.into()), remote_addr);
         let request_url = "https://example.com".parse().unwrap();
         let request_reader = SizedReader {
             size: crate::body::BodySize::Empty,
@@ -1015,7 +1040,7 @@ mod tests {
             OK",
         );
         let v = cow.to_vec();
-        let s = Stream::from_vec(v);
+        let s = Stream::new(ReadOnlyStream::new(v));
         let request_url = "https://example.com".parse().unwrap();
         let request_reader = SizedReader {
             size: crate::body::BodySize::Empty,

@@ -18,23 +18,13 @@ use crate::error::ErrorKind;
 use crate::unit::Unit;
 
 /// Trait for things implementing [std::io::Read] + [std::io::Write]. Used in [TlsConnector].
-pub trait ReadWrite: Read + Write + Send + fmt::Debug + 'static {
+pub trait ReadWrite: Read + Write + Send + Sync + fmt::Debug + 'static {
     fn socket(&self) -> Option<&TcpStream>;
-    fn is_poolable(&self) -> bool;
-
-    /// The bytes written to the stream as a Vec<u8>. This is used for tests only.
-    #[cfg(test)]
-    fn written_bytes(&self) -> Vec<u8> {
-        panic!("written_bytes on non Test stream");
-    }
 }
 
 impl ReadWrite for TcpStream {
     fn socket(&self) -> Option<&TcpStream> {
         Some(self)
-    }
-    fn is_poolable(&self) -> bool {
-        true
     }
 }
 
@@ -56,58 +46,13 @@ impl<T: ReadWrite + ?Sized> ReadWrite for Box<T> {
     fn socket(&self) -> Option<&TcpStream> {
         ReadWrite::socket(self.as_ref())
     }
-    fn is_poolable(&self) -> bool {
-        ReadWrite::is_poolable(self.as_ref())
-    }
-    #[cfg(test)]
-    fn written_bytes(&self) -> Vec<u8> {
-        ReadWrite::written_bytes(self.as_ref())
-    }
-}
-
-struct TestStream(Box<dyn Read + Send + Sync>, Vec<u8>, bool);
-
-impl ReadWrite for TestStream {
-    fn is_poolable(&self) -> bool {
-        self.2
-    }
-    fn socket(&self) -> Option<&TcpStream> {
-        None
-    }
-
-    #[cfg(test)]
-    fn written_bytes(&self) -> Vec<u8> {
-        self.1.clone()
-    }
-}
-
-impl Read for TestStream {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.0.read(buf)
-    }
-}
-
-impl Write for TestStream {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.1.write(buf)
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
-}
-
-impl fmt::Debug for TestStream {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("TestStream").finish()
-    }
 }
 
 // DeadlineStream wraps a stream such that read() will return an error
 // after the provided deadline, and sets timeouts on the underlying
 // TcpStream to ensure read() doesn't block beyond the deadline.
 // When the From trait is used to turn a DeadlineStream back into a
-// Stream (by PoolReturningRead), the timeouts are removed.
+// Stream (by PoolReturnRead), the timeouts are removed.
 pub(crate) struct DeadlineStream {
     stream: Stream,
     deadline: Option<Instant>,
@@ -116,6 +61,10 @@ pub(crate) struct DeadlineStream {
 impl DeadlineStream {
     pub(crate) fn new(stream: Stream, deadline: Option<Instant>) -> Self {
         DeadlineStream { stream, deadline }
+    }
+
+    pub(crate) fn inner_ref(&self) -> &Stream {
+        &self.stream
     }
 }
 
@@ -189,6 +138,37 @@ pub(crate) fn io_err_timeout(error: String) -> io::Error {
     io::Error::new(io::ErrorKind::TimedOut, error)
 }
 
+#[derive(Debug)]
+pub(crate) struct ReadOnlyStream(Cursor<Vec<u8>>);
+
+impl ReadOnlyStream {
+    pub(crate) fn new(v: Vec<u8>) -> Self {
+        Self(Cursor::new(v))
+    }
+}
+
+impl Read for ReadOnlyStream {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.0.read(buf)
+    }
+}
+
+impl std::io::Write for ReadOnlyStream {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+impl ReadWrite for ReadOnlyStream {
+    fn socket(&self) -> Option<&std::net::TcpStream> {
+        None
+    }
+}
+
 impl fmt::Debug for Stream {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.inner.get_ref().socket() {
@@ -199,7 +179,7 @@ impl fmt::Debug for Stream {
 }
 
 impl Stream {
-    fn new(t: impl ReadWrite, remote_addr: SocketAddr) -> Stream {
+    pub(crate) fn new(t: impl ReadWrite, remote_addr: SocketAddr) -> Stream {
         Stream::logged_create(Stream {
             inner: BufReader::new(Box::new(t)),
             remote_addr,
@@ -211,23 +191,8 @@ impl Stream {
         stream
     }
 
-    pub(crate) fn from_vec(v: Vec<u8>) -> Stream {
-        Stream::logged_create(Stream {
-            inner: BufReader::new(Box::new(TestStream(
-                Box::new(Cursor::new(v)),
-                vec![],
-                false,
-            ))),
-            remote_addr: remote_addr_for_test(),
-        })
-    }
-
-    #[cfg(test)]
-    pub(crate) fn from_vec_poolable(v: Vec<u8>) -> Stream {
-        Stream::logged_create(Stream {
-            inner: BufReader::new(Box::new(TestStream(Box::new(Cursor::new(v)), vec![], true))),
-            remote_addr: remote_addr_for_test(),
-        })
+    pub(crate) fn buffer(&self) -> &[u8] {
+        self.inner.buffer()
     }
 
     // Check if the server has closed a stream by performing a one-byte
@@ -269,9 +234,6 @@ impl Stream {
             None => Ok(false),
         }
     }
-    pub fn is_poolable(&self) -> bool {
-        self.inner.get_ref().is_poolable()
-    }
 
     pub(crate) fn reset(&mut self) -> io::Result<()> {
         // When we are turning this back into a regular, non-deadline Stream,
@@ -294,11 +256,6 @@ impl Stream {
         } else {
             Ok(())
         }
-    }
-
-    #[cfg(test)]
-    pub fn written_bytes(&self) -> Vec<u8> {
-        self.inner.get_ref().written_bytes()
     }
 }
 
@@ -656,6 +613,7 @@ pub(crate) fn connect_test(unit: &Unit) -> Result<Stream, Error> {
     Err(ErrorKind::UnknownScheme.msg(format!("unknown scheme '{}'", unit.url.scheme())))
 }
 
+#[cfg(test)]
 pub(crate) fn remote_addr_for_test() -> SocketAddr {
     use std::net::{Ipv4Addr, SocketAddrV4};
     SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 0).into()
@@ -700,10 +658,6 @@ mod tests {
 
     impl ReadWrite for ReadRecorder {
         fn socket(&self) -> Option<&TcpStream> {
-            unimplemented!()
-        }
-
-        fn is_poolable(&self) -> bool {
             unimplemented!()
         }
     }
