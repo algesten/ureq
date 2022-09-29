@@ -62,7 +62,7 @@ impl fmt::Display for HeaderLine {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 /// Wrapper type for a header field.
 /// <https://tools.ietf.org/html/rfc7230#section-3.2>
 pub struct Header {
