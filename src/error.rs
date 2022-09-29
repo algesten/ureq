@@ -328,7 +328,7 @@ impl Error {
 }
 
 /// One of the types of error the can occur when processing a Request.
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ErrorKind {
     /// The url could not be understood.
     InvalidUrl,

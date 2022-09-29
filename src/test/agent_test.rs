@@ -80,7 +80,7 @@ fn connection_reuse_with_408() {
     // pulls from the pool. If for some reason the timed-out
     // connection wasn't in the pool, we won't be testing what
     // we thought we were testing.
-    let resp = agent.post(&url).send_string("hello".into()).unwrap();
+    let resp = agent.post(&url).send_string("hello").unwrap();
     assert_eq!(resp.status(), 200);
 }
 

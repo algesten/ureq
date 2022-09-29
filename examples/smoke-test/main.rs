@@ -5,7 +5,6 @@ use std::time::Duration;
 use std::{env, error, fmt, result};
 
 use log::{error, info};
-use ureq;
 
 #[derive(Debug)]
 struct Oops(String);
@@ -77,7 +76,7 @@ fn get_many(urls: Vec<String>, simultaneous_fetches: usize) -> Result<()> {
 }
 
 fn main() -> Result<()> {
-    let args = env::args();
+    let mut args = env::args();
     if args.len() == 1 {
         println!(
             r##"Usage: {:#?} top-1m.csv
@@ -94,11 +93,11 @@ using 50 threads concurrently.
         return Ok(());
     }
     env_logger::init();
-    let file = std::fs::File::open(args.skip(1).next().unwrap())?;
+    let file = std::fs::File::open(args.nth(1).unwrap())?;
     let bufreader = BufReader::new(file);
     let mut urls = vec![];
     for line in bufreader.lines() {
-        let domain = line?.rsplit(",").next().unwrap().to_string();
+        let domain = line?.rsplit(',').next().unwrap().to_string();
         urls.push(format!("http://{}/", domain));
         urls.push(format!("https://{}/", domain));
         urls.push(format!("http://www.{}/", domain));

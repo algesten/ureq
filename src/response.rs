@@ -810,9 +810,9 @@ pub(crate) fn charset_from_content_type(header: Option<&str>) -> &str {
     header
         .and_then(|header| {
             header.find(';').and_then(|semi| {
-                (&header[semi + 1..])
+                header[semi + 1..]
                     .find('=')
-                    .map(|equal| (&header[semi + equal + 2..]).trim())
+                    .map(|equal| header[semi + equal + 2..].trim())
             })
         })
         .unwrap_or(DEFAULT_CHARACTER_SET)

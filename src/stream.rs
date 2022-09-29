@@ -674,7 +674,7 @@ mod tests {
         let mut deadline_stream = DeadlineStream::new(stream, None);
         let mut buf = [0u8; 1];
         for _ in 0..8193 {
-            deadline_stream.read(&mut buf).unwrap();
+            let _ = deadline_stream.read(&mut buf).unwrap();
         }
         let reads = reads.lock().unwrap();
         assert_eq!(reads.len(), 2);

@@ -20,6 +20,7 @@ mod timeout;
 
 type RequestHandler = dyn Fn(&Unit) -> Result<Stream, Error> + Send + 'static;
 
+#[allow(clippy::type_complexity)]
 pub(crate) static TEST_HANDLERS: Lazy<Arc<Mutex<HashMap<String, Box<RequestHandler>>>>> =
     Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
 
