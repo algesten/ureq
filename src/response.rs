@@ -1040,7 +1040,10 @@ mod tests {
             OK",
         );
         let v = cow.to_vec();
-        let s = Stream::new(ReadOnlyStream::new(v));
+        let s = Stream::new(
+            ReadOnlyStream::new(v),
+            crate::stream::remote_addr_for_test(),
+        );
         let request_url = "https://example.com".parse().unwrap();
         let request_reader = SizedReader {
             size: crate::body::BodySize::Empty,
