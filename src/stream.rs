@@ -38,6 +38,8 @@ pub trait TlsConnector: Send + Sync {
 
 pub(crate) struct Stream {
     inner: BufReader<Box<dyn ReadWrite>>,
+    /// The remote address the stream is connected to.
+    pub(crate) remote_addr: SocketAddr,
 }
 
 impl<T: ReadWrite + ?Sized> ReadWrite for Box<T> {
@@ -177,9 +179,10 @@ impl fmt::Debug for Stream {
 }
 
 impl Stream {
-    pub(crate) fn new(t: impl ReadWrite) -> Stream {
+    pub(crate) fn new(t: impl ReadWrite, remote_addr: SocketAddr) -> Stream {
         Stream::logged_create(Stream {
             inner: BufReader::new(Box::new(t)),
+            remote_addr,
         })
     }
 
@@ -190,12 +193,6 @@ impl Stream {
 
     pub(crate) fn buffer(&self) -> &[u8] {
         self.inner.buffer()
-    }
-
-    fn from_tcp_stream(t: TcpStream) -> Stream {
-        Stream::logged_create(Stream {
-            inner: BufReader::new(Box::new(t)),
-        })
     }
 
     // Check if the server has closed a stream by performing a one-byte
@@ -307,20 +304,25 @@ pub(crate) fn connect_http(unit: &Unit, hostname: &str) -> Result<Stream, Error>
     //
     let port = unit.url.port().unwrap_or(80);
 
-    connect_host(unit, hostname, port).map(Stream::from_tcp_stream)
+    connect_host(unit, hostname, port).map(|(t, r)| Stream::new(t, r))
 }
 
 pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error> {
     let port = unit.url.port().unwrap_or(443);
 
-    let sock = connect_host(unit, hostname, port)?;
+    let (sock, remote_addr) = connect_host(unit, hostname, port)?;
 
     let tls_conf = &unit.agent.config.tls_config;
     let https_stream = tls_conf.connect(hostname, Box::new(sock))?;
-    Ok(Stream::new(https_stream))
+    Ok(Stream::new(https_stream, remote_addr))
 }
 
-pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<TcpStream, Error> {
+/// If successful, returns a `TcpStream` and the remote address it is connected to.
+pub(crate) fn connect_host(
+    unit: &Unit,
+    hostname: &str,
+    port: u16,
+) -> Result<(TcpStream, SocketAddr), Error> {
     let connect_deadline: Option<Instant> =
         if let Some(timeout_connect) = unit.agent.config.timeout_connect {
             Instant::now().checked_add(timeout_connect)
@@ -347,7 +349,7 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
     let proto = proxy.as_ref().map(|proxy| proxy.proto);
 
     let mut any_err = None;
-    let mut any_stream = None;
+    let mut any_stream_and_addr = None;
     // Find the first sock_addr that accepts a connection
     for sock_addr in sock_addrs {
         // ensure connect timeout or overall timeout aren't yet hit.
@@ -376,15 +378,15 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         };
 
         if let Ok(stream) = stream {
-            any_stream = Some(stream);
+            any_stream_and_addr = Some((stream, sock_addr));
             break;
         } else if let Err(err) = stream {
             any_err = Some(err);
         }
     }
 
-    let mut stream = if let Some(stream) = any_stream {
-        stream
+    let (mut stream, remote_addr) = if let Some(stream_and_addr) = any_stream_and_addr {
+        stream_and_addr
     } else if let Some(e) = any_err {
         return Err(ErrorKind::ConnectionFailed.msg("Connect error").src(e));
     } else {
@@ -425,7 +427,7 @@ pub(crate) fn connect_host(unit: &Unit, hostname: &str, port: u16) -> Result<Tcp
         }
     }
 
-    Ok(stream)
+    Ok((stream, remote_addr))
 }
 
 #[cfg(feature = "socks-proxy")]
@@ -612,6 +614,12 @@ pub(crate) fn connect_test(unit: &Unit) -> Result<Stream, Error> {
 }
 
 #[cfg(test)]
+pub(crate) fn remote_addr_for_test() -> SocketAddr {
+    use std::net::{Ipv4Addr, SocketAddrV4};
+    SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 0).into()
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::{
@@ -662,7 +670,7 @@ mod tests {
         let recorder = ReadRecorder {
             reads: reads.clone(),
         };
-        let stream = Stream::new(recorder);
+        let stream = Stream::new(recorder, remote_addr_for_test());
         let mut deadline_stream = DeadlineStream::new(stream, None);
         let mut buf = [0u8; 1];
         for _ in 0..8193 {

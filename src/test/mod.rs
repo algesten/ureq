@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::stream::{ReadOnlyStream, Stream};
+use crate::stream::{remote_addr_for_test, ReadOnlyStream, Stream};
 use crate::unit::Unit;
 use crate::ReadWrite;
 use once_cell::sync::Lazy;
@@ -52,7 +52,10 @@ pub(crate) fn make_response(
     }
     write!(&mut buf, "\r\n").ok();
     buf.append(&mut body);
-    Ok(Stream::new(ReadOnlyStream::new(buf)))
+    Ok(Stream::new(
+        ReadOnlyStream::new(buf),
+        remote_addr_for_test(),
+    ))
 }
 
 pub(crate) fn resolve_handler(unit: &Unit) -> Result<Stream, Error> {
@@ -97,7 +100,10 @@ impl Recorder {
 
     fn stream(&self) -> Stream {
         let cursor = Cursor::new(b"HTTP/1.1 200 OK\r\n\r\n");
-        Stream::new(TestStream::new(cursor, self.clone()))
+        Stream::new(
+            TestStream::new(cursor, self.clone()),
+            remote_addr_for_test(),
+        )
     }
 }
 

@@ -1,4 +1,5 @@
 use std::io::{self, Cursor, Read};
+use std::net::SocketAddr;
 use std::str::FromStr;
 use std::{fmt, io::BufRead};
 
@@ -69,6 +70,8 @@ pub struct Response {
     // Boxed to avoid taking up too much size.
     unit: Box<Unit>,
     reader: Box<dyn Read + Send + Sync + 'static>,
+    /// The socket address of the server that sent the response.
+    remote_addr: SocketAddr,
     /// The redirect history of this response, if any. The history starts with
     /// the first response received and ends with the response immediately
     /// previous to this one.
@@ -221,6 +224,11 @@ impl Response {
     /// ```
     pub fn charset(&self) -> &str {
         charset_from_content_type(self.header("content-type"))
+    }
+
+    /// The socket address of the server that sent the response.
+    pub fn remote_addr(&self) -> SocketAddr {
+        self.remote_addr
     }
 
     /// Turn this response into a `impl Read` of the body.
@@ -495,6 +503,7 @@ impl Response {
     ///
     /// assert_eq!(resp.status(), 401);
     pub(crate) fn do_from_stream(stream: Stream, unit: Unit) -> Result<Response, Error> {
+        let remote_addr = stream.remote_addr;
         //
         // HTTP/1.1 200 OK\r\n
         let mut stream = stream::DeadlineStream::new(stream, unit.deadline);
@@ -540,6 +549,7 @@ impl Response {
             headers,
             unit: Box::new(unit),
             reader: Box::new(Cursor::new(vec![])),
+            remote_addr,
             history: vec![],
             length,
             compression,
@@ -668,7 +678,8 @@ impl FromStr for Response {
     /// # }
     /// ```
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let stream = Stream::new(ReadOnlyStream::new(s.into()));
+        let remote_addr = "0.0.0.0:0".parse().unwrap();
+        let stream = Stream::new(ReadOnlyStream::new(s.into()), remote_addr);
         let request_url = "https://example.com".parse().unwrap();
         let request_reader = SizedReader {
             size: crate::body::BodySize::Empty,
@@ -1029,7 +1040,10 @@ mod tests {
             OK",
         );
         let v = cow.to_vec();
-        let s = Stream::new(ReadOnlyStream::new(v));
+        let s = Stream::new(
+            ReadOnlyStream::new(v),
+            crate::stream::remote_addr_for_test(),
+        );
         let request_url = "https://example.com".parse().unwrap();
         let request_reader = SizedReader {
             size: crate::body::BodySize::Empty,

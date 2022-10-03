@@ -302,6 +302,7 @@ impl<R: Read + Sized + Done + Into<Stream>> Read for PoolReturnRead<R> {
 
 #[cfg(test)]
 mod tests {
+    use crate::stream::remote_addr_for_test;
     use crate::ReadWrite;
 
     use super::*;
@@ -311,7 +312,7 @@ mod tests {
 
     impl NoopStream {
         fn stream() -> Stream {
-            Stream::new(NoopStream)
+            Stream::new(NoopStream, remote_addr_for_test())
         }
     }
 
