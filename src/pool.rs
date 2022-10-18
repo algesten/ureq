@@ -302,8 +302,12 @@ impl<R: Read + Sized + Done + Into<Stream>> Read for PoolReturnRead<R> {
 
 #[cfg(test)]
 mod tests {
-    use crate::stream::remote_addr_for_test;
+    use std::io;
+
+    use crate::response::Compression;
+    use crate::stream::{remote_addr_for_test, Stream};
     use crate::ReadWrite;
+    use chunked_transfer::Decoder as ChunkDecoder;
 
     use super::*;
 
@@ -434,6 +438,57 @@ mod tests {
         let mut pool_return_read = PoolReturnRead::new(&agent, &url, limited_read);
 
         pool_return_read.read_exact(&mut out_buf).unwrap();
+
+        assert_eq!(agent.state.pool.len(), 1);
+    }
+
+    // Test that a stream gets returned to the pool if it is gzip encoded and the gzip
+    // decoder reads the exact amount from a chunked stream, not past the 0. This
+    // happens because gzip has built-in knowledge of the length to read.
+    #[test]
+    fn read_exact_chunked_gzip() {
+        let gz_body = vec![
+            b'E', b'\r', b'\n', // 14 first chunk
+            0x1F, 0x8B, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x03, 0xCB, 0x48, 0xCD, 0xC9,
+            b'\r', b'\n', //
+            b'E', b'\r', b'\n', // 14 second chunk
+            0xC9, 0x57, 0x28, 0xCF, 0x2F, 0xCA, 0x49, 0x51, 0xC8, 0x18, 0xBC, 0x6C, 0x00, 0xA5,
+            b'\r', b'\n', //
+            b'7', b'\r', b'\n', // 7 third chunk
+            0x5C, 0x7C, 0xEF, 0xA7, 0x00, 0x00, 0x00, //
+            b'\r', b'\n', //
+            // end
+            b'0', b'\r', b'\n', //
+            b'\r', b'\n', //
+        ];
+
+        println!("{:?}", gz_body);
+
+        impl ReadWrite for io::Cursor<Vec<u8>> {
+            fn socket(&self) -> Option<&std::net::TcpStream> {
+                None
+            }
+        }
+
+        impl From<io::Cursor<Vec<u8>>> for Stream {
+            fn from(c: io::Cursor<Vec<u8>>) -> Self {
+                Stream::new(c, "1.1.1.1:8080".parse().unwrap())
+            }
+        }
+
+        let agent = Agent::new();
+        let url = Url::parse("https://example.com").unwrap();
+
+        assert_eq!(agent.state.pool.len(), 0);
+
+        let chunked = ChunkDecoder::new(io::Cursor::new(gz_body));
+        let pool_return_read: Box<(dyn Read + Send + Sync + 'static)> =
+            Box::new(PoolReturnRead::new(&agent, &url, chunked));
+
+        let compression = Compression::Gzip;
+        let mut stream = compression.wrap_reader(pool_return_read);
+
+        io::copy(&mut stream, &mut io::sink()).unwrap();
 
         assert_eq!(agent.state.pool.len(), 1);
     }

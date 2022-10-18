@@ -571,7 +571,7 @@ impl Response {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-enum Compression {
+pub(crate) enum Compression {
     #[cfg(feature = "brotli")]
     Brotli,
     #[cfg(feature = "gzip")]
@@ -592,7 +592,7 @@ impl Compression {
 
     /// Wrap the raw reader with a decompressing reader
     #[allow(unused_variables)] // when no features enabled, reader is unused (unreachable)
-    fn wrap_reader(
+    pub(crate) fn wrap_reader(
         self,
         reader: Box<dyn Read + Send + Sync + 'static>,
     ) -> Box<dyn Read + Send + Sync + 'static> {
