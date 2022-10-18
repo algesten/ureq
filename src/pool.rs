@@ -446,6 +446,7 @@ mod tests {
     // decoder reads the exact amount from a chunked stream, not past the 0. This
     // happens because gzip has built-in knowledge of the length to read.
     #[test]
+    #[cfg(feature = "gzip")]
     fn read_exact_chunked_gzip() {
         let gz_body = vec![
             b'E', b'\r', b'\n', // 14 first chunk
