@@ -596,12 +596,94 @@ impl Compression {
         self,
         reader: Box<dyn Read + Send + Sync + 'static>,
     ) -> Box<dyn Read + Send + Sync + 'static> {
+        let zero = DidReadZero::new(reader);
         match self {
             #[cfg(feature = "brotli")]
-            Compression::Brotli => Box::new(BrotliDecoder::new(reader, 4096)),
+            Compression::Brotli => {
+                Box::new(CompressionRead::Brotli(BrotliDecoder::new(zero, 4096)))
+            }
             #[cfg(feature = "gzip")]
-            Compression::Gzip => Box::new(GzDecoder::new(reader)),
+            Compression::Gzip => Box::new(CompressionRead::Gzip(GzDecoder::new(zero))),
         }
+    }
+}
+
+/// Helper type to know whether a CompressionRead has used it's inner reader to read a 0.
+/// This is required because Gzip "knows" how many bytes to read to fulfil the compression,
+/// which means a combination of gzip + chunked encoding does read the ChunkedDecoder to a
+/// 0 leaving the final `0\r\n\r\n` unread. Unread bytes means the connection is not returned to
+/// the pool.
+struct DidReadZero(Box<dyn Read + Send + Sync + 'static>, bool);
+
+impl DidReadZero {
+    fn new(r: Box<dyn Read + Send + Sync + 'static>) -> Self {
+        DidReadZero(r, false)
+    }
+
+    #[allow(unused)]
+    fn did_read_zero(&self) -> bool {
+        self.1
+    }
+}
+
+impl Read for DidReadZero {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let n = self.0.read(buf)?;
+
+        if n == 0 {
+            self.1 = true;
+        }
+
+        Ok(n)
+    }
+}
+
+#[cfg(any(feature = "gzip", feature = "brotli"))]
+enum CompressionRead {
+    #[cfg(feature = "brotli")]
+    Brotli(BrotliDecoder<DidReadZero>),
+    #[cfg(feature = "gzip")]
+    Gzip(GzDecoder<DidReadZero>),
+    #[cfg(any(feature = "gzip", feature = "brotli"))]
+    Empty,
+}
+
+#[cfg(any(feature = "gzip", feature = "brotli"))]
+impl Read for CompressionRead {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let n = match self {
+            #[cfg(feature = "brotli")]
+            CompressionRead::Brotli(r) => r.read(buf),
+            #[cfg(feature = "gzip")]
+            CompressionRead::Gzip(r) => r.read(buf),
+            CompressionRead::Empty => return Ok(0),
+        }?;
+
+        if n == 0 {
+            let wrap = std::mem::replace(self, CompressionRead::Empty);
+            let mut inner = match wrap {
+                #[cfg(feature = "brotli")]
+                CompressionRead::Brotli(r) => r.into_inner(),
+                #[cfg(feature = "gzip")]
+                CompressionRead::Gzip(r) => r.into_inner(),
+                CompressionRead::Empty => return Ok(0),
+            };
+
+            // This is the whole point of CompressionRead. If we have not read to 0 for the
+            // inner reader, we must at this point exhaust to ensure a potential PoolReturnRead
+            // is releasing the connection back to the pool.
+            if !inner.did_read_zero() {
+                let mut dummy = vec![0_u8; 10];
+                loop {
+                    let n = inner.read(&mut dummy)?;
+                    if n == 0 {
+                        break;
+                    }
+                }
+            }
+        }
+
+        Ok(n)
     }
 }
 
