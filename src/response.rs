@@ -638,6 +638,7 @@ impl Read for DidReadZero {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 #[cfg(any(feature = "gzip", feature = "brotli"))]
 enum CompressionRead {
     #[cfg(feature = "brotli")]
