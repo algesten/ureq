@@ -642,14 +642,6 @@ mod precise {
         }
     }
 
-    struct EmptyInner;
-    impl IntoInner<DidReadZero> for EmptyInner {
-        fn into_inner(self) -> DidReadZero {
-            let c = Box::new(io::Cursor::new(vec![]));
-            DidReadZero::new(c)
-        }
-    }
-
     impl<R: Read + IntoInner<DidReadZero>> Read for PreciseRead<R> {
         fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
             let reader = match &mut self.0 {
