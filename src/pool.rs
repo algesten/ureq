@@ -464,18 +464,6 @@ mod tests {
             b'\r', b'\n', //
         ];
 
-        impl ReadWrite for io::Cursor<Vec<u8>> {
-            fn socket(&self) -> Option<&std::net::TcpStream> {
-                None
-            }
-        }
-
-        impl From<io::Cursor<Vec<u8>>> for Stream {
-            fn from(c: io::Cursor<Vec<u8>>) -> Self {
-                Stream::new(c, "1.1.1.1:8080".parse().unwrap())
-            }
-        }
-
         let agent = Agent::new();
         let url = Url::parse("https://example.com").unwrap();
 

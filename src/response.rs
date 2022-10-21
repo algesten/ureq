@@ -596,95 +596,117 @@ impl Compression {
         self,
         reader: Box<dyn Read + Send + Sync + 'static>,
     ) -> Box<dyn Read + Send + Sync + 'static> {
-        let zero = DidReadZero::new(reader);
+        #[cfg(any(feature = "brotli", feature = "gzip"))]
+        let zero = precise::DidReadZero::new(reader);
         match self {
             #[cfg(feature = "brotli")]
-            Compression::Brotli => {
-                Box::new(CompressionRead::Brotli(BrotliDecoder::new(zero, 4096)))
-            }
+            Compression::Brotli => Box::new(PreciseRead2::new(BrotliDecoder::new(zero, 4096))),
             #[cfg(feature = "gzip")]
-            Compression::Gzip => Box::new(CompressionRead::Gzip(GzDecoder::new(zero))),
+            Compression::Gzip => Box::new(precise::PreciseRead::new(GzDecoder::new(zero))),
         }
     }
 }
 
-/// Helper type to know whether a CompressionRead has used it's inner reader to read a 0.
-/// This is required because Gzip "knows" how many bytes to read to fulfil the compression,
-/// which means a combination of gzip + chunked encoding does read the ChunkedDecoder to a
-/// 0 leaving the final `0\r\n\r\n` unread. Unread bytes means the connection is not returned to
-/// the pool.
-struct DidReadZero(Box<dyn Read + Send + Sync + 'static>, bool);
+#[cfg(any(feature = "brotli", feature = "gzip"))]
+mod precise {
+    use std::io::{self, Read};
 
-impl DidReadZero {
-    fn new(r: Box<dyn Read + Send + Sync + 'static>) -> Self {
-        DidReadZero(r, false)
+    trait IntoInner<I> {
+        fn into_inner(self) -> I;
     }
 
-    #[allow(unused)]
-    fn did_read_zero(&self) -> bool {
-        self.1
-    }
-}
-
-impl Read for DidReadZero {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let n = self.0.read(buf)?;
-
-        if n == 0 {
-            self.1 = true;
-        }
-
-        Ok(n)
-    }
-}
-
-#[allow(clippy::large_enum_variant)]
-#[cfg(any(feature = "gzip", feature = "brotli"))]
-enum CompressionRead {
-    #[cfg(feature = "brotli")]
-    Brotli(BrotliDecoder<DidReadZero>),
     #[cfg(feature = "gzip")]
-    Gzip(GzDecoder<DidReadZero>),
-    #[cfg(any(feature = "gzip", feature = "brotli"))]
-    Empty,
-}
+    impl<I> IntoInner<I> for super::GzDecoder<I> {
+        fn into_inner(self) -> I {
+            Self::into_inner(self)
+        }
+    }
 
-#[cfg(any(feature = "gzip", feature = "brotli"))]
-impl Read for CompressionRead {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let n = match self {
-            #[cfg(feature = "brotli")]
-            CompressionRead::Brotli(r) => r.read(buf),
-            #[cfg(feature = "gzip")]
-            CompressionRead::Gzip(r) => r.read(buf),
-            CompressionRead::Empty => return Ok(0),
-        }?;
+    #[cfg(feature = "brotli")]
+    impl<I> IntoInner<I> for super::BrotliDecoder<I> {
+        fn into_inner(self) -> I {
+            Self::into_inner(self)
+        }
+    }
 
-        if n == 0 {
-            let wrap = std::mem::replace(self, CompressionRead::Empty);
-            let mut inner = match wrap {
-                #[cfg(feature = "brotli")]
-                CompressionRead::Brotli(r) => r.into_inner(),
-                #[cfg(feature = "gzip")]
-                CompressionRead::Gzip(r) => r.into_inner(),
-                CompressionRead::Empty => return Ok(0),
+    /// Inside decompression (gzip, brotli), we use PreciseRead to ensure the underlying
+    /// reader is read precisely to end. This is needed when we have the nesting
+    /// GzDecoder(ChunkedDecoder), because gzip (and brotli) has a "built in" idea
+    /// of how many bytes it's going to produce, which means it might omit reading
+    /// the 0\r\n\r\n after the last actual data in the chunked decoder.
+    pub(crate) struct PreciseRead<R>(Option<R>);
+
+    impl<R> PreciseRead<R> {
+        pub fn new(inner: R) -> Self {
+            PreciseRead(Some(inner))
+        }
+    }
+
+    struct EmptyInner;
+    impl IntoInner<DidReadZero> for EmptyInner {
+        fn into_inner(self) -> DidReadZero {
+            let c = Box::new(io::Cursor::new(vec![]));
+            DidReadZero::new(c)
+        }
+    }
+
+    impl<R: Read + IntoInner<DidReadZero>> Read for PreciseRead<R> {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            let reader = match &mut self.0 {
+                Some(v) => v,
+                None => return Ok(0),
             };
+            let n = reader.read(buf)?;
 
-            // This is the whole point of CompressionRead. If we have not read to 0 for the
-            // inner reader, we must at this point exhaust to ensure a potential PoolReturnRead
-            // is releasing the connection back to the pool.
-            if !inner.did_read_zero() {
-                let mut dummy = vec![0_u8; 10];
-                loop {
+            if n == 0 {
+                let precise = self.0.take().expect("to only take PreciseRead once");
+                let mut inner = precise.into_inner();
+
+                // This is the whole point of PreciseRead. If we have not read to 0 for the
+                // inner reader, we must at this point attempt to read a single 0, so that
+                // we ensure the potential underlying chunked decoder consumes the last 0\r\n\r\n.
+                if !inner.did_read_zero() {
+                    let mut dummy = [0_u8];
                     let n = inner.read(&mut dummy)?;
-                    if n == 0 {
-                        break;
+                    if n != 0 {
+                        let error = "Unexpected data in response after compressed content end";
+                        return Err(io::Error::new(io::ErrorKind::InvalidData, error));
                     }
                 }
             }
+
+            Ok(n)
+        }
+    }
+
+    /// Helper type to know whether a PreciseRead has used it's inner reader to read a 0.
+    /// This is required because Gzip "knows" how many bytes to read to fulfil the compression,
+    /// which means a combination of gzip + chunked encoding does read the ChunkedDecoder to a
+    /// 0 leaving the final `0\r\n\r\n` unread. Unread bytes means the connection is not returned to
+    /// the pool.
+    pub(crate) struct DidReadZero(Box<dyn Read + Send + Sync + 'static>, bool);
+
+    impl DidReadZero {
+        pub fn new(r: Box<dyn Read + Send + Sync + 'static>) -> Self {
+            DidReadZero(r, false)
         }
 
-        Ok(n)
+        #[allow(unused)]
+        fn did_read_zero(&self) -> bool {
+            self.1
+        }
+    }
+
+    impl Read for DidReadZero {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            let n = self.0.read(buf)?;
+
+            if n == 0 {
+                self.1 = true;
+            }
+
+            Ok(n)
+        }
     }
 }
 
@@ -1175,5 +1197,46 @@ mod tests {
         let size = std::mem::size_of::<Response>();
         println!("Response size: {}", size);
         assert!(size < 400); // 200 on Macbook M1
+    }
+
+    #[test]
+    #[cfg(feature = "gzip")]
+    fn ensure_no_content_after_compressed() {
+        use crate::response::Compression;
+        use chunked_transfer::Decoder as ChunkDecoder;
+
+        let gz_body = vec![
+            b'E', b'\r', b'\n', // 14 first chunk
+            0x1F, 0x8B, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x03, 0xCB, 0x48, 0xCD, 0xC9,
+            b'\r', b'\n', //
+            b'E', b'\r', b'\n', // 14 second chunk
+            0xC9, 0x57, 0x28, 0xCF, 0x2F, 0xCA, 0x49, 0x51, 0xC8, 0x18, 0xBC, 0x6C, 0x00, 0xA5,
+            b'\r', b'\n', //
+            b'7', b'\r', b'\n', // 7 third chunk
+            0x5C, 0x7C, 0xEF, 0xA7, 0x00, 0x00, 0x00, //
+            b'\r', b'\n', //
+            // THIS IS THE PROBLEM: We insert another chunk here, which is not expected for the gzip
+            // decoder (which finished after the last chunk). This should cause an error because we
+            // disallow garbage data after the compression end.
+            b'7', b'\r', b'\n', // 7 fourth chunk
+            0x5C, 0x7C, 0xEF, 0xA7, 0x00, 0x00, 0x00, //
+            b'\r', b'\n', //
+            // end
+            b'0', b'\r', b'\n', //
+            b'\r', b'\n', //
+        ];
+
+        let chunked = Box::new(ChunkDecoder::new(io::Cursor::new(gz_body)));
+        let compression = Compression::Gzip;
+        let mut stream = compression.wrap_reader(chunked);
+
+        let r = io::copy(&mut stream, &mut io::sink());
+
+        let err = r.unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+        assert_eq!(
+            err.to_string(),
+            "Unexpected data in response after compressed content end"
+        );
     }
 }

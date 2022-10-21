@@ -620,6 +620,20 @@ pub(crate) fn remote_addr_for_test() -> SocketAddr {
 }
 
 #[cfg(test)]
+impl ReadWrite for io::Cursor<Vec<u8>> {
+    fn socket(&self) -> Option<&std::net::TcpStream> {
+        None
+    }
+}
+
+#[cfg(test)]
+impl From<io::Cursor<Vec<u8>>> for Stream {
+    fn from(c: io::Cursor<Vec<u8>>) -> Self {
+        Stream::new(c, "1.1.1.1:8080".parse().unwrap())
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::{
