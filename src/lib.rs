@@ -7,7 +7,26 @@
 // we're not changing public api due to a lint.
 #![allow(clippy::upper_case_acronyms)]
 
+//!<div align="center">
+//!  <!-- Version -->
+//!  <a href="https://crates.io/crates/ureq">
+//!    <img src="https://img.shields.io/crates/v/ureq.svg?style=flat-square"
+//!    alt="Crates.io version" />
+//!  </a>
+//!  <!-- Docs -->
+//!  <a href="https://docs.rs/ureq">
+//!    <img src="https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square"
+//!      alt="docs.rs docs" />
+//!  </a>
+//!  <!-- Downloads -->
+//!  <a href="https://crates.io/crates/ureq">
+//!    <img src="https://img.shields.io/crates/d/ureq.svg?style=flat-square"
+//!      alt="Crates.io downloads" />
+//!  </a>
+//!</div>
+//!
 //! A simple, safe HTTP client.
+//!
 //!
 //! Ureq's first priority is being easy for you to use. It's great for
 //! anyone who wants a low-overhead HTTP client that just gets the job done. Works
