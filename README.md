@@ -2,9 +2,6 @@
 
 # ureq
 
-A simple, safe HTTP client.
-
-
 <div align="center">
  <!-- Version -->
  <a href="https://crates.io/crates/ureq">
@@ -19,9 +16,12 @@ A simple, safe HTTP client.
  <!-- Downloads -->
  <a href="https://crates.io/crates/ureq">
    <img src="https://img.shields.io/crates/d/ureq.svg?style=flat-square"
-     alt="Download" />
+     alt="Crates.io downloads" />
  </a>
 </div>
+
+A simple, safe HTTP client.
+
 
 Ureq's first priority is being easy for you to use. It's great for
 anyone who wants a low-overhead HTTP client that just gets the job done. Works
