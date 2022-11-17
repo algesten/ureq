@@ -234,13 +234,17 @@ pub(crate) struct PoolReturnRead<R: Read + Sized + Into<Stream>> {
     key: PoolKey,
 }
 
-impl<R: Read + Sized + Into<Stream>> PoolReturnRead<R> {
-    pub fn new(agent: &Agent, url: &Url, reader: R) -> Self {
-        PoolReturnRead {
+impl<R: Read + Sized + Done + Into<Stream>> PoolReturnRead<R> {
+    pub fn new(agent: &Agent, url: &Url, reader: R) -> Result<Self, std::io::Error> {
+        let mut pooler = PoolReturnRead {
             agent: agent.clone(),
             key: PoolKey::new(url, agent.config.proxy.clone()),
             reader: Some(reader),
+        };
+        if pooler.reader.as_ref().unwrap().done() {
+            pooler.return_connection()?;
         }
+        Ok(pooler)
     }
 
     fn return_connection(&mut self) -> io::Result<()> {
@@ -431,7 +435,26 @@ mod tests {
         let stream = NoopStream::stream();
         let limited_read = LimitedRead::new(stream, 500);
 
-        let mut pool_return_read = PoolReturnRead::new(&agent, &url, limited_read);
+        let mut pool_return_read = PoolReturnRead::new(&agent, &url, limited_read).unwrap();
+
+        pool_return_read.read_exact(&mut out_buf).unwrap();
+
+        assert_eq!(agent.state.pool.len(), 1);
+    }
+
+    // Test that a stream gets returned to the pool if it was wrapped in a LimitedRead, and
+    // user reads the exact right number of bytes (but never gets a read of 0 bytes).
+    #[test]
+    fn read_zero_len_body() {
+        let url = Url::parse("https:///example.com").unwrap();
+
+        let mut out_buf = [0u8; 0];
+
+        let agent = Agent::new();
+        let stream = NoopStream::stream();
+        let limited_read = LimitedRead::new(stream, 0);
+
+        let mut pool_return_read = PoolReturnRead::new(&agent, &url, limited_read).unwrap();
 
         pool_return_read.read_exact(&mut out_buf).unwrap();
 

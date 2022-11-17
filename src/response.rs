@@ -316,29 +316,33 @@ impl Response {
             // to the connection pool.
             (true, _) => {
                 debug!("Chunked body in response");
-                Box::new(PoolReturnRead::new(
-                    &unit.agent,
-                    &unit.url,
-                    ChunkDecoder::new(stream),
-                ))
+                let result = PoolReturnRead::new(&unit.agent, &unit.url, ChunkDecoder::new(stream));
+                match result {
+                    Ok(pool) => Box::new(pool),
+                    Err(e) => Box::new(ErrorReader(e)),
+                }
             }
             // Responses with a content-length header means we should limit the reading
             // of the body to the number of bytes in the header. Once done, we can
             // return the underlying stream to the connection pool.
             (false, Some(len)) => {
-                let mut pooler =
+                let result =
                     PoolReturnRead::new(&unit.agent, &unit.url, LimitedRead::new(stream, len));
-
-                if len <= buffer_len {
-                    debug!("Body entirely buffered (length: {})", len);
-                    let mut buf = vec![0; len];
-                    pooler
-                        .read_exact(&mut buf)
-                        .expect("failed to read exact buffer length from stream");
-                    Box::new(Cursor::new(buf))
-                } else {
-                    debug!("Streaming body until content-length: {}", len);
-                    Box::new(pooler)
+                match result {
+                    Err(e) => Box::new(ErrorReader(e)),
+                    Ok(mut pooler) => {
+                        if len <= buffer_len {
+                            debug!("Body entirely buffered (length: {})", len);
+                            let mut buf = vec![0; len];
+                            pooler
+                                .read_exact(&mut buf)
+                                .expect("failed to read exact buffer length from stream");
+                            Box::new(Cursor::new(buf))
+                        } else {
+                            debug!("Streaming body until content-length: {}", len);
+                            Box::new(pooler)
+                        }
+                    }
                 }
             }
             (false, None) => {
