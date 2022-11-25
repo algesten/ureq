@@ -47,7 +47,7 @@ brotli-decompressor = { version = "2.3.2", optional = true }
 
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }
-env_logger = "0.9"
+env_logger = "0.10"
 rustls = { version = "0.20", features = ["dangerous_configuration"] }
 rustls-pemfile = { version = "1.0" }
 
