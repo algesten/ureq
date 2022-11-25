@@ -22,7 +22,7 @@ use serde::de::DeserializeOwned;
 use encoding_rs::Encoding;
 
 #[cfg(feature = "gzip")]
-use flate2::read::GzDecoder;
+use flate2::read::MultiGzDecoder;
 
 #[cfg(feature = "brotli")]
 use brotli_decompressor::Decompressor as BrotliDecoder;
@@ -600,7 +600,7 @@ impl Compression {
             #[cfg(feature = "brotli")]
             Compression::Brotli => Box::new(BrotliDecoder::new(reader, 4096)),
             #[cfg(feature = "gzip")]
-            Compression::Gzip => Box::new(GzDecoder::new(reader)),
+            Compression::Gzip => Box::new(MultiGzDecoder::new(reader)),
         }
     }
 }
