@@ -101,7 +101,7 @@ impl Proxy {
         };
 
         let remaining_parts = proxy_parts.next();
-        if remaining_parts == None {
+        if remaining_parts.is_none() {
             return Err(ErrorKind::InvalidProxyUrl.new());
         }
 
@@ -131,7 +131,7 @@ impl Proxy {
 
     pub(crate) fn connect<S: AsRef<str>>(&self, host: S, port: u16) -> String {
         let authorization = if self.use_authorization() {
-            let creds = base64::encode(&format!(
+            let creds = base64::encode(format!(
                 "{}:{}",
                 self.user.clone().unwrap_or_default(),
                 self.password.clone().unwrap_or_default()

@@ -361,7 +361,8 @@ pub(crate) fn connect_host(
         debug!("connecting to {} at {}", netloc, &sock_addr);
 
         // connect with a configured timeout.
-        let stream = if None != proto && Some(Proto::HTTPConnect) != proto {
+        #[allow(clippy::unnecessary_unwrap)]
+        let stream = if proto.is_some() && Some(Proto::HTTPConnect) != proto {
             connect_socks(
                 unit,
                 proxy.clone().unwrap(),
@@ -374,7 +375,7 @@ pub(crate) fn connect_host(
         } else if let Some(timeout) = timeout {
             TcpStream::connect_timeout(&sock_addr, timeout)
         } else {
-            TcpStream::connect(&sock_addr)
+            TcpStream::connect(sock_addr)
         };
 
         if let Ok(stream) = stream {
