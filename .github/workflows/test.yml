@@ -56,6 +56,8 @@ jobs:
           - cookies
           - socks-proxy
           - native-certs
+          - gzip
+          - brotli
     env:
       RUST_BACKTRACE: "1"
       RUSTFLAGS: "-D dead_code -D unused-variables -D unused"
