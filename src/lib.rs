@@ -6,6 +6,8 @@
 #![allow(clippy::match_like_matches_macro)]
 // we're not changing public api due to a lint.
 #![allow(clippy::upper_case_acronyms)]
+#![allow(clippy::result_large_err)]
+#![allow(clippy::only_used_in_recursion)]
 
 //!<div align="center">
 //!  <!-- Version -->
