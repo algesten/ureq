@@ -10,7 +10,7 @@ use url::Url;
 use crate::body::SizedReader;
 use crate::error::{Error, ErrorKind::BadStatus};
 use crate::header::{get_all_headers, get_header, Header, HeaderLine};
-use crate::pool::PoolReturnRead;
+use crate::pool::{PoolReturnRead, PoolReturner};
 use crate::stream::{DeadlineStream, ReadOnlyStream, Stream};
 use crate::unit::Unit;
 use crate::{stream, Agent, ErrorKind};
@@ -326,19 +326,18 @@ impl Response {
             // of the body to the number of bytes in the header. Once done, we can
             // return the underlying stream to the connection pool.
             (false, Some(len)) => {
-                let mut pooler =
-                    PoolReturnRead::new(&unit.agent, &unit.url, LimitedRead::new(stream, len));
+                let mut limited_read = LimitedRead::new(stream, len);
 
                 if len <= buffer_len {
                     debug!("Body entirely buffered (length: {})", len);
                     let mut buf = vec![0; len];
-                    pooler
+                    limited_read
                         .read_exact(&mut buf)
                         .expect("failed to read exact buffer length from stream");
                     Box::new(Cursor::new(buf))
                 } else {
                     debug!("Streaming body until content-length: {}", len);
-                    Box::new(pooler)
+                    Box::new(limited_read)
                 }
             }
             (false, None) => {
@@ -679,7 +678,11 @@ impl FromStr for Response {
     /// ```
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let remote_addr = "0.0.0.0:0".parse().unwrap();
-        let stream = Stream::new(ReadOnlyStream::new(s.into()), remote_addr);
+        let stream = Stream::new(
+            ReadOnlyStream::new(s.into()),
+            remote_addr,
+            PoolReturner::none(),
+        );
         let request_url = "https://example.com".parse().unwrap();
         let request_reader = SizedReader {
             size: crate::body::BodySize::Empty,
@@ -744,15 +747,15 @@ fn read_next_line(reader: &mut impl BufRead, context: &str) -> io::Result<Header
 
 /// Limits a `Read` to a content size (as set by a "Content-Length" header).
 pub(crate) struct LimitedRead<R> {
-    reader: R,
+    reader: Option<R>,
     limit: usize,
     position: usize,
 }
 
-impl<R: Read> LimitedRead<R> {
+impl<R: Read + Sized + Into<Stream>> LimitedRead<R> {
     pub(crate) fn new(reader: R, limit: usize) -> Self {
         LimitedRead {
-            reader,
+            reader: Some(reader),
             limit,
             position: 0,
         }
@@ -761,9 +764,20 @@ impl<R: Read> LimitedRead<R> {
     pub(crate) fn remaining(&self) -> usize {
         self.limit - self.position
     }
+
+    fn return_stream_to_pool(&mut self) -> io::Result<()> {
+        if let Some(reader) = self.reader.take() {
+            // Convert back to a stream. If return_to_pool fails, the stream will
+            // drop and the connection will be closed.
+            let stream: Stream = reader.into();
+            stream.return_to_pool()?;
+        }
+
+        Ok(())
+    }
 }
 
-impl<R: Read> Read for LimitedRead<R> {
+impl<R: Read + Sized + Into<Stream>> Read for LimitedRead<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         if self.remaining() == 0 {
             return Ok(0);
@@ -773,31 +787,29 @@ impl<R: Read> Read for LimitedRead<R> {
         } else {
             buf
         };
-        match self.reader.read(from) {
+        let Some(reader) = self.reader.as_mut() else {
+            return Ok(0)
+        };
+        match reader.read(from) {
             // https://tools.ietf.org/html/rfc7230#page-33
             // If the sender closes the connection or
             // the recipient times out before the indicated number of octets are
             // received, the recipient MUST consider the message to be
             // incomplete and close the connection.
+            // TODO: actually close the connection by dropping the stream
             Ok(0) => Err(io::Error::new(
                 io::ErrorKind::UnexpectedEof,
                 "response body closed before all bytes were read",
             )),
             Ok(amount) => {
                 self.position += amount;
+                if self.remaining() == 0 {
+                    self.return_stream_to_pool()?;
+                }
                 Ok(amount)
             }
             Err(e) => Err(e),
         }
-    }
-}
-
-impl<R: Read> From<LimitedRead<R>> for Stream
-where
-    Stream: From<R>,
-{
-    fn from(limited_read: LimitedRead<R>) -> Stream {
-        limited_read.reader.into()
     }
 }
 

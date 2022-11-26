@@ -11,6 +11,7 @@ use chunked_transfer::Decoder as ChunkDecoder;
 #[cfg(feature = "socks-proxy")]
 use socks::{TargetAddr, ToTargetAddr};
 
+use crate::pool::{PoolKey, PoolReturner};
 use crate::proxy::Proxy;
 use crate::{error::Error, proxy::Proto};
 
@@ -40,6 +41,7 @@ pub(crate) struct Stream {
     inner: BufReader<Box<dyn ReadWrite>>,
     /// The remote address the stream is connected to.
     pub(crate) remote_addr: SocketAddr,
+    pool_returner: PoolReturner,
 }
 
 impl<T: ReadWrite + ?Sized> ReadWrite for Box<T> {
@@ -179,10 +181,15 @@ impl fmt::Debug for Stream {
 }
 
 impl Stream {
-    pub(crate) fn new(t: impl ReadWrite, remote_addr: SocketAddr) -> Stream {
+    pub(crate) fn new(
+        t: impl ReadWrite,
+        remote_addr: SocketAddr,
+        pool_returner: PoolReturner,
+    ) -> Stream {
         Stream::logged_create(Stream {
             inner: BufReader::new(Box::new(t)),
             remote_addr,
+            pool_returner,
         })
     }
 
@@ -233,6 +240,13 @@ impl Stream {
             Some(socket) => Stream::serverclosed_stream(socket),
             None => Ok(false),
         }
+    }
+
+    pub(crate) fn return_to_pool(mut self) -> io::Result<()> {
+        // ensure stream can be reused
+        self.reset()?;
+        self.pool_returner.clone().return_to_pool(self);
+        Ok(())
     }
 
     pub(crate) fn reset(&mut self) -> io::Result<()> {
@@ -303,8 +317,9 @@ impl Drop for Stream {
 pub(crate) fn connect_http(unit: &Unit, hostname: &str) -> Result<Stream, Error> {
     //
     let port = unit.url.port().unwrap_or(80);
-
-    connect_host(unit, hostname, port).map(|(t, r)| Stream::new(t, r))
+    let pool_key = PoolKey::from_parts("http", hostname, port);
+    let pool_returner = PoolReturner::new(unit.agent.clone(), pool_key);
+    connect_host(unit, hostname, port).map(|(t, r)| Stream::new(t, r, pool_returner))
 }
 
 pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error> {
@@ -314,7 +329,9 @@ pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error
 
     let tls_conf = &unit.agent.config.tls_config;
     let https_stream = tls_conf.connect(hostname, Box::new(sock))?;
-    Ok(Stream::new(https_stream, remote_addr))
+    let pool_key = PoolKey::from_parts("https", hostname, port);
+    let pool_returner = PoolReturner::new(unit.agent.clone(), pool_key);
+    Ok(Stream::new(https_stream, remote_addr, pool_returner))
 }
 
 /// If successful, returns a `TcpStream` and the remote address it is connected to.
@@ -671,7 +688,7 @@ mod tests {
         let recorder = ReadRecorder {
             reads: reads.clone(),
         };
-        let stream = Stream::new(recorder, remote_addr_for_test());
+        let stream = Stream::new(recorder, remote_addr_for_test(), PoolReturner::none());
         let mut deadline_stream = DeadlineStream::new(stream, None);
         let mut buf = [0u8; 1];
         for _ in 0..8193 {

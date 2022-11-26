@@ -124,7 +124,7 @@ impl ConnectionPool {
         }
     }
 
-    fn add(&self, key: &PoolKey, stream: Stream) {
+    pub(crate) fn add(&self, key: &PoolKey, stream: Stream) {
         if self.noop() {
             return;
         }
@@ -188,7 +188,7 @@ impl ConnectionPool {
 }
 
 #[derive(PartialEq, Clone, Eq, Hash)]
-struct PoolKey {
+pub(crate) struct PoolKey {
     scheme: String,
     hostname: String,
     port: Option<u16>,
@@ -216,6 +216,40 @@ impl PoolKey {
             hostname: url.host_str().unwrap_or("").to_string(),
             port,
             proxy,
+        }
+    }
+
+    pub(crate) fn from_parts(scheme: &str, hostname: &str, port: u16) -> Self {
+        PoolKey {
+            scheme: scheme.to_string(),
+            hostname: hostname.to_string(),
+            port: Some(port),
+            proxy: None,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct PoolReturner {
+    inner: Option<(Agent, PoolKey)>,
+}
+
+impl PoolReturner {
+    /// A PoolReturner that returns to the given Agent's Pool.
+    pub(crate) fn new(agent: Agent, pool_key: PoolKey) -> Self {
+        Self {
+            inner: Some((agent, pool_key)),
+        }
+    }
+
+    /// A PoolReturner that does nothing
+    pub(crate) fn none() -> Self {
+        Self { inner: None }
+    }
+
+    pub(crate) fn return_to_pool(&self, stream: Stream) {
+        if let Some((agent, pool_key)) = &self.inner {
+            agent.state.pool.add(&pool_key, stream);
         }
     }
 }
@@ -276,7 +310,7 @@ pub(crate) trait Done {
     fn done(&self) -> bool;
 }
 
-impl<R: Read> Done for LimitedRead<R> {
+impl<R: Read + Sized + Done + Into<Stream>> Done for LimitedRead<R> {
     fn done(&self) -> bool {
         self.remaining() == 0
     }
@@ -313,8 +347,8 @@ mod tests {
     struct NoopStream;
 
     impl NoopStream {
-        fn stream() -> Stream {
-            Stream::new(NoopStream, remote_addr_for_test())
+        fn stream(pool_returner: PoolReturner) -> Stream {
+            Stream::new(NoopStream, remote_addr_for_test(), pool_returner)
         }
     }
 
@@ -360,7 +394,7 @@ mod tests {
             proxy: None,
         });
         for key in poolkeys.clone() {
-            pool.add(&key, NoopStream::stream());
+            pool.add(&key, NoopStream::stream(PoolReturner::none()));
         }
         assert_eq!(pool.len(), pool.max_idle_connections);
 
@@ -385,7 +419,7 @@ mod tests {
         };
 
         for _ in 0..pool.max_idle_connections_per_host * 2 {
-            pool.add(&poolkey, NoopStream::stream())
+            pool.add(&poolkey, NoopStream::stream(PoolReturner::none()))
         }
         assert_eq!(pool.len(), pool.max_idle_connections_per_host);
 
@@ -404,12 +438,12 @@ mod tests {
         let url = Url::parse("zzz:///example.com").unwrap();
         let pool_key = PoolKey::new(&url, None);
 
-        pool.add(&pool_key, NoopStream::stream());
+        pool.add(&pool_key, NoopStream::stream(PoolReturner::none()));
         assert_eq!(pool.len(), 1);
 
         let pool_key = PoolKey::new(&url, Some(Proxy::new("localhost:9999").unwrap()));
 
-        pool.add(&pool_key, NoopStream::stream());
+        pool.add(&pool_key, NoopStream::stream(PoolReturner::none()));
         assert_eq!(pool.len(), 2);
 
         let pool_key = PoolKey::new(
@@ -417,7 +451,7 @@ mod tests {
             Some(Proxy::new("user:password@localhost:9999").unwrap()),
         );
 
-        pool.add(&pool_key, NoopStream::stream());
+        pool.add(&pool_key, NoopStream::stream(PoolReturner::none()));
         assert_eq!(pool.len(), 3);
     }
 
@@ -430,12 +464,11 @@ mod tests {
         let mut out_buf = [0u8; 500];
 
         let agent = Agent::new();
-        let stream = NoopStream::stream();
-        let limited_read = LimitedRead::new(stream, 500);
+        let pool_key = PoolKey::new(&url, None);
+        let stream = NoopStream::stream(PoolReturner::new(agent.clone(), pool_key));
+        let mut limited_read = LimitedRead::new(stream, 500);
 
-        let mut pool_return_read = PoolReturnRead::new(&agent, &url, limited_read);
-
-        pool_return_read.read_exact(&mut out_buf).unwrap();
+        limited_read.read_exact(&mut out_buf).unwrap();
 
         assert_eq!(agent.state.pool.len(), 1);
     }
@@ -474,7 +507,7 @@ mod tests {
 
         impl From<io::Cursor<Vec<u8>>> for Stream {
             fn from(c: io::Cursor<Vec<u8>>) -> Self {
-                Stream::new(c, "1.1.1.1:8080".parse().unwrap())
+                Stream::new(c, "1.1.1.1:8080".parse().unwrap(), PoolReturner::none())
             }
         }
 
