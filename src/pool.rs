@@ -304,10 +304,8 @@ impl<R: Read + Sized + Done + Into<Stream>> Read for PoolReturnRead<R> {
 mod tests {
     use std::io;
 
-    use crate::response::Compression;
     use crate::stream::{remote_addr_for_test, Stream};
     use crate::ReadWrite;
-    use chunked_transfer::Decoder as ChunkDecoder;
 
     use super::*;
 
@@ -446,7 +444,11 @@ mod tests {
     // decoder reads the exact amount from a chunked stream, not past the 0. This
     // happens because gzip has built-in knowledge of the length to read.
     #[test]
+    #[cfg(feature = "gzip")]
     fn read_exact_chunked_gzip() {
+        use crate::response::Compression;
+        use chunked_transfer::Decoder as ChunkDecoder;
+
         let gz_body = vec![
             b'E', b'\r', b'\n', // 14 first chunk
             0x1F, 0x8B, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x03, 0xCB, 0x48, 0xCD, 0xC9,
