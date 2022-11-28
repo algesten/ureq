@@ -325,8 +325,6 @@ impl Response {
             (true, _) => {
                 debug!("Chunked body in response");
                 Box::new(PoolReturnRead::new(
-                    &unit.agent,
-                    &unit.url,
                     ChunkDecoder::new(stream),
                 ))
             }
@@ -862,7 +860,9 @@ mod tests {
     #[test]
     fn short_read() {
         use std::io::Cursor;
-        let mut lr = LimitedRead::new(Cursor::new(vec![b'a'; 3]), std::num::NonZeroUsize::new(10).unwrap());
+        let test_stream =crate::test::TestStream::new(Cursor::new(vec![b'a'; 3]), std::io::sink());
+        let stream = Stream::new(test_stream, "1.1.1.1:4343".parse().unwrap(), PoolReturner::none());
+        let mut lr = LimitedRead::new(stream, std::num::NonZeroUsize::new(10).unwrap());
         let mut buf = vec![0; 1000];
         let result = lr.read_to_end(&mut buf);
         assert!(result.err().unwrap().kind() == io::ErrorKind::UnexpectedEof);

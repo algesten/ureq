@@ -3,11 +3,9 @@ use std::collections::{HashMap, VecDeque};
 use std::io::{self, Read};
 use std::sync::Mutex;
 
-use crate::response::LimitedRead;
 use crate::stream::Stream;
 use crate::{Agent, Proxy};
 
-use chunked_transfer::Decoder;
 use log::debug;
 use url::Url;
 
@@ -259,20 +257,14 @@ impl PoolReturner {
 ///
 /// *Internal API*
 pub(crate) struct PoolReturnRead<R: Read + Sized + Into<Stream>> {
-    // the agent where we want to return the stream.
-    agent: Agent,
     // wrapped reader around the same stream. It's an Option because we `take()` it
     // upon returning the stream to the Agent.
     reader: Option<R>,
-    // Key under which to store the stream when we're done.
-    key: PoolKey,
 }
 
 impl<R: Read + Sized + Into<Stream>> PoolReturnRead<R> {
-    pub fn new(agent: &Agent, url: &Url, reader: R) -> Self {
+    pub fn new(reader: R) -> Self {
         PoolReturnRead {
-            agent: agent.clone(),
-            key: PoolKey::new(url, agent.config.proxy.clone()),
             reader: Some(reader),
         }
     }
@@ -281,13 +273,8 @@ impl<R: Read + Sized + Into<Stream>> PoolReturnRead<R> {
         // guard we only do this once.
         if let Some(reader) = self.reader.take() {
             // bring back stream here to either go into pool or dealloc
-            let mut stream = reader.into();
-
-            // ensure stream can be reused
-            stream.reset()?;
-
-            // insert back into pool
-            self.agent.state.pool.add(&self.key, stream);
+            let stream: Stream = reader.into();
+            stream.return_to_pool()?;
         }
 
         Ok(())
@@ -301,33 +288,12 @@ impl<R: Read + Sized + Into<Stream>> PoolReturnRead<R> {
     }
 }
 
-// Done allows a reader to indicate it is done (next read will return Ok(0))
-// without actually performing a read. This is useful so LimitedRead can
-// inform PoolReturnRead to return a stream to the pool even if the user
-// never read past the end of the response (For instance because their
-// application is handling length information on its own).
-pub(crate) trait Done {
-    fn done(&self) -> bool;
-}
-
-impl<R: Read + Sized + Done + Into<Stream>> Done for LimitedRead<R> {
-    fn done(&self) -> bool {
-        self.remaining() == 0
-    }
-}
-
-impl<R: Read> Done for Decoder<R> {
-    fn done(&self) -> bool {
-        false
-    }
-}
-
-impl<R: Read + Sized + Done + Into<Stream>> Read for PoolReturnRead<R> {
+impl<R: Read + Sized + Into<Stream>> Read for PoolReturnRead<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let amount = self.do_read(buf)?;
         // only if the underlying reader is exhausted can we send a new
         // request to the same socket. hence, we only return it now.
-        if amount == 0 || self.reader.as_ref().map(|r| r.done()).unwrap_or_default() {
+        if amount == 0 {
             self.return_connection()?;
         }
         Ok(amount)
@@ -459,6 +425,8 @@ mod tests {
     // user reads the exact right number of bytes (but never gets a read of 0 bytes).
     #[test]
     fn read_exact() {
+        use crate::response::LimitedRead;
+
         let url = Url::parse("https:///example.com").unwrap();
 
         let mut out_buf = [0u8; 500];
@@ -480,6 +448,7 @@ mod tests {
     #[cfg(feature = "gzip")]
     fn read_exact_chunked_gzip() {
         use crate::response::Compression;
+        use std::io::Cursor;
         use chunked_transfer::Decoder as ChunkDecoder;
 
         let gz_body = vec![
@@ -497,28 +466,15 @@ mod tests {
             b'\r', b'\n', //
         ];
 
-        println!("{:?}", gz_body);
-
-        impl ReadWrite for io::Cursor<Vec<u8>> {
-            fn socket(&self) -> Option<&std::net::TcpStream> {
-                None
-            }
-        }
-
-        impl From<io::Cursor<Vec<u8>>> for Stream {
-            fn from(c: io::Cursor<Vec<u8>>) -> Self {
-                Stream::new(c, "1.1.1.1:8080".parse().unwrap(), PoolReturner::none())
-            }
-        }
-
         let agent = Agent::new();
-        let url = Url::parse("https://example.com").unwrap();
-
         assert_eq!(agent.state.pool.len(), 0);
 
-        let chunked = ChunkDecoder::new(io::Cursor::new(gz_body));
+        let ro = crate::test::TestStream::new(Cursor::new(gz_body), std::io::sink());
+        let stream = Stream::new(ro, "1.1.1.1:4343".parse().unwrap(), PoolReturner::new(agent.clone(), PoolKey::from_parts("http", "1.1.1.1", 8080)));
+
+        let chunked = ChunkDecoder::new(stream);
         let pool_return_read: Box<(dyn Read + Send + Sync + 'static)> =
-            Box::new(PoolReturnRead::new(&agent, &url, chunked));
+            Box::new(PoolReturnRead::new(chunked));
 
         let compression = Compression::Gzip;
         let mut stream = compression.wrap_reader(pool_return_read);
