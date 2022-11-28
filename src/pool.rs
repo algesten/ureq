@@ -466,7 +466,7 @@ mod tests {
         let agent = Agent::new();
         let pool_key = PoolKey::new(&url, None);
         let stream = NoopStream::stream(PoolReturner::new(agent.clone(), pool_key));
-        let mut limited_read = LimitedRead::new(stream, 500);
+        let mut limited_read = LimitedRead::new(stream, std::num::NonZeroUsize::new(500).unwrap());
 
         limited_read.read_exact(&mut out_buf).unwrap();
 

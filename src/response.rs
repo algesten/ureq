@@ -2,9 +2,10 @@ use std::io::{self, Cursor, Read};
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::{fmt, io::BufRead};
+use std::num::NonZeroUsize;
 
 use chunked_transfer::Decoder as ChunkDecoder;
-use log::debug;
+use log::{debug, error};
 use url::Url;
 
 use crate::body::SizedReader;
@@ -271,7 +272,7 @@ impl Response {
         self.reader
     }
 
-    fn stream_to_reader(&self, stream: DeadlineStream) -> Box<dyn Read + Send + Sync + 'static> {
+    fn stream_to_reader(&self, stream: DeadlineStream) -> Result<Box<dyn Read + Send + Sync + 'static>, Error> {
         //
         let is_http10 = self.http_version().eq_ignore_ascii_case("HTTP/1.0");
         let is_close = self
@@ -302,11 +303,18 @@ impl Response {
             self.length
         };
 
+        if !use_chunked && matches!(limit_bytes, Some(0)) {
+            // Zero-length body: return right away.
+            let stream: Stream = stream.into();
+            stream.return_to_pool()?;
+            return Ok(Box::new(std::io::empty()));
+        }
+
         let unit = &self.unit;
         let inner = stream.inner_ref();
         let result = inner.set_read_timeout(unit.agent.config.timeout_read);
         if let Err(e) = result {
-            return Box::new(ErrorReader(e)) as Box<dyn Read + Send + Sync + 'static>;
+            return Ok(Box::new(ErrorReader(e)) as Box<dyn Read + Send + Sync + 'static>);
         }
         let buffer_len = inner.buffer().len();
 
@@ -325,8 +333,12 @@ impl Response {
             // Responses with a content-length header means we should limit the reading
             // of the body to the number of bytes in the header. Once done, we can
             // return the underlying stream to the connection pool.
+            (false, Some(0)) => {
+                error!("received a zero-length body, when this should have been handled earlier");
+                Box::new(std::io::empty())
+            }
             (false, Some(len)) => {
-                let mut limited_read = LimitedRead::new(stream, len);
+                let mut limited_read = LimitedRead::new(stream, NonZeroUsize::new(len).unwrap());
 
                 if len <= buffer_len {
                     debug!("Body entirely buffered (length: {})", len);
@@ -346,10 +358,10 @@ impl Response {
             }
         };
 
-        match self.compression {
+        Ok(match self.compression {
             None => body_reader,
             Some(c) => c.wrap_reader(body_reader),
-        }
+        })
     }
 
     /// Turn this response into a String of the response body. By default uses `utf-8`,
@@ -553,7 +565,7 @@ impl Response {
             length,
             compression,
         };
-        response.reader = response.stream_to_reader(stream);
+        response.reader = response.stream_to_reader(stream)?;
         Ok(response)
     }
 
@@ -753,10 +765,10 @@ pub(crate) struct LimitedRead<R> {
 }
 
 impl<R: Read + Sized + Into<Stream>> LimitedRead<R> {
-    pub(crate) fn new(reader: R, limit: usize) -> Self {
+    pub(crate) fn new(reader: R, limit: NonZeroUsize) -> Self {
         LimitedRead {
             reader: Some(reader),
-            limit,
+            limit: limit.get(),
             position: 0,
         }
     }
@@ -850,7 +862,7 @@ mod tests {
     #[test]
     fn short_read() {
         use std::io::Cursor;
-        let mut lr = LimitedRead::new(Cursor::new(vec![b'a'; 3]), 10);
+        let mut lr = LimitedRead::new(Cursor::new(vec![b'a'; 3]), std::num::NonZeroUsize::new(10).unwrap());
         let mut buf = vec![0; 1000];
         let result = lr.read_to_end(&mut buf);
         assert!(result.err().unwrap().kind() == io::ErrorKind::UnexpectedEof);
