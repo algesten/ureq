@@ -27,7 +27,6 @@ brotli = ["brotli-decompressor"]
 
 [dependencies]
 base64 = "0.13"
-chunked_transfer = "1.2"
 cookie = { version = "0.16", default-features = false, optional = true}
 once_cell = "1"
 url = "2"

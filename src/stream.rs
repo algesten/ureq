@@ -6,17 +6,15 @@ use std::time::Duration;
 use std::time::Instant;
 use std::{fmt, io::Cursor};
 
-use chunked_transfer::Decoder as ChunkDecoder;
-
 #[cfg(feature = "socks-proxy")]
 use socks::{TargetAddr, ToTargetAddr};
 
+use crate::chunked::Decoder as ChunkDecoder;
+use crate::error::ErrorKind;
 use crate::pool::{PoolKey, PoolReturner};
 use crate::proxy::Proxy;
-use crate::{error::Error, proxy::Proto};
-
-use crate::error::ErrorKind;
 use crate::unit::Unit;
+use crate::{error::Error, proxy::Proto};
 
 /// Trait for things implementing [std::io::Read] + [std::io::Write]. Used in [TlsConnector].
 pub trait ReadWrite: Read + Write + Send + Sync + fmt::Debug + 'static {
