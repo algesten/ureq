@@ -14,7 +14,7 @@
 // limitations under the License.
 
 mod decoder;
-pub use crate::decoder::Decoder;
+pub use decoder::Decoder;
 
 mod encoder;
-pub use crate::encoder::Encoder;
+pub use encoder::Encoder;
