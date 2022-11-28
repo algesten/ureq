@@ -1,5 +1,6 @@
 // Copyright 2015 The tiny-http Contributors
 // Copyright 2015 The rust-chunked-transfer Contributors
+// Forked into ureq, 2022, from https://github.com/frewsxcv/rust-chunked-transfer
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
