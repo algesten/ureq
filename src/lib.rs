@@ -346,6 +346,7 @@
 
 mod agent;
 mod body;
+mod chunked;
 mod error;
 mod header;
 mod middleware;

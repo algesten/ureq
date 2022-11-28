@@ -21,7 +21,7 @@ use std::io::Write;
 ///
 /// # Example
 ///
-/// ```
+/// ```no_compile
 /// use chunked_transfer::Encoder;
 /// use std::io::Write;
 ///

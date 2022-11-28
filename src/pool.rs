@@ -448,7 +448,6 @@ mod tests {
     #[cfg(feature = "gzip")]
     fn read_exact_chunked_gzip() {
         use crate::response::Compression;
-        use chunked_transfer::Decoder as ChunkDecoder;
         use std::io::Cursor;
 
         let gz_body = vec![
@@ -476,7 +475,7 @@ mod tests {
             PoolReturner::new(agent.clone(), PoolKey::from_parts("http", "1.1.1.1", 8080)),
         );
 
-        let chunked = ChunkDecoder::new(stream);
+        let chunked = crate::chunked::Decoder::new(stream);
         let pool_return_read: Box<(dyn Read + Send + Sync + 'static)> =
             Box::new(PoolReturnRead::new(chunked));
 

@@ -25,7 +25,7 @@ use std::io::Result as IoResult;
 ///
 /// # Example
 ///
-/// ```
+/// ```no_compile
 /// use chunked_transfer::Decoder;
 /// use std::io::Read;
 ///

@@ -4,11 +4,11 @@ use std::num::NonZeroUsize;
 use std::str::FromStr;
 use std::{fmt, io::BufRead};
 
-use chunked_transfer::Decoder as ChunkDecoder;
 use log::debug;
 use url::Url;
 
 use crate::body::SizedReader;
+use crate::chunked::Decoder as ChunkDecoder;
 use crate::error::{Error, ErrorKind::BadStatus};
 use crate::header::{get_all_headers, get_header, Header, HeaderLine};
 use crate::pool::{PoolReturnRead, PoolReturner};
