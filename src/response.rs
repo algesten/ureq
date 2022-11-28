@@ -332,7 +332,7 @@ impl Response {
             // of the body to the number of bytes in the header. Once done, we can
             // return the underlying stream to the connection pool.
             (false, Some(0)) => {
-                error!("received a zero-length body, when this should have been handled earlier");
+                error!("received a zero-length body, when this should have been handled earlier. connection will drop.");
                 Box::new(std::io::empty())
             }
             (false, Some(len)) => {
@@ -341,6 +341,9 @@ impl Response {
                 if len <= buffer_len {
                     debug!("Body entirely buffered (length: {})", len);
                     let mut buf = vec![0; len];
+                    // TODO: This expect can actually panic if we get an error when
+                    // returning the stream to the pool. We reset the read timeouts
+                    // when we do that, and since that's a syscall it can fail.
                     limited_read
                         .read_exact(&mut buf)
                         .expect("failed to read exact buffer length from stream");
@@ -797,8 +800,10 @@ impl<R: Read + Sized + Into<Stream>> Read for LimitedRead<R> {
         } else {
             buf
         };
-        let Some(reader) = self.reader.as_mut() else {
-            return Ok(0)
+        let reader = match self.reader.as_mut() {
+            // If the reader has already been taken, return Ok(0) to all reads.
+            None=> return Ok(0),
+            Some(r) => r,
         };
         match reader.read(from) {
             // https://tools.ietf.org/html/rfc7230#page-33
