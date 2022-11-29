@@ -1,8 +1,8 @@
 use std::io::{self, Cursor, Read};
 use std::net::SocketAddr;
+use std::num::NonZeroUsize;
 use std::str::FromStr;
 use std::{fmt, io::BufRead};
-use std::num::NonZeroUsize;
 
 use chunked_transfer::Decoder as ChunkDecoder;
 use log::{debug, error};
@@ -272,7 +272,10 @@ impl Response {
         self.reader
     }
 
-    fn stream_to_reader(&self, stream: DeadlineStream) -> Result<Box<dyn Read + Send + Sync + 'static>, Error> {
+    fn stream_to_reader(
+        &self,
+        stream: DeadlineStream,
+    ) -> Result<Box<dyn Read + Send + Sync + 'static>, Error> {
         //
         let is_http10 = self.http_version().eq_ignore_ascii_case("HTTP/1.0");
         let is_close = self
@@ -324,9 +327,7 @@ impl Response {
             // to the connection pool.
             (true, _) => {
                 debug!("Chunked body in response");
-                Box::new(PoolReturnRead::new(
-                    ChunkDecoder::new(stream),
-                ))
+                Box::new(PoolReturnRead::new(ChunkDecoder::new(stream)))
             }
             // Responses with a content-length header means we should limit the reading
             // of the body to the number of bytes in the header. Once done, we can
@@ -802,7 +803,7 @@ impl<R: Read + Sized + Into<Stream>> Read for LimitedRead<R> {
         };
         let reader = match self.reader.as_mut() {
             // If the reader has already been taken, return Ok(0) to all reads.
-            None=> return Ok(0),
+            None => return Ok(0),
             Some(r) => r,
         };
         match reader.read(from) {
@@ -865,8 +866,12 @@ mod tests {
     #[test]
     fn short_read() {
         use std::io::Cursor;
-        let test_stream =crate::test::TestStream::new(Cursor::new(vec![b'a'; 3]), std::io::sink());
-        let stream = Stream::new(test_stream, "1.1.1.1:4343".parse().unwrap(), PoolReturner::none());
+        let test_stream = crate::test::TestStream::new(Cursor::new(vec![b'a'; 3]), std::io::sink());
+        let stream = Stream::new(
+            test_stream,
+            "1.1.1.1:4343".parse().unwrap(),
+            PoolReturner::none(),
+        );
         let mut lr = LimitedRead::new(stream, std::num::NonZeroUsize::new(10).unwrap());
         let mut buf = vec![0; 1000];
         let result = lr.read_to_end(&mut buf);

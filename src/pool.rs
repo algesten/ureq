@@ -448,8 +448,8 @@ mod tests {
     #[cfg(feature = "gzip")]
     fn read_exact_chunked_gzip() {
         use crate::response::Compression;
-        use std::io::Cursor;
         use chunked_transfer::Decoder as ChunkDecoder;
+        use std::io::Cursor;
 
         let gz_body = vec![
             b'E', b'\r', b'\n', // 14 first chunk
@@ -470,7 +470,11 @@ mod tests {
         assert_eq!(agent.state.pool.len(), 0);
 
         let ro = crate::test::TestStream::new(Cursor::new(gz_body), std::io::sink());
-        let stream = Stream::new(ro, "1.1.1.1:4343".parse().unwrap(), PoolReturner::new(agent.clone(), PoolKey::from_parts("http", "1.1.1.1", 8080)));
+        let stream = Stream::new(
+            ro,
+            "1.1.1.1:4343".parse().unwrap(),
+            PoolReturner::new(agent.clone(), PoolKey::from_parts("http", "1.1.1.1", 8080)),
+        );
 
         let chunked = ChunkDecoder::new(stream);
         let pool_return_read: Box<(dyn Read + Send + Sync + 'static)> =
