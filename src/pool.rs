@@ -247,7 +247,7 @@ impl PoolReturner {
 
     pub(crate) fn return_to_pool(&self, stream: Stream) {
         if let Some((agent, pool_key)) = &self.inner {
-            agent.state.pool.add(&pool_key, stream);
+            agent.state.pool.add(pool_key, stream);
         }
     }
 }
