@@ -303,7 +303,7 @@ impl Response {
             return BodyType::LengthDelimited(0);
         }
 
-        let length = get_header(&headers, "content-length").and_then(|v| v.parse::<usize>().ok());
+        let length = get_header(headers, "content-length").and_then(|v| v.parse::<usize>().ok());
 
         if is_http10 || is_close {
             BodyType::CloseDelimited
