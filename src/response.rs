@@ -1077,6 +1077,7 @@ mod tests {
         let s = Stream::new(
             ReadOnlyStream::new(v),
             crate::stream::remote_addr_for_test(),
+            PoolReturner::none(),
         );
         let request_url = "https://example.com".parse().unwrap();
         let request_reader = SizedReader {
