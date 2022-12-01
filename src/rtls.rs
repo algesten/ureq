@@ -92,7 +92,7 @@ fn root_certs() -> rustls::RootCertStore {
         }
     }
     if valid_count == 0 && invalid_count > 0 {
-        error!("no valid certificates loaded by rustls-native-certs. all HTTP requests will fail.");
+        error!("no valid certificates loaded by rustls-native-certs. all HTTPS requests will fail.");
     }
     root_cert_store
 }
