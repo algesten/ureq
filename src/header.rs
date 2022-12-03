@@ -150,14 +150,14 @@ impl Header {
     }
 }
 
-pub fn get_header<'a, 'b>(headers: &'b [Header], name: &'a str) -> Option<&'b str> {
+pub fn get_header<'h>(headers: &'h [Header], name: &str) -> Option<&'h str> {
     headers
         .iter()
         .find(|h| h.is_name(name))
         .and_then(|h| h.value())
 }
 
-pub fn get_all_headers<'a, 'b>(headers: &'b [Header], name: &'a str) -> Vec<&'b str> {
+pub fn get_all_headers<'h>(headers: &'h [Header], name: &str) -> Vec<&'h str> {
     headers
         .iter()
         .filter(|h| h.is_name(name))

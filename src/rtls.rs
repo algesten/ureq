@@ -61,20 +61,39 @@ impl Write for RustlsStream {
 
 #[cfg(feature = "native-certs")]
 fn root_certs() -> rustls::RootCertStore {
-    let mut root_store = rustls::RootCertStore::empty();
+    use log::error;
 
-    let certs = rustls_native_certs::load_native_certs().expect("Could not load platform certs");
+    let mut root_cert_store = rustls::RootCertStore::empty();
 
+    let mut valid_count = 0;
+    let mut invalid_count = 0;
+    let certs = rustls_native_certs::load_native_certs().unwrap_or_else(|e| {
+        error!("loading native certificates: {}", e);
+        vec![]
+    });
     for cert in certs {
-        // Repackage the certificate DER bytes.
-        let rustls_cert = rustls::Certificate(cert.0);
-
-        root_store
-            .add(&rustls_cert)
-            .expect("Failed to add native certificate too root store");
+        let cert = rustls::Certificate(cert.0);
+        // Continue on parsing errors, as native stores often include ancient or syntactically
+        // invalid certificates, like root certificates without any X509 extensions.
+        // Inspiration: https://github.com/rustls/rustls/blob/633bf4ba9d9521a95f68766d04c22e2b01e68318/rustls/src/anchors.rs#L105-L112
+        match root_cert_store.add(&cert) {
+            Ok(_) => valid_count += 1,
+            Err(err) => {
+                invalid_count += 1;
+                log::warn!(
+                    "rustls failed to parse DER certificate {:?} {:?}",
+                    &err,
+                    &cert
+                );
+            }
+        }
     }
-
-    root_store
+    if valid_count == 0 && invalid_count > 0 {
+        error!(
+            "no valid certificates loaded by rustls-native-certs. all HTTPS requests will fail."
+        );
+    }
+    root_cert_store
 }
 
 #[cfg(not(feature = "native-certs"))]

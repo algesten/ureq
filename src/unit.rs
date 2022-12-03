@@ -109,10 +109,6 @@ impl Unit {
         }
     }
 
-    pub fn is_head(&self) -> bool {
-        self.method.eq_ignore_ascii_case("head")
-    }
-
     pub fn resolver(&self) -> ArcResolver {
         self.agent.state.resolver.clone()
     }
