@@ -344,21 +344,34 @@ impl Response {
             // of the body to the number of bytes in the header. Once done, we can
             // return the underlying stream to the connection pool.
             BodyType::LengthDelimited(len) => {
-                let mut limited_read = LimitedRead::new(stream, NonZeroUsize::new(len).unwrap());
+                match NonZeroUsize::new(len) {
+                    None => {
+                        debug!("zero-length body returning stream directly to pool");
+                        let stream: Stream = stream.into();
+                        // TODO: This expect can actually panic if we get an error when
+                        // returning the stream to the pool. We reset the read timeouts
+                        // when we do that, and since that's a syscall it can fail.
+                        stream.return_to_pool().expect("returning stream to pool");
+                        Box::new(std::io::empty())
+                    },
+                    Some(len) =>  {
+                        let mut limited_read = LimitedRead::new(stream, len);
 
-                if len <= buffer_len {
-                    debug!("Body entirely buffered (length: {})", len);
-                    let mut buf = vec![0; len];
-                    // TODO: This expect can actually panic if we get an error when
-                    // returning the stream to the pool. We reset the read timeouts
-                    // when we do that, and since that's a syscall it can fail.
-                    limited_read
-                        .read_exact(&mut buf)
-                        .expect("failed to read exact buffer length from stream");
-                    Box::new(Cursor::new(buf))
-                } else {
-                    debug!("Streaming body until content-length: {}", len);
-                    Box::new(limited_read)
+                        if len.get() <= buffer_len {
+                            debug!("Body entirely buffered (length: {})", len);
+                            let mut buf = vec![0; len.get()];
+                            // TODO: This expect can actually panic if we get an error when
+                            // returning the stream to the pool. We reset the read timeouts
+                            // when we do that, and since that's a syscall it can fail.
+                            limited_read
+                                .read_exact(&mut buf)
+                                .expect("failed to read exact buffer length from stream");
+                            Box::new(Cursor::new(buf))
+                        } else {
+                            debug!("Streaming body until content-length: {}", len);
+                            Box::new(limited_read)
+                        }
+                    }
                 }
             }
             BodyType::CloseDelimited => {
