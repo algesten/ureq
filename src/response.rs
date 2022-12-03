@@ -5,7 +5,7 @@ use std::str::FromStr;
 use std::{fmt, io::BufRead};
 
 use chunked_transfer::Decoder as ChunkDecoder;
-use log::{debug};
+use log::debug;
 use url::Url;
 
 use crate::body::SizedReader;
@@ -353,8 +353,8 @@ impl Response {
                         // when we do that, and since that's a syscall it can fail.
                         stream.return_to_pool().expect("returning stream to pool");
                         Box::new(std::io::empty())
-                    },
-                    Some(len) =>  {
+                    }
+                    Some(len) => {
                         let mut limited_read = LimitedRead::new(stream, len);
 
                         if len.get() <= buffer_len {
