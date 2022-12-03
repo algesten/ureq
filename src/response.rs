@@ -35,6 +35,13 @@ const INTO_STRING_LIMIT: usize = 10 * 1_024 * 1_024;
 const MAX_HEADER_SIZE: usize = 100 * 1_024;
 const MAX_HEADER_COUNT: usize = 100;
 
+#[derive(Copy, Clone, Debug)]
+enum BodyType {
+    LengthDelimited(usize),
+    Chunked,
+    CloseDelimited,
+}
+
 /// Response instances are created as results of firing off requests.
 ///
 /// The `Response` is used to read response headers and decide what to do with the body.
@@ -67,8 +74,6 @@ pub struct Response {
     index: ResponseStatusIndex,
     status: u16,
     headers: Vec<Header>,
-    // Boxed to avoid taking up too much size.
-    unit: Box<Unit>,
     reader: Box<dyn Read + Send + Sync + 'static>,
     /// The socket address of the server that sent the response.
     remote_addr: SocketAddr,
@@ -78,11 +83,6 @@ pub struct Response {
     ///
     /// If this response was not redirected, the history is empty.
     pub(crate) history: Vec<Url>,
-    /// The Content-Length value. The header itself may have been removed due to
-    /// the automatic decompression system.
-    length: Option<usize>,
-    /// The compression type of the response body.
-    compression: Option<Compression>,
 }
 
 /// index into status_line where we split: HTTP/1.1 200 OK
@@ -271,38 +271,59 @@ impl Response {
         self.reader
     }
 
-    fn stream_to_reader(&self, stream: DeadlineStream) -> Box<dyn Read + Send + Sync + 'static> {
-        //
-        let is_http10 = self.http_version().eq_ignore_ascii_case("HTTP/1.0");
-        let is_close = self
-            .header("connection")
+    fn body_type(
+        request_method: &str,
+        response_status: u16,
+        response_version: &str,
+        headers: &[Header],
+    ) -> BodyType {
+        let is_http10 = response_version.eq_ignore_ascii_case("HTTP/1.0");
+        let is_close = get_header(headers, "connection")
             .map(|c| c.eq_ignore_ascii_case("close"))
             .unwrap_or(false);
 
-        let is_head = self.unit.is_head();
+        let is_head = request_method.eq_ignore_ascii_case("head");
         let has_no_body = is_head
-            || match self.status {
+            || match response_status {
                 204 | 304 => true,
                 _ => false,
             };
 
-        let is_chunked = self
-            .header("transfer-encoding")
+        let is_chunked = get_header(headers, "transfer-encoding")
             .map(|enc| !enc.is_empty()) // whatever it says, do chunked
             .unwrap_or(false);
 
         let use_chunked = !is_http10 && !has_no_body && is_chunked;
 
-        let limit_bytes = if is_http10 || is_close {
-            None
+        if use_chunked {
+            return BodyType::Chunked;
+        }
+
+        if has_no_body {
+            return BodyType::LengthDelimited(0);
+        }
+
+        let length = get_header(headers, "content-length").and_then(|v| v.parse::<usize>().ok());
+
+        if is_http10 || is_close {
+            BodyType::CloseDelimited
         } else if has_no_body {
             // head requests never have a body
-            Some(0)
+            BodyType::LengthDelimited(0)
         } else {
-            self.length
-        };
+            match length {
+                Some(n) => BodyType::LengthDelimited(n),
+                None => BodyType::CloseDelimited,
+            }
+        }
+    }
 
-        let unit = &self.unit;
+    fn stream_to_reader(
+        stream: DeadlineStream,
+        unit: &Unit,
+        body_type: BodyType,
+        compression: Option<Compression>,
+    ) -> Box<dyn Read + Send + Sync + 'static> {
         let inner = stream.inner_ref();
         let result = inner.set_read_timeout(unit.agent.config.timeout_read);
         if let Err(e) = result {
@@ -310,11 +331,11 @@ impl Response {
         }
         let buffer_len = inner.buffer().len();
 
-        let body_reader: Box<dyn Read + Send + Sync> = match (use_chunked, limit_bytes) {
+        let body_reader: Box<dyn Read + Send + Sync> = match body_type {
             // Chunked responses have an unknown length, but do have an end of body
             // marker. When we encounter the marker, we can return the underlying stream
             // to the connection pool.
-            (true, _) => {
+            BodyType::Chunked => {
                 debug!("Chunked body in response");
                 Box::new(PoolReturnRead::new(
                     &unit.agent,
@@ -325,7 +346,7 @@ impl Response {
             // Responses with a content-length header means we should limit the reading
             // of the body to the number of bytes in the header. Once done, we can
             // return the underlying stream to the connection pool.
-            (false, Some(len)) => {
+            BodyType::LengthDelimited(len) => {
                 let mut pooler =
                     PoolReturnRead::new(&unit.agent, &unit.url, LimitedRead::new(stream, len));
 
@@ -341,13 +362,13 @@ impl Response {
                     Box::new(pooler)
                 }
             }
-            (false, None) => {
+            BodyType::CloseDelimited => {
                 debug!("Body of unknown size - read until socket close");
                 Box::new(stream)
             }
         };
 
-        match self.compression {
+        match compression {
             None => body_reader,
             Some(c) => c.wrap_reader(body_reader),
         }
@@ -511,6 +532,7 @@ impl Response {
         // The status line we can ignore non-utf8 chars and parse as_str_lossy().
         let status_line = read_next_line(&mut stream, "the status line")?.into_string_lossy();
         let (index, status) = parse_status_line(status_line.as_str())?;
+        let http_version = &status_line.as_str()[0..index.http_version];
 
         let mut headers: Vec<Header> = Vec::new();
         while headers.len() <= MAX_HEADER_COUNT {
@@ -529,8 +551,6 @@ impl Response {
             ));
         }
 
-        let length = get_header(&headers, "content-length").and_then(|v| v.parse::<usize>().ok());
-
         let compression =
             get_header(&headers, "content-encoding").and_then(Compression::from_header_value);
 
@@ -539,22 +559,21 @@ impl Response {
             headers.retain(|h| !h.is_name("content-encoding") && !h.is_name("content-length"));
         }
 
+        let body_type = Self::body_type(&unit.method, status, http_version, &headers);
+        let reader = Self::stream_to_reader(stream, &unit, body_type, compression);
+
         let url = unit.url.clone();
 
-        let mut response = Response {
+        let response = Response {
             url,
             status_line,
             index,
             status,
             headers,
-            unit: Box::new(unit),
-            reader: Box::new(Cursor::new(vec![])),
+            reader,
             remote_addr,
             history: vec![],
-            length,
-            compression,
         };
-        response.reader = response.stream_to_reader(stream);
         Ok(response)
     }
 
