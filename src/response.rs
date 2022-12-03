@@ -328,7 +328,7 @@ impl Response {
         let inner = stream.inner_ref();
         let result = inner.set_read_timeout(unit.agent.config.timeout_read);
         if let Err(e) = result {
-            return Box::new(ErrorReader(e)) as Box<dyn Read + Send + Sync + 'static>;
+            return Box::new(ErrorReader(e));
         }
         let buffer_len = inner.buffer().len();
 
