@@ -423,7 +423,7 @@ pub use crate::stream::{ReadWrite, TlsConnector};
 #[cfg(feature = "cookies")]
 pub use cookie::Cookie;
 #[cfg(feature = "cookies")]
-pub use cookie::CookieStore;
+pub use cookie_store::CookieStore;
 
 #[cfg(feature = "json")]
 pub use {serde, serde_json};
