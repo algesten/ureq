@@ -877,7 +877,7 @@ impl Read for ErrorReader {
 
 #[cfg(test)]
 mod tests {
-    use std::{io::Cursor};
+    use std::io::Cursor;
 
     use crate::{body::Payload, pool::PoolKey};
 
