@@ -422,6 +422,8 @@ pub use crate::stream::{ReadWrite, TlsConnector};
 // re-export
 #[cfg(feature = "cookies")]
 pub use cookie::Cookie;
+#[cfg(feature = "cookies")]
+pub use cookie::CookieStore;
 
 #[cfg(feature = "json")]
 pub use {serde, serde_json};
