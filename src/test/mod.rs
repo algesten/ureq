@@ -1,4 +1,5 @@
 use crate::error::Error;
+use crate::pool::PoolReturner;
 use crate::stream::{remote_addr_for_test, ReadOnlyStream, Stream};
 use crate::unit::Unit;
 use crate::ReadWrite;
@@ -55,6 +56,7 @@ pub(crate) fn make_response(
     Ok(Stream::new(
         ReadOnlyStream::new(buf),
         remote_addr_for_test(),
+        PoolReturner::none(),
     ))
 }
 
@@ -103,6 +105,7 @@ impl Recorder {
         Stream::new(
             TestStream::new(cursor, self.clone()),
             remote_addr_for_test(),
+            PoolReturner::none(),
         )
     }
 }

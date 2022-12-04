@@ -1,5 +1,6 @@
 use std::io::{self, Cursor, Read};
 use std::net::SocketAddr;
+use std::num::NonZeroUsize;
 use std::str::FromStr;
 use std::{fmt, io::BufRead};
 
@@ -10,7 +11,7 @@ use url::Url;
 use crate::body::SizedReader;
 use crate::error::{Error, ErrorKind::BadStatus};
 use crate::header::{get_all_headers, get_header, Header, HeaderLine};
-use crate::pool::PoolReturnRead;
+use crate::pool::{PoolReturnRead, PoolReturner};
 use crate::stream::{DeadlineStream, ReadOnlyStream, Stream};
 use crate::unit::Unit;
 use crate::{stream, Agent, ErrorKind};
@@ -327,7 +328,7 @@ impl Response {
         let inner = stream.inner_ref();
         let result = inner.set_read_timeout(unit.agent.config.timeout_read);
         if let Err(e) = result {
-            return Box::new(ErrorReader(e)) as Box<dyn Read + Send + Sync + 'static>;
+            return Box::new(ErrorReader(e));
         }
         let buffer_len = inner.buffer().len();
 
@@ -337,29 +338,40 @@ impl Response {
             // to the connection pool.
             BodyType::Chunked => {
                 debug!("Chunked body in response");
-                Box::new(PoolReturnRead::new(
-                    &unit.agent,
-                    &unit.url,
-                    ChunkDecoder::new(stream),
-                ))
+                Box::new(PoolReturnRead::new(ChunkDecoder::new(stream)))
             }
             // Responses with a content-length header means we should limit the reading
             // of the body to the number of bytes in the header. Once done, we can
             // return the underlying stream to the connection pool.
             BodyType::LengthDelimited(len) => {
-                let mut pooler =
-                    PoolReturnRead::new(&unit.agent, &unit.url, LimitedRead::new(stream, len));
+                match NonZeroUsize::new(len) {
+                    None => {
+                        debug!("zero-length body returning stream directly to pool");
+                        let stream: Stream = stream.into();
+                        // TODO: This expect can actually panic if we get an error when
+                        // returning the stream to the pool. We reset the read timeouts
+                        // when we do that, and since that's a syscall it can fail.
+                        stream.return_to_pool().expect("returning stream to pool");
+                        Box::new(std::io::empty())
+                    }
+                    Some(len) => {
+                        let mut limited_read = LimitedRead::new(stream, len);
 
-                if len <= buffer_len {
-                    debug!("Body entirely buffered (length: {})", len);
-                    let mut buf = vec![0; len];
-                    pooler
-                        .read_exact(&mut buf)
-                        .expect("failed to read exact buffer length from stream");
-                    Box::new(Cursor::new(buf))
-                } else {
-                    debug!("Streaming body until content-length: {}", len);
-                    Box::new(pooler)
+                        if len.get() <= buffer_len {
+                            debug!("Body entirely buffered (length: {})", len);
+                            let mut buf = vec![0; len.get()];
+                            // TODO: This expect can actually panic if we get an error when
+                            // returning the stream to the pool. We reset the read timeouts
+                            // when we do that, and since that's a syscall it can fail.
+                            limited_read
+                                .read_exact(&mut buf)
+                                .expect("failed to read exact buffer length from stream");
+                            Box::new(Cursor::new(buf))
+                        } else {
+                            debug!("Streaming body until content-length: {}", len);
+                            Box::new(limited_read)
+                        }
+                    }
                 }
             }
             BodyType::CloseDelimited => {
@@ -698,7 +710,11 @@ impl FromStr for Response {
     /// ```
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let remote_addr = "0.0.0.0:0".parse().unwrap();
-        let stream = Stream::new(ReadOnlyStream::new(s.into()), remote_addr);
+        let stream = Stream::new(
+            ReadOnlyStream::new(s.into()),
+            remote_addr,
+            PoolReturner::none(),
+        );
         let request_url = "https://example.com".parse().unwrap();
         let request_reader = SizedReader {
             size: crate::body::BodySize::Empty,
@@ -763,16 +779,16 @@ fn read_next_line(reader: &mut impl BufRead, context: &str) -> io::Result<Header
 
 /// Limits a `Read` to a content size (as set by a "Content-Length" header).
 pub(crate) struct LimitedRead<R> {
-    reader: R,
+    reader: Option<R>,
     limit: usize,
     position: usize,
 }
 
-impl<R: Read> LimitedRead<R> {
-    pub(crate) fn new(reader: R, limit: usize) -> Self {
+impl<R: Read + Sized + Into<Stream>> LimitedRead<R> {
+    pub(crate) fn new(reader: R, limit: NonZeroUsize) -> Self {
         LimitedRead {
-            reader,
-            limit,
+            reader: Some(reader),
+            limit: limit.get(),
             position: 0,
         }
     }
@@ -780,9 +796,20 @@ impl<R: Read> LimitedRead<R> {
     pub(crate) fn remaining(&self) -> usize {
         self.limit - self.position
     }
+
+    fn return_stream_to_pool(&mut self) -> io::Result<()> {
+        if let Some(reader) = self.reader.take() {
+            // Convert back to a stream. If return_to_pool fails, the stream will
+            // drop and the connection will be closed.
+            let stream: Stream = reader.into();
+            stream.return_to_pool()?;
+        }
+
+        Ok(())
+    }
 }
 
-impl<R: Read> Read for LimitedRead<R> {
+impl<R: Read + Sized + Into<Stream>> Read for LimitedRead<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         if self.remaining() == 0 {
             return Ok(0);
@@ -792,31 +819,31 @@ impl<R: Read> Read for LimitedRead<R> {
         } else {
             buf
         };
-        match self.reader.read(from) {
+        let reader = match self.reader.as_mut() {
+            // If the reader has already been taken, return Ok(0) to all reads.
+            None => return Ok(0),
+            Some(r) => r,
+        };
+        match reader.read(from) {
             // https://tools.ietf.org/html/rfc7230#page-33
             // If the sender closes the connection or
             // the recipient times out before the indicated number of octets are
             // received, the recipient MUST consider the message to be
             // incomplete and close the connection.
+            // TODO: actually close the connection by dropping the stream
             Ok(0) => Err(io::Error::new(
                 io::ErrorKind::UnexpectedEof,
                 "response body closed before all bytes were read",
             )),
             Ok(amount) => {
                 self.position += amount;
+                if self.remaining() == 0 {
+                    self.return_stream_to_pool()?;
+                }
                 Ok(amount)
             }
             Err(e) => Err(e),
         }
-    }
-}
-
-impl<R: Read> From<LimitedRead<R>> for Stream
-where
-    Stream: From<R>,
-{
-    fn from(limited_read: LimitedRead<R>) -> Stream {
-        limited_read.reader.into()
     }
 }
 
@@ -852,12 +879,20 @@ impl Read for ErrorReader {
 mod tests {
     use std::io::Cursor;
 
+    use crate::{body::Payload, pool::PoolKey};
+
     use super::*;
 
     #[test]
     fn short_read() {
         use std::io::Cursor;
-        let mut lr = LimitedRead::new(Cursor::new(vec![b'a'; 3]), 10);
+        let test_stream = crate::test::TestStream::new(Cursor::new(vec![b'a'; 3]), std::io::sink());
+        let stream = Stream::new(
+            test_stream,
+            "1.1.1.1:4343".parse().unwrap(),
+            PoolReturner::none(),
+        );
+        let mut lr = LimitedRead::new(stream, std::num::NonZeroUsize::new(10).unwrap());
         let mut buf = vec![0; 1000];
         let result = lr.read_to_end(&mut buf);
         assert!(result.err().unwrap().kind() == io::ErrorKind::UnexpectedEof);
@@ -1062,6 +1097,7 @@ mod tests {
         let s = Stream::new(
             ReadOnlyStream::new(v),
             crate::stream::remote_addr_for_test(),
+            PoolReturner::none(),
         );
         let request_url = "https://example.com".parse().unwrap();
         let request_reader = SizedReader {
@@ -1111,5 +1147,40 @@ mod tests {
         let size = std::mem::size_of::<Response>();
         println!("Response size: {}", size);
         assert!(size < 400); // 200 on Macbook M1
+    }
+
+    // Test that a stream gets returned to the pool immediately for a zero-length response, and
+    // that reads from the response's body consistently return Ok(0).
+    #[test]
+    fn zero_length_body_immediate_return() {
+        use std::io::Cursor;
+        let response_bytes = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n"
+            .as_bytes()
+            .to_vec();
+        let test_stream =
+            crate::test::TestStream::new(Cursor::new(response_bytes), std::io::sink());
+        let agent = Agent::new();
+        let agent2 = agent.clone();
+        let stream = Stream::new(
+            test_stream,
+            "1.1.1.1:4343".parse().unwrap(),
+            PoolReturner::new(
+                agent.clone(),
+                PoolKey::from_parts("https", "example.com", 443),
+            ),
+        );
+        Response::do_from_stream(
+            stream,
+            Unit::new(
+                &agent,
+                "GET",
+                &"https://example.com/".parse().unwrap(),
+                vec![],
+                &Payload::Empty.into_read(),
+                None,
+            ),
+        )
+        .unwrap();
+        assert_eq!(agent2.state.pool.len(), 1);
     }
 }
