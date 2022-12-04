@@ -1,3 +1,14 @@
+# 2.6.0
+
+## Added
+ * Response::remote_addr() (#489)
+ * Request::query_pairs() - make query params from an Iterator of pairs (#519)
+
+## Fixed
+ * Gzip responses with chunked encoding now work with connection pooling (#560)
+ * Don't panic when rustls-native-certs errors (#564)
+ * Responses with zero-length body now work with connection pooling (#565)
+
 # 2.5.0
  * Add tcp no_delay option (#465)
  * Rework public TLS traits
