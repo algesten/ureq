@@ -877,7 +877,9 @@ impl Read for ErrorReader {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Cursor;
+    use std::{io::Cursor};
+
+    use crate::{body::Payload, pool::PoolKey};
 
     use super::*;
 
@@ -1145,5 +1147,40 @@ mod tests {
         let size = std::mem::size_of::<Response>();
         println!("Response size: {}", size);
         assert!(size < 400); // 200 on Macbook M1
+    }
+
+    // Test that a stream gets returned to the pool immediately for a zero-length response, and
+    // that reads from the response's body consistently return Ok(0).
+    #[test]
+    fn zero_length_body_immediate_return() {
+        use std::io::Cursor;
+        let response_bytes = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n"
+            .as_bytes()
+            .to_vec();
+        let test_stream =
+            crate::test::TestStream::new(Cursor::new(response_bytes), std::io::sink());
+        let agent = Agent::new();
+        let agent2 = agent.clone();
+        let stream = Stream::new(
+            test_stream,
+            "1.1.1.1:4343".parse().unwrap(),
+            PoolReturner::new(
+                agent.clone(),
+                PoolKey::from_parts("https", "example.com", 443),
+            ),
+        );
+        Response::do_from_stream(
+            stream,
+            Unit::new(
+                &agent,
+                "GET",
+                &"https://example.com/".parse().unwrap(),
+                vec![],
+                &Payload::Empty.into_read(),
+                None,
+            ),
+        )
+        .unwrap();
+        assert_eq!(agent2.state.pool.len(), 1);
     }
 }
