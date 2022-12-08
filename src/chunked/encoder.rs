@@ -125,7 +125,7 @@ where
         // Copy the prelude into the buffer. For small chunks, this won't necessarily
         // take up all the space that was reserved for the prelude.
         let offset = MAX_HEADER_SIZE - prelude.len();
-        self.buffer[offset..MAX_HEADER_SIZE].clone_from_slice(&prelude);
+        self.buffer[offset..MAX_HEADER_SIZE].clone_from_slice(prelude);
 
         // Append the chunk-finishing \r\n to the buffer.
         self.buffer.write_all(b"\r\n")?;
