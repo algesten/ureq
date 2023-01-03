@@ -566,12 +566,13 @@ impl Response {
         let compression =
             get_header(&headers, "content-encoding").and_then(Compression::from_header_value);
 
+        let body_type = Self::body_type(&unit.method, status, http_version, &headers);
+
         // remove Content-Encoding and length due to automatic decompression
         if compression.is_some() {
             headers.retain(|h| !h.is_name("content-encoding") && !h.is_name("content-length"));
         }
 
-        let body_type = Self::body_type(&unit.method, status, http_version, &headers);
         let reader = Self::stream_to_reader(stream, &unit, body_type, compression);
 
         let url = unit.url.clone();

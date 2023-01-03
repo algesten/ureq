@@ -1,3 +1,8 @@
+# 2.6.1
+
+## Fixed
+ * gzip: examine Content-Length header before removing (#578)
+
 # 2.6.0
 
 ## Added
