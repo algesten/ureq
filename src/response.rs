@@ -1186,15 +1186,16 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "gzip")]
     fn gzip_content_length() {
         use std::io::Cursor;
-        let response_bytes = b"HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Length: 23\r\n\r\n\
+        let response_bytes =
+            b"HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Length: 23\r\n\r\n\
 \x1f\x8b\x08\x00\x00\x00\x00\x00\x00\x03\xcb\xc8\xe4\x02\x00\x7a\x7a\x6f\xed\x03\x00\x00\x00";
         // Follow the response with an infinite stream of 0 bytes, so the content-length
         // is important.
         let reader = Cursor::new(response_bytes).chain(std::io::repeat(0u8));
-        let test_stream =
-            crate::test::TestStream::new(reader, std::io::sink());
+        let test_stream = crate::test::TestStream::new(reader, std::io::sink());
         let agent = Agent::new();
         let stream = Stream::new(
             test_stream,
