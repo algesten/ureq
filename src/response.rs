@@ -566,12 +566,13 @@ impl Response {
         let compression =
             get_header(&headers, "content-encoding").and_then(Compression::from_header_value);
 
+        let body_type = Self::body_type(&unit.method, status, http_version, &headers);
+
         // remove Content-Encoding and length due to automatic decompression
         if compression.is_some() {
             headers.retain(|h| !h.is_name("content-encoding") && !h.is_name("content-length"));
         }
 
-        let body_type = Self::body_type(&unit.method, status, http_version, &headers);
         let reader = Self::stream_to_reader(stream, &unit, body_type, compression);
 
         let url = unit.url.clone();
@@ -1182,5 +1183,38 @@ mod tests {
         )
         .unwrap();
         assert_eq!(agent2.state.pool.len(), 1);
+    }
+
+    #[test]
+    #[cfg(feature = "gzip")]
+    fn gzip_content_length() {
+        use std::io::Cursor;
+        let response_bytes =
+            b"HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Length: 23\r\n\r\n\
+\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\x03\xcb\xc8\xe4\x02\x00\x7a\x7a\x6f\xed\x03\x00\x00\x00";
+        // Follow the response with an infinite stream of 0 bytes, so the content-length
+        // is important.
+        let reader = Cursor::new(response_bytes).chain(std::io::repeat(0u8));
+        let test_stream = crate::test::TestStream::new(reader, std::io::sink());
+        let agent = Agent::new();
+        let stream = Stream::new(
+            test_stream,
+            "1.1.1.1:4343".parse().unwrap(),
+            PoolReturner::none(),
+        );
+        let resp = Response::do_from_stream(
+            stream,
+            Unit::new(
+                &agent,
+                "GET",
+                &"https://example.com/".parse().unwrap(),
+                vec![],
+                &Payload::Empty.into_read(),
+                None,
+            ),
+        )
+        .unwrap();
+        let body = resp.into_string().unwrap();
+        assert_eq!(body, "hi\n");
     }
 }
