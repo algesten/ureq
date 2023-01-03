@@ -1184,4 +1184,33 @@ mod tests {
         .unwrap();
         assert_eq!(agent2.state.pool.len(), 1);
     }
+
+    #[test]
+    fn gzip_content_length() {
+        use std::io::Cursor;
+        let response_bytes = b"HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Length: 23\r\n\r\n\
+\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\x03\xcb\xc8\xe4\x02\x00\x7a\x7a\x6f\xed\x03\x00\x00\x00";
+        let test_stream =
+            crate::test::TestStream::new(Cursor::new(response_bytes), std::io::sink());
+        let agent = Agent::new();
+        let stream = Stream::new(
+            test_stream,
+            "1.1.1.1:4343".parse().unwrap(),
+            PoolReturner::none(),
+        );
+        let resp = Response::do_from_stream(
+            stream,
+            Unit::new(
+                &agent,
+                "GET",
+                &"https://example.com/".parse().unwrap(),
+                vec![],
+                &Payload::Empty.into_read(),
+                None,
+            ),
+        )
+        .unwrap();
+        let body = resp.into_string().unwrap();
+        assert_eq!(body, "hi\n");
+    }
 }
