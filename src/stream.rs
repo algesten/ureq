@@ -316,7 +316,7 @@ pub(crate) fn connect_http(unit: &Unit, hostname: &str) -> Result<Stream, Error>
     //
     let port = unit.url.port().unwrap_or(80);
     let pool_key = PoolKey::from_parts("http", hostname, port);
-    let pool_returner = PoolReturner::new(unit.agent.clone(), pool_key);
+    let pool_returner = PoolReturner::new(&unit.agent, pool_key);
     connect_host(unit, hostname, port).map(|(t, r)| Stream::new(t, r, pool_returner))
 }
 
@@ -328,7 +328,7 @@ pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error
     let tls_conf = &unit.agent.config.tls_config;
     let https_stream = tls_conf.connect(hostname, Box::new(sock))?;
     let pool_key = PoolKey::from_parts("https", hostname, port);
-    let pool_returner = PoolReturner::new(unit.agent.clone(), pool_key);
+    let pool_returner = PoolReturner::new(&unit.agent, pool_key);
     Ok(Stream::new(https_stream, remote_addr, pool_returner))
 }
 
