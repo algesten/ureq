@@ -238,6 +238,10 @@ impl Agent {
     pub fn cookie_store(&self) -> CookieStoreGuard<'_> {
         self.state.cookie_tin.read_lock()
     }
+
+    pub(crate) fn weak_state(&self) -> std::sync::Weak<AgentState> {
+        Arc::downgrade(&self.state)
+    }
 }
 
 const DEFAULT_MAX_IDLE_CONNECTIONS: usize = 100;

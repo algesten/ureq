@@ -1,3 +1,8 @@
+# 2.6.2
+
+## Fixed
+ * Non-empty connection pools were never dropped (#NNN)
+
 # 2.6.1
 
 ## Fixed

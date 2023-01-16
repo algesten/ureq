@@ -1161,10 +1161,7 @@ mod tests {
         let stream = Stream::new(
             test_stream,
             "1.1.1.1:4343".parse().unwrap(),
-            PoolReturner::new(
-                agent.clone(),
-                PoolKey::from_parts("https", "example.com", 443),
-            ),
+            PoolReturner::new(&agent, PoolKey::from_parts("https", "example.com", 443)),
         );
         Response::do_from_stream(
             stream,

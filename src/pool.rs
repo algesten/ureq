@@ -3,6 +3,7 @@ use std::collections::{HashMap, VecDeque};
 use std::io::{self, Read};
 use std::sync::Mutex;
 
+use crate::agent::AgentState;
 use crate::stream::Stream;
 use crate::{Agent, Proxy};
 
@@ -229,14 +230,17 @@ impl PoolKey {
 
 #[derive(Clone, Debug)]
 pub(crate) struct PoolReturner {
-    inner: Option<(Agent, PoolKey)>,
+    // We store a weak reference to an agent state here to avoid creating
+    // a reference loop, since AgentState contains a ConnectionPool, which
+    // contains Streams, which contain PoolReturners.
+    inner: Option<(std::sync::Weak<AgentState>, PoolKey)>,
 }
 
 impl PoolReturner {
     /// A PoolReturner that returns to the given Agent's Pool.
-    pub(crate) fn new(agent: Agent, pool_key: PoolKey) -> Self {
+    pub(crate) fn new(agent: &Agent, pool_key: PoolKey) -> Self {
         Self {
-            inner: Some((agent, pool_key)),
+            inner: Some((agent.weak_state(), pool_key)),
         }
     }
 
@@ -246,8 +250,10 @@ impl PoolReturner {
     }
 
     pub(crate) fn return_to_pool(&self, stream: Stream) {
-        if let Some((agent, pool_key)) = &self.inner {
-            agent.state.pool.add(pool_key, stream);
+        if let Some((weak_state, pool_key)) = &self.inner {
+            if let Some(state) = weak_state.upgrade() {
+                state.pool.add(pool_key, stream);
+            }
         }
     }
 }
@@ -433,7 +439,7 @@ mod tests {
 
         let agent = Agent::new();
         let pool_key = PoolKey::new(&url, None);
-        let stream = NoopStream::stream(PoolReturner::new(agent.clone(), pool_key));
+        let stream = NoopStream::stream(PoolReturner::new(&agent, pool_key));
         let mut limited_read = LimitedRead::new(stream, std::num::NonZeroUsize::new(500).unwrap());
 
         limited_read.read_exact(&mut out_buf).unwrap();
@@ -472,7 +478,7 @@ mod tests {
         let stream = Stream::new(
             ro,
             "1.1.1.1:4343".parse().unwrap(),
-            PoolReturner::new(agent.clone(), PoolKey::from_parts("http", "1.1.1.1", 8080)),
+            PoolReturner::new(&agent, PoolKey::from_parts("http", "1.1.1.1", 8080)),
         );
 
         let chunked = crate::chunked::Decoder::new(stream);
