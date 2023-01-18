@@ -40,10 +40,10 @@
 //! the API simple and keeps dependencies to a minimum. For TLS, ureq uses
 //! [rustls or native-tls](#https--tls--ssl).
 //!
-//! Version 2.0.0 was released recently and changed some APIs. See the [changelog] for details.
+//! See the [changelog] for details of recent releases.
 //!
 //! [blocking]: #blocking-io-for-simplicity
-//! [changelog]: https://github.com/algesten/ureq/blob/master/CHANGELOG.md
+//! [changelog]: https://github.com/algesten/ureq/blob/main/CHANGELOG.md
 //!
 //!
 //! ## Usage
