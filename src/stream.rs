@@ -377,7 +377,7 @@ pub(crate) fn connect_host(
 
         // connect with a configured timeout.
         #[allow(clippy::unnecessary_unwrap)]
-        let stream = if proto.is_some() && Some(Proto::HTTPConnect) != proto {
+        let stream = if proto.is_some() && Some(Proto::HTTP) != proto {
             connect_socks(
                 unit,
                 proxy.clone().unwrap(),
@@ -423,7 +423,7 @@ pub(crate) fn connect_host(
         stream.set_write_timeout(unit.agent.config.timeout_write)?;
     }
 
-    if proto == Some(Proto::HTTPConnect) {
+    if proto == Some(Proto::HTTP) && unit.url.scheme() == "https" {
         if let Some(ref proxy) = proxy {
             write!(
                 stream,
