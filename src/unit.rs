@@ -3,6 +3,7 @@ use std::io::{self, Write};
 use std::ops::Range;
 use std::time;
 
+use base64::{prelude::BASE64_STANDARD, Engine};
 use log::debug;
 use url::Url;
 
@@ -87,7 +88,7 @@ impl Unit {
             if (!username.is_empty() || !password.is_empty())
                 && get_header(&headers, "authorization").is_none()
             {
-                let encoded = base64::encode(format!("{}:{}", username, password));
+                let encoded = BASE64_STANDARD.encode(format!("{}:{}", username, password));
                 extra.push(Header::new("Authorization", &format!("Basic {}", encoded)));
             }
 
