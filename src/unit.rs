@@ -15,6 +15,7 @@ use crate::body::{self, BodySize, Payload, SizedReader};
 use crate::error::{Error, ErrorKind};
 use crate::header;
 use crate::header::{get_header, Header};
+use crate::proxy::Proto;
 use crate::resolve::ArcResolver;
 use crate::response::Response;
 use crate::stream::{self, connect_test, Stream};
@@ -404,12 +405,24 @@ fn send_prelude(unit: &Unit, stream: &mut Stream) -> io::Result<()> {
     // build into a buffer and send in one go.
     let mut prelude = PreludeBuilder::new();
 
+    let path = if let Some(proxy) = &unit.agent.config.proxy {
+        // HTTP proxies require the path to be in absolute URI form
+        // https://www.rfc-editor.org/rfc/rfc7230#section-5.3.2
+        match proxy.proto {
+            Proto::HTTP => format!(
+                "{}://{}{}",
+                unit.url.scheme(),
+                unit.url.host().unwrap(),
+                unit.url.path()
+            ),
+            _ => unit.url.path().into(),
+        }
+    } else {
+        unit.url.path().into()
+    };
+
     // request line
-    prelude.write_request_line(
-        &unit.method,
-        unit.url.path(),
-        unit.url.query().unwrap_or_default(),
-    )?;
+    prelude.write_request_line(&unit.method, &path, unit.url.query().unwrap_or_default())?;
 
     // host header if not set by user.
     if !header::has_header(&unit.headers, "host") {

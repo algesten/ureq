@@ -225,14 +225,14 @@
 //!
 //! # Proxying
 //!
-//! ureq supports two kinds of proxies,  HTTP [`CONNECT`], [`SOCKS4`] and [`SOCKS5`], the former is
+//! ureq supports two kinds of proxies,  [`HTTP`], [`SOCKS4`] and [`SOCKS5`], the former is
 //! always available while the latter must be enabled using the feature
 //! `ureq = { version = "*", features = ["socks-proxy"] }`.
 //!
 //! Proxies settings are configured on an [Agent] (using [AgentBuilder]). All request sent
 //! through the agent will be proxied.
 //!
-//! ## Example using HTTP CONNECT
+//! ## Example using HTTP
 //!
 //! ```rust
 //! fn proxy_example_1() -> std::result::Result<(), ureq::Error> {
