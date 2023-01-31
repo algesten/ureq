@@ -8,6 +8,10 @@
 #![allow(clippy::upper_case_acronyms)]
 #![allow(clippy::result_large_err)]
 #![allow(clippy::only_used_in_recursion)]
+// println!("{var}") doesn't allow even the simplest expressions for var,
+// such as "{foo.var}" – hence this lint forces us to have inconsistent
+// formatting args. I prefer a lint that forbid "{var}".
+#![allow(clippy::uninlined_format_args)]
 
 //!<div align="center">
 //!  <!-- Version -->
