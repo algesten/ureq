@@ -500,7 +500,7 @@ impl Request {
     }
 }
 
-#[cfg(feature = "http")]
+#[cfg(feature = "http-interop")]
 impl From<http::request::Builder> for Request {
     fn from(value: http::request::Builder) -> Self {
         let mut new_request = crate::agent().request(
@@ -529,7 +529,7 @@ impl From<http::request::Builder> for Request {
     }
 }
 
-#[cfg(feature = "http")]
+#[cfg(feature = "http-interop")]
 impl From<Request> for http::request::Builder {
     fn from(value: Request) -> Self {
         value

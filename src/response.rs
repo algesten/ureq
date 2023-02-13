@@ -28,7 +28,7 @@ use flate2::read::MultiGzDecoder;
 #[cfg(feature = "brotli")]
 use brotli_decompressor::Decompressor as BrotliDecoder;
 
-#[cfg(feature = "http")]
+#[cfg(feature = "http-interop")]
 use std::net::{IpAddr, Ipv4Addr};
 
 pub const DEFAULT_CONTENT_TYPE: &str = "text/plain";
@@ -875,7 +875,7 @@ impl Read for ErrorReader {
     }
 }
 
-#[cfg(feature = "http")]
+#[cfg(feature = "http-interop")]
 impl<T: AsRef<[u8]> + Send + Sync + 'static> From<http::Response<T>> for Response {
     fn from(value: http::Response<T>) -> Self {
         let version_str = format!("{:?}", value.version());
@@ -907,7 +907,7 @@ impl<T: AsRef<[u8]> + Send + Sync + 'static> From<http::Response<T>> for Respons
     }
 }
 
-#[cfg(feature = "http")]
+#[cfg(feature = "http-interop")]
 fn create_builder(response: &Response) -> http::response::Builder {
     let http_version = match response.http_version() {
         "HTTP/0.9" => http::Version::HTTP_09,
@@ -935,14 +935,14 @@ fn create_builder(response: &Response) -> http::response::Builder {
     response_builder
 }
 
-#[cfg(feature = "http")]
+#[cfg(feature = "http-interop")]
 impl From<Response> for http::Response<Box<dyn Read + Send + Sync + 'static>> {
     fn from(value: Response) -> Self {
         create_builder(&value).body(value.into_reader()).unwrap()
     }
 }
 
-#[cfg(feature = "http")]
+#[cfg(feature = "http-interop")]
 impl From<Response> for http::Response<String> {
     fn from(value: Response) -> Self {
         create_builder(&value)
@@ -1291,7 +1291,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "http")]
+    #[cfg(feature = "http-interop")]
     fn convert_http_response() {
         use http::{Response, StatusCode, Version};
 
@@ -1319,7 +1319,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "http")]
+    #[cfg(feature = "http-interop")]
     fn convert_http_response_string() {
         use http::{Response, StatusCode, Version};
 
@@ -1337,7 +1337,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "http")]
+    #[cfg(feature = "http-interop")]
     fn convert_http_response_bad_header() {
         use http::{Response, StatusCode, Version};
 
