@@ -30,7 +30,7 @@ pub struct Request {
     agent: Agent,
     method: String,
     url: String,
-    headers: Vec<Header>,
+    pub(crate) headers: Vec<Header>,
     timeout: Option<time::Duration>,
 }
 
@@ -497,55 +497,6 @@ impl Request {
     /// ```
     pub fn request_url(&self) -> Result<RequestUrl> {
         Ok(RequestUrl::new(self.parse_url()?))
-    }
-}
-
-#[cfg(feature = "http-interop")]
-impl From<http::request::Builder> for Request {
-    fn from(value: http::request::Builder) -> Self {
-        let mut new_request = crate::agent().request(
-            value.method_ref().map_or("GET", |m| m.as_str()),
-            &value
-                .uri_ref()
-                .map_or("https://example.com".to_string(), |u| u.to_string()),
-        );
-
-        if let Some(headers) = value.headers_ref() {
-            new_request = headers
-                .iter()
-                .filter_map(|header| {
-                    header
-                        .1
-                        .to_str()
-                        .ok()
-                        .map(|str_value| (header.0.as_str(), str_value))
-                })
-                .fold(new_request, |request, header| {
-                    request.set(header.0, header.1)
-                });
-        }
-
-        new_request
-    }
-}
-
-#[cfg(feature = "http-interop")]
-impl From<Request> for http::request::Builder {
-    fn from(value: Request) -> Self {
-        value
-            .headers
-            .iter()
-            .filter_map(|header| {
-                header
-                    .value()
-                    .map(|safe_value| (header.name().to_owned(), safe_value.to_owned()))
-            })
-            .fold(http::Request::builder(), |builder, header| {
-                builder.header(header.0, header.1)
-            })
-            .method(value.method())
-            .version(http::Version::HTTP_11)
-            .uri(value.url())
     }
 }
 
