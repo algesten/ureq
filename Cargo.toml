@@ -24,7 +24,7 @@ cookies = ["cookie", "cookie_store"]
 socks-proxy = ["socks"]
 gzip = ["flate2"]
 brotli = ["brotli-decompressor"]
-http = ["dep:http"]
+http-interop = ["dep:http"]
 
 [dependencies]
 base64 = "0.21"
