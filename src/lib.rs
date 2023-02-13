@@ -412,6 +412,9 @@ mod test;
 #[doc(hidden)]
 mod testserver;
 
+#[cfg(feature = "http-interop")]
+mod http_interop;
+
 pub use crate::agent::Agent;
 pub use crate::agent::AgentBuilder;
 pub use crate::agent::RedirectAuthHeaders;
