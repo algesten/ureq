@@ -5,6 +5,23 @@ use std::{
 
 use crate::{header::HeaderLine, response::ResponseStatusIndex, Request, Response};
 
+/// Converts an [http::Response] into a [Response](crate::Response).
+///
+/// As an [http::Response] does not contain a URL, `"https://example.com/"` is
+/// used as a placeholder. Additionally, if the response has a header which
+/// cannot be converted into a valid [Header](crate::Header), it will be skipped
+/// rather than having the conversion fail. The remote address property will
+/// also always be `127.0.0.1:80` for similar reasons to the URL.
+///
+/// Requires feature `ureq = { version = "*", features = ["http"] }`
+/// ```
+/// # fn main() -> Result<(), http::Error> {
+/// # ureq::is_test(true);
+/// let http_response = http::Response::builder().status(200).body("<response>")?;
+/// let response: ureq::Response = http_response.into();
+/// # Ok(())
+/// # }
+/// ```
 impl<T: AsRef<[u8]> + Send + Sync + 'static> From<http::Response<T>> for Response {
     fn from(value: http::Response<T>) -> Self {
         let version_str = format!("{:?}", value.version());
@@ -63,12 +80,44 @@ fn create_builder(response: &Response) -> http::response::Builder {
     response_builder
 }
 
+/// Converts a [Response](crate::Response) into an [http::Response], where the
+/// body is a reader containing the body of the response.
+///
+/// Due to slight differences in how headers are handled, this means if a header
+/// from a [Response](crate::Response) is not valid UTF-8, it will not be
+/// included in the resulting [http::Response].
+///
+/// Requires feature `ureq = { version = "*", features = ["http"] }`
+/// ```
+/// # fn main() -> Result<(), ureq::Error> {
+/// # ureq::is_test(true);
+/// let response = ureq::get("https://somewhere.com").call()?;
+/// let http_response: http::Response<Box<dyn Read + Send + Sync + 'static>> = response.into();
+/// # Ok(())
+/// # }
+/// ```
 impl From<Response> for http::Response<Box<dyn Read + Send + Sync + 'static>> {
     fn from(value: Response) -> Self {
         create_builder(&value).body(value.into_reader()).unwrap()
     }
 }
 
+/// Converts a [Response](crate::Response) into an [http::Response], where the
+/// body is a String.
+///
+/// Due to slight differences in how headers are handled, this means if a header
+/// from a [Response](crate::Response) is not valid UTF-8, it will not be
+/// included in the resulting [http::Response].
+///
+/// Requires feature `ureq = { version = "*", features = ["http"] }`
+/// ```
+/// # fn main() -> Result<(), ureq::Error> {
+/// # ureq::is_test(true);
+/// let response = ureq::get("https://somewhere.com").call()?;
+/// let http_response: http::Response<String> = response.into();
+/// # Ok(())
+/// # }
+/// ```
 impl From<Response> for http::Response<String> {
     fn from(value: Response) -> Self {
         create_builder(&value)
@@ -77,6 +126,23 @@ impl From<Response> for http::Response<String> {
     }
 }
 
+/// Converts an [http] [Builder](http::request::Builder) into a [Request](crate::Request)
+///
+/// This will safely handle cases where a builder is not fully "complete" to
+/// prevent the conversion from failing. Should the requests' method or URI not
+/// be correctly set, the request will default to being a GET request to
+/// `"https://example.com"`. Additionally, any non-UTF8 headers will be skipped.
+///
+/// Requires feature `ureq = { version = "*", features = ["http"] }`
+/// ```
+/// # fn main() -> Result<(), ureq::Error> {
+/// # ureq::is_test(true);
+/// let http_request_builder = http::Request::builder().method("GET").uri("https://my-website.com");
+/// let request: ureq::Request = http_request_builder.into();
+/// request.call()?;
+/// # Ok(())
+/// # }
+/// ```
 impl From<http::request::Builder> for Request {
     fn from(value: http::request::Builder) -> Self {
         let mut new_request = crate::agent().request(
@@ -105,6 +171,23 @@ impl From<http::request::Builder> for Request {
     }
 }
 
+/// Converts a [Request](crate::Request) into an [http] [Builder](http::request::Builder).
+///
+/// This will only convert valid UTF-8 header values into headers on the
+/// resulting builder. The method and URI are preserved. The HTTP version will
+/// always be set to `HTTP/1.1`.
+///
+/// Requires feature `ureq = { version = "*", features = ["http"] }`
+/// ```
+/// # fn main() -> Result<(), http::Error> {
+/// # ureq::is_test(true);
+/// let request = ureq::get("https://my-website.com");
+/// let http_request_builder: http::request::Builder = request.into();
+///
+/// http_request_builder.body(())?;
+/// # Ok(())
+/// # }
+/// ```
 impl From<Request> for http::request::Builder {
     fn from(value: Request) -> Self {
         value
