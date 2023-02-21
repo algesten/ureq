@@ -37,7 +37,7 @@
 //! Ureq's first priority is being easy for you to use. It's great for
 //! anyone who wants a low-overhead HTTP client that just gets the job done. Works
 //! very well with HTTP APIs. Its features include cookies, JSON, HTTP proxies,
-//! HTTPS, and charset decoding.
+//! HTTPS, interoperability with the `http` crate, and charset decoding.
 //!
 //! Ureq is in pure Rust for safety and ease of understanding. It avoids using
 //! `unsafe` directly. It [uses blocking I/O][blocking] instead of async I/O, because that keeps
@@ -160,6 +160,7 @@
 //!   does nothing for `native-tls`.
 //! * `gzip` enables requests of gzip-compressed responses and decompresses them. This is enabled by default.
 //! * `brotli` enables requests brotli-compressed responses and decompresses them.
+//! * `http-interop` enables conversion methods to and from `http::Response` and `http::request::Builder`.
 //!
 //! # Plain requests
 //!
