@@ -187,4 +187,81 @@ mod tests {
         assert_eq!(response.header("Some-Invalid-Header"), None);
         assert_eq!(response.header("Some-Valid-Header"), Some("HELLO"));
     }
+
+    #[test]
+    fn convert_to_http_response_string() {
+        use http::Response;
+
+        let mut response = super::Response::new(418, "I'm a teapot", "some body text").unwrap();
+        response.headers.push(
+            super::HeaderLine::from("Content-Type: text/plain".as_bytes().to_vec())
+                .into_header()
+                .unwrap(),
+        );
+        let http_response: Response<String> = response.into();
+
+        assert_eq!(http_response.body(), "some body text");
+        assert_eq!(http_response.status().as_u16(), 418);
+        assert_eq!(
+            http_response.status().canonical_reason(),
+            Some("I'm a teapot")
+        );
+        assert_eq!(
+            http_response
+                .headers()
+                .get("content-type")
+                .map(|f| f.to_str().unwrap()),
+            Some("text/plain")
+        );
+    }
+
+    #[test]
+    fn convert_to_http_response_bytes() {
+        use http::Response;
+        use std::io::{Cursor, Read};
+
+        let mut response = super::Response::new(200, "OK", "tbr").unwrap();
+        response.reader = Box::new(Cursor::new(vec![0xde, 0xad, 0xbe, 0xef]));
+        let http_response: Response<Box<dyn Read + Send + Sync + 'static>> = response.into();
+
+        let mut buf = vec![];
+        http_response.into_body().read_to_end(&mut buf).unwrap();
+        assert_eq!(buf, vec![0xde, 0xad, 0xbe, 0xef]);
+    }
+
+    #[test]
+    fn convert_http_request_builder() {
+        use http::Request;
+
+        let http_request = Request::builder()
+            .method("PUT")
+            .header("Some-Key", "some value")
+            .uri("https://google.com/?some=query");
+        let request: super::Request = http_request.into();
+
+        assert_eq!(request.header("some-key"), Some("some value"));
+        assert_eq!(request.method(), "PUT");
+        assert_eq!(request.url(), "https://google.com/?some=query");
+    }
+
+    #[test]
+    fn convert_to_http_request_builder() {
+        use http::request::Builder;
+
+        let request = crate::agent()
+            .head("http://some-website.com")
+            .set("Some-Key", "some value");
+        let http_request_builder: Builder = request.into();
+        let http_request = http_request_builder.body(()).unwrap();
+
+        assert_eq!(
+            http_request
+                .headers()
+                .get("some-key")
+                .map(|v| v.to_str().unwrap()),
+            Some("some value")
+        );
+        assert_eq!(http_request.uri(), "http://some-website.com");
+        assert_eq!(http_request.version(), http::Version::HTTP_11);
+    }
 }
