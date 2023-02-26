@@ -197,7 +197,7 @@ impl Request {
         }
 
         let json_bytes = serde_json::to_vec(&data)
-            .expect("Failed to serialze data passed to send_json into JSON");
+            .expect("Failed to serialize data passed to send_json into JSON");
 
         self.do_call(Payload::Bytes(&json_bytes))
     }
