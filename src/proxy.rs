@@ -131,7 +131,7 @@ impl Proxy {
         })
     }
 
-    pub(crate) fn connect<S: AsRef<str>>(&self, host: S, port: u16) -> String {
+    pub(crate) fn connect<S: AsRef<str>>(&self, host: S, port: u16, user_agent: &str) -> String {
         let authorization = if self.use_authorization() {
             let creds = BASE64_STANDARD.encode(format!(
                 "{}:{}",
@@ -150,7 +150,7 @@ impl Proxy {
         format!(
             "CONNECT {}:{} HTTP/1.1\r\n\
 Host: {}:{}\r\n\
-User-Agent: something/1.0.0\r\n\
+User-Agent: {}\r\n\
 Proxy-Connection: Keep-Alive\r\n\
 {}\
 \r\n",
@@ -158,6 +158,7 @@ Proxy-Connection: Keep-Alive\r\n\
             port,
             host.as_ref(),
             port,
+            user_agent,
             authorization
         )
     }

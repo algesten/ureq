@@ -425,7 +425,12 @@ pub(crate) fn connect_host(
 
     if proto == Some(Proto::HTTPConnect) {
         if let Some(ref proxy) = proxy {
-            write!(stream, "{}", proxy.connect(hostname, port)).unwrap();
+            write!(
+                stream,
+                "{}",
+                proxy.connect(hostname, port, &unit.agent.config.user_agent)
+            )
+            .unwrap();
             stream.flush()?;
 
             let mut proxy_response = Vec::new();
