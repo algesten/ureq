@@ -28,6 +28,7 @@ impl fmt::Debug for Payload<'_> {
     }
 }
 
+#[allow(clippy::derivable_impls)]
 impl Default for Payload<'_> {
     fn default() -> Self {
         Payload::Empty
