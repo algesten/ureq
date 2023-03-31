@@ -91,7 +91,8 @@ fn create_builder(response: &Response) -> http::response::Builder {
 /// ```
 /// # fn main() -> Result<(), ureq::Error> {
 /// # ureq::is_test(true);
-/// let response = ureq::get("https://somewhere.com").call()?;
+/// use std::io::Read;
+/// let response = ureq::get("http://example.com").call()?;
 /// let http_response: http::Response<Box<dyn Read + Send + Sync + 'static>> = response.into();
 /// # Ok(())
 /// # }
@@ -113,7 +114,7 @@ impl From<Response> for http::Response<Box<dyn Read + Send + Sync + 'static>> {
 /// ```
 /// # fn main() -> Result<(), ureq::Error> {
 /// # ureq::is_test(true);
-/// let response = ureq::get("https://somewhere.com").call()?;
+/// let response = ureq::get("http://example.com").call()?;
 /// let http_response: http::Response<String> = response.into();
 /// # Ok(())
 /// # }
@@ -137,7 +138,7 @@ impl From<Response> for http::Response<String> {
 /// ```
 /// # fn main() -> Result<(), ureq::Error> {
 /// # ureq::is_test(true);
-/// let http_request_builder = http::Request::builder().method("GET").uri("https://my-website.com");
+/// let http_request_builder = http::Request::builder().method("GET").uri("http://example.com");
 /// let request: ureq::Request = http_request_builder.into();
 /// request.call()?;
 /// # Ok(())
