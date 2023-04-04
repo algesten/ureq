@@ -409,12 +409,21 @@ fn send_prelude(unit: &Unit, stream: &mut Stream) -> io::Result<()> {
         // HTTP proxies require the path to be in absolute URI form
         // https://www.rfc-editor.org/rfc/rfc7230#section-5.3.2
         match proxy.proto {
-            Proto::HTTP => format!(
-                "{}://{}{}",
-                unit.url.scheme(),
-                unit.url.host().unwrap(),
-                unit.url.path()
-            ),
+            Proto::HTTP => match unit.url.port() {
+                Some(port) => format!(
+                    "{}://{}:{}{}",
+                    unit.url.scheme(),
+                    unit.url.host().unwrap(),
+                    port,
+                    unit.url.path()
+                ),
+                None => format!(
+                    "{}://{}{}",
+                    unit.url.scheme(),
+                    unit.url.host().unwrap(),
+                    unit.url.path()
+                ),
+            },
             _ => unit.url.path().into(),
         }
     } else {
