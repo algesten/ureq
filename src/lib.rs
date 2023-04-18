@@ -568,8 +568,8 @@ mod tests {
 
         let resp = agent.get("http://www.google.com/").call().unwrap();
         assert_eq!(
-            "text/html; charset=ISO-8859-1",
-            resp.header("content-type").unwrap()
+            "text/html;charset=ISO-8859-1",
+            resp.header("content-type").unwrap().replace("; ", ";")
         );
         assert_eq!("text/html", resp.content_type());
     }
@@ -581,8 +581,8 @@ mod tests {
 
         let resp = agent.get("https://www.google.com/").call().unwrap();
         assert_eq!(
-            "text/html; charset=ISO-8859-1",
-            resp.header("content-type").unwrap()
+            "text/html;charset=ISO-8859-1",
+            resp.header("content-type").unwrap().replace("; ", ";")
         );
         assert_eq!("text/html", resp.content_type());
     }
@@ -597,8 +597,8 @@ mod tests {
 
         let resp = agent.get("https://www.google.com/").call().unwrap();
         assert_eq!(
-            "text/html; charset=ISO-8859-1",
-            resp.header("content-type").unwrap()
+            "text/html;charset=ISO-8859-1",
+            resp.header("content-type").unwrap().replace("; ", ";")
         );
         assert_eq!("text/html", resp.content_type());
     }
