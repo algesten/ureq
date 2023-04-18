@@ -78,8 +78,7 @@ pub struct Response {
     pub(crate) reader: Box<dyn Read + Send + Sync + 'static>,
     /// The socket address of the server that sent the response.
     pub(crate) remote_addr: SocketAddr,
-    /// Local address request was sent from. Only set if necessary since
-    /// it is an extra system call.
+    /// The socket address of the client that sent the request.
     pub(crate) local_addr: Option<SocketAddr>,
     /// The redirect history of this response, if any. The history starts with
     /// the first response received and ends with the response immediately
@@ -236,8 +235,6 @@ impl Response {
     }
 
     /// The local address the request was made from.
-    ///
-    /// This is only available if [`AgentBuilder::get_local_addr()`][crate::AgentBuilder] is set to true.
     pub fn local_addr(&self) -> Option<SocketAddr> {
         self.local_addr
     }
@@ -544,13 +541,7 @@ impl Response {
     pub(crate) fn do_from_stream(stream: Stream, unit: Unit) -> Result<Response, Error> {
         let remote_addr = stream.remote_addr;
 
-        // Only read local_addr if configured to do so, since it's another syscall.
-        let mut local_addr = None;
-        if unit.agent.config.get_local_addr {
-            if let Some(socket) = stream.socket() {
-                local_addr = Some(socket.local_addr()?);
-            }
-        }
+        let local_addr = stream.socket().map(|s| s.local_addr().unwrap());
 
         //
         // HTTP/1.1 200 OK\r\n
