@@ -78,7 +78,6 @@ pub(crate) struct AgentConfig {
     pub redirect_auth_headers: RedirectAuthHeaders,
     pub user_agent: String,
     pub tls_config: TlsConfig,
-    pub get_local_addr: bool,
 }
 
 /// Agents keep state between requests.
@@ -263,7 +262,6 @@ impl AgentBuilder {
                 redirect_auth_headers: RedirectAuthHeaders::Never,
                 user_agent: format!("ureq/{}", env!("CARGO_PKG_VERSION")),
                 tls_config: TlsConfig(crate::default_tls_config()),
-                get_local_addr: false,
             },
             max_idle_connections: DEFAULT_MAX_IDLE_CONNECTIONS,
             max_idle_connections_per_host: DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST,
@@ -619,30 +617,6 @@ impl AgentBuilder {
     /// ```
     pub fn tls_connector<T: TlsConnector + 'static>(mut self, tls_config: Arc<T>) -> Self {
         self.config.tls_config = TlsConfig(tls_config);
-        self
-    }
-
-    /// Whether local_addr will be read from the tcp socket.
-    ///
-    /// local_addr is the address from which the client sends the request.
-    /// Reading it invokes a syscall, therefore it is disabled by default.
-    ///
-    /// Defaults to false.
-    ///
-    /// ```
-    /// # fn main() -> Result<(), ureq::Error> {
-    /// # use std::net::SocketAddr;
-    /// # ureq::is_test(true);
-    /// let agent = ureq::builder()
-    ///     .get_local_addr(true)
-    ///     .build();
-    /// let response = agent.get("http://httpbin.org/get").call()?;
-    /// assert!(response.local_addr().is_some());
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub fn get_local_addr(mut self, get_local_addr: bool) -> Self {
-        self.config.get_local_addr = get_local_addr;
         self
     }
 
