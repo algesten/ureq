@@ -79,7 +79,7 @@ pub struct Response {
     /// The socket address of the server that sent the response.
     pub(crate) remote_addr: SocketAddr,
     /// The socket address of the client that sent the request.
-    pub(crate) local_addr: Option<SocketAddr>,
+    pub(crate) local_addr: SocketAddr,
     /// The redirect history of this response, if any. The history starts with
     /// the first response received and ends with the response immediately
     /// previous to this one.
@@ -235,7 +235,7 @@ impl Response {
     }
 
     /// The local address the request was made from.
-    pub fn local_addr(&self) -> Option<SocketAddr> {
+    pub fn local_addr(&self) -> SocketAddr {
         self.local_addr
     }
 
@@ -541,7 +541,10 @@ impl Response {
     pub(crate) fn do_from_stream(stream: Stream, unit: Unit) -> Result<Response, Error> {
         let remote_addr = stream.remote_addr;
 
-        let local_addr = stream.socket().map(|s| s.local_addr().unwrap());
+        let local_addr = match stream.socket() {
+            Some(sock) => sock.local_addr().map_err(|e| Error::from(e))?,
+            None => std::net::SocketAddrV4::new(std::net::Ipv4Addr::new(127, 0, 0, 1), 0).into(),
+        };
 
         //
         // HTTP/1.1 200 OK\r\n

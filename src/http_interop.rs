@@ -48,7 +48,7 @@ impl<T: AsRef<[u8]> + Send + Sync + 'static> From<http::Response<T>> for Respons
                 .collect::<Vec<_>>(),
             reader: Box::new(Cursor::new(value.into_body())),
             remote_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 80),
-            local_addr: None,
+            local_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 0),
             history: vec![],
         }
     }
