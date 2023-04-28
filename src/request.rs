@@ -47,10 +47,10 @@ impl fmt::Debug for Request {
 impl Request {
     pub(crate) fn new(agent: Agent, method: String, url: String) -> Request {
         Request {
-            agent,
+            agent: agent.clone(),
             method,
             url,
-            headers: vec![],
+            headers: agent.state.headers.clone(),
             timeout: None,
         }
     }

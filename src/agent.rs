@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use url::Url;
 
+use crate::header::{self, Header};
 use crate::middleware::Middleware;
 use crate::pool::ConnectionPool;
 use crate::proxy::Proxy;
@@ -45,6 +46,7 @@ pub struct AgentBuilder {
     cookie_store: Option<CookieStore>,
     resolver: ArcResolver,
     middleware: Vec<Box<dyn Middleware>>,
+    headers: Vec<Header>,
 }
 
 #[derive(Clone)]
@@ -117,6 +119,7 @@ pub struct Agent {
 /// Container of the state
 ///
 /// *Internal API*.
+
 pub(crate) struct AgentState {
     /// Reused connections between requests.
     pub(crate) pool: ConnectionPool,
@@ -126,6 +129,7 @@ pub(crate) struct AgentState {
     pub(crate) cookie_tin: CookieTin,
     pub(crate) resolver: ArcResolver,
     pub(crate) middleware: Vec<Box<dyn Middleware>>,
+    pub(crate) headers: Vec<Header>,
 }
 
 impl Agent {
@@ -269,6 +273,7 @@ impl AgentBuilder {
             #[cfg(feature = "cookies")]
             cookie_store: None,
             middleware: vec![],
+            headers: vec![],
         }
     }
 
@@ -289,6 +294,7 @@ impl AgentBuilder {
                 cookie_tin: CookieTin::new(self.cookie_store.unwrap_or_else(CookieStore::default)),
                 resolver: self.resolver,
                 middleware: self.middleware,
+                headers: self.headers,
             }),
         }
     }
@@ -375,6 +381,19 @@ impl AgentBuilder {
     /// ```
     pub fn resolver(mut self, resolver: impl crate::Resolver + 'static) -> Self {
         self.resolver = resolver.into();
+        self
+    }
+
+    /// Sets a header field that will be used on all requests made by this agent.
+    ///
+    /// ```
+    /// let agent = ureq::AgentBuilder::new()
+    ///     .set("Accept", "text/plain")
+    ///     .set("Range", "bytes=500-999")
+    ///     .build();
+    /// ```
+    pub fn set(mut self, header: &str, value: &str) -> Self {
+        header::add_header(&mut self.headers, Header::new(header, value));
         self
     }
 
