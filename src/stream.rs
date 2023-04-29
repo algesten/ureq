@@ -2,6 +2,7 @@ use log::debug;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::SocketAddr;
 use std::net::TcpStream;
+use std::ops::Div;
 use std::time::Duration;
 use std::time::Instant;
 use std::{fmt, io::Cursor};
@@ -375,10 +376,18 @@ pub(crate) fn connect_host(
     let mut any_err = None;
     let mut any_stream_and_addr = None;
     // Find the first sock_addr that accepts a connection
+    let multiple_addrs = sock_addrs.len() > 1;
+
     for sock_addr in sock_addrs {
         // ensure connect timeout or overall timeout aren't yet hit.
         let timeout = match connect_deadline {
-            Some(deadline) => Some(time_until_deadline(deadline)?),
+            Some(deadline) => {
+                let mut deadline = time_until_deadline(deadline)?;
+                if multiple_addrs {
+                    deadline = deadline.div(2);
+                }
+                Some(deadline)
+            }
             None => None,
         };
 

@@ -3,7 +3,7 @@
 use crate::error::Error;
 use crate::testserver::{read_request, TestServer};
 use std::io::{self, Read, Write};
-use std::net::TcpStream;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
 use std::thread;
 use std::time::Duration;
 
@@ -103,6 +103,33 @@ fn custom_resolver() {
 
     AgentBuilder::new()
         .resolver(move |_: &str| Ok(vec![local_addr]))
+        .build()
+        .get("http://cool.server/")
+        .call()
+        .ok();
+
+    assert_eq!(&server.join().unwrap(), b"GET / HTTP/1.1\r\n");
+}
+
+#[test]
+fn socket_addr_fail_over() {
+    use std::net::TcpListener;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+
+    let local_addr = listener.local_addr().unwrap();
+    let non_routable_ipv4 = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(10, 255, 255, 1)), 9872);
+    let server = std::thread::spawn(move || {
+        let (mut client, _) = listener.accept().unwrap();
+        let mut buf = vec![0u8; 16];
+        let read = client.read(&mut buf).unwrap();
+        buf.truncate(read);
+        buf
+    });
+
+    AgentBuilder::new()
+        .resolver(move |_: &str| Ok(vec![non_routable_ipv4, local_addr]))
+        .timeout_connect(Duration::from_secs(2))
         .build()
         .get("http://cool.server/")
         .call()
