@@ -542,7 +542,7 @@ impl Response {
         let remote_addr = stream.remote_addr;
 
         let local_addr = match stream.socket() {
-            Some(sock) => sock.local_addr().map_err(|e| Error::from(e))?,
+            Some(sock) => sock.local_addr().map_err(Error::from)?,
             None => std::net::SocketAddrV4::new(std::net::Ipv4Addr::new(127, 0, 0, 1), 0).into(),
         };
 
