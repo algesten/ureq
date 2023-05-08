@@ -1,6 +1,9 @@
 use base64::{prelude::BASE64_STANDARD, Engine};
 
-use crate::error::{Error, ErrorKind};
+use crate::{
+    error::{Error, ErrorKind},
+    Response,
+};
 
 /// Proxy protocol
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -163,20 +166,10 @@ Proxy-Connection: Keep-Alive\r\n\
         )
     }
 
-    pub(crate) fn verify_response(response: &[u8]) -> Result<(), Error> {
-        let response_string = String::from_utf8_lossy(response);
-        let top_line = response_string
-            .lines()
-            .next()
-            .ok_or_else(|| ErrorKind::ProxyConnect.new())?;
-        let status_code = top_line
-            .split_whitespace()
-            .nth(1)
-            .ok_or_else(|| ErrorKind::ProxyConnect.new())?;
-
-        match status_code {
-            "200" => Ok(()),
-            "401" | "407" => Err(ErrorKind::ProxyUnauthorized.new()),
+    pub(crate) fn verify_response(response: &Response) -> Result<(), Error> {
+        match response.status() {
+            200 => Ok(()),
+            401 | 407 => Err(ErrorKind::ProxyUnauthorized.new()),
             _ => Err(ErrorKind::ProxyConnect.new()),
         }
     }

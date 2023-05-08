@@ -14,6 +14,7 @@ use crate::error::ErrorKind;
 use crate::pool::{PoolKey, PoolReturner};
 use crate::proxy::Proxy;
 use crate::unit::Unit;
+use crate::Response;
 use crate::{error::Error, proxy::Proto};
 
 /// Trait for things implementing [std::io::Read] + [std::io::Write]. Used in [TlsConnector].
@@ -433,18 +434,12 @@ pub(crate) fn connect_host(
             .unwrap();
             stream.flush()?;
 
-            let mut proxy_response = Vec::new();
-
-            loop {
-                let mut buf = vec![0; 256];
-                let total = stream.read(&mut buf)?;
-                proxy_response.append(&mut buf);
-                if total < 256 {
-                    break;
-                }
-            }
-
-            Proxy::verify_response(&proxy_response)?;
+            let s = stream.try_clone()?;
+            let pool_key = PoolKey::from_parts(unit.url.scheme(), hostname, port);
+            let pool_returner = PoolReturner::new(&unit.agent, pool_key);
+            let s = Stream::new(s, remote_addr, pool_returner);
+            let response = Response::do_from_stream(s, unit.clone())?;
+            Proxy::verify_response(&response)?;
         }
     }
 
