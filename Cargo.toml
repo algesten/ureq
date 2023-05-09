@@ -37,8 +37,8 @@ serde_json = { version = ">=1,<1.0.94", optional = true }
 encoding_rs = { version = "0.8", optional = true }
 cookie_store = { version = "0.19", optional = true, default-features = false, features = ["preserve_order"] }
 log = "0.4"
-webpki = { version = "0.22", optional = true }
-webpki-roots = { version = "0.22", optional = true }
+webpki = { package = "rustls-webpki", version = "0.100", optional = true }
+webpki-roots = { version = "0.23", optional = true }
 rustls = { version = "0.21", optional = true }
 rustls-native-certs = { version = "0.6", optional = true }
 native-tls = { version = "0.2", optional = true }
