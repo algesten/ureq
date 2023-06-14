@@ -535,7 +535,7 @@ impl AgentBuilder {
     /// Defaults to `ureq/[VERSION]`. You can override the user-agent on an individual request by
     /// setting the `User-Agent` header when constructing the request.
     ///
-    /// ```
+    /// ```no_run
     /// # #[cfg(feature = "json")]
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);

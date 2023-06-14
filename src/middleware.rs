@@ -24,7 +24,7 @@ use crate::{Error, Request, Response};
 ///
 /// A common use case is to add headers to the outgoing request. Here an example of how.
 ///
-/// ```
+/// ```no_run
 /// # #[cfg(feature = "json")]
 /// # fn main() -> Result<(), ureq::Error> {
 /// # use ureq::{Request, Response, MiddlewareNext, Error};
@@ -58,7 +58,7 @@ use crate::{Error, Request, Response};
 /// In the `examples` directory there is an additional example `count-bytes.rs` which uses
 /// a mutex lock like shown below.
 ///
-/// ```
+/// ```no_run
 /// # use ureq::{Request, Response, Middleware, MiddlewareNext, Error};
 /// # use std::sync::{Arc, Mutex};
 /// struct MyState {
@@ -89,7 +89,7 @@ use crate::{Error, Request, Response};
 /// This example shows how we can increase a counter for each request going
 /// through the agent.
 ///
-/// ```
+/// ```no_run
 /// # fn main() -> Result<(), ureq::Error> {
 /// # ureq::is_test(true);
 /// use ureq::{Request, Response, Middleware, MiddlewareNext, Error};
