@@ -163,6 +163,50 @@ fn redirect_post_with_data() {
     assert_eq!(resp.status(), 200);
 }
 
+#[cfg(feature = "cookies")]
+#[test]
+fn redirect_post_with_cookies() {
+    test::set_handler("/secure/login", |_| {
+        test::make_response(
+            302,
+            "Go here",
+            vec![
+                "Set-cookie: USER=ferris; Path=/; SameSite=Strict",
+                "Set-cookie: SECRET=123456; Path=/secure; SameSite=Strict",
+                "Location: /secure/login-handler",
+            ],
+            vec![],
+        )
+    });
+    test::set_handler("/secure/login-handler", |unit| {
+        let cookie_headers = unit.all("cookie");
+        assert_eq!(cookie_headers.len(), 1);
+        assert!(cookie_headers.first().unwrap().contains("USER"));
+        assert!(cookie_headers.first().unwrap().contains("SECRET"));
+        test::make_response(302, "Go here", vec!["Location: /out"], vec![])
+    });
+    test::set_handler("/out", |unit| {
+        let cookie_headers = unit.all("cookie");
+        assert_eq!(unit.all("cookie").len(), 1);
+        assert!(cookie_headers.first().unwrap().contains("USER"));
+        assert!(!cookie_headers.first().unwrap().contains("SECRET"));
+        test::make_response(
+            302,
+            "Go away",
+            vec!["Location: test://external.example/external"],
+            vec![],
+        )
+    });
+    test::set_handler("/external", |unit| {
+        assert_eq!(unit.method, "GET");
+        assert_eq!(unit.all("cookie").len(), 0);
+        test::make_response(200, "OK", vec![], vec![])
+    });
+    let resp = post("test://host.example/secure/login").call().unwrap();
+    assert_eq!(resp.status(), 200);
+    assert_eq!(resp.get_url(), "test://external.example/external");
+}
+
 #[test]
 fn redirect_308() {
     test::set_handler("/redirect_get3", |_| {
