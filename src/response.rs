@@ -36,7 +36,7 @@ const INTO_STRING_LIMIT: usize = 10 * 1_024 * 1_024;
 const MAX_HEADER_SIZE: usize = 100 * 1_024;
 const MAX_HEADER_COUNT: usize = 100;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 enum BodyType {
     LengthDelimited(usize),
     Chunked,
@@ -279,6 +279,8 @@ impl Response {
         self.reader
     }
 
+    /// Determine how the body should be read, based on
+    /// <https://datatracker.ietf.org/doc/html/rfc9112#name-message-body-length>
     fn body_type(
         request_method: &str,
         response_status: u16,
@@ -286,9 +288,6 @@ impl Response {
         headers: &[Header],
     ) -> BodyType {
         let is_http10 = response_version.eq_ignore_ascii_case("HTTP/1.0");
-        let is_close = get_header(headers, "connection")
-            .map(|c| c.eq_ignore_ascii_case("close"))
-            .unwrap_or(false);
 
         let is_head = request_method.eq_ignore_ascii_case("head");
         let has_no_body = is_head
@@ -297,32 +296,28 @@ impl Response {
                 _ => false,
             };
 
+        if has_no_body {
+            return BodyType::LengthDelimited(0);
+        }
+
         let is_chunked = get_header(headers, "transfer-encoding")
             .map(|enc| !enc.is_empty()) // whatever it says, do chunked
             .unwrap_or(false);
 
-        let use_chunked = !is_http10 && !has_no_body && is_chunked;
+        // https://www.rfc-editor.org/rfc/rfc2068#page-161
+        // > a persistent connection with an HTTP/1.0 client cannot make
+        // > use of the chunked transfer-coding
+        let use_chunked = !is_http10 && is_chunked;
 
         if use_chunked {
             return BodyType::Chunked;
         }
 
-        if has_no_body {
-            return BodyType::LengthDelimited(0);
-        }
-
         let length = get_header(headers, "content-length").and_then(|v| v.parse::<usize>().ok());
 
-        if is_http10 || is_close {
-            BodyType::CloseDelimited
-        } else if has_no_body {
-            // head requests never have a body
-            BodyType::LengthDelimited(0)
-        } else {
-            match length {
-                Some(n) => BodyType::LengthDelimited(n),
-                None => BodyType::CloseDelimited,
-            }
+        match length {
+            Some(n) => BodyType::LengthDelimited(n),
+            None => BodyType::CloseDelimited,
         }
     }
 
@@ -1223,5 +1218,106 @@ mod tests {
         .unwrap();
         let body = resp.into_string().unwrap();
         assert_eq!(body, "hi\n");
+    }
+
+    #[test]
+    fn body_type() {
+        assert_eq!(
+            Response::body_type("GET", 200, "HTTP/1.1", &[]),
+            BodyType::CloseDelimited
+        );
+        assert_eq!(
+            Response::body_type("HEAD", 200, "HTTP/1.1", &[]),
+            BodyType::LengthDelimited(0)
+        );
+        assert_eq!(
+            Response::body_type("hEaD", 200, "HTTP/1.1", &[]),
+            BodyType::LengthDelimited(0)
+        );
+        assert_eq!(
+            Response::body_type("head", 200, "HTTP/1.1", &[]),
+            BodyType::LengthDelimited(0)
+        );
+        assert_eq!(
+            Response::body_type("GET", 304, "HTTP/1.1", &[]),
+            BodyType::LengthDelimited(0)
+        );
+        assert_eq!(
+            Response::body_type("GET", 204, "HTTP/1.1", &[]),
+            BodyType::LengthDelimited(0)
+        );
+        assert_eq!(
+            Response::body_type(
+                "GET",
+                200,
+                "HTTP/1.1",
+                &[Header::new("Transfer-Encoding", "chunked"),]
+            ),
+            BodyType::Chunked
+        );
+        assert_eq!(
+            Response::body_type(
+                "GET",
+                200,
+                "HTTP/1.1",
+                &[Header::new("Content-Length", "123"),]
+            ),
+            BodyType::LengthDelimited(123)
+        );
+        assert_eq!(
+            Response::body_type(
+                "GET",
+                200,
+                "HTTP/1.1",
+                &[
+                    Header::new("Content-Length", "123"),
+                    Header::new("Transfer-Encoding", "chunked"),
+                ]
+            ),
+            BodyType::Chunked
+        );
+        assert_eq!(
+            Response::body_type(
+                "GET",
+                200,
+                "HTTP/1.1",
+                &[
+                    Header::new("Transfer-Encoding", "chunked"),
+                    Header::new("Content-Length", "123"),
+                ]
+            ),
+            BodyType::Chunked
+        );
+        assert_eq!(
+            Response::body_type(
+                "HEAD",
+                200,
+                "HTTP/1.1",
+                &[
+                    Header::new("Transfer-Encoding", "chunked"),
+                    Header::new("Content-Length", "123"),
+                ]
+            ),
+            BodyType::LengthDelimited(0)
+        );
+        assert_eq!(
+            Response::body_type(
+                "GET",
+                200,
+                "HTTP/1.0",
+                &[Header::new("Transfer-Encoding", "chunked"),]
+            ),
+            BodyType::CloseDelimited,
+            "HTTP/1.0 did not support chunked encoding"
+        );
+        assert_eq!(
+            Response::body_type(
+                "GET",
+                200,
+                "HTTP/1.0",
+                &[Header::new("Content-Length", "123"),]
+            ),
+            BodyType::LengthDelimited(123)
+        );
     }
 }
