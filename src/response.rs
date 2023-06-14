@@ -36,7 +36,13 @@ const INTO_STRING_LIMIT: usize = 10 * 1_024 * 1_024;
 const MAX_HEADER_SIZE: usize = 100 * 1_024;
 const MAX_HEADER_COUNT: usize = 100;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum ConnectionOption {
+    KeepAlive,
+    Close,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
 enum BodyType {
     LengthDelimited(usize),
     Chunked,
@@ -279,6 +285,31 @@ impl Response {
         self.reader
     }
 
+    // Determine what to do with the connection after we've read the body.
+    fn connection_option(
+        response_version: &str,
+        connection_header: Option<&str>,
+    ) -> ConnectionOption {
+        // https://datatracker.ietf.org/doc/html/rfc9112#name-tear-down
+        // "A client that receives a "close" connection option MUST cease sending requests on that
+        // connection and close the connection after reading the response message containing the "close"
+        // connection option"
+        //
+        // Per https://www.rfc-editor.org/rfc/rfc2068#section-19.7.1, an HTTP/1.0 response can explicitly
+        // say "Connection: keep-alive" in response to a request with "Connection: keep-alive". We don't
+        // send "Connection: keep-alive" in the request but are willing to accept in the response anyhow.
+        use ConnectionOption::*;
+        let is_http10 = response_version.eq_ignore_ascii_case("HTTP/1.0");
+        match (is_http10, connection_header) {
+            (true, Some(c)) if c.eq_ignore_ascii_case("keep-alive") => KeepAlive,
+            (true, _) => Close,
+            (false, Some(c)) if c.eq_ignore_ascii_case("close") => Close,
+            (false, _) => KeepAlive,
+        }
+    }
+
+    /// Determine how the body should be read, based on
+    /// <https://datatracker.ietf.org/doc/html/rfc9112#name-message-body-length>
     fn body_type(
         request_method: &str,
         response_status: u16,
@@ -286,9 +317,6 @@ impl Response {
         headers: &[Header],
     ) -> BodyType {
         let is_http10 = response_version.eq_ignore_ascii_case("HTTP/1.0");
-        let is_close = get_header(headers, "connection")
-            .map(|c| c.eq_ignore_ascii_case("close"))
-            .unwrap_or(false);
 
         let is_head = request_method.eq_ignore_ascii_case("head");
         let has_no_body = is_head
@@ -297,41 +325,41 @@ impl Response {
                 _ => false,
             };
 
+        if has_no_body {
+            return BodyType::LengthDelimited(0);
+        }
+
         let is_chunked = get_header(headers, "transfer-encoding")
             .map(|enc| !enc.is_empty()) // whatever it says, do chunked
             .unwrap_or(false);
 
-        let use_chunked = !is_http10 && !has_no_body && is_chunked;
+        // https://www.rfc-editor.org/rfc/rfc2068#page-161
+        // > a persistent connection with an HTTP/1.0 client cannot make
+        // > use of the chunked transfer-coding
+        let use_chunked = !is_http10 && is_chunked;
 
         if use_chunked {
             return BodyType::Chunked;
         }
 
-        if has_no_body {
-            return BodyType::LengthDelimited(0);
-        }
-
         let length = get_header(headers, "content-length").and_then(|v| v.parse::<usize>().ok());
 
-        if is_http10 || is_close {
-            BodyType::CloseDelimited
-        } else if has_no_body {
-            // head requests never have a body
-            BodyType::LengthDelimited(0)
-        } else {
-            match length {
-                Some(n) => BodyType::LengthDelimited(n),
-                None => BodyType::CloseDelimited,
-            }
+        match length {
+            Some(n) => BodyType::LengthDelimited(n),
+            None => BodyType::CloseDelimited,
         }
     }
 
     fn stream_to_reader(
-        stream: DeadlineStream,
+        mut stream: DeadlineStream,
         unit: &Unit,
         body_type: BodyType,
         compression: Option<Compression>,
+        connection_option: ConnectionOption,
     ) -> Box<dyn Read + Send + Sync + 'static> {
+        if connection_option == ConnectionOption::Close {
+            stream.inner_mut().set_unpoolable();
+        }
         let inner = stream.inner_ref();
         let result = inner.set_read_timeout(unit.agent.config.timeout_read);
         if let Err(e) = result {
@@ -575,6 +603,9 @@ impl Response {
         let compression =
             get_header(&headers, "content-encoding").and_then(Compression::from_header_value);
 
+        let connection_option =
+            Self::connection_option(http_version, get_header(&headers, "connection"));
+
         let body_type = Self::body_type(&unit.method, status, http_version, &headers);
 
         // remove Content-Encoding and length due to automatic decompression
@@ -582,7 +613,8 @@ impl Response {
             headers.retain(|h| !h.is_name("content-encoding") && !h.is_name("content-length"));
         }
 
-        let reader = Self::stream_to_reader(stream, &unit, body_type, compression);
+        let reader =
+            Self::stream_to_reader(stream, &unit, body_type, compression, connection_option);
 
         let url = unit.url.clone();
 
@@ -1223,5 +1255,137 @@ mod tests {
         .unwrap();
         let body = resp.into_string().unwrap();
         assert_eq!(body, "hi\n");
+    }
+
+    #[test]
+    fn connection_option() {
+        use ConnectionOption::*;
+        assert_eq!(Response::connection_option("HTTP/1.0", None), Close);
+        assert_eq!(Response::connection_option("HtTp/1.0", None), Close);
+        assert_eq!(Response::connection_option("HTTP/1.0", Some("blah")), Close);
+        assert_eq!(
+            Response::connection_option("HTTP/1.0", Some("keep-ALIVE")),
+            KeepAlive
+        );
+        assert_eq!(
+            Response::connection_option("http/1.0", Some("keep-alive")),
+            KeepAlive
+        );
+
+        assert_eq!(Response::connection_option("http/1.1", None), KeepAlive);
+        assert_eq!(
+            Response::connection_option("http/1.1", Some("blah")),
+            KeepAlive
+        );
+        assert_eq!(
+            Response::connection_option("http/1.1", Some("keep-alive")),
+            KeepAlive
+        );
+        assert_eq!(
+            Response::connection_option("http/1.1", Some("CLOSE")),
+            Close
+        );
+    }
+
+    #[test]
+    fn body_type() {
+        use BodyType::*;
+        assert_eq!(
+            Response::body_type("GET", 200, "HTTP/1.1", &[]),
+            CloseDelimited
+        );
+        assert_eq!(
+            Response::body_type("HEAD", 200, "HTTP/1.1", &[]),
+            LengthDelimited(0)
+        );
+        assert_eq!(
+            Response::body_type("hEaD", 200, "HTTP/1.1", &[]),
+            LengthDelimited(0)
+        );
+        assert_eq!(
+            Response::body_type("head", 200, "HTTP/1.1", &[]),
+            LengthDelimited(0)
+        );
+        assert_eq!(
+            Response::body_type("GET", 304, "HTTP/1.1", &[]),
+            LengthDelimited(0)
+        );
+        assert_eq!(
+            Response::body_type("GET", 204, "HTTP/1.1", &[]),
+            LengthDelimited(0)
+        );
+        assert_eq!(
+            Response::body_type(
+                "GET",
+                200,
+                "HTTP/1.1",
+                &[Header::new("Transfer-Encoding", "chunked"),]
+            ),
+            Chunked
+        );
+        assert_eq!(
+            Response::body_type(
+                "GET",
+                200,
+                "HTTP/1.1",
+                &[Header::new("Content-Length", "123"),]
+            ),
+            LengthDelimited(123)
+        );
+        assert_eq!(
+            Response::body_type(
+                "GET",
+                200,
+                "HTTP/1.1",
+                &[
+                    Header::new("Content-Length", "123"),
+                    Header::new("Transfer-Encoding", "chunked"),
+                ]
+            ),
+            Chunked
+        );
+        assert_eq!(
+            Response::body_type(
+                "GET",
+                200,
+                "HTTP/1.1",
+                &[
+                    Header::new("Transfer-Encoding", "chunked"),
+                    Header::new("Content-Length", "123"),
+                ]
+            ),
+            Chunked
+        );
+        assert_eq!(
+            Response::body_type(
+                "HEAD",
+                200,
+                "HTTP/1.1",
+                &[
+                    Header::new("Transfer-Encoding", "chunked"),
+                    Header::new("Content-Length", "123"),
+                ]
+            ),
+            LengthDelimited(0)
+        );
+        assert_eq!(
+            Response::body_type(
+                "GET",
+                200,
+                "HTTP/1.0",
+                &[Header::new("Transfer-Encoding", "chunked"),]
+            ),
+            CloseDelimited,
+            "HTTP/1.0 did not support chunked encoding"
+        );
+        assert_eq!(
+            Response::body_type(
+                "GET",
+                200,
+                "HTTP/1.0",
+                &[Header::new("Content-Length", "123"),]
+            ),
+            LengthDelimited(123)
+        );
     }
 }
