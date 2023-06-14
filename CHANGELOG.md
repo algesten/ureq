@@ -1,7 +1,21 @@
+# 2.7.0
+
+## Fixed
+ * Pass User-Agent when connecting to proxy (#597)
+ * Proxy: Use CONNECT for HTTPS requests, but not HTTP requests (#587)
+ * Cookie headers are now cleared on redirect (#608)
+ * HTTP/1.0 responses with Content-Length no longer block until server closes
+   the socket. (#625)
+
+## Added
+ * Conversions to and from http::Response and http::request::Builder (#591)
+ * Updated to rustls 0.21 and rustls-webpki, which add support for IP address certificates (#601)
+ * Response::local_addr (#605)
+
 # 2.6.2
 
 ## Fixed
- * Non-empty connection pools were never dropped (#NNN)
+ * Non-empty connection pools were never dropped (#583)
 
 # 2.6.1
 
