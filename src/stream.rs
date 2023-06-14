@@ -66,6 +66,10 @@ impl DeadlineStream {
     pub(crate) fn inner_ref(&self) -> &Stream {
         &self.stream
     }
+
+    pub(crate) fn inner_mut(&mut self) -> &mut Stream {
+        &mut self.stream
+    }
 }
 
 impl From<DeadlineStream> for Stream {
@@ -238,6 +242,10 @@ impl Stream {
             Some(socket) => Stream::serverclosed_stream(socket),
             None => Ok(false),
         }
+    }
+
+    pub(crate) fn set_unpoolable(&mut self) {
+        self.pool_returner = PoolReturner::none();
     }
 
     pub(crate) fn return_to_pool(mut self) -> io::Result<()> {
