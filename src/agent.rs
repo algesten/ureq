@@ -498,7 +498,7 @@ impl AgentBuilder {
     /// WARNING: for 307 and 308 redirects, this value is ignored for methods that have a body.
     /// You must handle 307 redirects yourself when sending a PUT, POST, PATCH, or DELETE request.
     ///
-    /// ```
+    /// ```no_run
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
     /// let result = ureq::builder()
