@@ -1,3 +1,8 @@
+# 2.7.1
+
+## Fixed
+ * Updated serde_json dependency constraint to be >=1.0.97 (#630)
+
 # 2.7.0
 
 ## Fixed
