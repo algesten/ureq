@@ -115,6 +115,13 @@ impl TlsConnector for Arc<rustls::ClientConfig> {
         dns_name: &str,
         mut io: Box<dyn ReadWrite>,
     ) -> Result<Box<dyn ReadWrite>, Error> {
+        let dns_name = if dns_name.starts_with('[') && dns_name.ends_with(']') {
+            // rustls doesn't like ipv6 addresses with brackets
+            &dns_name[1..dns_name.len() - 1]
+        } else {
+            dns_name
+        };
+
         let sni = rustls::ServerName::try_from(dns_name)
             .map_err(|e| ErrorKind::Dns.msg(format!("parsing '{}'", dns_name)).src(e))?;
 

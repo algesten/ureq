@@ -150,3 +150,33 @@ m0Wqhhi8/24Sy934t5Txgkfoltg8ahkx934WjP6WWRnSAu+cf+vW
 
     assert!(resp.into_string().unwrap().len() > 10);
 }
+
+// This tests that IPv6 addresses as host names work.
+// This is a regression test for passing the host name to `rustls::ServerName::try_from(host_name)`
+#[test]
+#[cfg(any(feature = "tls", feature = "tls-native"))]
+fn ipv6_addr_in_dns_name() {
+    let mut root_store = rustls::RootCertStore::empty();
+    root_store.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
+        rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
+            ta.subject,
+            ta.spki,
+            ta.name_constraints,
+        )
+    }));
+
+    let tls_config = rustls::ClientConfig::builder()
+        .with_safe_defaults()
+        .with_root_certificates(root_store)
+        .with_no_client_auth();
+
+    let agent = ureq::builder()
+        .tls_config(std::sync::Arc::new(tls_config))
+        .build();
+
+    let resp = agent.get("https://[2606:4700:4700::1111]/").call();
+
+    assert!(
+        !matches!(resp, Err(ureq::Error::Transport(ref t)) if t.kind() == ureq::ErrorKind::Dns)
+    );
+}
