@@ -128,6 +128,30 @@ impl From<Response> for http::Response<String> {
     }
 }
 
+/// Converts a [Response](crate::Response) into an [http::Response], where the
+/// body is a Vec<u8>.
+///
+/// Due to slight differences in how headers are handled, this means if a header
+/// from a [Response](crate::Response) is not valid UTF-8, it will not be
+/// included in the resulting [http::Response].
+///
+/// Requires feature `ureq = { version = "*", features = ["http"] }`
+/// ```
+/// # fn main() -> Result<(), ureq::Error> {
+/// # ureq::is_test(true);
+/// let response = ureq::get("http://example.com").call()?;
+/// let http_response: http::Response<Vec<u8>> = response.into();
+/// # Ok(())
+/// # }
+/// ```
+impl From<Response> for http::Response<Vec<u8>> {
+    fn from(value: Response) -> Self {
+        create_builder(&value)
+            .body(value.into_string().unwrap().into_bytes())
+            .unwrap()
+    }
+}
+
 /// Converts an [http] [Builder](http::request::Builder) into a [Request](crate::Request)
 ///
 /// This will safely handle cases where a builder is not fully "complete" to
