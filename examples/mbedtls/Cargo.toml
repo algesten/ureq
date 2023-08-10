@@ -6,3 +6,4 @@ edition = "2021"
 
 [dependencies]
 mbedtls = { version = "0.8.1" }
+ureq = { path = "../.." }
