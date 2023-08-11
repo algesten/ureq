@@ -67,6 +67,30 @@ impl Proxy {
         self.user.is_some() && self.password.is_some()
     }
 
+    pub(crate) fn try_from_system() -> Option<Self> {
+        macro_rules! try_env {
+            ($($env:literal),+) => {
+                $(
+                    if let Ok(env) = std::env::var($env) {
+                        if let Ok(proxy) = Self::new(env) {
+                            return Some(proxy);
+                        }
+                    }
+                )+
+            };
+        }
+
+        try_env!(
+            "ALL_PROXY",
+            "all_proxy",
+            "HTTPS_PROXY",
+            "https_proxy",
+            "HTTP_PROXY",
+            "http_proxy"
+        );
+        None
+    }
+
     /// Create a proxy from a format string.
     /// # Arguments:
     /// * `proxy` - a str of format `<protocol>://<user>:<password>@<host>:port` . All parts except host are optional.

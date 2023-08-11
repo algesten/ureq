@@ -37,6 +37,7 @@ pub enum RedirectAuthHeaders {
 /// Accumulates options towards building an [Agent].
 pub struct AgentBuilder {
     config: AgentConfig,
+    no_proxy: bool,
     max_idle_connections: usize,
     max_idle_connections_per_host: usize,
     /// Cookies saved between requests.
@@ -263,6 +264,7 @@ impl AgentBuilder {
                 user_agent: format!("ureq/{}", env!("CARGO_PKG_VERSION")),
                 tls_config: TlsConfig(crate::default_tls_config()),
             },
+            no_proxy: false,
             max_idle_connections: DEFAULT_MAX_IDLE_CONNECTIONS,
             max_idle_connections_per_host: DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST,
             resolver: StdResolver.into(),
@@ -277,7 +279,12 @@ impl AgentBuilder {
     // AgentBuilder to be used multiple times, except CookieStore does
     // not implement clone, so we have to give ownership to the newly
     // built Agent.
-    pub fn build(self) -> Agent {
+    pub fn build(mut self) -> Agent {
+        if self.config.proxy.is_none() && !self.no_proxy {
+            if let Some(proxy) = Proxy::try_from_system() {
+                self.config.proxy = Some(proxy);
+            }
+        }
         Agent {
             config: Arc::new(self.config),
             state: Arc::new(AgentState {
@@ -306,8 +313,17 @@ impl AgentBuilder {
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// # Note
+    /// Adding a proxy will disable the automatic usage of the “system” proxy.
     pub fn proxy(mut self, proxy: Proxy) -> Self {
         self.config.proxy = Some(proxy);
+        self
+    }
+
+    /// Don't auto detect proxy from system environment, e.g. HTTP_PROXY
+    pub fn no_proxy(mut self) -> Self {
+        self.no_proxy = true;
         self
     }
 
