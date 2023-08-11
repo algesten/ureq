@@ -1,3 +1,5 @@
+// This requires mbedtls crate 0.11.0 or newer due to
+// new Context<T> parameter
 use std::fmt;
 use std::io;
 use ureq::{Error, ReadWrite, TlsConnector};
@@ -14,7 +16,7 @@ fn entropy_new() -> mbedtls::rng::OsEntropy {
 }
 
 pub struct MbedTlsConnector {
-    context: Arc<Mutex<Context>>,
+    context: Arc<Mutex<Context<Box<dyn ReadWrite>>>>,
 }
 
 #[derive(Debug)]
@@ -59,9 +61,8 @@ impl TlsConnector for MbedTlsConnector {
         io: Box<dyn ReadWrite>,
     ) -> Result<Box<dyn ReadWrite>, Error> {
         let mut ctx = self.context.lock().unwrap();
-        let sync = SyncIo(Mutex::new(io));
-        match ctx.establish(sync, None) {
-            Err(_) => {
+        match ctx.establish(io, None) {
+            Err(e) => {
                 let io_err = io::Error::new(io::ErrorKind::InvalidData, MbedTlsError);
                 return Err(io_err.into());
             }
@@ -92,7 +93,7 @@ impl io::Write for SyncIo {
 }
 
 struct MbedTlsStream {
-    context: Arc<Mutex<Context>>, //tcp_stream: TcpStream,
+    context: Arc<Mutex<Context<Box<dyn ReadWrite>>>>, //tcp_stream: TcpStream,
 }
 
 impl fmt::Debug for MbedTlsStream {
