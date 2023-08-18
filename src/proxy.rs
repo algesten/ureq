@@ -1,3 +1,4 @@
+use std::env;
 use base64::{prelude::BASE64_STANDARD, Engine};
 
 use crate::error::{Error, ErrorKind};
@@ -129,6 +130,16 @@ impl Proxy {
             port: port.unwrap_or(8080),
             proto,
         })
+    }
+
+    pub fn new_from_env() -> Result<Self, Error> {
+        let names = ["http_proxy", "HTTP_PROXY", "https_proxy", "HTTPS_PROXY",
+            "socks_proxy", "SOCKS_PROXY", "socks5_proxy", "SOCKS5_PROXY"];
+        let proxy = names.iter().find_map(|&name| {
+            env::var(name).ok()
+        })
+            .ok_or(ErrorKind::InvalidProxyUrl.new())?;
+        Self::new(proxy)
     }
 
     pub(crate) fn connect<S: AsRef<str>>(&self, host: S, port: u16, user_agent: &str) -> String {

@@ -249,13 +249,10 @@ const DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST: usize = 1;
 
 impl AgentBuilder {
     pub fn new() -> Self {
-        let names = ["http_proxy", "HTTP_PROXY", "https_proxy", "HTTPS_PROXY",
-            "socks_proxy", "SOCKS_PROXY", "socks5_proxy", "SOCKS5_PROXY"];
-        let proxy = names.iter().find_map(|&name| {
-            env::var(name).ok()
-        }).map(|addr| {
-            Proxy::new(addr).ok()
-        }).flatten();
+        #[cfg(not(feature = "proxy-from-env"))]
+            let proxy = None;
+        #[cfg(feature = "proxy-from-env")]
+            let proxy = Proxy::new_from_env().ok();
         AgentBuilder {
             config: AgentConfig {
                 proxy,

@@ -15,7 +15,7 @@ edition = "2018"
 features = ["tls", "native-tls", "json", "charset", "cookies", "socks-proxy"]
 
 [features]
-default = ["tls", "gzip"]
+default = ["tls", "gzip", "proxy-from-env"]
 tls = ["webpki", "webpki-roots", "rustls"]
 native-certs = ["rustls-native-certs"]
 json = ["serde", "serde_json"]
@@ -25,6 +25,7 @@ socks-proxy = ["socks"]
 gzip = ["flate2"]
 brotli = ["brotli-decompressor"]
 http-interop = ["dep:http"]
+proxy-from-env = []
 
 [dependencies]
 base64 = "0.21"
