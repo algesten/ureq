@@ -481,6 +481,17 @@ impl Response {
         }
     }
 
+    pub fn into_vec(self) -> Result<Vec<u8>, Error> {
+        let size = self
+            .header("Content-Type")
+            .unwrap_or_default()
+            .parse::<usize>()
+            .unwrap_or_default();
+        let mut buf = Vec::with_capacity(size);
+        self.into_reader().read_to_end(&mut buf)?;
+        Ok(buf)
+    }
+
     /// Read the body of this response into a serde_json::Value, or any other type that
     /// implements the [serde::Deserialize] trait.
     ///
