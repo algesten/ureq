@@ -1,8 +1,13 @@
 # 2.8.0
+
+## Fixed
+  * Fix regression in IPv6 handling (#635)
   * Read proxy response to \r\n\r\n (#620)
+
+## Added
   * Auto-detect proxy from env vars (turned off by default) (#649)
   * Conversion ureq::Response -> http::Response<Vec<u8>> (#638)
-  * Fix regression in IPv6 handling (#635)
+  * cargo-deny CI action to disallow copy-left and duplicate deps (#661)
 
 # 2.7.1
 
