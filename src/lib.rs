@@ -12,6 +12,8 @@
 // such as "{foo.var}" – hence this lint forces us to have inconsistent
 // formatting args. I prefer a lint that forbid "{var}".
 #![allow(clippy::uninlined_format_args)]
+// if we want a range, we will make a range.
+#![allow(clippy::manual_range_patterns)]
 
 //!<div align="center">
 //!  <!-- Version -->
