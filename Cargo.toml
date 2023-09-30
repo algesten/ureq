@@ -30,9 +30,7 @@ http-interop = ["dep:http"]
 base64 = "0.21"
 cookie = { version = "0.17", default-features = false, optional = true}
 once_cell = "1"
-# url 2.4.x brings in idna 0.4.0 and cookie_store dep on idna 0.3.0
-# check if we can remove this next time we upgrade cookie_store.
-url = "=2.3.1"
+url = "2"
 socks = { version = "0.3", optional = true }
 serde = { version = "1", optional = true }
 serde_json = { version = ">=1.0.97", optional = true }
