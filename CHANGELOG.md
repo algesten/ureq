@@ -1,3 +1,9 @@
+# 2.8.0
+  * Read proxy response to \r\n\r\n (#620)
+  * Auto-detect proxy from env vars (turned off by default) (#649)
+  * Conversion ureq::Response -> http::Response<Vec<u8>> (#638)
+  * Fix regression in IPv6 handling (#635)
+
 # 2.7.1
 
 ## Fixed
