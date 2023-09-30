@@ -199,8 +199,8 @@ to encode the request body using that.
 
 ## Proxying
 
-ureq supports two kinds of proxies,  [`HTTP`], [`SOCKS4`] and [`SOCKS5`], the former is
-always available while the latter must be enabled using the feature
+ureq supports two kinds of proxies,  [`HTTP`] ([`CONNECT`]), [`SOCKS4`] and [`SOCKS5`],
+the former is always available while the latter must be enabled using the feature
 `ureq = { version = "*", features = ["socks-proxy"] }`.
 
 Proxies settings are configured on an [Agent] (using [AgentBuilder]). All request sent
@@ -298,6 +298,7 @@ the dependencies required by an async API.
 [async-std]: https://github.com/async-rs/async-std#async-std
 [tokio]: https://github.com/tokio-rs/tokio#tokio
 [what-color]: https://journal.stuffwithstuff.com/2015/02/01/what-color-is-your-function/
+[`HTTP`]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Proxy_servers_and_tunneling#http_tunneling
 [`CONNECT`]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods/CONNECT
 [`SOCKS4`]: https://en.wikipedia.org/wiki/SOCKS#SOCKS4
 [`SOCKS5`]: https://en.wikipedia.org/wiki/SOCKS#SOCKS5
