@@ -36,10 +36,11 @@ jobs:
           override: true
       - name: Docs
         uses: actions-rs/cargo@v1
+        env:
+          RUSTDOCFLAGS: -Dwarnings
         with:
           command: doc
-          # Keep in sync with Cargo.toml's [package.metadata.docs.rs]
-          args: --no-default-features --no-deps --features "tls native-tls json charset cookies socks-proxy"
+          args: --no-default-features --no-deps --all-features
   build_and_test:
     name: Test
     runs-on: ubuntu-latest
