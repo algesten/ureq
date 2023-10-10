@@ -98,7 +98,7 @@ impl Header {
 
     /// The header value.
     ///
-    /// For non-utf8 headers this returns None (use [`Header::value_raw()`]).
+    /// For non-utf8 headers this returns [`None`] (use [`Header::value_raw()`]).
     pub fn value(&self) -> Option<&str> {
         let bytes = &self.line.as_bytes()[self.index + 1..];
         from_utf8(bytes)
@@ -150,11 +150,20 @@ impl Header {
     }
 }
 
+/// For non-utf8 headers this returns [`None`] (use [`get_header_raw()`]).
 pub fn get_header<'h>(headers: &'h [Header], name: &str) -> Option<&'h str> {
     headers
         .iter()
         .find(|h| h.is_name(name))
         .and_then(|h| h.value())
+}
+
+#[cfg(any(doc, all(test, feature = "http-interop")))]
+pub fn get_header_raw<'h>(headers: &'h [Header], name: &str) -> Option<&'h [u8]> {
+    headers
+        .iter()
+        .find(|h| h.is_name(name))
+        .map(|h| h.value_raw())
 }
 
 pub fn get_all_headers<'h>(headers: &'h [Header], name: &str) -> Vec<&'h str> {
