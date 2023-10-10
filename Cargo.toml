@@ -11,24 +11,25 @@ categories = ["web-programming::http-client"]
 edition = "2018"
 
 [package.metadata.docs.rs]
-# Keep in sync with .github/workflows/test.yml
-features = ["tls", "native-tls", "json", "charset", "cookies", "socks-proxy"]
+# features = ["tls", "dep:native-tls", "json", "charset", "cookies", "socks-proxy", "gzip", "brotli", "http-interop"]
+features = "all"
+rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = ["tls", "gzip"]
-tls = ["webpki", "webpki-roots", "rustls"]
-native-certs = ["rustls-native-certs"]
-json = ["serde", "serde_json"]
-charset = ["encoding_rs"]
-cookies = ["cookie", "cookie_store"]
-socks-proxy = ["socks"]
-gzip = ["flate2"]
-brotli = ["brotli-decompressor"]
+tls = ["dep:webpki", "dep:webpki-roots", "dep:rustls"]
+native-certs = ["dep:rustls-native-certs"]
+json = ["dep:serde", "dep:serde_json"]
+charset = ["dep:encoding_rs"]
+cookies = ["dep:cookie", "dep:cookie_store"]
+socks-proxy = ["dep:socks"]
+gzip = ["dep:flate2"]
+brotli = ["dep:brotli-decompressor"]
 http-interop = ["dep:http"]
 
 [dependencies]
 base64 = "0.21"
-cookie = { version = "0.17", default-features = false, optional = true}
+cookie = { version = "0.17", default-features = false, optional = true }
 once_cell = "1"
 url = "2"
 socks = { version = "0.3", optional = true }

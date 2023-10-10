@@ -14,6 +14,7 @@
 #![allow(clippy::uninlined_format_args)]
 // if we want a range, we will make a range.
 #![allow(clippy::manual_range_patterns)]
+#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
 //!<div align="center">
 //!  <!-- Version -->
@@ -495,7 +496,7 @@ pub fn agent() -> Agent {
 /// This allows making requests with verbs that don't have a dedicated
 /// method.
 ///
-/// If you've got an already-parsed [Url], try [request_url][request_url].
+/// If you've got an already-parsed [`Url`], try [`request_url()`].
 ///
 /// ```
 /// # fn main() -> Result<(), ureq::Error> {
@@ -510,9 +511,9 @@ pub fn request(method: &str, path: &str) -> Request {
 }
 /// Make a request using an already-parsed [Url].
 ///
-/// This is useful if you've got a parsed Url from some other source, or if
+/// This is useful if you've got a parsed [`Url`] from some other source, or if
 /// you want to parse the URL and then modify it before making the request.
-/// If you'd just like to pass a String or a `&str`, try [request][request()].
+/// If you'd just like to pass a [`String`] or a [`&str`], try [`request()`].
 ///
 /// ```
 /// # fn main() -> Result<(), ureq::Error> {

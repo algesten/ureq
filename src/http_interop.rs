@@ -5,13 +5,12 @@ use std::{
 
 use crate::{header::HeaderLine, response::ResponseStatusIndex, Request, Response};
 
-/// Converts an [http::Response] into a [Response](crate::Response).
+/// Converts an [`http::Response`] into a [`Response`].
 ///
-/// As an [http::Response] does not contain a URL, `"https://example.com/"` is
-/// used as a placeholder. Additionally, if the response has a header which
-/// cannot be converted into a valid [Header](crate::Header), it will be skipped
-/// rather than having the conversion fail. The remote address property will
-/// also always be `127.0.0.1:80` for similar reasons to the URL.
+/// As an [`http::Response`] does not contain a URL, `"https://example.com/"` is used as a
+/// placeholder. Additionally, if the response has a header which cannot be converted into a valid
+/// [`Header`](crate::Header), it will be skipped rather than having the conversion fail. The remote
+/// address property will also always be `127.0.0.1:80` for similar reasons to the URL.
 ///
 /// Requires feature `ureq = { version = "*", features = ["http"] }`
 /// ```
@@ -81,12 +80,11 @@ fn create_builder(response: &Response) -> http::response::Builder {
     response_builder
 }
 
-/// Converts a [Response](crate::Response) into an [http::Response], where the
-/// body is a reader containing the body of the response.
+/// Converts a [`Response`] into an [`http::Response`], where the body is a reader containing the
+/// body of the response.
 ///
-/// Due to slight differences in how headers are handled, this means if a header
-/// from a [Response](crate::Response) is not valid UTF-8, it will not be
-/// included in the resulting [http::Response].
+/// Due to slight differences in how headers are handled, this means if a header from a [`Response`]
+/// is not valid UTF-8, it will not be included in the resulting [`http::Response`].
 ///
 /// Requires feature `ureq = { version = "*", features = ["http"] }`
 /// ```
@@ -104,12 +102,10 @@ impl From<Response> for http::Response<Box<dyn Read + Send + Sync + 'static>> {
     }
 }
 
-/// Converts a [Response](crate::Response) into an [http::Response], where the
-/// body is a String.
+/// Converts a [`Response`] into an [`http::Response`], where the body is a String.
 ///
-/// Due to slight differences in how headers are handled, this means if a header
-/// from a [Response](crate::Response) is not valid UTF-8, it will not be
-/// included in the resulting [http::Response].
+/// Due to slight differences in how headers are handled, this means if a header from a [`Response`]
+/// is not valid UTF-8, it will not be included in the resulting [`http::Response`].
 ///
 /// Requires feature `ureq = { version = "*", features = ["http"] }`
 /// ```
@@ -128,12 +124,10 @@ impl From<Response> for http::Response<String> {
     }
 }
 
-/// Converts a [Response](crate::Response) into an [http::Response], where the
-/// body is a Vec<u8>.
+/// Converts a [`Response`] into an [`http::Response`], where the body is a [`Vec<u8>`].
 ///
-/// Due to slight differences in how headers are handled, this means if a header
-/// from a [Response](crate::Response) is not valid UTF-8, it will not be
-/// included in the resulting [http::Response].
+/// Due to slight differences in how headers are handled, this means if a header from a [`Response`]
+/// is not valid UTF-8, it will not be included in the resulting [`http::Response`].
 ///
 /// Requires feature `ureq = { version = "*", features = ["http"] }`
 /// ```
@@ -152,12 +146,12 @@ impl From<Response> for http::Response<Vec<u8>> {
     }
 }
 
-/// Converts an [http] [Builder](http::request::Builder) into a [Request](crate::Request)
+/// Converts an [`http::request::Builder`] into a [`Request`].
 ///
-/// This will safely handle cases where a builder is not fully "complete" to
-/// prevent the conversion from failing. Should the requests' method or URI not
-/// be correctly set, the request will default to being a GET request to
-/// `"https://example.com"`. Additionally, any non-UTF8 headers will be skipped.
+/// This will safely handle cases where a builder is not fully "complete" to prevent the conversion
+/// from failing. Should the requests' method or URI not be correctly set, the request will default
+/// to being a `GET` request to `"https://example.com"`. Additionally, any non-UTF8 headers will
+/// be skipped.
 ///
 /// Requires feature `ureq = { version = "*", features = ["http"] }`
 /// ```
@@ -197,11 +191,10 @@ impl From<http::request::Builder> for Request {
     }
 }
 
-/// Converts a [Request](crate::Request) into an [http] [Builder](http::request::Builder).
+/// Converts a [`Request`] into an [`http::request::Builder`].
 ///
-/// This will only convert valid UTF-8 header values into headers on the
-/// resulting builder. The method and URI are preserved. The HTTP version will
-/// always be set to `HTTP/1.1`.
+/// This will only convert valid UTF-8 header values into headers on the resulting builder. The
+/// method and URI are preserved. The HTTP version will always be set to `HTTP/1.1`.
 ///
 /// Requires feature `ureq = { version = "*", features = ["http"] }`
 /// ```
@@ -240,7 +233,7 @@ mod tests {
     fn convert_http_response() {
         use http::{Response, StatusCode, Version};
 
-        let http_response_body = (0..10240).into_iter().map(|_| 0xaa).collect::<Vec<u8>>();
+        let http_response_body = vec![0xaa; 10240];
         let http_response = Response::builder()
             .version(Version::HTTP_2)
             .header("Custom-Header", "custom value")
