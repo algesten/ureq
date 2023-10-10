@@ -144,17 +144,50 @@ impl From<Response> for http::Response<Vec<u8>> {
 
 /// Converts an [`http::request::Builder`] into a [`Request`].
 ///
-/// This will safely handle cases where a builder is not fully "complete" to prevent the conversion
-/// from failing. Should the requests' method or URI not be correctly set, the request will default
-/// to being a `GET` request to `"https://example.com"`. Additionally, any non-UTF8 headers will
-/// be skipped.
-///
 /// ```
 /// # fn main() -> Result<(), ureq::Error> {
 /// # ureq::is_test(true);
 /// let http_request_builder = http::Request::builder().method("GET").uri("http://example.com");
 /// let request: ureq::Request = http_request_builder.into();
 /// request.call()?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// # Fallibility
+///
+/// [`http::request::Builder`] contains a [`Result`] that is normally checked when the builder
+/// is "built" into a [`http::Request`].  This [`From`] implementation does _not_ check it
+/// however, and returns a `GET` [`Request`] that defaults to `"https://example.com"` in case
+/// it contains [`Err`].  In order to test for errors, utilize the provided conversion from
+/// [`http::request::Parts`]:
+///
+/// ```
+/// # fn main() -> Result<(), ureq::Error> {
+/// ureq::is_test(true);
+/// let http_builder = http::Request::builder().method("GET").uri("http://example.com");
+/// let request = http_builder.body(()).expect("Builder error"); // Check the error
+/// let (parts, ()) = request.into_parts();
+/// let request: ureq::Request = parts.into();
+//// request.call()?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// # Converting from [`http::Request`]
+///
+/// Notably `ureq` does _not_ implement the conversion from [`http::Request`] because it contains
+/// the body of a request together with the actual request data.  However, [`http`] provides
+/// [`http::Request::into_parts()`] to split out a request into [`http::request::Parts`] and a
+/// `body`, for which the conversion _is_ implemented and can be used as follows:
+///
+/// ```
+/// # fn main() -> Result<(), ureq::Error> {
+/// # ureq::is_test(true);
+/// let http_request = http::Request::builder().method("GET").uri("http://example.com").body(vec![0u8]).unwrap();
+/// let (http_parts, body) = http_request.into_parts();
+/// let request: ureq::Request = http_parts.into();
+/// request.send_bytes(&body)?;
 /// # Ok(())
 /// # }
 /// ```
@@ -180,6 +213,41 @@ impl From<http::request::Builder> for Request {
                 .fold(new_request, |request, header| {
                     request.set(header.0, header.1)
                 });
+        }
+
+        new_request
+    }
+}
+
+/// Converts [`http::request::Parts`] into a [`Request`].
+///
+/// An [`http::Request`] can be split out into its [`http::request::Parts`] and body as follows:
+///
+/// ```
+/// # fn main() -> Result<(), ureq::Error> {
+/// # ureq::is_test(true);
+/// let http_request = http::Request::builder().method("GET").uri("http://example.com").body(vec![0u8]).unwrap();
+/// let (http_parts, body) = http_request.into_parts();
+/// let request: ureq::Request = http_parts.into();
+/// request.send_bytes(&body)?;
+/// # Ok(())
+/// # }
+/// ```
+impl From<http::request::Parts> for Request {
+    fn from(value: http::request::Parts) -> Self {
+        let mut new_request = crate::agent().request(value.method.as_str(), &value.uri.to_string());
+
+        for (name, value) in &value.headers {
+            // TODO: Aren't complete header values available as raw byte slices?
+            let mut raw_header: Vec<u8> = name.to_string().into_bytes();
+            raw_header.extend(b": ");
+            raw_header.extend(value.as_bytes());
+
+            let header = HeaderLine::from(raw_header)
+                .into_header()
+                .expect("Unreachable");
+
+            crate::header::add_header(&mut new_request.headers, header)
         }
 
         new_request
