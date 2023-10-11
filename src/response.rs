@@ -59,7 +59,7 @@ enum BodyType {
 /// When dropping a `Response` instance, one one of two things can happen. If
 /// the response has unread bytes, the underlying socket cannot be reused,
 /// and the connection is closed. If there are no unread bytes, the connection
-/// is returned to the [`Agent`](crate::Agent) connection pool used (notice there is always
+/// is returned to the [`Agent`] connection pool used (notice there is always
 /// an agent present, even when not explicitly configured by the user).
 ///
 /// ```

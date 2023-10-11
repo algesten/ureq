@@ -12,25 +12,25 @@ use url::Url;
 
 /// Holder of recycled connections.
 ///
-/// For each PoolKey (approximately hostname and port), there may be
+/// For each [`PoolKey`] (approximately hostname and port), there may be
 /// multiple connections stored in the `recycle` map. If so, they are stored in
 /// order from oldest at the front to freshest at the back.
 ///
-/// The `lru` VecDeque is a companion struct to `recycle`, and is used to keep
+/// The `lru` [`VecDeque`] is a companion struct to `recycle`, and is used to keep
 /// track of which connections to expire if the pool is full on the next insert.
-/// A given PoolKey can occur in lru multiple times. The first entry in lru for
-/// a key K represents the first entry in `recycle[K]`. The second entry in lru
+/// A given [`PoolKey`] can occur in `lru` multiple times. The first entry in `lru` for
+/// a key `K` represents the first entry in `recycle[K]`. The second entry in `lru`
 /// for `K` represents the second entry in `recycle[K]`, and so on. In other
-/// words, `lru` is ordered the same way as the VecDeque entries in `recycle`:
+/// words, `lru` is ordered the same way as the [`VecDeque`] entries in `recycle`:
 /// oldest at the front, freshest at the back. This allows keeping track of which
 /// host should have its connection dropped next.
 ///
 /// These invariants hold at the start and end of each method:
-///  - The length `lru` is equal to the sum of lengths of `recycle`'s VecDeques.
+///  - The length `lru` is equal to the sum of lengths of `recycle`'s [`VecDeque`]s.
 ///  - Each PoolKey exists the same number of times in `lru` as it has entries in `recycle`.
 ///  - If there is an entry in `recycle`, it has at least one element.
-///  - The length of `lru` is less than or equal to max_idle_connections.
-///  - The length of recycle[K] is less than or equal to max_idle_connections_per_host.
+///  - The length of `lru` is less than or equal to [`Self::max_idle_connections`].
+///  - The length of `recycle[K]` is less than or equal to [`Self::max_idle_connections_per_host`].
 ///
 /// *Internal API*
 pub(crate) struct ConnectionPool {
