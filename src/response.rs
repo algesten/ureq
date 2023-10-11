@@ -489,8 +489,6 @@ impl Response {
     ///
     /// [turbofish operator]: https://matematikaadit.github.io/posts/rust-turbofish.html
     ///
-    /// Requires feature `ureq = { version = "*", features = ["json"] }`
-    ///
     /// Example:
     ///
     /// ```
