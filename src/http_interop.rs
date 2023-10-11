@@ -12,7 +12,6 @@ use crate::{header::HeaderLine, response::ResponseStatusIndex, Request, Response
 /// [`Header`](crate::Header), it will be skipped rather than having the conversion fail. The remote
 /// address property will also always be `127.0.0.1:80` for similar reasons to the URL.
 ///
-/// Requires feature `ureq = { version = "*", features = ["http"] }`
 /// ```
 /// # fn main() -> Result<(), http::Error> {
 /// # ureq::is_test(true);
@@ -86,7 +85,6 @@ fn create_builder(response: &Response) -> http::response::Builder {
 /// Due to slight differences in how headers are handled, this means if a header from a [`Response`]
 /// is not valid UTF-8, it will not be included in the resulting [`http::Response`].
 ///
-/// Requires feature `ureq = { version = "*", features = ["http"] }`
 /// ```
 /// # fn main() -> Result<(), ureq::Error> {
 /// # ureq::is_test(true);
@@ -107,7 +105,6 @@ impl From<Response> for http::Response<Box<dyn Read + Send + Sync + 'static>> {
 /// Due to slight differences in how headers are handled, this means if a header from a [`Response`]
 /// is not valid UTF-8, it will not be included in the resulting [`http::Response`].
 ///
-/// Requires feature `ureq = { version = "*", features = ["http"] }`
 /// ```
 /// # fn main() -> Result<(), ureq::Error> {
 /// # ureq::is_test(true);
@@ -129,7 +126,6 @@ impl From<Response> for http::Response<String> {
 /// Due to slight differences in how headers are handled, this means if a header from a [`Response`]
 /// is not valid UTF-8, it will not be included in the resulting [`http::Response`].
 ///
-/// Requires feature `ureq = { version = "*", features = ["http"] }`
 /// ```
 /// # fn main() -> Result<(), ureq::Error> {
 /// # ureq::is_test(true);
@@ -153,7 +149,6 @@ impl From<Response> for http::Response<Vec<u8>> {
 /// to being a `GET` request to `"https://example.com"`. Additionally, any non-UTF8 headers will
 /// be skipped.
 ///
-/// Requires feature `ureq = { version = "*", features = ["http"] }`
 /// ```
 /// # fn main() -> Result<(), ureq::Error> {
 /// # ureq::is_test(true);
@@ -196,7 +191,6 @@ impl From<http::request::Builder> for Request {
 /// This will only convert valid UTF-8 header values into headers on the resulting builder. The
 /// method and URI are preserved. The HTTP version will always be set to `HTTP/1.1`.
 ///
-/// Requires feature `ureq = { version = "*", features = ["http"] }`
 /// ```
 /// # fn main() -> Result<(), http::Error> {
 /// # ureq::is_test(true);

@@ -175,8 +175,6 @@ impl Request {
 
     /// Send data a json value.
     ///
-    /// Requires feature `ureq = { version = "*", features = ["json"] }`
-    ///
     /// The `Content-Length` header is implicitly set to the length of the serialized value.
     ///
     /// ```
