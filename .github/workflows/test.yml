@@ -40,7 +40,7 @@ jobs:
           RUSTDOCFLAGS: -Dwarnings
         with:
           command: doc
-          args: --no-default-features --no-deps --all-features
+          args: --no-deps --all-features --document-private-items
   build_and_test:
     name: Test
     runs-on: ubuntu-latest
