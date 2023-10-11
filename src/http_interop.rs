@@ -290,6 +290,7 @@ impl From<Request> for http::request::Builder {
 
 #[cfg(test)]
 mod tests {
+    use crate::header::{add_header, HeaderLine};
 
     #[test]
     fn convert_http_response() {
@@ -394,6 +395,34 @@ mod tests {
     }
 
     #[test]
+    fn convert_http_response_builder_invalid_utf8_header_is_skipped() {
+        use http::Response;
+
+        let http_response = Response::builder()
+            .header("Some-Key", b"some\xff\xffvalue".as_slice())
+            .body(b"hello")
+            .unwrap();
+        let response: super::Response = http_response.into();
+
+        assert_eq!(response.header("some-key"), None);
+    }
+
+    #[test]
+    fn convert_to_http_response_builder_invalid_utf8_header_is_skipped() {
+        let mut response = super::Response::new(200, "OK", "tbr").unwrap();
+        add_header(
+            &mut response.headers,
+            HeaderLine::from(b"Some-Key: some\xff\xffvalue".to_vec())
+                .into_header()
+                .unwrap(),
+        );
+        dbg!(&response);
+        let http_response: http::Response<Vec<u8>> = response.into();
+
+        assert_eq!(http_response.headers().get("some-key"), None);
+    }
+
+    #[test]
     fn convert_http_request_builder() {
         use http::Request;
 
@@ -425,6 +454,36 @@ mod tests {
                 .map(|v| v.to_str().unwrap()),
             Some("some value")
         );
+        assert_eq!(http_request.uri(), "http://some-website.com");
+        assert_eq!(http_request.version(), http::Version::HTTP_11);
+    }
+
+    #[test]
+    fn convert_http_request_builder_invalid_utf8_header_is_skipped() {
+        use http::Request;
+
+        let http_request = Request::builder()
+            .method("PUT")
+            .header("Some-Key", "some\u{ffff}value")
+            .uri("https://google.com/?some=query");
+        let request: super::Request = http_request.into();
+
+        assert_eq!(request.header("some-key"), None);
+        assert_eq!(request.method(), "PUT");
+        assert_eq!(request.url(), "https://google.com/?some=query");
+    }
+
+    #[test]
+    fn convert_to_http_request_builder_invalid_utf8_header_is_skipped() {
+        use http::request::Builder;
+
+        let request = crate::agent()
+            .head("http://some-website.com")
+            .set("Some-Key", "some\u{ffff}value");
+        let http_request_builder: Builder = request.into();
+        let http_request = http_request_builder.body(()).unwrap();
+
+        assert_eq!(http_request.headers().get("some-key"), None);
         assert_eq!(http_request.uri(), "http://some-website.com");
         assert_eq!(http_request.version(), http::Version::HTTP_11);
     }
