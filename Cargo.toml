@@ -40,7 +40,7 @@ cookie_store = { version = "0.20", optional = true, default-features = false, fe
 log = "0.4"
 webpki = { package = "rustls-webpki", version = "0.101", optional = true }
 webpki-roots = { version = "0.25", optional = true }
-rustls = { version = "0.21", optional = true }
+rustls = { version = ">=0.21.6, <0.22", optional = true }
 rustls-native-certs = { version = "0.6", optional = true }
 native-tls = { version = "0.2", optional = true }
 flate2 = { version = "1.0.22", optional = true }
@@ -50,7 +50,7 @@ http = { version = "0.2", optional = true }
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }
 env_logger = "0.10"
-rustls = { version = "0.21", features = ["dangerous_configuration"] }
+rustls = { version = ">=0.21.6, <0.22", features = ["dangerous_configuration"] }
 rustls-pemfile = { version = "1.0" }
 
 [[example]]
