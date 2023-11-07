@@ -561,7 +561,7 @@ impl Response {
     /// let resp = ureq::Response::do_from_read(read);
     ///
     /// assert_eq!(resp.status(), 401);
-    pub(crate) fn do_from_stream(stream: Stream, unit: Unit) -> Result<Response, Error> {
+    pub(crate) fn do_from_stream(stream: Stream, unit: &Unit) -> Result<Response, Error> {
         let remote_addr = stream.remote_addr;
 
         let local_addr = match stream.socket() {
@@ -609,7 +609,7 @@ impl Response {
         }
 
         let reader =
-            Self::stream_to_reader(stream, &unit, body_type, compression, connection_option);
+            Self::stream_to_reader(stream, unit, body_type, compression, connection_option);
 
         let url = unit.url.clone();
 
@@ -766,7 +766,7 @@ impl FromStr for Response {
             &request_reader,
             None,
         );
-        Self::do_from_stream(stream, unit)
+        Self::do_from_stream(stream, &unit)
     }
 }
 
@@ -1150,7 +1150,7 @@ mod tests {
             &request_reader,
             None,
         );
-        let resp = Response::do_from_stream(s.into(), unit).unwrap();
+        let resp = Response::do_from_stream(s.into(), &unit).unwrap();
         assert_eq!(resp.status(), 200);
         assert_eq!(resp.header("x-geo-header"), None);
     }
@@ -1206,7 +1206,7 @@ mod tests {
         );
         Response::do_from_stream(
             stream,
-            Unit::new(
+            &Unit::new(
                 &agent,
                 "GET",
                 &"https://example.com/".parse().unwrap(),
@@ -1238,7 +1238,7 @@ mod tests {
         );
         let resp = Response::do_from_stream(
             stream,
-            Unit::new(
+            &Unit::new(
                 &agent,
                 "GET",
                 &"https://example.com/".parse().unwrap(),
