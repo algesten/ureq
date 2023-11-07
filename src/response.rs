@@ -49,6 +49,11 @@ enum BodyType {
     CloseDelimited,
 }
 
+pub(crate) enum PendingReader {
+    BeforeBodyStart,
+    Reader(Box<dyn Read + Send + Sync + 'static>),
+}
+
 /// Response instances are created as results of firing off requests.
 ///
 /// The `Response` is used to read response headers and decide what to do with the body.
@@ -81,7 +86,7 @@ pub struct Response {
     pub(crate) index: ResponseStatusIndex,
     pub(crate) status: u16,
     pub(crate) headers: Vec<Header>,
-    pub(crate) reader: Box<dyn Read + Send + Sync + 'static>,
+    pub(crate) reader: PendingReader,
     /// The socket address of the server that sent the response.
     pub(crate) remote_addr: SocketAddr,
     /// The socket address of the client that sent the request.
@@ -282,7 +287,12 @@ impl Response {
     /// # }
     /// ```
     pub fn into_reader(self) -> Box<dyn Read + Send + Sync + 'static> {
-        self.reader
+        match self.reader {
+            PendingReader::Reader(reader) => reader,
+            PendingReader::BeforeBodyStart => panic!(
+                "It is not valid to call into_reader before Request::stream_to_reader is called"
+            ),
+        }
     }
 
     // Determine what to do with the connection after we've read the body.
@@ -548,39 +558,33 @@ impl Response {
         })
     }
 
-    /// Create a response from a Read trait impl.
+    /// Create a response from a DeadlineStream, reading and parsing only the status line, headers
+    /// and its following CRLF.
     ///
-    /// This is hopefully useful for unit tests.
-    ///
-    /// Example:
-    ///
-    /// use std::io::Cursor;
-    ///
-    /// let text = "HTTP/1.1 401 Authorization Required\r\n\r\nPlease log in\n";
-    /// let read = Cursor::new(text.to_string().into_bytes());
-    /// let resp = ureq::Response::do_from_read(read);
-    ///
-    /// assert_eq!(resp.status(), 401);
-    pub(crate) fn do_from_stream(stream: Stream, unit: &Unit) -> Result<Response, Error> {
-        let remote_addr = stream.remote_addr;
+    /// Since this function only reads the status line, header and the following CRLF, the returned
+    /// Response will have an empty reader and does not take ownership of DeadlineStream.
+    /// To read the following data, the DeadlineStream can be read again after the call to this
+    /// function.
+    pub(crate) fn read_response_head(
+        stream: &mut DeadlineStream,
+        unit: &Unit,
+    ) -> Result<Response, Error> {
+        let mut bytes_read = 0;
+        let remote_addr = stream.inner_ref().remote_addr;
 
-        let local_addr = match stream.socket() {
+        let local_addr = match stream.inner_ref().socket() {
             Some(sock) => sock.local_addr().map_err(Error::from)?,
             None => std::net::SocketAddrV4::new(std::net::Ipv4Addr::new(127, 0, 0, 1), 0).into(),
         };
 
-        //
-        // HTTP/1.1 200 OK\r\n
-        let mut stream = stream::DeadlineStream::new(stream, unit.deadline);
-
         // The status line we can ignore non-utf8 chars and parse as_str_lossy().
-        let status_line = read_next_line(&mut stream, "the status line")?.into_string_lossy();
+        let status_line =
+            read_next_line(stream, "the status line", &mut bytes_read)?.into_string_lossy();
         let (index, status) = parse_status_line(status_line.as_str())?;
-        let http_version = &status_line.as_str()[0..index.http_version];
 
         let mut headers: Vec<Header> = Vec::new();
         while headers.len() <= MAX_HEADER_COUNT {
-            let line = read_next_line(&mut stream, "a header")?;
+            let line = read_next_line(stream, "a header", &mut bytes_read)?;
             if line.is_empty() {
                 break;
             }
@@ -595,23 +599,8 @@ impl Response {
             ));
         }
 
-        let compression =
-            get_header(&headers, "content-encoding").and_then(Compression::from_header_value);
-
-        let connection_option =
-            Self::connection_option(http_version, get_header(&headers, "connection"));
-
-        let body_type = Self::body_type(&unit.method, status, http_version, &headers);
-
-        // remove Content-Encoding and length due to automatic decompression
-        if compression.is_some() {
-            headers.retain(|h| !h.is_name("content-encoding") && !h.is_name("content-length"));
-        }
-
-        let reader =
-            Self::stream_to_reader(stream, unit, body_type, compression, connection_option);
-
         let url = unit.url.clone();
+        let reader = PendingReader::BeforeBodyStart;
 
         let response = Response {
             url,
@@ -624,6 +613,54 @@ impl Response {
             local_addr,
             history: vec![],
         };
+        Ok(response)
+    }
+
+    /// Attach a stream to Response, for reading the body.
+    ///
+    /// The response reader also uncompresses the body if it is compressed.
+    pub(crate) fn take_body(&mut self, stream: DeadlineStream, unit: &Unit) -> Result<(), Error> {
+        let compression =
+            get_header(&self.headers, "content-encoding").and_then(Compression::from_header_value);
+
+        let connection_option =
+            Self::connection_option(self.http_version(), get_header(&self.headers, "connection"));
+
+        let body_type = Self::body_type(
+            &unit.method,
+            self.status(),
+            self.http_version(),
+            &self.headers,
+        );
+
+        // remove Content-Encoding and length due to automatic decompression
+        if compression.is_some() {
+            self.headers
+                .retain(|h| !h.is_name("content-encoding") && !h.is_name("content-length"));
+        }
+
+        self.reader = PendingReader::Reader(Self::stream_to_reader(
+            stream,
+            unit,
+            body_type,
+            compression,
+            connection_option,
+        ));
+
+        Ok(())
+    }
+
+    /// Create a Response from a DeadlineStream
+    ///
+    /// Parses and comsumes the header from the stream and creates a Response with
+    /// the stream as the reader. The response reader also uncompresses the body
+    /// if it is compressed.
+    pub(crate) fn do_from_stream(
+        mut stream: DeadlineStream,
+        unit: &Unit,
+    ) -> Result<Response, Error> {
+        let mut response = Self::read_response_head(&mut stream, unit)?;
+        response.take_body(stream, unit)?;
         Ok(response)
     }
 
@@ -766,15 +803,22 @@ impl FromStr for Response {
             &request_reader,
             None,
         );
+        let stream = stream::DeadlineStream::new(stream, unit.deadline);
         Self::do_from_stream(stream, &unit)
     }
 }
 
-fn read_next_line(reader: &mut impl BufRead, context: &str) -> io::Result<HeaderLine> {
+fn read_next_line(
+    reader: &mut impl BufRead,
+    context: &str,
+    running_total: &mut usize,
+) -> io::Result<HeaderLine> {
     let mut buf = Vec::new();
     let result = reader
         .take((MAX_HEADER_SIZE + 1) as u64)
         .read_until(b'\n', &mut buf);
+
+    *running_total += buf.len();
 
     match result {
         Ok(0) => Err(io::Error::new(
@@ -1078,7 +1122,8 @@ mod tests {
         const LEN: usize = MAX_HEADER_SIZE + 1;
         let s = format!("Long-Header: {}\r\n", "A".repeat(LEN),);
         let mut cursor = Cursor::new(s);
-        let result = read_next_line(&mut cursor, "some context");
+        let mut bytes_read = 0;
+        let result = read_next_line(&mut cursor, "some context", &mut bytes_read);
         let err = result.expect_err("did not error on too-large header");
         assert_eq!(err.kind(), io::ErrorKind::Other);
         assert_eq!(
@@ -1117,9 +1162,9 @@ mod tests {
             encoding_rs::WINDOWS_1252.encode("HTTP/1.1 302 Déplacé Temporairement\r\n");
         let bytes = cow.to_vec();
         let mut reader = io::BufReader::new(io::Cursor::new(bytes));
-        let r = read_next_line(&mut reader, "test status line");
-        let h = r.unwrap();
-        assert_eq!(h.to_string(), "HTTP/1.1 302 D�plac� Temporairement");
+        let mut bytes_read = 0;
+        let header = read_next_line(&mut reader, "test status line", &mut bytes_read).unwrap();
+        assert_eq!(header.to_string(), "HTTP/1.1 302 D�plac� Temporairement");
     }
 
     #[test]
@@ -1150,6 +1195,7 @@ mod tests {
             &request_reader,
             None,
         );
+        let s = stream::DeadlineStream::new(s, unit.deadline);
         let resp = Response::do_from_stream(s.into(), &unit).unwrap();
         assert_eq!(resp.status(), 200);
         assert_eq!(resp.header("x-geo-header"), None);
@@ -1204,18 +1250,16 @@ mod tests {
             "1.1.1.1:4343".parse().unwrap(),
             PoolReturner::new(&agent, PoolKey::from_parts("https", "example.com", 443)),
         );
-        Response::do_from_stream(
-            stream,
-            &Unit::new(
-                &agent,
-                "GET",
-                &"https://example.com/".parse().unwrap(),
-                vec![],
-                &Payload::Empty.into_read(),
-                None,
-            ),
-        )
-        .unwrap();
+        let unit = &Unit::new(
+            &agent,
+            "GET",
+            &"https://example.com/".parse().unwrap(),
+            vec![],
+            &Payload::Empty.into_read(),
+            None,
+        );
+        let stream = stream::DeadlineStream::new(stream, unit.deadline);
+        Response::do_from_stream(stream, unit).unwrap();
         assert_eq!(agent2.state.pool.len(), 1);
     }
 
@@ -1236,18 +1280,16 @@ mod tests {
             "1.1.1.1:4343".parse().unwrap(),
             PoolReturner::none(),
         );
-        let resp = Response::do_from_stream(
-            stream,
-            &Unit::new(
-                &agent,
-                "GET",
-                &"https://example.com/".parse().unwrap(),
-                vec![],
-                &Payload::Empty.into_read(),
-                None,
-            ),
-        )
-        .unwrap();
+        let unit = &Unit::new(
+            &agent,
+            "GET",
+            &"https://example.com/".parse().unwrap(),
+            vec![],
+            &Payload::Empty.into_read(),
+            None,
+        );
+        let stream = stream::DeadlineStream::new(stream, unit.deadline);
+        let resp = Response::do_from_stream(stream, unit).unwrap();
         let body = resp.into_string().unwrap();
         assert_eq!(body, "hi\n");
     }

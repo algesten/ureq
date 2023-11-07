@@ -81,37 +81,91 @@ impl TestHeaders {
     pub fn headers(&self) -> &[String] {
         &self.0[1..]
     }
+
+    pub(crate) fn to_headers(&self) -> Vec<crate::header::Header> {
+        if self.0.len() <= 1 {
+            return Vec::new();
+        }
+
+        let mut headers = Vec::new();
+        for line in &self.0[1..] {
+            let headerline = crate::header::HeaderLine::from(line.clone());
+            let header = headerline.into_header().unwrap();
+            headers.push(header);
+        }
+        headers
+    }
 }
 
 // Read a stream until reaching a blank line, in order to consume
 // request headers.
 #[cfg(test)]
-pub fn read_request(stream: &TcpStream) -> TestHeaders {
-    use std::io::{BufRead, BufReader};
-
+use std::io::{BufRead, BufReader};
+#[cfg(test)]
+pub fn read_request_headers(bufreader: &mut BufReader<&TcpStream>) -> TestHeaders {
     let mut results = vec![];
-    for line in BufReader::new(stream).lines() {
-        match line {
-            Err(e) => {
-                eprintln!("testserver: in read_request: {}", e);
-                break;
-            }
-            Ok(line) if line.is_empty() => break,
-            Ok(line) => results.push(line),
-        };
-    }
-    // Consume rest of body. TODO maybe capture the body for inspection in the test?
-    // There's a risk stream is ended here, and fill_buf() would block.
-    stream.set_nonblocking(true).ok();
-    let mut reader = BufReader::new(stream);
-    while let Ok(buf) = reader.fill_buf() {
-        let amount = buf.len();
-        if amount == 0 {
+    loop {
+        let mut line = String::new();
+        bufreader.read_line(&mut line).unwrap();
+        // Remove \r\n
+        line.truncate(line.len().saturating_sub(2));
+
+        if line.is_empty() {
             break;
         }
-        reader.consume(amount);
+        results.push(line);
     }
+    let mut body = Vec::new();
+    body.append(&mut bufreader.buffer().to_vec());
+
     TestHeaders(results)
+}
+
+// Read whole body from a stream after reading the statusline and headers
+#[cfg(test)]
+pub fn read_request_body(
+    bufreader: &mut BufReader<&TcpStream>,
+    request_headers: &TestHeaders,
+) -> Vec<u8> {
+    let headers = request_headers.to_headers();
+
+    // NOTE: Currently only requests with "Content-Length" is supported.
+    let mut content_length = 0;
+    for header in headers {
+        if header.name() == "Content-Length" {
+            content_length = header.value().unwrap().parse().unwrap();
+        }
+    }
+
+    let mut bytes_read = 0;
+    let mut body = Vec::new();
+
+    // There's possibly already some data in the BufReader, read and consume
+    // those first
+    body.append(&mut bufreader.buffer().to_vec());
+    bytes_read += body.len();
+    bufreader.consume(body.len());
+
+    while bytes_read < content_length {
+        let buf = bufreader.fill_buf().unwrap();
+        body.append(&mut buf.to_vec());
+        let amount = buf.len();
+        bytes_read += amount;
+        bufreader.consume(amount);
+    }
+
+    body
+}
+
+// Read a stream as a request and return the headers
+#[cfg(test)]
+pub fn read_request(stream: &TcpStream) -> TestHeaders {
+    let mut bufreader = BufReader::new(stream);
+
+    let request_headers = read_request_headers(&mut bufreader);
+    let _body = read_request_body(&mut bufreader, &request_headers);
+
+    request_headers
 }
 
 impl TestServer {

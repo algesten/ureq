@@ -455,8 +455,9 @@ pub(crate) fn connect_host(
             let s = stream.try_clone()?;
             let pool_key = PoolKey::from_parts(unit.url.scheme(), hostname, port);
             let pool_returner = PoolReturner::new(&unit.agent, pool_key);
-            let s = Stream::new(s, remote_addr, pool_returner);
-            let response = Response::do_from_stream(s, unit)?;
+            let stream = Stream::new(s, remote_addr, pool_returner);
+            let stream = DeadlineStream::new(stream, unit.deadline);
+            let response = Response::do_from_stream(stream, unit)?;
             Proxy::verify_response(&response)?;
         }
     }

@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use crate::error::Error;
-use crate::testserver::{read_request, TestServer};
+use crate::testserver::{read_request, read_request_body, read_request_headers, TestServer};
 use std::io::{self, Read, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
 use std::thread;
@@ -27,6 +27,30 @@ fn idle_timeout_handler_408(mut stream: TcpStream) -> io::Result<()> {
     stream.set_read_timeout(Some(twosec))?;
     thread::sleep(twosec);
     stream.write_all(b"HTTP/1.1 408 Request Timeout\r\nContent-Length: 7\r\n\r\ntimeout")?;
+    Ok(())
+}
+
+// Handler that answers with 100-continue before reading body
+fn expect_100_continue_handler(stream: TcpStream) -> io::Result<()> {
+    use std::io::BufReader;
+
+    let mut bufreader = BufReader::new(&stream);
+    let request_headers = read_request_headers(&mut bufreader);
+    {
+        let stream_write = bufreader.get_mut();
+        stream_write.write_all(b"HTTP/1.1 100 Continue\r\n\r\n")?;
+        stream_write.flush().unwrap();
+    }
+    let request_body = read_request_body(&mut bufreader, &request_headers);
+    {
+        let stream_write = bufreader.get_mut();
+        stream_write.write_all(b"HTTP/1.1 200 OK\r\n")?;
+        stream_write.write_all(b"Content-Length: ")?;
+        stream_write.write_all(request_body.len().to_string().as_bytes())?;
+        stream_write.write_all(b"\r\n\r\n")?;
+        stream_write.write_all(&request_body)?;
+        stream_write.flush().unwrap();
+    }
     Ok(())
 }
 
@@ -82,6 +106,23 @@ fn connection_reuse_with_408() {
     // we thought we were testing.
     let resp = agent.post(&url).send_string("hello").unwrap();
     assert_eq!(resp.status(), 200);
+}
+
+#[test]
+fn expect_100_continue() {
+    let testserver = TestServer::new(expect_100_continue_handler);
+    let url = format!("http://localhost:{}", testserver.port);
+    let agent = Agent::new();
+    let request_body = "this is a test string for the test expect_100_continue";
+    let resp = agent
+        .post(&url)
+        .set("Expect", "100-continue")
+        .send_bytes(request_body.as_bytes())
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+    let mut response_body = Vec::new();
+    resp.into_reader().read_to_end(&mut response_body).unwrap();
+    assert_eq!(request_body.as_bytes(), response_body);
 }
 
 #[test]

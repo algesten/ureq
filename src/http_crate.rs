@@ -3,7 +3,9 @@ use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
 };
 
-use crate::{header::HeaderLine, response::ResponseStatusIndex, Request, Response};
+use crate::{
+    header::HeaderLine, response::PendingReader, response::ResponseStatusIndex, Request, Response,
+};
 
 /// Converts an [`http::Response`] into a [`Response`].
 ///
@@ -44,7 +46,7 @@ impl<T: AsRef<[u8]> + Send + Sync + 'static> From<http::Response<T>> for Respons
                     HeaderLine::from(raw_header).into_header().unwrap()
                 })
                 .collect::<Vec<_>>(),
-            reader: Box::new(Cursor::new(value.into_body())),
+            reader: PendingReader::Reader(Box::new(Cursor::new(value.into_body()))),
             remote_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 80),
             local_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 0),
             history: vec![],
@@ -328,12 +330,14 @@ mod tests {
 
     #[test]
     fn convert_to_http_response_bytes() {
+        use crate::response::PendingReader;
         use http::Response;
         use std::io::Cursor;
 
         let mut response = super::Response::new(200, "OK", "tbr").unwrap();
         // b'\xFF' as invalid UTF-8 character
-        response.reader = Box::new(Cursor::new(vec![b'\xFF', 0xde, 0xad, 0xbe, 0xef]));
+        response.reader =
+            PendingReader::Reader(Box::new(Cursor::new(vec![b'\xFF', 0xde, 0xad, 0xbe, 0xef])));
         let http_response: Response<Vec<u8>> = response.into();
 
         assert_eq!(
