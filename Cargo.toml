@@ -45,7 +45,7 @@ rustls-native-certs = { version = "0.6", optional = true }
 native-tls = { version = "0.2", optional = true }
 flate2 = { version = "1.0.22", optional = true }
 brotli-decompressor = { version = "2.3.2", optional = true }
-http = { version = "0.2", optional = true }
+http = { version = "1.0", optional = true }
 
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }
