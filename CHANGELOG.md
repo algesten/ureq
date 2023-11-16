@@ -1,3 +1,14 @@
+# 2.9.0
+
+## Fixed
+  * Broken rustls dep (introduced new function in patch version) (#677)
+  * Doc and test fixes (#670, #673, #674)
+
+## Added
+  * Upgraded http dep to 1.0
+  * http_interop to not require utf-8 headers (#672)
+  * http_interop implement conversion for `http::request::Parts` (#669)
+
 # 2.8.0
 
 ## Fixed
