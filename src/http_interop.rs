@@ -8,8 +8,8 @@ use crate::{header::HeaderLine, response::ResponseStatusIndex, Request, Response
 /// Converts an [`http::Response`] into a [`Response`].
 ///
 /// As an [`http::Response`] does not contain a URL, `"https://example.com/"` is used as a
-/// placeholder. Additionally, if the response has a header which cannot be converted into a valid
-/// [`Header`](crate::Header), it will be skipped rather than having the conversion fail. The remote
+/// placeholder. Additionally, if the response has a header which cannot be converted into
+/// the ureq equivalent, it will be skipped rather than having the conversion fail. The remote
 /// address property will also always be `127.0.0.1:80` for similar reasons to the URL.
 ///
 /// ```

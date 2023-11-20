@@ -65,7 +65,7 @@ impl fmt::Display for HeaderLine {
 #[derive(Clone, PartialEq, Eq)]
 /// Wrapper type for a header field.
 /// <https://tools.ietf.org/html/rfc7230#section-3.2>
-pub struct Header {
+pub(crate) struct Header {
     // Line contains the unmodified bytes of single header field.
     // It does not contain the final CRLF.
     line: HeaderLine,
@@ -115,6 +115,7 @@ impl Header {
     ///
     /// ureq can't know what encoding the header is in, but this function provides
     /// an escape hatch for users that need to handle such headers.
+    #[cfg(any(feature = "http-interop", feature = "charset"))]
     pub fn value_raw(&self) -> &[u8] {
         let mut bytes = &self.line.as_bytes()[self.index + 1..];
 
