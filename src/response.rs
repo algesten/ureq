@@ -183,6 +183,33 @@ impl Response {
             .collect()
     }
 
+    /// Returns a list of all headers in this response.
+    /// First element of the tuple is the header name, second is the value.
+    pub fn headers(&self) -> Vec<(String, Option<String>)> {
+        self.headers
+            .iter()
+            .map(|h| (h.name().to_owned(), h.value().map(|v| v.to_owned())))
+            .collect()
+    }
+
+    /// Iterate over all headers in this response.
+    /// First element of the tuple is the header name, second is the value.
+    /// This avoids allocating a vector.
+    pub fn headers_iter(&self) -> impl Iterator<Item = (&str, Option<&str>)> + '_ {
+        self.headers.iter().map(|h| (h.name(), h.value()))
+    }
+
+    /// Returns a hashmap of all headers in this response.
+    /// The keys are the header names, and the values are the header values.
+    /// Note: if there is multiple entries for the same header name, this function only returns the last one.
+    pub fn headers_hashmap(&self) -> std::collections::HashMap<String, Option<String>> {
+        let mut hashmap = std::collections::HashMap::new();
+        for (key, value) in self.headers_iter() {
+            hashmap.insert(key.to_string(), value.map(|v| v.to_string()));
+        }
+        hashmap
+    }
+
     /// Tells if the response has the named header.
     pub fn has(&self, name: &str) -> bool {
         self.header(name).is_some()
