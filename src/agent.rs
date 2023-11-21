@@ -325,8 +325,9 @@ impl AgentBuilder {
 
     /// Attempt to detect proxy settings from the environment, i.e. HTTP_PROXY
     ///
-    /// The default is `false`, i.e. not detecting proxy from env since this is
-    /// a potential security risk.
+    /// The default is `false` without the `proxy-from-env` feature flag, i.e.
+    /// not detecting proxy from env, due to the potential security risk and to
+    /// maintain backward compatibility.
     ///
     /// If the `proxy` is set on the builder, this setting has no effect.
     pub fn try_proxy_from_env(mut self, do_try: bool) -> Self {
