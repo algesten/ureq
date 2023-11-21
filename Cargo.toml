@@ -26,6 +26,7 @@ socks-proxy = ["dep:socks"]
 gzip = ["dep:flate2"]
 brotli = ["dep:brotli-decompressor"]
 http-interop = ["dep:http"]
+proxy-from-env = []
 
 [dependencies]
 base64 = "0.21"

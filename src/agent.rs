@@ -264,6 +264,9 @@ impl AgentBuilder {
                 user_agent: format!("ureq/{}", env!("CARGO_PKG_VERSION")),
                 tls_config: TlsConfig(crate::default_tls_config()),
             },
+            #[cfg(feature = "proxy-from-env")]
+            try_proxy_from_env: true,
+            #[cfg(not(feature = "proxy-from-env"))]
             try_proxy_from_env: false,
             max_idle_connections: DEFAULT_MAX_IDLE_CONNECTIONS,
             max_idle_connections_per_host: DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST,
