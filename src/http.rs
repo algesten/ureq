@@ -1,5 +1,3 @@
-use http_02 as http;
-
 use std::{
     io::{Cursor, Read},
     net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -15,7 +13,6 @@ use crate::{header::HeaderLine, response::ResponseStatusIndex, Request, Response
 /// address property will also always be `127.0.0.1:80` for similar reasons to the URL.
 ///
 /// ```
-/// # use http_02 as http;
 /// # fn main() -> Result<(), http::Error> {
 /// # ureq::is_test(true);
 /// let http_response = http::Response::builder().status(200).body("<response>")?;
@@ -81,7 +78,6 @@ fn create_builder(response: &Response) -> http::response::Builder {
 /// body of the response.
 ///
 /// ```
-/// # use http_02 as http;
 /// # fn main() -> Result<(), ureq::Error> {
 /// # ureq::is_test(true);
 /// use std::io::Read;
@@ -99,7 +95,6 @@ impl From<Response> for http::Response<Box<dyn Read + Send + Sync + 'static>> {
 /// Converts a [`Response`] into an [`http::Response`], where the body is a String.
 ///
 /// ```
-/// # use http_02 as http;
 /// # fn main() -> Result<(), ureq::Error> {
 /// # ureq::is_test(true);
 /// let response = ureq::get("http://example.com").call()?;
@@ -118,7 +113,6 @@ impl From<Response> for http::Response<String> {
 /// Converts a [`Response`] into an [`http::Response`], where the body is a [`Vec<u8>`].
 ///
 /// ```
-/// # use http_02 as http;
 /// # fn main() -> Result<(), ureq::Error> {
 /// # ureq::is_test(true);
 /// let response = ureq::get("http://example.com").call()?;
@@ -137,36 +131,17 @@ impl From<Response> for http::Response<Vec<u8>> {
 /// Converts an [`http::request::Builder`] into a [`Request`].
 ///
 /// ```
-/// # use http_02 as http;
-/// # fn main() -> Result<(), ureq::Error> {
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// # ureq::is_test(true);
+/// use std::convert::TryInto;
+///
 /// let http_request_builder = http::Request::builder().method("GET").uri("http://example.com");
-/// let request: ureq::Request = http_request_builder.into();
+/// let request: ureq::Request = http_request_builder.try_into()?;
 /// request.call()?;
 /// # Ok(())
 /// # }
 /// ```
 ///
-/// # Fallibility
-///
-/// [`http::request::Builder`] contains a [`Result`] that is normally checked when the builder
-/// is "built" into a [`http::Request`].  This [`From`] implementation does _not_ check it
-/// however, and returns a `GET` [`Request`] that defaults to `"https://example.com"` in case
-/// it contains [`Err`].  In order to test for errors, utilize the provided conversion from
-/// [`http::request::Parts`]:
-///
-/// ```
-/// # use http_02 as http;
-/// # fn main() -> Result<(), ureq::Error> {
-/// ureq::is_test(true);
-/// let http_builder = http::Request::builder().method("GET").uri("http://example.com");
-/// let request = http_builder.body(()).expect("Builder error"); // Check the error
-/// let (parts, ()) = request.into_parts();
-/// let request: ureq::Request = parts.into();
-//// request.call()?;
-/// # Ok(())
-/// # }
-/// ```
 ///
 /// # Converting from [`http::Request`]
 ///
@@ -176,7 +151,6 @@ impl From<Response> for http::Response<Vec<u8>> {
 /// `body`, for which the conversion _is_ implemented and can be used as follows:
 ///
 /// ```
-/// # use http_02 as http;
 /// # fn main() -> Result<(), ureq::Error> {
 /// # ureq::is_test(true);
 /// let http_request = http::Request::builder().method("GET").uri("http://example.com").body(vec![0u8]).unwrap();
@@ -186,27 +160,12 @@ impl From<Response> for http::Response<Vec<u8>> {
 /// # Ok(())
 /// # }
 /// ```
-impl From<http::request::Builder> for Request {
-    fn from(value: http::request::Builder) -> Self {
-        let mut new_request = crate::agent().request(
-            value.method_ref().map_or("GET", |m| m.as_str()),
-            &value
-                .uri_ref()
-                .map_or("https://example.com".to_string(), |u| u.to_string()),
-        );
+impl core::convert::TryFrom<http::request::Builder> for Request {
+    type Error = http::Error;
 
-        if let Some(headers) = value.headers_ref() {
-            for (name, value) in headers {
-                let mut raw_header: Vec<u8> = name.to_string().into_bytes();
-                raw_header.extend(b": ");
-                raw_header.extend(value.as_bytes());
-                let header = HeaderLine::from(raw_header).into_header().unwrap();
-
-                crate::header::add_header(&mut new_request.headers, header)
-            }
-        }
-
-        new_request
+    fn try_from(value: http::request::Builder) -> Result<Self, http::Error> {
+        let (parts, ()) = value.body(())?.into_parts();
+        Ok(parts.into())
     }
 }
 
@@ -215,7 +174,6 @@ impl From<http::request::Builder> for Request {
 /// An [`http::Request`] can be split out into its [`http::request::Parts`] and body as follows:
 ///
 /// ```
-/// # use http_02 as http;
 /// # fn main() -> Result<(), ureq::Error> {
 /// # ureq::is_test(true);
 /// let http_request = http::Request::builder().method("GET").uri("http://example.com").body(vec![0u8]).unwrap();
@@ -251,7 +209,6 @@ impl From<http::request::Parts> for Request {
 /// The method and URI are preserved. The HTTP version will always be set to `HTTP/1.1`.
 ///
 /// ```
-/// # use http_02 as http;
 /// # fn main() -> Result<(), http::Error> {
 /// # ureq::is_test(true);
 /// let request = ureq::get("https://my-website.com");
@@ -277,8 +234,8 @@ impl From<Request> for http::request::Builder {
 
 #[cfg(test)]
 mod tests {
-    use http_02 as http;
     use crate::header::{add_header, get_header_raw, HeaderLine};
+    use std::convert::TryInto;
 
     #[test]
     fn convert_http_response() {
@@ -427,7 +384,7 @@ mod tests {
             .method("PUT")
             .header("Some-Key", "some value")
             .uri("https://google.com/?some=query");
-        let request: super::Request = http_request.into();
+        let request: super::Request = http_request.try_into().unwrap();
 
         assert_eq!(request.header("some-key"), Some("some value"));
         assert_eq!(request.method(), "PUT");
@@ -441,7 +398,7 @@ mod tests {
         let request = crate::agent()
             .head("http://some-website.com")
             .set("Some-Key", "some value");
-        let http_request_builder: Builder = request.into();
+        let http_request_builder: Builder = request.try_into().unwrap();
         let http_request = http_request_builder.body(()).unwrap();
 
         assert_eq!(
@@ -463,7 +420,7 @@ mod tests {
             .method("PUT")
             .header("Some-Key", b"some\xff\xffvalue".as_slice())
             .uri("https://google.com/?some=query");
-        let request: super::Request = http_request.into();
+        let request: super::Request = http_request.try_into().unwrap();
 
         assert_eq!(
             get_header_raw(&request.headers, "some-key"),
@@ -485,7 +442,7 @@ mod tests {
                 .unwrap(),
         );
         dbg!(&request);
-        let http_request_builder: Builder = request.into();
+        let http_request_builder: Builder = request.try_into().unwrap();
         let http_request = http_request_builder.body(()).unwrap();
 
         assert_eq!(
