@@ -1,6 +1,6 @@
 [package]
 name = "ureq"
-version = "2.9.0"
+version = "2.9.1"
 authors = ["Martin Algesten <martin@algesten.se>", "Jacob Hoffman-Andrews <ureq@hoffman-andrews.com>"]
 description = "Simple, safe HTTP client"
 license = "MIT OR Apache-2.0"
