@@ -25,8 +25,11 @@ cookies = ["dep:cookie", "dep:cookie_store"]
 socks-proxy = ["dep:socks"]
 gzip = ["dep:flate2"]
 brotli = ["dep:brotli-decompressor"]
+# http-interop is for http crate version 0.2 (backwards compat with last pre-release)
+# Consider this feature deprecated. In time, we will remove it. Use `http-crate` instead.
 http-interop = ["dep:http-02"]
-http = ["dep:http"]
+# http-crate is for http crate version 1.0 (full release)
+http-crate = ["dep:http"]
 proxy-from-env = []
 
 [dependencies]

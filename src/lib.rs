@@ -419,10 +419,12 @@ mod test;
 mod testserver;
 
 #[cfg(feature = "http-interop")]
+// 0.2 version dependency (deprecated)
 mod http_interop;
 
-#[cfg(feature = "http")]
-mod http;
+#[cfg(feature = "http-crate")]
+// 1.0 version dependency.
+mod http_crate;
 
 pub use crate::agent::Agent;
 pub use crate::agent::AgentBuilder;

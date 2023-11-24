@@ -59,9 +59,9 @@ jobs:
           - native-certs
           - gzip
           - brotli
-          - http
+          - http-crate
           - http-interop
-          - http http-interop
+          - http-crate http-interop
     env:
       RUST_BACKTRACE: "1"
       RUSTFLAGS: "-D dead_code -D unused-variables -D unused"

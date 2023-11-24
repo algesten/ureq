@@ -1,3 +1,11 @@
+# 2.9.1
+
+## Fixed
+
+  * Unbreak feature `http-interop`. This feature is version locked to http crate 0.2
+  * New feature `http-crate`. This feature is for http crate 1.0
+  * New feature `proxy-from-env` to detect proxy settings for global Agent (ureq::get).
+
 # 2.9.0
 
 ## Fixed
