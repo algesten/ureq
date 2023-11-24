@@ -277,8 +277,8 @@ impl From<Request> for http::request::Builder {
 
 #[cfg(test)]
 mod tests {
-    use http_02 as http;
     use crate::header::{add_header, get_header_raw, HeaderLine};
+    use http_02 as http;
 
     #[test]
     fn convert_http_response() {

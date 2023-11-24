@@ -158,7 +158,7 @@ pub fn get_header<'h>(headers: &'h [Header], name: &str) -> Option<&'h str> {
         .and_then(|h| h.value())
 }
 
-#[cfg(any(doc, all(test, any(feature = "http-interop", feature = "http"))))]
+#[cfg(any(doc, all(test, any(feature = "http-interop", feature = "http-crate"))))]
 pub fn get_header_raw<'h>(headers: &'h [Header], name: &str) -> Option<&'h [u8]> {
     headers
         .iter()
