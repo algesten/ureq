@@ -96,26 +96,19 @@ m0Wqhhi8/24Sy934t5Txgkfoltg8ahkx934WjP6WWRnSAu+cf+vW
     use ureq::OrAnyStatus;
 
     let certs = rustls_pemfile::certs(&mut BADSSL_CLIENT_CERT_PEM.as_bytes())
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    let key = rustls_pemfile::private_key(&mut BADSSL_CLIENT_CERT_PEM.as_bytes())
         .unwrap()
-        .into_iter()
-        .map(rustls::Certificate)
-        .collect();
-    let key = rustls_pemfile::rsa_private_keys(&mut BADSSL_CLIENT_CERT_PEM.as_bytes()).unwrap()[0]
-        .clone();
+        .unwrap();
 
-    let mut root_store = rustls::RootCertStore::empty();
-    root_store.add_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.iter().map(|ta| {
-        rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
-            ta.subject,
-            ta.spki,
-            ta.name_constraints,
-        )
-    }));
+    let root_store = rustls::RootCertStore {
+        roots: webpki_roots::TLS_SERVER_ROOTS.iter().cloned().collect(),
+    };
 
     let tls_config = rustls::ClientConfig::builder()
-        .with_safe_defaults()
         .with_root_certificates(root_store)
-        .with_single_cert(certs, rustls::PrivateKey(key))
+        .with_client_auth_cert(certs, key)
         .unwrap();
 
     let agent = ureq::builder()
@@ -156,17 +149,11 @@ m0Wqhhi8/24Sy934t5Txgkfoltg8ahkx934WjP6WWRnSAu+cf+vW
 #[test]
 #[cfg(any(feature = "tls", feature = "tls-native"))]
 fn ipv6_addr_in_dns_name() {
-    let mut root_store = rustls::RootCertStore::empty();
-    root_store.add_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.iter().map(|ta| {
-        rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
-            ta.subject,
-            ta.spki,
-            ta.name_constraints,
-        )
-    }));
+    let root_store = rustls::RootCertStore {
+        roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
+    };
 
     let tls_config = rustls::ClientConfig::builder()
-        .with_safe_defaults()
         .with_root_certificates(root_store)
         .with_no_client_auth();
 

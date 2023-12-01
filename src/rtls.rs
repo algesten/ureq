@@ -64,30 +64,12 @@ fn root_certs() -> rustls::RootCertStore {
     use log::error;
 
     let mut root_cert_store = rustls::RootCertStore::empty();
-
-    let mut valid_count = 0;
-    let mut invalid_count = 0;
-    let certs = rustls_native_certs::load_native_certs().unwrap_or_else(|e| {
+    let native_certs = rustls_native_certs::load_native_certs().unwrap_or_else(|e| {
         error!("loading native certificates: {}", e);
         vec![]
     });
-    for cert in certs {
-        let cert = rustls::Certificate(cert.0);
-        // Continue on parsing errors, as native stores often include ancient or syntactically
-        // invalid certificates, like root certificates without any X509 extensions.
-        // Inspiration: https://github.com/rustls/rustls/blob/633bf4ba9d9521a95f68766d04c22e2b01e68318/rustls/src/anchors.rs#L105-L112
-        match root_cert_store.add(&cert) {
-            Ok(_) => valid_count += 1,
-            Err(err) => {
-                invalid_count += 1;
-                log::warn!(
-                    "rustls failed to parse DER certificate {:?} {:?}",
-                    &err,
-                    &cert
-                );
-            }
-        }
-    }
+    let (valid_count, invalid_count) =
+        root_cert_store.add_parsable_certificates(native_certs.into_iter().map(|c| c.0.into()));
     if valid_count == 0 && invalid_count > 0 {
         error!(
             "no valid certificates loaded by rustls-native-certs. all HTTPS requests will fail."
@@ -98,15 +80,9 @@ fn root_certs() -> rustls::RootCertStore {
 
 #[cfg(not(feature = "native-certs"))]
 fn root_certs() -> rustls::RootCertStore {
-    let mut root_store = rustls::RootCertStore::empty();
-    root_store.add_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.iter().map(|ta| {
-        rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
-            ta.subject,
-            ta.spki,
-            ta.name_constraints,
-        )
-    }));
-    root_store
+    rustls::RootCertStore {
+        roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
+    }
 }
 
 impl TlsConnector for Arc<rustls::ClientConfig> {
@@ -122,8 +98,9 @@ impl TlsConnector for Arc<rustls::ClientConfig> {
             dns_name
         };
 
-        let sni = rustls::ServerName::try_from(dns_name)
-            .map_err(|e| ErrorKind::Dns.msg(format!("parsing '{}'", dns_name)).src(e))?;
+        let sni = rustls_pki_types::ServerName::try_from(dns_name)
+            .map_err(|e| ErrorKind::Dns.msg(format!("parsing '{}'", dns_name)).src(e))?
+            .to_owned();
 
         let mut sess = rustls::ClientConnection::new(self.clone(), sni)
             .map_err(|e| ErrorKind::Io.msg("tls connection creation failed").src(e))?;
@@ -142,7 +119,6 @@ impl TlsConnector for Arc<rustls::ClientConfig> {
 pub fn default_tls_config() -> Arc<dyn TlsConnector> {
     static TLS_CONF: Lazy<Arc<dyn TlsConnector>> = Lazy::new(|| {
         let config = rustls::ClientConfig::builder()
-            .with_safe_defaults()
             .with_root_certificates(root_certs())
             .with_no_client_auth();
         Arc::new(Arc::new(config))
