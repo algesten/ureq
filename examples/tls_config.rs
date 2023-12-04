@@ -21,23 +21,13 @@ pub fn main() {
     // }
 
     // This adds webpki_roots certs.
-    root_store.add_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.iter().map(|ta| {
-        rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
-            ta.subject,
-            ta.spki,
-            ta.name_constraints,
-        )
-    }));
+    root_store.roots = webpki_roots::TLS_SERVER_ROOTS.iter().cloned().collect();
 
     // This is how we narrow down the allowed TLS versions for rustls.
     let protocol_versions = &[&TLS12, &TLS13];
 
     // See rustls documentation for more configuration options.
-    let tls_config = rustls::ClientConfig::builder()
-        .with_safe_default_cipher_suites()
-        .with_safe_default_kx_groups()
-        .with_protocol_versions(protocol_versions)
-        .unwrap()
+    let tls_config = rustls::ClientConfig::builder_with_protocol_versions(protocol_versions)
         .with_root_certificates(root_store)
         .with_no_client_auth();
 
