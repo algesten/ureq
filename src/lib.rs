@@ -357,6 +357,7 @@
 mod agent;
 mod body;
 mod chunked;
+mod connect;
 mod error;
 mod header;
 mod middleware;
@@ -429,6 +430,7 @@ mod http_crate;
 pub use crate::agent::Agent;
 pub use crate::agent::AgentBuilder;
 pub use crate::agent::RedirectAuthHeaders;
+pub use crate::connect::Connector;
 pub use crate::error::{Error, ErrorKind, OrAnyStatus, Transport};
 pub use crate::middleware::{Middleware, MiddlewareNext};
 pub use crate::proxy::Proxy;
