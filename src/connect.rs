@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 /// A custom Connector to override the default TcpStream connector.
-pub trait Connector: Send + Sync {
+pub trait TcpConnector: Send + Sync {
     fn connect(&self, addr: &SocketAddr) -> IoResult<TcpStream> {
         TcpStream::connect(addr)
     }
@@ -18,28 +18,28 @@ pub trait Connector: Send + Sync {
 #[derive(Debug)]
 pub(crate) struct StdTcpConnector;
 
-impl Connector for StdTcpConnector {}
+impl TcpConnector for StdTcpConnector {}
 
 #[derive(Clone)]
-pub(crate) struct ArcConnector(Arc<dyn Connector>);
+pub(crate) struct ArcTcpConnector(Arc<dyn TcpConnector>);
 
-impl<R> From<R> for ArcConnector
+impl<R> From<R> for ArcTcpConnector
 where
-    R: Connector + 'static,
+    R: TcpConnector + 'static,
 {
     fn from(r: R) -> Self {
         Self(Arc::new(r))
     }
 }
 
-impl fmt::Debug for ArcConnector {
+impl fmt::Debug for ArcTcpConnector {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "ArcConnector(...)")
+        write!(f, "ArcTcpConnector(...)")
     }
 }
 
-impl std::ops::Deref for ArcConnector {
-    type Target = dyn Connector;
+impl std::ops::Deref for ArcTcpConnector {
+    type Target = dyn TcpConnector;
 
     fn deref(&self) -> &Self::Target {
         self.0.as_ref()

@@ -1,6 +1,6 @@
 use socket2::{Domain, Socket, Type};
 use std::net::SocketAddr;
-use ureq::Connector;
+use ureq::TcpConnector;
 
 #[derive(Debug)]
 pub(crate) struct BindConnector {
@@ -13,7 +13,7 @@ impl BindConnector {
     }
 }
 
-impl Connector for BindConnector {
+impl TcpConnector for BindConnector {
     fn connect(&self, addr: &std::net::SocketAddr) -> std::io::Result<std::net::TcpStream> {
         let socket = Socket::new(Domain::for_address(addr.to_owned()), Type::STREAM, None)?;
         socket.bind(&self.bind_addr.into())?;
@@ -35,7 +35,7 @@ impl Connector for BindConnector {
 
 pub fn main() {
     let agent = ureq::builder()
-        .connector(BindConnector::new_bind("127.0.0.1:54321".parse().unwrap()))
+        .tcp_connector(BindConnector::new_bind("127.0.0.1:54321".parse().unwrap()))
         .build();
 
     let result = agent.get("http://127.0.0.1:8080/").call();

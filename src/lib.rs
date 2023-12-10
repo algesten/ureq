@@ -430,7 +430,7 @@ mod http_crate;
 pub use crate::agent::Agent;
 pub use crate::agent::AgentBuilder;
 pub use crate::agent::RedirectAuthHeaders;
-pub use crate::connect::Connector;
+pub use crate::connect::TcpConnector;
 pub use crate::error::{Error, ErrorKind, OrAnyStatus, Transport};
 pub use crate::middleware::{Middleware, MiddlewareNext};
 pub use crate::proxy::Proxy;

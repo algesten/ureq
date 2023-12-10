@@ -406,9 +406,9 @@ pub(crate) fn connect_host(
                 proto.unwrap(),
             )
         } else if let Some(timeout) = timeout {
-            unit.connector().connect_timeout(&sock_addr, timeout)
+            unit.tcp_connector().connect_timeout(&sock_addr, timeout)
         } else {
-            unit.connector().connect(&sock_addr)
+            unit.tcp_connector().connect(&sock_addr)
         };
 
         if let Ok(stream) = stream {
