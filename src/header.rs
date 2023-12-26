@@ -115,7 +115,7 @@ impl Header {
     ///
     /// ureq can't know what encoding the header is in, but this function provides
     /// an escape hatch for users that need to handle such headers.
-    #[cfg(any(feature = "http-interop", feature = "charset"))]
+    #[allow(unused)]
     pub fn value_raw(&self) -> &[u8] {
         let mut bytes = &self.line.as_bytes()[self.index + 1..];
 
@@ -159,7 +159,7 @@ pub fn get_header<'h>(headers: &'h [Header], name: &str) -> Option<&'h str> {
         .and_then(|h| h.value())
 }
 
-#[cfg(any(doc, all(test, any(feature = "http-interop", feature = "http-crate"))))]
+#[allow(unused)]
 pub fn get_header_raw<'h>(headers: &'h [Header], name: &str) -> Option<&'h [u8]> {
     headers
         .iter()
