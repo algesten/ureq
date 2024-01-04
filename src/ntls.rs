@@ -17,9 +17,12 @@ impl TlsConnector for native_tls::TlsConnector {
                 native_tls::HandshakeError::Failure(e) => ErrorKind::ConnectionFailed
                     .msg("native_tls connect failed")
                     .src(e),
-                native_tls::HandshakeError::WouldBlock(_) => {
-                    ErrorKind::Io.msg("Unexpected native_tls::HandshakeError::WouldBlock")
-                }
+                native_tls::HandshakeError::WouldBlock(_) => ErrorKind::Io
+                    .msg("native_tls handshake timed out")
+                    .src(std::io::Error::new(
+                        std::io::ErrorKind::TimedOut,
+                        "native_tls handshake timed out",
+                    )),
             })?;
 
         Ok(Box::new(stream))
