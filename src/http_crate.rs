@@ -122,9 +122,10 @@ impl From<Response> for http::Response<String> {
 /// ```
 impl From<Response> for http::Response<Vec<u8>> {
     fn from(value: Response) -> Self {
-        create_builder(&value)
-            .body(value.into_string().unwrap().into_bytes())
-            .unwrap()
+        let respone_builder = create_builder(&value);
+        let mut body_buf: Vec<u8> = vec![];
+        value.into_reader().read_to_end(&mut body_buf).unwrap();
+        respone_builder.body(body_buf).unwrap();
     }
 }
 
@@ -331,12 +332,15 @@ mod tests {
         use std::io::{Cursor, Read};
 
         let mut response = super::Response::new(200, "OK", "tbr").unwrap();
-        response.reader = Box::new(Cursor::new(vec![0xde, 0xad, 0xbe, 0xef]));
-        let http_response: Response<Box<dyn Read + Send + Sync + 'static>> = response.into();
+        // b'\xFF' as invalid UTF-8 character
+        response.reader = Box::new(Cursor::new(vec![b'\xFF', 0xde, 0xad, 0xbe, 0xef]));
+        let http_response: Response<Vec<u8>> = response.into();
 
-        let mut buf = vec![];
-        http_response.into_body().read_to_end(&mut buf).unwrap();
-        assert_eq!(buf, vec![0xde, 0xad, 0xbe, 0xef]);
+        assert_eq!(
+            http_response.body().to_vec(),
+            // non UTF-8 byte is preserved
+            vec![b'\xFF', 0xde, 0xad, 0xbe, 0xef]
+        );
     }
 
     #[test]
