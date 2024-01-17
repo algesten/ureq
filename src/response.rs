@@ -788,15 +788,9 @@ fn read_next_line(reader: &mut impl BufRead, context: &str) -> io::Result<Header
         Ok(_) => Ok(()),
         Err(e) => {
             // Provide context to errors encountered while reading the line.
-            let reason = format!("Error encountered in {}", context);
-
+            let reason = format!("Error encountered in {}: {}", context, e);
             let kind = e.kind();
-
-            // Use an intermediate wrapper type which carries the error message
-            // as well as a .source() reference to the original error.
-            let wrapper = Error::new(ErrorKind::Io, Some(reason)).src(e);
-
-            Err(io::Error::new(kind, wrapper))
+            Err(io::Error::new(kind, reason))
         }
     }?;
 
