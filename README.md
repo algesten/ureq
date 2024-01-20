@@ -134,7 +134,8 @@ You can control them when including ureq as a dependency.
   does nothing for `native-tls`.
 * `gzip` enables requests of gzip-compressed responses and decompresses them. This is enabled by default.
 * `brotli` enables requests brotli-compressed responses and decompresses them.
-* `http-interop` enables conversion methods to and from `http::Response` and `http::request::Builder`.
+* `http-interop` enables conversion methods to and from `http::Response` and `http::request::Builder` (v0.2).
+* `http` enables conversion methods to and from `http::Response` and `http::request::Builder` (v1.0).
 
 ## Plain requests
 
