@@ -93,11 +93,11 @@ pub(crate) struct AgentConfig {
 /// let mut agent = ureq::agent();
 ///
 /// agent
-///     .post("http://example.com/login")
+///     .post("http://example.com/post/login")
 ///     .call()?;
 ///
 /// let secret = agent
-///     .get("http://example.com/my-protected-page")
+///     .get("http://example.com/get/my-protected-page")
 ///     .call()?
 ///     .into_string()?;
 ///
@@ -173,7 +173,7 @@ impl Agent {
     /// let agent = ureq::agent();
     ///
     /// let mut url: Url = "http://example.com/some-page".parse()?;
-    /// url.set_path("/robots.txt");
+    /// url.set_path("/get/robots.txt");
     /// let resp: Response = agent
     ///     .request_url("GET", &url)
     ///     .call()?;

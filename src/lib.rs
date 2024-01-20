@@ -104,7 +104,7 @@
 //! # fn main() -> std::result::Result<(), ureq::Error> {
 //! # ureq::is_test(true);
 //!   // Requires the `json` feature enabled.
-//!   let resp: String = ureq::post("http://myapi.example.com/ingest")
+//!   let resp: String = ureq::post("http://myapi.example.com/post/ingest")
 //!       .set("X-My-Header", "Secret")
 //!       .send_json(ureq::json!({
 //!           "name": "martin",
@@ -527,7 +527,7 @@ pub fn request(method: &str, path: &str) -> Request {
 /// let agent = ureq::agent();
 ///
 /// let mut url: Url = "http://example.com/some-page".parse()?;
-/// url.set_path("/robots.txt");
+/// url.set_path("/get/robots.txt");
 /// let resp: ureq::Response = ureq::request_url("GET", &url)
 ///     .call()?;
 /// # Ok(())

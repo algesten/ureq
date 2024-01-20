@@ -1,12 +1,10 @@
+use std::io;
+use std::net::ToSocketAddrs;
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-use std::{
-    io::{self, BufRead, BufReader, Write},
-    net::ToSocketAddrs,
-};
 
 use crate::{Agent, AgentBuilder};
 
@@ -16,41 +14,23 @@ pub(crate) fn test_agent() -> Agent {
     #[cfg(test)]
     let _ = env_logger::try_init();
 
-    let testserver = TestServer::new(|mut stream: TcpStream| -> io::Result<()> {
-        let headers = read_request(&stream);
-        if headers.0.is_empty() {
-            // no headers probably means it's the initial request to check test server is up.
-        } else if headers.path() == "/status/200" {
-            stream.write_all(b"HTTP/1.1 200 OK\r\n\r\n")?;
-        } else if headers.path() == "/status/500" {
-            stream.write_all(b"HTTP/1.1 500 Server Internal Error\r\n\r\n")?;
-        } else if headers.path() == "/bytes/100" {
-            stream.write_all(b"HTTP/1.1 200 OK\r\n")?;
-            stream.write_all(b"Content-Length: 100\r\n")?;
-            stream.write_all(b"\r\n")?;
-            stream.write_all(&[0; 100])?;
-        } else if headers.path() == "/hello_world.json" {
-            stream.write_all(b"HTTP/1.1 200 OK\r\n")?;
-            stream.write_all(b"\r\n")?;
-            stream.write_all(br#"{"hello": "world"}"#)?;
-        } else if headers.path() == "/status/301" {
-            stream.write_all(b"HTTP/1.1 301 Found\r\n")?;
-            stream.write_all(b"Location: /status/200\r\n")?;
-            stream.write_all(b"\r\n")?;
-        } else if headers.path() == "/status/307" {
-            stream.write_all(b"HTTP/1.1 307 Found\r\n")?;
-            stream.write_all(b"Location: /status/200\r\n")?;
-            stream.write_all(b"\r\n")?;
-        } else {
-            stream.write_all(b"HTTP/1.1 200 OK\r\n")?;
-            stream.write_all(b"Transfer-Encoding: chunked\r\n")?;
-            stream.write_all(b"Content-Type: text/html; charset=ISO-8859-1\r\n")?;
-            stream.write_all(b"\r\n")?;
-            stream.write_all(b"7\r\n")?;
-            stream.write_all(b"success\r\n")?;
-            stream.write_all(b"0\r\n")?;
-            stream.write_all(b"\r\n")?;
-        }
+    let testserver = TestServer::new(|stream: TcpStream| -> io::Result<()> {
+        use hootbin::serve_single;
+        let o = stream.try_clone().expect("TcpStream to be clonable");
+        let i = stream;
+        match serve_single(i, o, "https://hootbin.test/") {
+            Ok(()) => {}
+            Err(e) => {
+                if let hootbin::Error::Io(ioe) = &e {
+                    if ioe.kind() == io::ErrorKind::UnexpectedEof {
+                        // accept this. the pre-connect below is always erroring.
+                        return Ok(());
+                    }
+                }
+
+                println!("TestServer error: {:?}", e);
+            }
+        };
         Ok(())
     });
     // Slightly tricky thing here: we want to make sure the TestServer lives
@@ -97,7 +77,10 @@ impl TestHeaders {
 
 // Read a stream until reaching a blank line, in order to consume
 // request headers.
+#[cfg(test)]
 pub fn read_request(stream: &TcpStream) -> TestHeaders {
+    use std::io::{BufRead, BufReader};
+
     let mut results = vec![];
     for line in BufReader::new(stream).lines() {
         match line {

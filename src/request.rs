@@ -18,7 +18,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// ```
 /// # fn main() -> Result<(), ureq::Error> {
 /// # ureq::is_test(true);
-/// let response = ureq::get("http://example.com/form")
+/// let response = ureq::get("http://example.com/get")
 ///     .query("foo", "bar baz")  // add ?foo=bar+baz
 ///     .call()?;                 // run the request
 /// # Ok(())
