@@ -69,7 +69,7 @@ fn root_certs() -> rustls::RootCertStore {
         vec![]
     });
     let (valid_count, invalid_count) =
-        root_cert_store.add_parsable_certificates(native_certs.into_iter().map(|c| c.0.into()));
+        root_cert_store.add_parsable_certificates(native_certs.into_iter().map(|c| c.into()));
     if valid_count == 0 && invalid_count > 0 {
         error!(
             "no valid certificates loaded by rustls-native-certs. all HTTPS requests will fail."
