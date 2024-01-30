@@ -1,3 +1,9 @@
+# 2.9.3
+
+## Fixed
+
+  * docs.rs docs
+
 # 2.9.2
 
 ## Added
