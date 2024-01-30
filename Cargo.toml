@@ -11,14 +11,14 @@ categories = ["web-programming::http-client"]
 edition = "2018"
 
 [package.metadata.docs.rs]
-# features = ["tls", "dep:native-tls", "json", "charset", "cookies", "socks-proxy", "gzip", "brotli", "http-interop"]
-features = "all"
+features = ["tls", "native-tls", "json", "charset", "cookies", "socks-proxy", "gzip", "brotli", "http-interop"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = ["tls", "gzip"]
 tls = ["dep:webpki", "dep:webpki-roots", "dep:rustls", "dep:rustls-pki-types"]
 native-certs = ["dep:rustls-native-certs"]
+native-tls = ["dep:native-tls"]
 json = ["dep:serde", "dep:serde_json"]
 charset = ["dep:encoding_rs"]
 cookies = ["dep:cookie", "dep:cookie_store"]
