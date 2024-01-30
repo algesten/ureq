@@ -1,3 +1,14 @@
+# 2.9.2
+
+## Added
+
+  * Replace dependency on httpbin.org for tests/doc-tests. (#703)
+
+## Fixed
+
+  * Remove Header struct that never should have been exported. (#696)
+  * Update deps (rustls 0.22) (#690)
+
 # 2.9.1
 
 ## Fixed
