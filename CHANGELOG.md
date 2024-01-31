@@ -1,3 +1,9 @@
+# 2.9.4
+
+## Fixed
+
+  * MSRV 1.61 with CI tests
+
 # 2.9.3
 
 ## Fixed
