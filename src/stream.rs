@@ -14,6 +14,7 @@ use crate::chunked::Decoder as ChunkDecoder;
 use crate::error::ErrorKind;
 use crate::pool::{PoolKey, PoolReturner};
 use crate::proxy::Proxy;
+use crate::timeout::{io_err_timeout, time_until_deadline};
 use crate::unit::Unit;
 use crate::Response;
 use crate::{error::Error, proxy::Proto};
@@ -83,7 +84,7 @@ impl From<DeadlineStream> for Stream {
 impl BufRead for DeadlineStream {
     fn fill_buf(&mut self) -> io::Result<&[u8]> {
         if let Some(deadline) = self.deadline {
-            let timeout = time_until_deadline(deadline)?;
+            let timeout = time_until_deadline(deadline, "timed out reading response")?;
             if let Some(socket) = self.stream.socket() {
                 socket.set_read_timeout(Some(timeout))?;
                 socket.set_write_timeout(Some(timeout))?;
@@ -128,20 +129,6 @@ impl Read for DeadlineStream {
         self.consume(nread);
         Ok(nread)
     }
-}
-
-// If the deadline is in the future, return the remaining time until
-// then. Otherwise return a TimedOut error.
-fn time_until_deadline(deadline: Instant) -> io::Result<Duration> {
-    let now = Instant::now();
-    match deadline.checked_duration_since(now) {
-        None => Err(io_err_timeout("timed out reading response".to_string())),
-        Some(duration) => Ok(duration),
-    }
-}
-
-pub(crate) fn io_err_timeout(error: String) -> io::Error {
-    io::Error::new(io::ErrorKind::TimedOut, error)
 }
 
 #[derive(Debug)]
@@ -348,6 +335,7 @@ pub(crate) fn connect_host(
     hostname: &str,
     port: u16,
 ) -> Result<(TcpStream, SocketAddr), Error> {
+    const TIMEOUT_MSG: &str = "timed out connecting";
     let connect_deadline: Option<Instant> =
         if let Some(timeout_connect) = unit.agent.config.timeout_connect {
             Instant::now().checked_add(timeout_connect)
@@ -382,7 +370,7 @@ pub(crate) fn connect_host(
         // ensure connect timeout or overall timeout aren't yet hit.
         let timeout = match connect_deadline {
             Some(deadline) => {
-                let mut deadline = time_until_deadline(deadline)?;
+                let mut deadline = time_until_deadline(deadline, TIMEOUT_MSG)?;
                 if multiple_addrs {
                     deadline = deadline.div(2);
                 }
@@ -430,14 +418,10 @@ pub(crate) fn connect_host(
     stream.set_nodelay(unit.agent.config.no_delay)?;
 
     if let Some(deadline) = unit.deadline {
-        stream.set_read_timeout(Some(time_until_deadline(deadline)?))?;
+        stream.set_read_timeout(Some(time_until_deadline(deadline, TIMEOUT_MSG)?))?;
+        stream.set_write_timeout(Some(time_until_deadline(deadline, TIMEOUT_MSG)?))?;
     } else {
         stream.set_read_timeout(unit.agent.config.timeout_read)?;
-    }
-
-    if let Some(deadline) = unit.deadline {
-        stream.set_write_timeout(Some(time_until_deadline(deadline)?))?;
-    } else {
         stream.set_write_timeout(unit.agent.config.timeout_write)?;
     }
 
@@ -562,7 +546,7 @@ fn connect_socks(
         let (lock, cvar) = &*master_signal;
         let done = lock.lock().unwrap();
 
-        let timeout_connect = time_until_deadline(deadline)?;
+        let timeout_connect = time_until_deadline(deadline, "SOCKS proxy timed out connecting")?;
         let done_result = cvar.wait_timeout(done, timeout_connect).unwrap();
         let done = done_result.0;
         if *done {

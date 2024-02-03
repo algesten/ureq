@@ -366,6 +366,7 @@ mod request;
 mod resolve;
 mod response;
 mod stream;
+mod timeout;
 mod unit;
 
 // rustls is our default tls engine. If the feature is on, it will be
