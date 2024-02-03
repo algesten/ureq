@@ -153,7 +153,10 @@ impl Proxy {
             server,
             user,
             password,
-            port: port.unwrap_or(8080),
+            port: port.unwrap_or(match proto {
+                Proto::HTTP => 80,
+                Proto::SOCKS4 | Proto::SOCKS4A | Proto::SOCKS5 => 1080,
+            }),
             proto,
         })
     }
