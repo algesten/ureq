@@ -336,7 +336,7 @@ pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error
     let (sock, remote_addr) = connect_host(unit, hostname, port)?;
 
     let tls_conf = &unit.agent.config.tls_config;
-    let https_stream = tls_conf.connect(hostname, Box::new(sock))?;
+    let https_stream = tls_conf.connect(hostname, sock)?;
     let pool_key = PoolKey::from_parts("https", hostname, port);
     let pool_returner = PoolReturner::new(&unit.agent, pool_key);
     Ok(Stream::new(https_stream, remote_addr, pool_returner))
@@ -347,7 +347,7 @@ pub(crate) fn connect_host(
     unit: &Unit,
     hostname: &str,
     port: u16,
-) -> Result<(TcpStream, SocketAddr), Error> {
+) -> Result<(Box<dyn ReadWrite>, SocketAddr), Error> {
     let connect_deadline: Option<Instant> =
         if let Some(timeout_connect) = unit.agent.config.timeout_connect {
             Instant::now().checked_add(timeout_connect)
@@ -395,7 +395,8 @@ pub(crate) fn connect_host(
 
         // connect with a configured timeout.
         #[allow(clippy::unnecessary_unwrap)]
-        let stream = if proto.is_some() && Some(Proto::HTTP) != proto {
+        let stream = if proto.is_some() && Some(Proto::HTTP) != proto && Some(Proto::HTTPS) != proto
+        {
             connect_socks(
                 unit,
                 proxy.clone().unwrap(),
@@ -419,7 +420,7 @@ pub(crate) fn connect_host(
         }
     }
 
-    let (mut stream, remote_addr) = if let Some(stream_and_addr) = any_stream_and_addr {
+    let (stream, remote_addr) = if let Some(stream_and_addr) = any_stream_and_addr {
         stream_and_addr
     } else if let Some(e) = any_err {
         return Err(ErrorKind::ConnectionFailed.msg("Connect error").src(e));
@@ -441,26 +442,38 @@ pub(crate) fn connect_host(
         stream.set_write_timeout(unit.agent.config.timeout_write)?;
     }
 
-    if proto == Some(Proto::HTTP) && unit.url.scheme() == "https" {
+    if (proto == Some(Proto::HTTP) || proto == Some(Proto::HTTPS)) && unit.url.scheme() == "https" {
         if let Some(ref proxy) = proxy {
+            let stream = stream.try_clone()?;
+            let mut s;
+            if proto == Some(Proto::HTTPS) {
+                s = unit
+                    .agent
+                    .config
+                    .tls_config
+                    .connect(&proxy.server, Box::new(stream))?;
+            } else {
+                s = Box::new(stream);
+            }
             write!(
-                stream,
+                s,
                 "{}",
                 proxy.connect(hostname, port, &unit.agent.config.user_agent)
             )
             .unwrap();
-            stream.flush()?;
+            s.flush()?;
 
-            let s = stream.try_clone()?;
+            // let s = s.try_clone()?; FIXME enable something like this so that we can return the stream
             let pool_key = PoolKey::from_parts(unit.url.scheme(), hostname, port);
             let pool_returner = PoolReturner::new(&unit.agent, pool_key);
             let s = Stream::new(s, remote_addr, pool_returner);
             let response = Response::do_from_stream(s, unit.clone())?;
             Proxy::verify_response(&response)?;
+            // TODO! return Ok((Box::new(s), remote_addr)) otherwise this tunnel is not used
         }
     }
 
-    Ok((stream, remote_addr))
+    Ok((Box::new(stream), remote_addr))
 }
 
 #[cfg(feature = "socks-proxy")]
