@@ -358,6 +358,7 @@ mod agent;
 mod body;
 mod chunked;
 mod error;
+mod eyeballs;
 mod header;
 mod middleware;
 mod pool;

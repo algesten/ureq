@@ -2,7 +2,6 @@ use log::debug;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::SocketAddr;
 use std::net::TcpStream;
-use std::ops::Div;
 use std::time::Duration;
 use std::time::Instant;
 use std::{fmt, io::Cursor};
@@ -12,6 +11,7 @@ use socks::{TargetAddr, ToTargetAddr};
 
 use crate::chunked::Decoder as ChunkDecoder;
 use crate::error::ErrorKind;
+use crate::eyeballs;
 use crate::pool::{PoolKey, PoolReturner};
 use crate::proxy::Proxy;
 use crate::timeout::{io_err_timeout, time_until_deadline};
@@ -361,30 +361,20 @@ pub(crate) fn connect_host(
 
     let proto = proxy.as_ref().map(|proxy| proxy.proto);
 
-    let mut any_err = None;
-    let mut any_stream_and_addr = None;
-    // Find the first sock_addr that accepts a connection
-    let multiple_addrs = sock_addrs.len() > 1;
+    let (mut stream, remote_addr) = if proto.is_some() && Some(Proto::HTTP) != proto {
+        // SOCKS proxy connections.
+        // Don't mix that with happy eyeballs
+        // (where we race multiple connections and take the fastest)
+        // since we'd be repeatedly connecting to the same proxy server.
+        let mut stream_and_addr_result = None;
+        // Find the first sock_addr that accepts a connection
+        for sock_addr in sock_addrs {
+            // ensure connect timeout or overall timeout aren't yet hit.
+            debug!("connecting to {} at {}", netloc, &sock_addr);
 
-    for sock_addr in sock_addrs {
-        // ensure connect timeout or overall timeout aren't yet hit.
-        let timeout = match connect_deadline {
-            Some(deadline) => {
-                let mut deadline = time_until_deadline(deadline, TIMEOUT_MSG)?;
-                if multiple_addrs {
-                    deadline = deadline.div(2);
-                }
-                Some(deadline)
-            }
-            None => None,
-        };
-
-        debug!("connecting to {} at {}", netloc, &sock_addr);
-
-        // connect with a configured timeout.
-        #[allow(clippy::unnecessary_unwrap)]
-        let stream = if proto.is_some() && Some(Proto::HTTP) != proto {
-            connect_socks(
+            // connect with a configured timeout.
+            #[allow(clippy::unnecessary_unwrap)]
+            let stream = connect_socks(
                 unit,
                 proxy.clone().unwrap(),
                 connect_deadline,
@@ -392,28 +382,14 @@ pub(crate) fn connect_host(
                 hostname,
                 port,
                 proto.unwrap(),
-            )
-        } else if let Some(timeout) = timeout {
-            TcpStream::connect_timeout(&sock_addr, timeout)
-        } else {
-            TcpStream::connect(sock_addr)
-        };
-
-        if let Ok(stream) = stream {
-            any_stream_and_addr = Some((stream, sock_addr));
-            break;
-        } else if let Err(err) = stream {
-            any_err = Some(err);
+            );
+            stream_and_addr_result = Some(stream.map(|s| (s, sock_addr)));
         }
-    }
-
-    let (mut stream, remote_addr) = if let Some(stream_and_addr) = any_stream_and_addr {
-        stream_and_addr
-    } else if let Some(e) = any_err {
-        return Err(ErrorKind::ConnectionFailed.msg("Connect error").src(e));
+        stream_and_addr_result.expect("unreachable: connected to IPs, but no result")
     } else {
-        panic!("shouldn't happen: failed to connect to all IPs, but no error");
-    };
+        eyeballs::connect(netloc, &sock_addrs, connect_deadline)
+    }
+    .map_err(|e| ErrorKind::ConnectionFailed.msg("Connect error").src(e))?;
 
     stream.set_nodelay(unit.agent.config.no_delay)?;
 

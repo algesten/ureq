@@ -530,7 +530,7 @@ impl Response {
     /// ```
     #[cfg(feature = "json")]
     pub fn into_json<T: DeserializeOwned>(self) -> io::Result<T> {
-        use crate::stream::io_err_timeout;
+        use crate::timeout::io_err_timeout;
 
         let reader = self.into_reader();
         serde_json::from_reader(reader).map_err(|e| {
