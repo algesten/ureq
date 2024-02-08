@@ -38,18 +38,14 @@ proxy-from-env = []
 
 [dependencies]
 base64 = "0.21"
-# cookie_store 0.20 pins cookie at v0.17
-cookie = { version = "0.17", default-features = false, optional = true }
+cookie = { version = "0.18", default-features = false, optional = true }
 once_cell = "1"
-# cookie_store 0.20 pins idna at v0.3.0
-# url > 2.3.1 brings in idna v0.5.0, so this dep
-# must be fixed until cookie_store upgrades to cookie v0.18
-url = "=2.3.1"
+url = "2"
 socks = { version = "0.3", optional = true }
 serde = { version = "1", optional = true }
 serde_json = { version = ">=1.0.97", optional = true }
 encoding_rs = { version = "0.8", optional = true }
-cookie_store = { version = "0.20", optional = true, default-features = false, features = ["preserve_order"] }
+cookie_store = { version = "0.21", optional = true, default-features = false, features = ["preserve_order"] }
 log = "0.4"
 webpki = { package = "rustls-webpki", version = "0.102", optional = true }
 webpki-roots = { version = "0.26", optional = true }

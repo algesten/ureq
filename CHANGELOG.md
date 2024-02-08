@@ -1,3 +1,9 @@
+# Unreleased
+
+## Fixed
+
+  * Update deps (`cookie` 0.18, `cookie_store` 0.21, unpin `url`). (#722)
+
 # 2.9.4
 
 ## Fixed
