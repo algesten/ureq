@@ -39,7 +39,6 @@ proxy-from-env = []
 [dependencies]
 base64 = "0.21"
 cookie = { version = "0.18", default-features = false, optional = true }
-once_cell = "1"
 url = "2"
 socks = { version = "0.3", optional = true }
 serde = { version = "1", optional = true }

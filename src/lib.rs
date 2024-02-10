@@ -460,8 +460,7 @@ pub fn serde_to_value<T: serde::Serialize>(
     serde_json::to_value(value)
 }
 
-use once_cell::sync::Lazy;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::OnceLock;
 
 /// Creates an [AgentBuilder].
 pub fn builder() -> AgentBuilder {
@@ -477,11 +476,11 @@ pub fn builder() -> AgentBuilder {
 // when collecting doctests, not when building the crate.
 #[doc(hidden)]
 pub fn is_test(is: bool) -> bool {
-    static IS_TEST: Lazy<AtomicBool> = Lazy::new(|| AtomicBool::new(false));
+    static IS_TEST: OnceLock<bool> = OnceLock::new();
     if is {
-        IS_TEST.store(true, Ordering::SeqCst);
+        let _ = IS_TEST.set(true);
     }
-    IS_TEST.load(Ordering::SeqCst)
+    *IS_TEST.get_or_init(|| false)
 }
 
 /// Agents are used to hold configuration and keep state between requests.

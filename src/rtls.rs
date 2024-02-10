@@ -2,9 +2,7 @@ use std::convert::TryFrom;
 use std::fmt;
 use std::io::{self, Read, Write};
 use std::net::TcpStream;
-use std::sync::Arc;
-
-use once_cell::sync::Lazy;
+use std::sync::{Arc, OnceLock};
 
 use crate::ErrorKind;
 use crate::{
@@ -117,13 +115,16 @@ impl TlsConnector for Arc<rustls::ClientConfig> {
 }
 
 pub fn default_tls_config() -> Arc<dyn TlsConnector> {
-    static TLS_CONF: Lazy<Arc<dyn TlsConnector>> = Lazy::new(|| {
-        let config = rustls::ClientConfig::builder()
-            .with_root_certificates(root_certs())
-            .with_no_client_auth();
-        Arc::new(Arc::new(config))
-    });
-    TLS_CONF.clone()
+    static TLS_CONF: OnceLock<Arc<dyn TlsConnector>> = OnceLock::new();
+
+    TLS_CONF
+        .get_or_init(|| {
+            let config = rustls::ClientConfig::builder()
+                .with_root_certificates(root_certs())
+                .with_no_client_auth();
+            Arc::new(Arc::new(config))
+        })
+        .clone()
 }
 
 impl fmt::Debug for RustlsStream {
