@@ -9,6 +9,7 @@ readme = "README.md"
 keywords = ["web", "request", "https", "http", "client"]
 categories = ["web-programming::http-client"]
 edition = "2018"
+exclude = ["/cargo_deny.sh", "/deny.toml", "/test.sh"]
 
 
 # MSRV
