@@ -3,7 +3,8 @@ name = "ureq"
 version = "2.9.5"
 authors = ["Martin Algesten <martin@algesten.se>", "Jacob Hoffman-Andrews <ureq@hoffman-andrews.com>"]
 description = "Simple, safe HTTP client"
-license = "MIT OR Apache-2.0"
+# src/chunked is forked from chunked_transfer, licensed  under Apache-2.0
+license = "(MIT OR Apache-2.0) AND Apache-2.0"
 repository = "https://github.com/algesten/ureq"
 readme = "README.md"
 keywords = ["web", "request", "https", "http", "client"]
