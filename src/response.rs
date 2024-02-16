@@ -435,7 +435,7 @@ impl Response {
     /// ```
     /// # fn main() -> Result<(), ureq::Error> {
     /// # ureq::is_test(true);
-    /// let text = ureq::get("http://httpbin.org/get/success")
+    /// let text = ureq::get("http://httpbin.org/get?success")
     ///     .call()?
     ///     .into_string()?;
     ///
