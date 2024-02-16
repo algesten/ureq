@@ -1,5 +1,12 @@
 # Unreleased
 
+# 2.9.6
+
+## Fixed
+
+  * `hootbin` is optional dep. Tests must be run with feature `testdeps` (#729)
+  * Exclude script files from cargo package (#728)
+
 # 2.9.5
 
 ## Fixed
