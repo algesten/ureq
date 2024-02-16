@@ -8,31 +8,39 @@ use std::time::Duration;
 
 use crate::{Agent, AgentBuilder};
 
+#[cfg(not(feature = "testdeps"))]
+fn test_server_handler(_stream: TcpStream) -> io::Result<()> {
+    Ok(())
+}
+
+#[cfg(feature = "testdeps")]
+fn test_server_handler(stream: TcpStream) -> io::Result<()> {
+    use hootbin::serve_single;
+    let o = stream.try_clone().expect("TcpStream to be clonable");
+    let i = stream;
+    match serve_single(i, o, "https://hootbin.test/") {
+        Ok(()) => {}
+        Err(e) => {
+            if let hootbin::Error::Io(ioe) = &e {
+                if ioe.kind() == io::ErrorKind::UnexpectedEof {
+                    // accept this. the pre-connect below is always erroring.
+                    return Ok(());
+                }
+            }
+
+            println!("TestServer error: {:?}", e);
+        }
+    };
+    Ok(())
+}
+
 // An agent to be installed by default for tests and doctests, such
 // that all hostnames resolve to a TestServer on localhost.
 pub(crate) fn test_agent() -> Agent {
     #[cfg(test)]
     let _ = env_logger::try_init();
 
-    let testserver = TestServer::new(|stream: TcpStream| -> io::Result<()> {
-        use hootbin::serve_single;
-        let o = stream.try_clone().expect("TcpStream to be clonable");
-        let i = stream;
-        match serve_single(i, o, "https://hootbin.test/") {
-            Ok(()) => {}
-            Err(e) => {
-                if let hootbin::Error::Io(ioe) = &e {
-                    if ioe.kind() == io::ErrorKind::UnexpectedEof {
-                        // accept this. the pre-connect below is always erroring.
-                        return Ok(());
-                    }
-                }
-
-                println!("TestServer error: {:?}", e);
-            }
-        };
-        Ok(())
-    });
+    let testserver = TestServer::new(test_server_handler);
     // Slightly tricky thing here: we want to make sure the TestServer lives
     // as long as the agent. This is accomplished by `move`ing it into the
     // closure, which becomes owned by the agent.

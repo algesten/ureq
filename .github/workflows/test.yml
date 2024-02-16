@@ -97,7 +97,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --no-default-features --features "${{ matrix.tls }} ${{ matrix.feature }}"
+          args: --no-default-features --features "testdeps ${{ matrix.tls }} ${{ matrix.feature }}"
 
 
   cargo-deny:
