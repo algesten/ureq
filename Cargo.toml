@@ -36,6 +36,8 @@ http-interop = ["dep:http-02"]
 # http-crate is for http crate version 1.0 (full release)
 http-crate = ["dep:http"]
 proxy-from-env = []
+# Doc tests require hootbin.
+testdeps = ["dep:hootbin"]
 
 [dependencies]
 base64 = "0.21"
@@ -60,7 +62,7 @@ http-02 = { package = "http", version = "0.2", optional = true }
 http = { version = "1.0", optional = true }
 
 # This can't be in dev-dependencies due to doc tests.
-hootbin = { version = "0.1.1" }
+hootbin = { version = "0.1.1", optional = true }
 
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }
