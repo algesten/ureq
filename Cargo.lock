@@ -272,9 +272,9 @@ dependencies = [
 
 [[package]]
 name = "hoot"
-version = "0.1.3"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df22a4d90f1b0e65fe3e0d6ee6a4608cc4d81f4b2eb3e670f44bb6bde711e452"
+checksum = "fceae3b65325d8086333faa87d165c595464b57a50963911a5a2c1ee87cd4e56"
 dependencies = [
  "httparse",
  "log",
@@ -282,9 +282,9 @@ dependencies = [
 
 [[package]]
 name = "hootbin"
-version = "0.1.1"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "354e60868e49ea1a39c44b9562ad207c4259dc6eabf9863bf3b0f058c55cfdb2"
+checksum = "ebcf9e17911ae109a3abe00cd094ff6a5d36e36a10694b7db827fdf30d36c1b8"
 dependencies = [
  "fastrand",
  "hoot",
