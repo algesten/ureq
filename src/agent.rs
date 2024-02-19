@@ -593,8 +593,32 @@ impl AgentBuilder {
     /// List of default headers to use when making a request.
     ///
     /// This can be overriden on a per-request basis
-    pub fn headers(mut self, headers: Vec<Header>) -> Self {
-        self.config.headers = headers;
+    ///
+    /// ```no_run
+    /// # #[cfg(feature = "json")]
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// let agent = ureq::builder()
+    ///     .headers(vec![("Foo", "Bar")])
+    ///     .build();
+    ///
+    /// // Uses agent's header
+    /// let result: serde_json::Value =
+    ///     agent.get("http://httpbin.org/headers").call()?.into_json()?;
+    /// assert_eq!(&result["headers"]["Foo"], "Bar");
+    ///
+    /// // Overrides user-agent set on the agent
+    /// let result: serde_json::Value = agent.get("http://httpbin.org/headers")
+    ///     .set("Foo", "Baz")
+    ///     .call()?.into_json()?;
+    /// assert_eq!(&result["headers"]["Foo"], "Baz");
+    /// # Ok(())
+    /// # }
+    /// # #[cfg(not(feature = "json"))]
+    /// # fn main() {}
+    /// ```
+    pub fn headers(mut self, headers: Vec<(&str, &str)>) -> Self {
+        self.config.headers = headers.iter().map(|(name, value)| Header::new(name, value)).collect();
         self
     }
 
