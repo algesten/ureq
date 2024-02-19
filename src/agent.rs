@@ -16,6 +16,7 @@ use {
     crate::cookies::{CookieStoreGuard, CookieTin},
     cookie_store::CookieStore,
 };
+use crate::header::Header;
 
 /// Strategy for keeping `authorization` headers during redirects.
 ///
@@ -78,6 +79,7 @@ pub(crate) struct AgentConfig {
     pub redirects: u32,
     pub redirect_auth_headers: RedirectAuthHeaders,
     pub user_agent: String,
+    pub headers: Vec<Header>,
     pub tls_config: TlsConfig,
 }
 
@@ -262,6 +264,7 @@ impl AgentBuilder {
                 redirects: 5,
                 redirect_auth_headers: RedirectAuthHeaders::Never,
                 user_agent: format!("ureq/{}", env!("CARGO_PKG_VERSION")),
+                headers: Vec::new(),
                 tls_config: TlsConfig(crate::default_tls_config()),
             },
             #[cfg(feature = "proxy-from-env")]
@@ -584,6 +587,14 @@ impl AgentBuilder {
     /// ```
     pub fn user_agent(mut self, user_agent: &str) -> Self {
         self.config.user_agent = user_agent.into();
+        self
+    }
+
+    /// List of default headers to use when making a request.
+    ///
+    /// This can be overriden on a per-request basis
+    pub fn headers(mut self, headers: Vec<Header>) -> Self {
+        self.config.headers = headers;
         self
     }
 

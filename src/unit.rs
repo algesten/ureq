@@ -463,6 +463,20 @@ fn send_prelude(unit: &Unit, stream: &mut Stream) -> io::Result<()> {
         prelude.write_header("Accept", "*/*")?;
     }
 
+    // config headers
+    for header in &unit.agent.config.headers {
+        // specified headers have precedence
+        if !header.has_header(&unit.headers, header.name()) {
+            if let Some(v) = header.value() {
+                if is_header_sensitive(header) {
+                    prelude.write_sensitive_header(header.name(), v)?;
+                } else {
+                    prelude.write_header(header.name(), v)?;
+                }
+            }
+        }
+    }
+
     // other headers
     for header in &unit.headers {
         if let Some(v) = header.value() {
