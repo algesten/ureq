@@ -188,26 +188,31 @@ impl From<Response> for http::Response<Vec<u8>> {
 /// ```
 impl From<http::request::Builder> for Request {
     fn from(value: http::request::Builder) -> Self {
-        let mut new_request = crate::agent().request(
-            value.method_ref().map_or("GET", |m| m.as_str()),
-            &value
-                .uri_ref()
-                .map_or("https://example.com".to_string(), |u| u.to_string()),
-        );
-
-        if let Some(headers) = value.headers_ref() {
-            for (name, value) in headers {
-                let mut raw_header: Vec<u8> = name.to_string().into_bytes();
-                raw_header.extend(b": ");
-                raw_header.extend(value.as_bytes());
-                let header = HeaderLine::from(raw_header).into_header().unwrap();
-
-                crate::header::add_header(&mut new_request.headers, header)
-            }
-        }
-
-        new_request
+        convert_from_http_builder_with_agent(value, crate::agent())
     }
+}
+
+/// Converts an [`http::request::Builder`] into a [`Request`] with a custom [`Agent`].
+pub fn convert_from_http_builder_with_agent(value: http::request::Builder, agent: crate::Agent) -> Request {
+    let mut new_request = agent.request(
+        value.method_ref().map_or("GET", |m| m.as_str()),
+        &value
+            .uri_ref()
+            .map_or("https://example.com".to_string(), |u| u.to_string()),
+    );
+
+    if let Some(headers) = value.headers_ref() {
+        for (name, value) in headers {
+            let mut raw_header: Vec<u8> = name.to_string().into_bytes();
+            raw_header.extend(b": ");
+            raw_header.extend(value.as_bytes());
+            let header = HeaderLine::from(raw_header).into_header().unwrap();
+
+            crate::header::add_header(&mut new_request.headers, header)
+        }
+    }
+
+    new_request
 }
 
 /// Converts [`http::request::Parts`] into a [`Request`].
@@ -227,23 +232,29 @@ impl From<http::request::Builder> for Request {
 /// ```
 impl From<http::request::Parts> for Request {
     fn from(value: http::request::Parts) -> Self {
-        let mut new_request = crate::agent().request(value.method.as_str(), &value.uri.to_string());
-
-        for (name, value) in &value.headers {
-            // TODO: Aren't complete header values available as raw byte slices?
-            let mut raw_header: Vec<u8> = name.to_string().into_bytes();
-            raw_header.extend(b": ");
-            raw_header.extend(value.as_bytes());
-
-            let header = HeaderLine::from(raw_header)
-                .into_header()
-                .expect("Unreachable");
-
-            crate::header::add_header(&mut new_request.headers, header)
-        }
-
-        new_request
+        convert_from_http_parts_with_agent(value, crate::agent())
     }
+}
+
+/// Converts a [`http::request::Parts`] into a [`Request`] with a custom [`Agent`].
+pub fn convert_from_http_parts_with_agent(value: http::request::Parts, agent: crate::Agent) -> Request {
+    let mut new_request = agent.request(value.method.as_str(), &value.uri.to_string());
+
+    for (name, value) in &value.headers {
+        // TODO: Aren't complete header values available as raw byte slices?
+        let mut raw_header: Vec<u8> = name.to_string().into_bytes();
+        raw_header.extend(b": ");
+        raw_header.extend(value.as_bytes());
+
+        let header = HeaderLine::from(raw_header)
+            .into_header()
+            .expect("Unreachable");
+
+        crate::header::add_header(&mut new_request.headers, header)
+    }
+
+    new_request
+
 }
 
 /// Converts a [`Request`] into an [`http::request::Builder`].
