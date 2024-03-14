@@ -136,6 +136,12 @@ impl Response {
 
     /// The URL we ended up at. This can differ from the request url when
     /// we have followed redirects.
+    pub fn url(&self) -> &Url {
+        &self.url
+    }
+
+    /// The URL we ended up at. This can differ from the request url when
+    /// we have followed redirects.
     pub fn get_url(&self) -> &str {
         &self.url[..]
     }
