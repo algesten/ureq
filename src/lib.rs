@@ -358,6 +358,7 @@ mod agent;
 mod body;
 mod chunked;
 mod error;
+mod eyeballs;
 mod header;
 mod middleware;
 mod pool;
@@ -366,6 +367,7 @@ mod request;
 mod resolve;
 mod response;
 mod stream;
+mod timeout;
 mod unit;
 
 // rustls is our default tls engine. If the feature is on, it will be
