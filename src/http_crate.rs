@@ -329,7 +329,7 @@ mod tests {
     #[test]
     fn convert_to_http_response_bytes() {
         use http::Response;
-        use std::io::{Cursor, Read};
+        use std::io::Cursor;
 
         let mut response = super::Response::new(200, "OK", "tbr").unwrap();
         // b'\xFF' as invalid UTF-8 character
