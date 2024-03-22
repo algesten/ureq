@@ -125,7 +125,7 @@ impl From<Response> for http::Response<Vec<u8>> {
         let respone_builder = create_builder(&value);
         let mut body_buf: Vec<u8> = vec![];
         value.into_reader().read_to_end(&mut body_buf).unwrap();
-        respone_builder.body(body_buf).unwrap();
+        respone_builder.body(body_buf).unwrap()
     }
 }
 
