@@ -682,7 +682,7 @@ impl AgentBuilder {
 
 #[cfg(feature = "tls")]
 #[derive(Clone)]
-pub(crate) struct TLSClientConfig(pub(crate) Arc<rustls::ClientConfig>);
+pub(crate) struct TLSClientConfig(());
 
 #[cfg(feature = "tls")]
 impl fmt::Debug for TLSClientConfig {

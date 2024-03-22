@@ -107,6 +107,7 @@ impl BufRead for DeadlineStream {
 }
 
 impl Read for DeadlineStream {
+    #[allow(clippy::unused_io_amount)]
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         // If the stream's BufReader has any buffered bytes, return those first.
         // This avoids calling `fill_buf()` on DeadlineStream unnecessarily,
