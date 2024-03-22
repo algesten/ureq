@@ -120,11 +120,7 @@ impl Write for Recorder {
     }
 }
 
-pub(crate) struct TestStream(
-    Box<dyn Read + Send + Sync>,
-    Box<dyn Write + Send + Sync>,
-    bool,
-);
+pub(crate) struct TestStream(Box<dyn Read + Send + Sync>, Box<dyn Write + Send + Sync>);
 
 impl TestStream {
     #[cfg(test)]
@@ -132,7 +128,7 @@ impl TestStream {
         response: impl Read + Send + Sync + 'static,
         recorder: impl Write + Send + Sync + 'static,
     ) -> Self {
-        Self(Box::new(response), Box::new(recorder), false)
+        Self(Box::new(response), Box::new(recorder))
     }
 }
 
