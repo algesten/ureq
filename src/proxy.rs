@@ -9,6 +9,7 @@ use crate::{
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Proto {
     HTTP,
+    HTTPS,
     SOCKS4,
     SOCKS4A,
     SOCKS5,
@@ -119,6 +120,7 @@ impl Proxy {
         let proto = if proxy_parts.len() == 2 {
             match proxy_parts.next() {
                 Some("http") => Proto::HTTP,
+                Some("https") => Proto::HTTPS,
                 Some("socks4") => Proto::SOCKS4,
                 Some("socks4a") => Proto::SOCKS4A,
                 Some("socks") => Proto::SOCKS5,
@@ -153,7 +155,10 @@ impl Proxy {
             server,
             user,
             password,
-            port: port.unwrap_or(8080),
+            port: port.unwrap_or(match proto {
+                Proto::HTTPS => 443,
+                _ => 8080,
+            }),
             proto,
         })
     }
@@ -226,6 +231,13 @@ mod tests {
         assert_eq!(proxy.server, String::from("localhost"));
         assert_eq!(proxy.port, 9999);
         assert_eq!(proxy.proto, Proto::HTTP);
+    }
+
+    #[test]
+    fn parse_proxy_https_server() {
+        let proxy = Proxy::new("https://localhost").unwrap();
+        assert_eq!(proxy.server, String::from("localhost"));
+        assert_eq!(proxy.proto, Proto::HTTPS);
     }
 
     #[cfg(feature = "socks-proxy")]
