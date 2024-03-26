@@ -79,6 +79,7 @@ pub(crate) struct AgentConfig {
     pub redirect_auth_headers: RedirectAuthHeaders,
     pub user_agent: String,
     pub tls_config: TlsConfig,
+    pub strict_mode: bool,
 }
 
 /// Agents keep state between requests.
@@ -263,6 +264,7 @@ impl AgentBuilder {
                 redirect_auth_headers: RedirectAuthHeaders::Never,
                 user_agent: format!("ureq/{}", env!("CARGO_PKG_VERSION")),
                 tls_config: TlsConfig(crate::default_tls_config()),
+                strict_mode: true,
             },
             #[cfg(feature = "proxy-from-env")]
             try_proxy_from_env: true,
@@ -676,6 +678,16 @@ impl AgentBuilder {
     /// in the order they are added to the builder.
     pub fn middleware(mut self, m: impl Middleware) -> Self {
         self.middleware.push(Box::new(m));
+        self
+    }
+
+    /// Set whether to use strict mode or not.
+    ///
+    /// Strict mode validates set-cookie headers for RFC compliance before they are set,
+    /// and cookies before they are sent.
+    /// This is on by default, but turning it off allows more interoperability.
+    pub fn strict_mode(mut self, strict_mode: bool) -> Self {
+        self.config.strict_mode = strict_mode;
         self
     }
 }
