@@ -845,7 +845,6 @@ dependencies = [
  "http 1.0.0",
  "log",
  "native-tls",
- "once_cell",
  "rustls",
  "rustls-native-certs",
  "rustls-pemfile",
