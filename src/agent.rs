@@ -680,17 +680,6 @@ impl AgentBuilder {
     }
 }
 
-#[cfg(feature = "tls")]
-#[derive(Clone)]
-pub(crate) struct TLSClientConfig(());
-
-#[cfg(feature = "tls")]
-impl fmt::Debug for TLSClientConfig {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("TLSClientConfig").finish()
-    }
-}
-
 impl fmt::Debug for AgentBuilder {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AgentBuilder")
