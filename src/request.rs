@@ -115,7 +115,6 @@ impl Request {
         for h in &self.headers {
             h.validate()?;
         }
-        let url = self.parse_url()?;
 
         #[cfg(any(feature = "gzip", feature = "brotli"))]
         self.add_accept_encoding();
@@ -138,6 +137,7 @@ impl Request {
 
         let request_fn = |req: Request| {
             let reader = payload.into_read();
+            let url = req.parse_url()?;
             let unit = Unit::new(
                 &req.agent,
                 &req.method,
@@ -147,7 +147,7 @@ impl Request {
                 deadline,
             );
 
-            unit::connect(unit, true, reader).map_err(|e| e.url(url.clone()))
+            unit::connect(unit, true, reader).map_err(|e| e.url(url))
         };
 
         let response = if !self.agent.state.middleware.is_empty() {
