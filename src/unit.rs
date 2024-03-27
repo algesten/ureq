@@ -261,6 +261,13 @@ fn connect_inner(
         debug!("sending request {} {}", method, url);
     }
 
+    let mut expect_100_continue = false;
+    for header in &unit.headers {
+        if header.name() == "Expect" && header.value() == Some("100-continue") {
+            expect_100_continue = true;
+        }
+    }
+
     let send_result = send_prelude(unit, &mut stream);
 
     if let Err(err) = send_result {
@@ -277,14 +284,20 @@ fn connect_inner(
     }
     let retryable = unit.is_retryable(&body);
 
+    let mut stream = stream::DeadlineStream::new(stream, unit.deadline);
+
+    if expect_100_continue {
+        let response = Response::read_response_head(&mut stream, unit)?;
+        if response.status() != 100 {
+            return Err(Error::Status(response.status(), response));
+        }
+    }
+
     // send the body (which can be empty now depending on redirects)
-    body::send_body(body, unit.is_chunked, &mut stream)?;
+    body::send_body(body, unit.is_chunked, stream.inner_mut())?;
 
     // start reading the response to process cookies and redirects.
-    // TODO: this unit.clone() bothers me. At this stage, we're not
-    // going to use the unit (much) anymore, and it should be possible
-    // to have ownership of it and pass it into the Response.
-    let result = Response::do_from_stream(stream, unit.clone());
+    let result = Response::do_from_stream(stream, unit);
 
     // https://tools.ietf.org/html/rfc7230#section-6.3.1
     // When an inbound connection is closed prematurely, a client MAY
