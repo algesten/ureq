@@ -16,7 +16,7 @@ exclude = ["/cargo_deny.sh", "/deny.toml", "/test.sh"]
 rust-version = "1.61"
 
 [package.metadata.docs.rs]
-features = ["tls", "native-tls", "json", "charset", "cookies", "socks-proxy", "gzip", "brotli", "http-interop"]
+features = ["tls", "native-tls", "json", "charset", "cookies", "socks-proxy", "gzip", "brotli", "http-interop", "digest-auth"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
@@ -38,6 +38,7 @@ http-crate = ["dep:http"]
 proxy-from-env = []
 # Doc tests require hootbin.
 testdeps = ["dep:hootbin"]
+digest-auth = ["dep:digest_auth"]
 
 [dependencies]
 base64 = "0.21"
@@ -60,6 +61,7 @@ flate2 = { version = "1.0.22", optional = true }
 brotli-decompressor = { version = "2.3.2", optional = true }
 http-02 = { package = "http", version = "0.2", optional = true }
 http = { version = "1.0", optional = true }
+digest_auth = { version = "0.3.0", optional = true }
 
 # This can't be in dev-dependencies due to doc tests.
 hootbin = { version = "0.1.5", optional = true }

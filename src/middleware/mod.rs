@@ -1,5 +1,8 @@
 use crate::{Error, Request, Response};
 
+#[cfg(feature = "digest-auth")]
+pub mod digest;
+
 /// Chained processing of request (and response).
 ///
 /// # Middleware as `fn`

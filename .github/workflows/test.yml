@@ -83,6 +83,7 @@ jobs:
           - http-crate
           - http-interop
           - http-crate http-interop
+          - digest-auth
     env:
       RUST_BACKTRACE: "1"
       RUSTFLAGS: "-D dead_code -D unused-variables -D unused"
