@@ -8,6 +8,7 @@
 [std::sync::Arc]: https://doc.rust-lang.org/stable/alloc/sync/struct.Arc.html
 [std::io::Read]: https://doc.rust-lang.org/stable/std/io/trait.Read.html
 [Agent]: https://docs.rs/ureq/latest/ureq/struct.Agent.html
+[AgentBuilder]: https://docs.rs/ureq/latest/ureq/struct.AgentBuilder.html
 [get()]: https://docs.rs/ureq/latest/ureq/fn.get.html
 [post()]: https://docs.rs/ureq/latest/ureq/fn.post.html
 [put()]: https://docs.rs/ureq/latest/ureq/fn.put.html
