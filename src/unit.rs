@@ -287,10 +287,36 @@ fn connect_inner(
     let mut stream = stream::DeadlineStream::new(stream, unit.deadline);
 
     if expect_100_continue {
-        let mut response = Response::read_response_head(&mut stream, unit)?;
-        if response.status() != 100 {
-            response.take_body(stream, unit)?;
-            return Err(Error::Status(response.status(), response));
+        match Response::read_response_head(&mut stream, unit) {
+            Ok(mut response) => {
+                match response.status() {
+                    100 => debug!("Got 100-continue, proceeding with body"),
+                    200 => {
+                        // TODO: How should we handle this case?
+                        debug!("Got 200 OK on an expect 100-continue response, never got the chance to send the request body");
+                        response.take_body(stream, unit)?;
+                        return Ok(response);
+                    }
+                    417 => {
+                        debug!("Got 417, trying again but without expect");
+                        response.take_body(stream, unit)?;
+                        let mut unit_without_expect = unit.clone();
+                        for (idx, header) in unit.headers.iter().enumerate() {
+                            if header.name() == "Expect" {
+                                unit_without_expect.headers.remove(idx);
+                                break;
+                            }
+                        }
+                        return connect_inner(&unit_without_expect, use_pooled, body, history);
+                    }
+                    _ => {
+                        debug!("Didn't get 100-continue, reading body");
+                        response.take_body(stream, unit)?;
+                        return Err(Error::Status(response.status(), response));
+                    }
+                }
+            }
+            Err(err) => return Err(err),
         }
     }
 

@@ -30,7 +30,8 @@ fn idle_timeout_handler_408(mut stream: TcpStream) -> io::Result<()> {
     Ok(())
 }
 
-// Handler that answers with 100-continue before reading body
+// Handler that answers with 100-continue before reading body, then sends
+// request body as response body.
 fn expect_100_continue_handler(stream: TcpStream) -> io::Result<()> {
     use std::io::BufReader;
 
@@ -43,6 +44,39 @@ fn expect_100_continue_handler(stream: TcpStream) -> io::Result<()> {
     }
     let request_body = read_request_body(&mut bufreader, &request_headers);
     {
+        let stream_write = bufreader.get_mut();
+        stream_write.write_all(b"HTTP/1.1 200 OK\r\n")?;
+        stream_write.write_all(b"Content-Length: ")?;
+        stream_write.write_all(request_body.len().to_string().as_bytes())?;
+        stream_write.write_all(b"\r\n\r\n")?;
+        stream_write.write_all(&request_body)?;
+        stream_write.flush().unwrap();
+    }
+    Ok(())
+}
+
+// Handler that answers with 417 if "Expect: 100-continue" is set, otherwise
+// returns 200 OK with request body as response body.
+fn expect_100_continue_respond_417_handler(stream: TcpStream) -> io::Result<()> {
+    use std::io::BufReader;
+
+    let mut bufreader = BufReader::new(&stream);
+    let request_headers = read_request_headers(&mut bufreader);
+
+    let mut has_expect_100_continue = false;
+    let headers = request_headers.to_headers();
+    for header in headers {
+        if header.name() == "Expect" {
+            has_expect_100_continue = true;
+        }
+    }
+
+    if has_expect_100_continue {
+        let stream_write = bufreader.get_mut();
+        stream_write.write_all(b"HTTP/1.1 417 Expectation Failed\r\n\r\n")?;
+        stream_write.flush().unwrap();
+    } else {
+        let request_body = read_request_body(&mut bufreader, &request_headers);
         let stream_write = bufreader.get_mut();
         stream_write.write_all(b"HTTP/1.1 200 OK\r\n")?;
         stream_write.write_all(b"Content-Length: ")?;
@@ -114,6 +148,23 @@ fn expect_100_continue() {
     let url = format!("http://localhost:{}", testserver.port);
     let agent = Agent::new();
     let request_body = "this is a test string for the test expect_100_continue";
+    let resp = agent
+        .post(&url)
+        .set("Expect", "100-continue")
+        .send_bytes(request_body.as_bytes())
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+    let mut response_body = Vec::new();
+    resp.into_reader().read_to_end(&mut response_body).unwrap();
+    assert_eq!(request_body.as_bytes(), response_body);
+}
+
+#[test]
+fn retry_on_417() {
+    let testserver = TestServer::new(expect_100_continue_respond_417_handler);
+    let url = format!("http://localhost:{}", testserver.port);
+    let agent = Agent::new();
+    let request_body = "this is a test string for the test retry_on_417";
     let resp = agent
         .post(&url)
         .set("Expect", "100-continue")
