@@ -88,6 +88,27 @@ fn expect_100_continue_respond_417_handler(stream: TcpStream) -> io::Result<()> 
     Ok(())
 }
 
+// Handler that does not support "Expect: 100-continue", which ureq should
+// handle gracefully by timing out on reading the response headers and send
+// the request body after a short timeout.
+fn expect_100_continue_not_supported_handler(stream: TcpStream) -> io::Result<()> {
+    use std::io::BufReader;
+
+    let mut bufreader = BufReader::new(&stream);
+    let request_headers = read_request_headers(&mut bufreader);
+    let request_body = read_request_body(&mut bufreader, &request_headers);
+    {
+        let stream_write = bufreader.get_mut();
+        stream_write.write_all(b"HTTP/1.1 200 OK\r\n")?;
+        stream_write.write_all(b"Content-Length: ")?;
+        stream_write.write_all(request_body.len().to_string().as_bytes())?;
+        stream_write.write_all(b"\r\n\r\n")?;
+        stream_write.write_all(&request_body)?;
+        stream_write.flush().unwrap();
+    }
+    Ok(())
+}
+
 #[test]
 fn connection_reuse() {
     let testserver = TestServer::new(idle_timeout_handler);
@@ -162,6 +183,23 @@ fn expect_100_continue() {
 #[test]
 fn retry_on_417() {
     let testserver = TestServer::new(expect_100_continue_respond_417_handler);
+    let url = format!("http://localhost:{}", testserver.port);
+    let agent = Agent::new();
+    let request_body = "this is a test string for the test retry_on_417";
+    let resp = agent
+        .post(&url)
+        .set("Expect", "100-continue")
+        .send_bytes(request_body.as_bytes())
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+    let mut response_body = Vec::new();
+    resp.into_reader().read_to_end(&mut response_body).unwrap();
+    assert_eq!(request_body.as_bytes(), response_body);
+}
+
+#[test]
+fn expect_100_continue_not_supported() {
+    let testserver = TestServer::new(expect_100_continue_not_supported_handler);
     let url = format!("http://localhost:{}", testserver.port);
     let agent = Agent::new();
     let request_body = "this is a test string for the test retry_on_417";

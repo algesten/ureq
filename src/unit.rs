@@ -12,7 +12,7 @@ use cookie::Cookie;
 
 use crate::agent::RedirectAuthHeaders;
 use crate::body::{self, BodySize, Payload, SizedReader};
-use crate::error::{Error, ErrorKind};
+use crate::error::{error_get_root_source, Error, ErrorKind};
 use crate::header;
 use crate::header::{get_header, Header};
 use crate::proxy::Proto;
@@ -287,6 +287,22 @@ fn connect_inner(
     let mut stream = stream::DeadlineStream::new(stream, unit.deadline);
 
     if expect_100_continue {
+        // Set lower timeout on reading status+headers.
+        // We do this in case we make a request to a server without "Expect: 100-continue", then we
+        // should continue sending the body instead of waiting for a "100 Continue" response.
+        let now = time::Instant::now();
+        let timeout = std::time::Duration::from_secs(1);
+        let deadline = match now.checked_add(timeout) {
+            Some(dl) => Some(dl),
+            None => {
+                return Err(Error::new(
+                    ErrorKind::Io,
+                    Some("Request deadline overflowed".to_string()),
+                ))
+            }
+        };
+        stream = stream::DeadlineStream::new(stream.into_inner(), deadline);
+
         match Response::read_response_head(&mut stream, unit) {
             Ok(mut response) => {
                 match response.status() {
@@ -316,8 +332,27 @@ fn connect_inner(
                     }
                 }
             }
+            Err(crate::Error::Transport(err)) => {
+                // We need to fetch the root error here, because it is not guaranteed that the
+                // error itself has kind TimedOut even if the root cause was TimedOut (to preserve
+                // the stack-trace).
+                // See rejected GitHub PR #744.
+                let root_err = error_get_root_source(&err);
+                if let Some(io_err) = root_err.downcast_ref::<std::io::Error>() {
+                    if io_err.kind() == std::io::ErrorKind::TimedOut {
+                        debug!("Got timeout on reading response status+header for 'Expect: 100-continue' request, sending body even if we didn't get a '100 Continue' response");
+                    } else {
+                        return Err(crate::Error::Transport(err));
+                    }
+                } else {
+                    return Err(crate::Error::Transport(err));
+                }
+            }
             Err(err) => return Err(err),
         }
+
+        // reset DeadlineStream to be for complete request/response
+        stream = stream::DeadlineStream::new(stream.into_inner(), unit.deadline);
     }
 
     // send the body (which can be empty now depending on redirects)

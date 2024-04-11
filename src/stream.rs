@@ -72,6 +72,10 @@ impl DeadlineStream {
     pub(crate) fn inner_mut(&mut self) -> &mut Stream {
         &mut self.stream
     }
+
+    pub(crate) fn into_inner(self) -> Stream {
+        self.stream
+    }
 }
 
 impl From<DeadlineStream> for Stream {
