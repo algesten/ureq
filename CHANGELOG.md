@@ -1,5 +1,11 @@
 # Unreleased
 
+# 2.9.7
+
+  * Update deps (`base64` 0.22, `rustls` to 0.22.4 (#747, #748)
+  * Parse URL after middleware to enable changing it (#745)
+  * Tidy up code and fix compilatio (#742, 743)
+
 # 2.9.6
 
 ## Fixed
