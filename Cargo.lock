@@ -1049,7 +1049,6 @@ dependencies = [
  "rustls-native-certs",
  "rustls-pemfile",
  "rustls-pki-types",
- "rustls-webpki",
  "serde",
  "serde_json",
  "socks",

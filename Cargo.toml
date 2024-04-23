@@ -21,7 +21,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = ["tls", "gzip"]
-tls = ["dep:webpki", "dep:webpki-roots", "dep:rustls", "dep:rustls-pki-types"]
+tls = ["dep:webpki-roots", "dep:rustls", "dep:rustls-pki-types"]
 native-certs = ["dep:rustls-native-certs"]
 native-tls = ["dep:native-tls"]
 json = ["dep:serde", "dep:serde_json"]
@@ -50,7 +50,6 @@ serde_json = { version = ">=1.0.97", optional = true }
 encoding_rs = { version = "0.8", optional = true }
 cookie_store = { version = "0.21", optional = true, default-features = false, features = ["preserve_order"] }
 log = "0.4"
-webpki = { package = "rustls-webpki", version = "0.102", optional = true }
 webpki-roots = { version = "0.26", optional = true }
 rustls = { version = "0.23.5", optional = true }
 rustls-pki-types = { version = "1", optional = true }
