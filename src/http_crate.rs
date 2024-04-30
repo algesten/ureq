@@ -131,6 +131,8 @@ impl From<Response> for http::Response<Vec<u8>> {
 
 /// Converts an [`http::request::Builder`] into a [`Request`].
 ///
+/// For incomplete builders, see the [`http::request::Builder`] documentation for defaults.
+///
 /// ```
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// # ureq::is_test(true);
@@ -142,7 +144,6 @@ impl From<Response> for http::Response<Vec<u8>> {
 /// # Ok(())
 /// # }
 /// ```
-///
 ///
 /// # Converting from [`http::Request`]
 ///
@@ -164,7 +165,7 @@ impl From<Response> for http::Response<Vec<u8>> {
 impl core::convert::TryFrom<http::request::Builder> for Request {
     type Error = http::Error;
 
-    fn try_from(value: http::request::Builder) -> Result<Self, http::Error> {
+    fn try_from(value: http::request::Builder) -> Result<Self, Self::Error> {
         let (parts, ()) = value.body(())?.into_parts();
         Ok(parts.into())
     }
@@ -402,7 +403,7 @@ mod tests {
         let request = crate::agent()
             .head("http://some-website.com")
             .set("Some-Key", "some value");
-        let http_request_builder: Builder = request.try_into().unwrap();
+        let http_request_builder: Builder = request.into();
         let http_request = http_request_builder.body(()).unwrap();
 
         assert_eq!(
@@ -446,7 +447,7 @@ mod tests {
                 .unwrap(),
         );
         dbg!(&request);
-        let http_request_builder: Builder = request.try_into().unwrap();
+        let http_request_builder: Builder = request.into();
         let http_request = http_request_builder.body(()).unwrap();
 
         assert_eq!(

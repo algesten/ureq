@@ -164,7 +164,7 @@ impl From<Response> for http::Response<Vec<u8>> {
 /// let request = http_builder.body(()).expect("Builder error"); // Check the error
 /// let (parts, ()) = request.into_parts();
 /// let request: ureq::Request = parts.into();
-//// request.call()?;
+/// request.call()?;
 /// # Ok(())
 /// # }
 /// ```

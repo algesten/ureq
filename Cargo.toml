@@ -16,7 +16,7 @@ exclude = ["/cargo_deny.sh", "/deny.toml", "/test.sh"]
 rust-version = "1.61"
 
 [package.metadata.docs.rs]
-features = ["tls", "native-tls", "json", "charset", "cookies", "socks-proxy", "gzip", "brotli", "http-interop"]
+features = ["tls", "native-tls", "json", "charset", "cookies", "socks-proxy", "gzip", "brotli", "http-interop", "http-crate"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
