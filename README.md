@@ -247,8 +247,7 @@ be manually configured using [`AgentBuilder::tls_connector`].
 
 You might want to use native-tls if you need to interoperate with servers that
 only support less-secure TLS configurations (rustls doesn't support TLS 1.0 and 1.1, for
-instance). You might also want to use it if you need to validate certificates for IP addresses,
-which are not currently supported in rustls.
+instance).
 
 Here's an example of constructing an Agent that uses native-tls. It requires the
 "native-tls" feature to be enabled.
