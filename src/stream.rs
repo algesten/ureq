@@ -72,6 +72,18 @@ impl DeadlineStream {
     pub(crate) fn inner_mut(&mut self) -> &mut Stream {
         &mut self.stream
     }
+
+    fn apply_deadline(&mut self) -> io::Result<()> {
+        if let Some(deadline) = self.deadline {
+            let timeout = time_until_deadline(deadline)?;
+            if let Some(socket) = self.stream.socket() {
+                socket.set_read_timeout(Some(timeout))?;
+                socket.set_write_timeout(Some(timeout))?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl From<DeadlineStream> for Stream {
@@ -82,23 +94,8 @@ impl From<DeadlineStream> for Stream {
 
 impl BufRead for DeadlineStream {
     fn fill_buf(&mut self) -> io::Result<&[u8]> {
-        if let Some(deadline) = self.deadline {
-            let timeout = time_until_deadline(deadline)?;
-            if let Some(socket) = self.stream.socket() {
-                socket.set_read_timeout(Some(timeout))?;
-                socket.set_write_timeout(Some(timeout))?;
-            }
-        }
-        self.stream.fill_buf().map_err(|e| {
-            // On unix-y platforms set_read_timeout and set_write_timeout
-            // causes ErrorKind::WouldBlock instead of ErrorKind::TimedOut.
-            // Since the socket most definitely not set_nonblocking(true),
-            // we can safely normalize WouldBlock to TimedOut
-            if e.kind() == io::ErrorKind::WouldBlock {
-                return io_err_timeout("timed out reading response".to_string());
-            }
-            e
-        })
+        self.apply_deadline()?;
+        self.stream.fill_buf().map_err(map_socker_error)
     }
 
     fn consume(&mut self, amt: usize) {
@@ -118,6 +115,13 @@ impl Read for DeadlineStream {
             self.stream.inner.consume(n);
             return Ok(n);
         }
+        // If we don't have any buffered data and we're doing a massive read
+        // (larger than our internal buffer), bypass our internal buffer
+        // entirely.
+        if buf.len() >= self.stream.inner.buffer().len() {
+            self.apply_deadline()?;
+            return self.stream.read(buf).map_err(map_socker_error);
+        }
         // All reads on a DeadlineStream use the BufRead impl. This ensures
         // that we have a chance to set the correct timeout before each recv
         // syscall.
@@ -128,6 +132,18 @@ impl Read for DeadlineStream {
         };
         self.consume(nread);
         Ok(nread)
+    }
+}
+
+fn map_socker_error(e: std::io::Error) -> std::io::Error {
+    // On unix-y platforms set_read_timeout and set_write_timeout
+    // causes ErrorKind::WouldBlock instead of ErrorKind::TimedOut.
+    // Since the socket most definitely not set_nonblocking(true),
+    // we can safely normalize WouldBlock to TimedOut
+    if e.kind() == io::ErrorKind::WouldBlock {
+        io_err_timeout("timed out reading response".to_string())
+    } else {
+        e
     }
 }
 
