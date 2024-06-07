@@ -3,12 +3,11 @@ use crate::pool::PoolReturner;
 use crate::stream::{remote_addr_for_test, ReadOnlyStream, Stream};
 use crate::unit::Unit;
 use crate::ReadWrite;
-use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::fmt;
 use std::io::{self, Cursor, Read, Write};
 use std::net::TcpStream;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 mod agent_test;
 mod body_read;
@@ -22,8 +21,8 @@ mod timeout;
 type RequestHandler = dyn Fn(&Unit) -> Result<Stream, Error> + Send + 'static;
 
 #[allow(clippy::type_complexity)]
-pub(crate) static TEST_HANDLERS: Lazy<Arc<Mutex<HashMap<String, Box<RequestHandler>>>>> =
-    Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
+pub(crate) static TEST_HANDLERS: OnceLock<Arc<Mutex<HashMap<String, Box<RequestHandler>>>>> =
+    OnceLock::new();
 
 pub(crate) fn set_handler<H>(path: &str, handler: H)
 where
@@ -31,8 +30,11 @@ where
 {
     let path = path.to_string();
     let handler = Box::new(handler);
+
+    let test_handlers = TEST_HANDLERS.get_or_init(|| Arc::new(Mutex::new(HashMap::new())));
+
     // See `resolve_handler` below for why poisoning isn't necessary.
-    let mut handlers = match TEST_HANDLERS.lock() {
+    let mut handlers = match test_handlers.lock() {
         Ok(h) => h,
         Err(poison) => poison.into_inner(),
     };
@@ -62,11 +64,14 @@ pub(crate) fn make_response(
 
 pub(crate) fn resolve_handler(unit: &Unit) -> Result<Stream, Error> {
     let path = unit.url.path();
+
+    let test_handlers = TEST_HANDLERS.get_or_init(|| Arc::new(Mutex::new(HashMap::new())));
+
     // The only way this can panic is if
     // 1. `remove(path).unwrap()` panics, in which case the HANDLERS haven't been modified.
     // 2. `make_hash` for `handlers.insert` panics (in `set_handler`), in which case the HANDLERS haven't been modified.
     // In all cases, another test will fail as a result, so it's ok to continue other tests in parallel.
-    let mut handlers = match TEST_HANDLERS.lock() {
+    let mut handlers = match test_handlers.lock() {
         Ok(h) => h,
         Err(poison) => poison.into_inner(),
     };
