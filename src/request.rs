@@ -312,6 +312,43 @@ impl Request {
         self
     }
 
+    /// Set multiple header fields.
+    ///
+    /// ```
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// let headers = [
+    ///     ("Accept", "text/plain"),
+    ///     ("Range", "bytes=500-999")
+    /// ];
+    /// let resp = ureq::get("http://httpbin.org/bytes/1000")
+    ///     .set_headers(&headers)
+    ///     .call()?;
+    ///
+    /// let headers_vec = vec![
+    ///     ("Accept", "text/plain"),
+    ///     ("Range", "bytes=500-999")
+    /// ];
+    /// let resp = ureq::get("http://httpbin.org/bytes/1000")
+    ///     .set_headers(&headers_vec)
+    ///     .call()?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn set_headers<I, T>(mut self, headers: I) -> Self
+    where
+        I: IntoIterator<Item = (T, T)>,
+        T: AsRef<str>,
+    {
+        for (name, value) in headers {
+            header::add_header(
+                &mut self.headers,
+                Header::new(name.as_ref(), value.as_ref()),
+            );
+        }
+        self
+    }
+
     /// Returns the value for a set header.
     ///
     /// ```
