@@ -1,18 +1,7 @@
 // Copyright 2015 The tiny-http Contributors
 // Copyright 2015 The rust-chunked-transfer Contributors
-// Forked into ureq, 2022, from https://github.com/frewsxcv/rust-chunked-transfer
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//	https://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Forked into ureq, 2024, from https://github.com/frewsxcv/rust-chunked-transfer
+// Forked under dual MIT and Apache 2.0 license (see adjacent LICENSE-MIT and LICENSE-APACHE file)
 
 use std::error::Error;
 use std::fmt;
@@ -55,11 +44,6 @@ where
             source,
             remaining_chunks_size: None,
         }
-    }
-
-    /// Returns the remaining bytes left in the chunk being read.
-    pub fn remaining_chunks_size(&self) -> Option<usize> {
-        self.remaining_chunks_size
     }
 
     /// Unwraps the Decoder into its inner `Read` source.
