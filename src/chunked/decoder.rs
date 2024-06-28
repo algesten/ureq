@@ -1,18 +1,7 @@
 // Copyright 2015 The tiny-http Contributors
 // Copyright 2015 The rust-chunked-transfer Contributors
-// Forked into ureq, 2022, from https://github.com/frewsxcv/rust-chunked-transfer
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//	https://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Forked into ureq, 2024, from https://github.com/frewsxcv/rust-chunked-transfer
+// Forked under the MIT license (see adjacent LICENSE file)
 
 use std::error::Error;
 use std::fmt;
@@ -55,11 +44,6 @@ where
             source,
             remaining_chunks_size: None,
         }
-    }
-
-    /// Returns the remaining bytes left in the chunk being read.
-    pub fn remaining_chunks_size(&self) -> Option<usize> {
-        self.remaining_chunks_size
     }
 
     /// Unwraps the Decoder into its inner `Read` source.
@@ -125,6 +109,39 @@ where
             _ => Err(IoError::new(ErrorKind::InvalidInput, DecoderError)),
         }
     }
+
+    // Sometimes the last \r\n is missing.
+    fn read_end(&mut self) -> IoResult<()> {
+        fn expect_or_end(
+            bytes: &mut impl Iterator<Item = IoResult<u8>>,
+            expected: u8,
+        ) -> IoResult<()> {
+            match bytes.next() {
+                Some(Ok(c)) => {
+                    if c == expected {
+                        Ok(())
+                    } else {
+                        Err(IoError::new(ErrorKind::InvalidInput, DecoderError))
+                    }
+                }
+                Some(Err(e)) => {
+                    match e.kind() {
+                        // Closed connections are ok.
+                        ErrorKind::ConnectionReset | ErrorKind::ConnectionAborted => Ok(()),
+                        _ => Err(IoError::new(ErrorKind::InvalidInput, DecoderError)),
+                    }
+                }
+                None => Ok(()), // End of iterator is ok
+            }
+        }
+
+        let mut bytes = self.source.by_ref().bytes();
+
+        expect_or_end(&mut bytes, b'\r')?;
+        expect_or_end(&mut bytes, b'\n')?;
+
+        Ok(())
+    }
 }
 
 impl<R> Read for Decoder<R>
@@ -141,8 +158,7 @@ where
 
                 // if the chunk size is 0, we are at EOF
                 if chunk_size == 0 {
-                    self.read_carriage_return()?;
-                    self.read_line_feed()?;
+                    self.read_end()?;
                     return Ok(0);
                 }
 
@@ -302,5 +318,24 @@ mod test {
 
         let mut string = String::new();
         assert!(decoded.read_to_string(&mut string).is_err());
+    }
+
+    #[test]
+    fn test_decode_end_missing_last_crlf() {
+        // This has been observed in the wild.
+        // See https://github.com/algesten/ureq/issues/325
+
+        // Missing last \r\n
+        let source = io::Cursor::new(
+            "3\r\nhel\r\nb\r\nlo world!!!\r\n0\r\n"
+                .to_string()
+                .into_bytes(),
+        );
+        let mut decoded = Decoder::new(source);
+
+        let mut string = String::new();
+        decoded.read_to_string(&mut string).unwrap();
+
+        assert_eq!(string, "hello world!!!");
     }
 }
