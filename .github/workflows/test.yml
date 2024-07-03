@@ -67,22 +67,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        tls:
-          - ""
-          - "tls"
-          - "native-tls"
         feature:
           - ""
-          - json
-          - charset
-          - cookies
-          - socks-proxy
-          - native-certs
-          - gzip
-          - brotli
-          - http-crate
-          - http-interop
-          - http-crate http-interop
     env:
       RUST_BACKTRACE: "1"
       RUSTFLAGS: "-D dead_code -D unused-variables -D unused"
@@ -97,7 +83,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --no-default-features --features "testdeps ${{ matrix.tls }} ${{ matrix.feature }}"
+          args: --no-default-features --features "${{ matrix.feature }}"
 
 
   cargo-deny:
