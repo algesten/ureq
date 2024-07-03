@@ -1,3 +1,6 @@
+// TODO(martin): Is a better name SendBody to  mirror RecvBody? Or even invert
+// BodySend, BodyRecv to get alphabetical sorting.
+
 pub trait Body {}
 
 pub struct BodyOwned;
