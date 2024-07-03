@@ -17,13 +17,14 @@ mod agent;
 mod body;
 mod error;
 mod request;
+mod unit;
 
 pub use agent::Agent;
 pub use body::Body;
 pub use error::Error;
 
 pub fn run(request: &Request<impl Body>) -> Result<Response<RecvBody>, Error> {
-    let agent = Agent::new();
+    let mut agent = Agent::new_default();
     agent.run(request)
 }
 
@@ -32,7 +33,7 @@ where
     Uri: TryFrom<T>,
     <Uri as TryFrom<T>>::Error: Into<http::Error>,
 {
-    let agent = Agent::new();
+    let agent = Agent::new_default();
     RequestBuilder::new(agent, method, uri)
 }
 

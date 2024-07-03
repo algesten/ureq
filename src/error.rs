@@ -2,6 +2,6 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("this is bad")]
-    Bad,
+    #[error("protocol: {0}")]
+    Protocol(#[from] hoot::Error),
 }
