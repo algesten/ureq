@@ -1,0 +1,31 @@
+[package]
+name = "ureq"
+version = "3.0.0-beta1"
+authors = [
+    "Martin Algesten <martin@algesten.se>",
+    "Jacob Hoffman-Andrews <ureq@hoffman-andrews.com>",
+]
+description = "Simple, safe HTTP client"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/algesten/ureq"
+readme = "README.md"
+keywords = ["web", "request", "https", "http", "client"]
+categories = ["web-programming::http-client"]
+edition = "2018"
+exclude = ["/cargo_deny.sh", "/deny.toml", "/test.sh"]
+
+
+# MSRV
+rust-version = "1.61"
+
+[package.metadata.docs.rs]
+features = []
+
+[features]
+
+[dependencies]
+hoot = { git = "https://github.com/algesten/hoot", rev = "903fc51" }
+http = "1.1.0"
+log = "0.4.22"
+once_cell = "1.19.0"
+thiserror = "1.0.61"
