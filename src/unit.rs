@@ -2,16 +2,16 @@ use hoot::client::flow::state::{Prepare, SendRequest};
 use hoot::client::flow::{Flow, SendRequestResult};
 use http::{Request, Response};
 
-use crate::agent::{ConnectionPool, Transport};
 use crate::body::RecvBody;
+use crate::pool::{Connection, ConnectionPool};
 use crate::{Body, Error};
 
 pub(crate) struct Unit;
 
 impl Unit {
-    pub(crate) fn handle(
+    pub(crate) fn run(
         &mut self,
-        pool: &mut dyn ConnectionPool,
+        pool: &mut ConnectionPool,
         request: &Request<impl Body>,
     ) -> Result<Response<RecvBody>, Error> {
         let flow = Flow::new(request)?;
@@ -21,29 +21,29 @@ impl Unit {
         todo!()
     }
 
-    fn prepare<'a, B>(
+    fn prepare<B>(
         &mut self,
-        pool: &mut dyn ConnectionPool,
-        flow: Flow<'a, B, Prepare>,
+        pool: &mut ConnectionPool,
+        flow: Flow<B, Prepare>,
     ) -> Result<(), Error> {
-        let transport = pool.acquire(flow.uri())?;
+        let connection = pool.connect(flow.uri())?;
 
-        self.send_request(flow.proceed(), transport)
+        self.send_request(flow.proceed(), connection)
     }
 
     fn send_request<B>(
         &self,
         mut flow: Flow<B, SendRequest>,
-        transport: &mut dyn Transport,
+        mut connection: Connection,
     ) -> Result<(), Error> {
         loop {
             if flow.can_proceed() {
                 break;
             }
 
-            let buffer = transport.output_buffer();
+            let mut buffer = connection.output_buffer();
             let n = flow.write(buffer.as_mut())?;
-            buffer.push_output(n)?;
+            buffer.flush(n)?;
         }
 
         match flow.proceed().unwrap() {
