@@ -3,18 +3,20 @@ use std::fmt::Debug;
 use http::{Request, Response, Uri};
 
 use crate::body::RecvBody;
+use crate::pool::ConnectionPool;
+use crate::transport::{Conn, Transport};
 use crate::unit::Unit;
 use crate::{Body, Error};
 
 #[derive(Debug)]
 pub struct Agent {
-    pool: Box<dyn ConnectionPool>,
+    pool: ConnectionPool,
 }
 
 impl Agent {
-    pub fn new(pool: impl ConnectionPool) -> Self {
+    pub fn new(pool: impl Transport) -> Self {
         Agent {
-            pool: Box::new(pool),
+            pool: ConnectionPool::new(pool),
         }
     }
 
@@ -32,28 +34,16 @@ impl Agent {
         &mut self,
         request: &Request<impl Body>,
     ) -> Result<Response<RecvBody>, Error> {
-        let response = Unit.handle(&mut *self.pool, request)?;
+        let response = Unit.run(&mut self.pool, request)?;
         Ok(response)
     }
-}
-
-pub trait ConnectionPool: Debug + 'static {
-    fn acquire(&mut self, uri: &Uri) -> Result<&mut dyn Transport, Error>;
-}
-
-pub trait Transport: Debug {
-    fn output_buffer(&mut self) -> &mut dyn OutputBuffer;
-}
-
-pub trait OutputBuffer: AsMut<[u8]> {
-    fn push_output(&mut self, amount: usize) -> Result<(), Error>;
 }
 
 #[derive(Debug)]
 pub struct RustlConnectionPool;
 
-impl ConnectionPool for RustlConnectionPool {
-    fn acquire(&mut self, _uri: &Uri) -> Result<&mut dyn Transport, Error> {
+impl Transport for RustlConnectionPool {
+    fn connect(&mut self, _uri: &Uri) -> Result<&mut dyn Conn, Error> {
         todo!()
     }
 }
