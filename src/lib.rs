@@ -16,7 +16,9 @@ use request::RequestBuilder;
 mod agent;
 mod body;
 mod error;
+mod pool;
 mod request;
+mod transport;
 mod unit;
 
 pub use agent::Agent;
