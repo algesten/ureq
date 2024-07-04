@@ -16,12 +16,14 @@ use request::RequestBuilder;
 mod agent;
 mod body;
 mod error;
+mod flow;
 mod pool;
 mod request;
+mod time;
 mod transport;
 mod unit;
 
-pub use agent::Agent;
+pub use agent::{Agent, AgentConfig};
 pub use body::Body;
 pub use error::Error;
 
