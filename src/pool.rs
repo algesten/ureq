@@ -22,15 +22,13 @@ impl ConnectionPool {
     }
 }
 
-pub(crate) struct Connection<'a> {
-    conn: &'a mut dyn Conn,
+pub(crate) struct Connection {
+    conn: Box<dyn Conn>,
 }
 
-impl<'a> Connection<'a> {
+impl Connection {
     pub fn output_buffer(&mut self) -> OutputBuffer {
-        OutputBuffer {
-            transport: self.conn,
-        }
+        todo!()
     }
 }
 
