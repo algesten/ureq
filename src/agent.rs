@@ -1,5 +1,4 @@
 use std::fmt::Debug;
-use std::sync::Arc;
 use std::time::Duration;
 
 use hoot::client::flow::RedirectAuthHeaders;
@@ -14,7 +13,7 @@ use crate::{Body, Error};
 
 #[derive(Debug)]
 pub struct Agent {
-    config: Arc<AgentConfig>,
+    config: AgentConfig,
     pool: ConnectionPool,
 }
 
@@ -116,7 +115,7 @@ impl Default for AgentConfig {
 impl Agent {
     pub fn new(config: AgentConfig, pool: impl Transport) -> Self {
         Agent {
-            config: Arc::new(config),
+            config,
             pool: ConnectionPool::new(pool),
         }
     }
@@ -131,14 +130,14 @@ impl Agent {
     // TODO(martin): One design idea is to be able to create requests in one thread, then
     // actually run them to completion in another. &mut self here makes it impossible to use
     // Agent in such a design. Is that a concern?
-    pub(crate) fn run<'a>(
+    pub(crate) fn run(
         &mut self,
-        request: &'a Request<()>,
+        request: &Request<()>,
         body: Body,
     ) -> Result<Response<RecvBody>, Error> {
         let start_time = Instant::now();
 
-        let unit = Unit::new(self.config.clone(), start_time, request, body)?;
+        let unit = Unit::new(&self.config, start_time, request, body)?;
 
         todo!()
     }

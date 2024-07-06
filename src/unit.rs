@@ -1,6 +1,5 @@
 use std::mem;
 use std::net::SocketAddr;
-use std::sync::Arc;
 
 use hoot::client::flow::{
     state::*, Await100Result, RecvBodyResult, RecvResponseResult, SendRequestResult,
@@ -10,8 +9,8 @@ use http::{Request, Uri};
 use crate::time::Instant;
 use crate::{AgentConfig, Body, Error};
 
-pub(crate) struct Unit<'a, 'b> {
-    config: Arc<AgentConfig>,
+pub(crate) struct Unit<'c, 'a, 'b> {
+    config: &'c AgentConfig,
     time_start: Instant,
     call_timings: CallTimings,
     state: State<'a>,
@@ -66,12 +65,13 @@ pub enum Input<'a> {
     Input { data: &'a [u8] },
 }
 
-impl<'a, 'b> Unit<'a, 'b> {
+// impl<'c, 'a, 'b> Unit<'c, 'a, 'b> {
+impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
     pub fn new(
-        config: Arc<AgentConfig>,
+        config: &'c AgentConfig,
         time_start: Instant,
-        request: &'a Request<()>,
-        body: Body<'b>,
+        request: &'b Request<()>,
+        body: Body<'a>,
     ) -> Result<Self, Error> {
         Ok(Self {
             config,
@@ -84,7 +84,7 @@ impl<'a, 'b> Unit<'a, 'b> {
     }
 
     pub fn poll_output(
-        &'a mut self,
+        &mut self,
         now: Instant,
         transmit_buffer: &mut [u8],
     ) -> Result<Output, Error> {
@@ -289,7 +289,7 @@ pub(crate) struct CallTimings {
 }
 
 impl CallTimings {
-    fn next_timeout<'a>(&self, state: &State, config: &AgentConfig) -> Instant {
+    fn next_timeout(&self, state: &State, config: &AgentConfig) -> Instant {
         // self.time_xxx unwraps() below are OK. If the unwrap fails, we have a state
         // bug where we progressed to a certain State without setting the corresponding time.
         match state {
