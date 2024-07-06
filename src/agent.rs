@@ -131,9 +131,9 @@ impl Agent {
     // TODO(martin): One design idea is to be able to create requests in one thread, then
     // actually run them to completion in another. &mut self here makes it impossible to use
     // Agent in such a design. Is that a concern?
-    pub(crate) fn run<'a, B>(
+    pub(crate) fn run<'a>(
         &mut self,
-        request: &'a Request<B>,
+        request: &'a Request<()>,
         body: Body,
     ) -> Result<Response<RecvBody>, Error> {
         let start_time = Instant::now();
