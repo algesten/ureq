@@ -1,10 +1,19 @@
 # Unreleased
 
+# 2.10.0
+  * Bump MSRV 1.61 -> 1.63 due to rustls (#764)
+  * Update deps (only patch versions in Cargo.lock) (#763)
+  * Refork frewsxcv/rust-chunked-transfer to fix MIT/Apache2.0 license (#761)
+  * Fix doc Rustls does now support IP address certificates (#759)
+  * Enable http-crate feature for docs (#755)
+  * Rustls dep to default to ring backend (#753)
+  * Remove direct dep rustls-webpki (#752)
+
 # 2.9.7
 
   * Update deps (`base64` 0.22, `rustls` to 0.22.4 (#747, #748)
   * Parse URL after middleware to enable changing it (#745)
-  * Tidy up code and fix compilatio (#742, 743)
+  * Tidy up code and fix compilation (#742, 743)
 
 # 2.9.6
 
