@@ -19,6 +19,31 @@ impl<'a> Body<'a> {
     pub fn from_owned_reader(reader: impl Read + 'static) -> Body<'static> {
         BodyInner::OwnedReader(Box::new(reader)).into()
     }
+
+    pub(crate) fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let n = match &mut self.inner {
+            BodyInner::ByteSlice(v) => {
+                let max = v.len().min(buf.len());
+
+                buf[..max].copy_from_slice(&v[..max]);
+                *v = &v[max..];
+
+                Ok(max)
+            }
+            BodyInner::Reader(v) => v.read(buf),
+            BodyInner::OwnedReader(v) => v.read(buf),
+        }?;
+
+        if n == 0 {
+            self.ended = true;
+        }
+
+        Ok(n)
+    }
+
+    pub(crate) fn is_ended(&self) -> bool {
+        self.ended
+    }
 }
 
 mod private {

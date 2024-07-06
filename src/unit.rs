@@ -106,13 +106,39 @@ impl<'a, 'b> Unit<'a, 'b> {
                 })
             }
             State::SendBody(flow) => {
-                // let (input_used, output_used) = flow.write(input, transmit_buffer)?;
+                // Split the transmit butter in 2. The second half is used to read input
+                // from the incoming body. The first half is used to write output via hoot.
+                // The Output::Transmit amount is from the beginning of the buffer.
+                let buf_len = transmit_buffer.len();
 
-                // Some(Output::Transmit {
-                //     amount: output_used,
-                //     timeout,
-                // })
-                todo!()
+                let (output, input) = transmit_buffer.split_at_mut(buf_len / 2);
+                let input_len = input.len();
+
+                // The + 1 and floor() is to make even powers of 16 right.
+                // The + 4 is for the \r\n overhead. A chunk is:
+                // <digits_in_hex>\r\n
+                // <chunk>\r\n
+                // 0\r\n
+                // \r\n
+                let chunk_overhead = ((output.len() as f64).log(16.0) + 1.0).floor() as usize + 4;
+                assert!(input_len > chunk_overhead);
+                let max_input = input_len - chunk_overhead;
+
+                // TODO(martin): for any body that is BodyInner::ByteSlice, it's not great to
+                // go via self.body.read() since we're incurring on more memcopy than we need.
+                let input = &mut input[..max_input];
+                let n = self.body.read(input)?;
+
+                let (input_used, output_used) = flow.write(&input[..n], output)?;
+
+                // Since output is "a bit" larger than the input (compensate for chunk ovherhead),
+                // the entire input we read from the body should also be shipped to the output.
+                assert!(input_used == n);
+
+                Some(Output::Transmit {
+                    amount: output_used,
+                    timeout,
+                })
             }
             State::Await100(_) => Some(Output::Await100 { timeout }),
             State::RecvResponse(_) => Some(Output::AwaitInput { timeout }),
@@ -163,7 +189,7 @@ impl<'a, 'b> Unit<'a, 'b> {
                 }
             }
             State::SendBody(flow) => {
-                if flow.can_proceed() {
+                if flow.can_proceed() || self.body.is_ended() {
                     self.call_timings.time_send_body = Some(now);
                     State::RecvResponse(flow.proceed().unwrap())
                 } else {
@@ -203,44 +229,41 @@ impl<'a, 'b> Unit<'a, 'b> {
     }
 
     pub fn handle_input(&mut self, now: Instant, input: Input) {
+        macro_rules! extract {
+            ($e:expr, $p:path) => {
+                match mem::replace($e, State::Empty) {
+                    $p(value) => Some(value),
+                    _ => None,
+                }
+            };
+        }
+
         match input {
             Input::Begin => {
-                let state = mem::replace(&mut self.state, State::Empty);
-                let flow = match state {
-                    State::Begin(v) => v,
-                    _ => unreachable!("Input::Begin requires State::Begin"),
-                };
+                let flow = extract!(&mut self.state, State::Begin)
+                    .expect("Input::Begin requires State::Begin");
 
                 self.call_timings.time_call_start = Some(now);
                 self.state = State::DnsLookup(flow);
             }
             Input::SocketAddr(addr) => {
-                let state = mem::replace(&mut self.state, State::Empty);
-                let flow = match state {
-                    State::DnsLookup(v) => v,
-                    _ => unreachable!("Input::SocketAddr requires State::DnsLookup"),
-                };
+                let flow = extract!(&mut self.state, State::DnsLookup)
+                    .expect("Input::SocketAddr requires State::DnsLookup");
 
                 self.call_timings.time_dns_lookup = Some(now);
                 self.addr = Some(addr);
                 self.state = State::OpenConnection(flow)
             }
             Input::ConnectionOpen => {
-                let state = mem::replace(&mut self.state, State::Empty);
-                let flow = match state {
-                    State::OpenConnection(v) => v,
-                    _ => unreachable!("Input::SocketAddr requires State::DnsLookup"),
-                };
+                let flow = extract!(&mut self.state, State::OpenConnection)
+                    .expect("Input::ConnectionOpen requires State::OpenConnection");
 
                 self.call_timings.time_connect = Some(now);
                 self.state = State::SendRequest(flow.proceed());
             }
             Input::EndAwait100 => {
-                let state = mem::replace(&mut self.state, State::Empty);
-                let flow = match state {
-                    State::Await100(v) => v,
-                    _ => unreachable!("Input::SocketAddr requires State::DnsLookup"),
-                };
+                let flow = extract!(&mut self.state, State::Await100)
+                    .expect("Input::EndAwait100 requires State::Await100");
 
                 self.call_timings.time_await_100 = Some(now);
                 self.state = match flow.proceed() {
