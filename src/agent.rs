@@ -1,18 +1,20 @@
 use std::fmt::Debug;
-use std::time::{Duration, Instant};
+use std::sync::Arc;
+use std::time::Duration;
 
 use hoot::client::flow::RedirectAuthHeaders;
 use http::{Request, Response, Uri};
 
 use crate::body::RecvBody;
 use crate::pool::ConnectionPool;
+use crate::time::Instant;
 use crate::transport::{Conn, Transport};
 use crate::unit::Unit;
 use crate::{Body, Error};
 
 #[derive(Debug)]
 pub struct Agent {
-    config: AgentConfig,
+    config: Arc<AgentConfig>,
     pool: ConnectionPool,
 }
 
@@ -114,7 +116,7 @@ impl Default for AgentConfig {
 impl Agent {
     pub fn new(config: AgentConfig, pool: impl Transport) -> Self {
         Agent {
-            config,
+            config: Arc::new(config),
             pool: ConnectionPool::new(pool),
         }
     }
@@ -129,13 +131,14 @@ impl Agent {
     // TODO(martin): One design idea is to be able to create requests in one thread, then
     // actually run them to completion in another. &mut self here makes it impossible to use
     // Agent in such a design. Is that a concern?
-    pub(crate) fn run(
+    pub(crate) fn run<'a, B>(
         &mut self,
-        request: &Request<impl Body>,
+        request: &'a Request<B>,
+        body: Body,
     ) -> Result<Response<RecvBody>, Error> {
         let start_time = Instant::now();
 
-        let unit = Unit::new(start_time, request)?;
+        let unit = Unit::new(self.config.clone(), start_time, request, body)?;
 
         todo!()
     }

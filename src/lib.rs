@@ -5,7 +5,7 @@
 use std::convert::TryFrom;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use body::RecvBody;
+use body::{IntoBody, RecvBody};
 /// Re-exported http-crate.
 pub use http;
 
@@ -16,7 +16,6 @@ use request::RequestBuilder;
 mod agent;
 mod body;
 mod error;
-mod flow;
 mod pool;
 mod request;
 mod time;
@@ -27,9 +26,10 @@ pub use agent::{Agent, AgentConfig};
 pub use body::Body;
 pub use error::Error;
 
-pub fn run(request: &Request<impl Body>) -> Result<Response<RecvBody>, Error> {
+pub fn run(request: &Request<impl IntoBody>) -> Result<Response<RecvBody>, Error> {
     let mut agent = Agent::new_default();
-    agent.run(request)
+    let body = request.body().as_body();
+    agent.run(request, body)
 }
 
 fn builder<T>(method: Method, uri: T) -> RequestBuilder

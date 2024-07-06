@@ -1,19 +1,39 @@
 // TODO(martin): Is a better name SendBody to  mirror RecvBody? Or even invert
 // BodySend, BodyRecv to get alphabetical sorting.
 
-pub trait Body {}
+use std::io::Read;
 
-pub struct BodyOwned;
+pub struct Body<'a> {
+    inner: BodyInner<'a>,
+}
 
-impl Body for BodyOwned {}
-impl Body for &BodyOwned {}
-
-impl BodyOwned {
-    pub(crate) fn empty() -> BodyOwned {
-        BodyOwned
+impl<'a> Body<'a> {
+    pub fn empty() -> Body<'static> {
+        Body {
+            inner: BodyInner::ByteSlice(&[]),
+        }
     }
 }
 
-impl Body for &[u8] {}
+pub trait IntoBody {
+    fn as_body(&self) -> Body;
+}
+
+pub(crate) enum BodyInner<'a> {
+    ByteSlice(&'a [u8]),
+    Reader(&'a mut dyn Read),
+}
+
+impl IntoBody for &[u8] {
+    fn as_body(&self) -> Body {
+        BodyInner::ByteSlice(self).into()
+    }
+}
 
 pub struct RecvBody;
+
+impl<'a> From<BodyInner<'a>> for Body<'a> {
+    fn from(inner: BodyInner<'a>) -> Self {
+        Body { inner }
+    }
+}
