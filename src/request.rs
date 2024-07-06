@@ -80,7 +80,8 @@ impl RequestBuilder {
     /// ```
     pub fn send_bytes(self, data: &[u8]) -> Result<Response<RecvBody>, Error> {
         let request = self.builder.body(()).unwrap();
-        do_call(self.agent, request, data.as_body())
+        let mut data_ref = data;
+        do_call(self.agent, request, (&mut data_ref).as_body())
     }
 }
 

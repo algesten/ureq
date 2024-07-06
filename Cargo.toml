@@ -16,7 +16,7 @@ exclude = ["/cargo_deny.sh", "/deny.toml", "/test.sh"]
 
 
 # MSRV
-rust-version = "1.61"
+rust-version = "1.63"
 
 [package.metadata.docs.rs]
 features = []
