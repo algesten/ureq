@@ -2,7 +2,7 @@ use std::convert::TryFrom;
 
 use http::{HeaderName, HeaderValue, Method, Request, Response, Uri};
 
-use crate::body::{IntoBody, RecvBody};
+use crate::body::{AsBody, RecvBody};
 use crate::{Agent, Body, Error};
 
 #[derive(Debug)]
