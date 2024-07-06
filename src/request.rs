@@ -2,7 +2,7 @@ use std::convert::TryFrom;
 
 use http::{HeaderName, HeaderValue, Method, Request, Response, Uri};
 
-use crate::body::{BodyOwned, RecvBody};
+use crate::body::{IntoBody, RecvBody};
 use crate::{Agent, Body, Error};
 
 #[derive(Debug)]
@@ -62,8 +62,8 @@ impl RequestBuilder {
     /// # }
     /// ```
     pub fn call(self) -> Result<Response<RecvBody>, Error> {
-        let request = self.builder.body(BodyOwned::empty()).unwrap();
-        do_call(self.agent, request)
+        let request = self.builder.body(()).unwrap();
+        do_call(self.agent, request, Body::empty())
     }
 
     /// Send data as bytes.
@@ -79,13 +79,17 @@ impl RequestBuilder {
     /// # }
     /// ```
     pub fn send_bytes(self, data: &[u8]) -> Result<Response<RecvBody>, Error> {
-        let request = self.builder.body(data).unwrap();
-        do_call(self.agent, request)
+        let request = self.builder.body(()).unwrap();
+        do_call(self.agent, request, data.as_body())
     }
 }
 
-fn do_call(mut agent: Agent, request: Request<impl Body>) -> Result<Response<RecvBody>, Error> {
-    let response = agent.run(&request)?;
+fn do_call<B>(
+    mut agent: Agent,
+    request: Request<B>,
+    body: Body,
+) -> Result<Response<RecvBody>, Error> {
+    let response = agent.run(&request, body)?;
     Ok(response)
 }
 
