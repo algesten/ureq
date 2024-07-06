@@ -3,6 +3,7 @@
 // #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
 use std::convert::TryFrom;
+use std::mem;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use body::{AsBody, RecvBody};
@@ -26,10 +27,14 @@ pub use agent::{Agent, AgentConfig};
 pub use body::Body;
 pub use error::Error;
 
-pub fn run(request: &Request<impl AsBody>) -> Result<Response<RecvBody>, Error> {
+pub fn run(request: Request<impl AsBody>) -> Result<Response<RecvBody>, Error> {
     let mut agent = Agent::new_default();
-    let body = request.body().as_body();
-    agent.run(request, body)
+
+    let (parts, mut body) = request.into_parts();
+    let body = body.as_body();
+    let request = Request::from_parts(parts, ());
+
+    agent.run(&request, body)
 }
 
 fn builder<T>(method: Method, uri: T) -> RequestBuilder
