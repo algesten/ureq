@@ -85,9 +85,9 @@ impl RequestBuilder {
     }
 }
 
-fn do_call<B>(
+fn do_call(
     mut agent: Agent,
-    request: Request<B>,
+    request: Request<()>,
     body: Body,
 ) -> Result<Response<RecvBody>, Error> {
     let response = agent.run(&request, body)?;

@@ -3,33 +3,35 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use hoot::client::flow::{
-    state::*, Await100Result, Flow, RecvBodyResult, RecvResponseResult, SendRequestResult,
+    state::*, Await100Result, RecvBodyResult, RecvResponseResult, SendRequestResult,
 };
 use http::{Request, Uri};
 
 use crate::time::Instant;
 use crate::{AgentConfig, Body, Error};
 
-pub(crate) struct Unit<'a, 'b, B> {
+pub(crate) struct Unit<'a, 'b> {
     config: Arc<AgentConfig>,
     time_start: Instant,
     call_timings: CallTimings,
-    state: State<'a, B>,
+    state: State<'a>,
     body: Body<'b>,
     addr: Option<SocketAddr>,
 }
 
-enum State<'a, B> {
-    Begin(Flow<'a, B, Prepare>),
-    DnsLookup(Flow<'a, B, Prepare>),
-    OpenConnection(Flow<'a, B, Prepare>),
-    SendRequest(Flow<'a, B, SendRequest>),
-    SendBody(Flow<'a, B, SendBody>),
-    Await100(Flow<'a, B, Await100>),
-    RecvResponse(Flow<'a, B, RecvResponse>),
-    RecvBody(Flow<'a, B, RecvBody>),
-    Redirect(Flow<'a, B, Redirect>),
-    Cleanup(Flow<'a, B, Cleanup>),
+type Flow<'a, State> = hoot::client::flow::Flow<'a, (), State>;
+
+enum State<'a> {
+    Begin(Flow<'a, Prepare>),
+    DnsLookup(Flow<'a, Prepare>),
+    OpenConnection(Flow<'a, Prepare>),
+    SendRequest(Flow<'a, SendRequest>),
+    SendBody(Flow<'a, SendBody>),
+    Await100(Flow<'a, Await100>),
+    RecvResponse(Flow<'a, RecvResponse>),
+    RecvBody(Flow<'a, RecvBody>),
+    Redirect(Flow<'a, Redirect>),
+    Cleanup(Flow<'a, Cleanup>),
     Empty,
 }
 
@@ -64,11 +66,11 @@ pub enum Input<'a> {
     Input { data: &'a [u8] },
 }
 
-impl<'a, 'b, B> Unit<'a, 'b, B> {
+impl<'a, 'b> Unit<'a, 'b> {
     pub fn new(
         config: Arc<AgentConfig>,
         time_start: Instant,
-        request: &'a Request<B>,
+        request: &'a Request<()>,
         body: Body<'b>,
     ) -> Result<Self, Error> {
         Ok(Self {
@@ -264,7 +266,7 @@ pub(crate) struct CallTimings {
 }
 
 impl CallTimings {
-    fn next_timeout<'a, B>(&self, state: &State<B>, config: &AgentConfig) -> Instant {
+    fn next_timeout<'a>(&self, state: &State, config: &AgentConfig) -> Instant {
         // self.time_xxx unwraps() below are OK. If the unwrap fails, we have a state
         // bug where we progressed to a certain State without setting the corresponding time.
         match state {
