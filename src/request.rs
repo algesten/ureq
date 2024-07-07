@@ -3,6 +3,7 @@ use std::convert::TryFrom;
 use http::{HeaderName, HeaderValue, Method, Request, Response, Uri};
 
 use crate::body::{AsBody, RecvBody};
+use crate::time::Instant;
 use crate::{Agent, Body, Error};
 
 #[derive(Debug)]
@@ -90,7 +91,7 @@ fn do_call(
     request: Request<()>,
     body: Body,
 ) -> Result<Response<RecvBody>, Error> {
-    let response = agent.run(&request, body)?;
+    let response = agent.run(&request, body, Instant::now)?;
     Ok(response)
 }
 

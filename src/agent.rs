@@ -142,10 +142,9 @@ impl Agent {
         &mut self,
         request: &Request<()>,
         body: Body,
+        current_time: impl Fn() -> Instant,
     ) -> Result<Response<RecvBody>, Error> {
-        let start_time = Instant::now();
-
-        let mut unit = Unit::new(&self.config, start_time, request, body)?;
+        let mut unit = Unit::new(&self.config, current_time(), request, body)?;
 
         let mut addr = None;
         let mut connection: Option<Connection> = None;
@@ -159,32 +158,32 @@ impl Agent {
                 .map(|c| c.buffer_borrow())
                 .unwrap_or(&mut []);
 
-            match unit.poll_event(Instant::now(), buffer)? {
+            match unit.poll_event(current_time(), buffer)? {
                 Event::Reset => {
                     addr = None;
                     connection = None;
                     response = None;
-                    unit.handle_input(Instant::now(), Input::Begin)?;
+                    unit.handle_input(current_time(), Input::Begin)?;
                 }
                 Event::Resolve { uri, timeout } => {
                     addr = Some(self.resolver.resolve(uri, timeout)?);
-                    unit.handle_input(Instant::now(), Input::Resolved)?;
+                    unit.handle_input(current_time(), Input::Resolved)?;
                 }
                 Event::OpenConnection { uri, timeout } => {
                     let addr = addr.expect("addr to be available after Event::Resolve");
                     connection = Some(self.pool.connect(uri, addr, timeout)?);
-                    unit.handle_input(Instant::now(), Input::ConnectionOpen)?;
+                    unit.handle_input(current_time(), Input::ConnectionOpen)?;
                 }
                 Event::Await100 { timeout } => {
                     let connection = connection.as_mut().expect("connection for AwaitInput");
 
                     match connection.input_await(timeout) {
-                        Ok(input) => unit.handle_input(Instant::now(), Input::Input { input })?,
+                        Ok(input) => unit.handle_input(current_time(), Input::Input { input })?,
 
                         // If we get a timeout while waiting for input, that is not an error,
                         // EndAwait100 progresses the state machine to start reading a response.
                         Err(Error::Timeout(_)) => {
-                            unit.handle_input(Instant::now(), Input::EndAwait100)?
+                            unit.handle_input(current_time(), Input::EndAwait100)?
                         }
                         Err(e) => return Err(e),
                     };
@@ -196,14 +195,25 @@ impl Agent {
                 Event::AwaitInput { timeout } => {
                     let connection = connection.as_mut().expect("connection for AwaitInput");
                     let input = connection.input_await(timeout)?;
-                    unit.handle_input(Instant::now(), Input::Input { input })?;
+                    unit.handle_input(current_time(), Input::Input { input })?;
                 }
                 Event::InputConsumed { amount } => {
                     let connection = connection.as_mut().expect("connection for InputConsumed");
                     connection.input_consume(amount);
                 }
-                Event::Response { response: r } => {
+                Event::Response { response: r, end } => {
                     response = Some(r);
+
+                    // end true means one of two things:
+                    // 1. This is a non-redirect response
+                    // 2. This is a redirect response, and we are not following (any more) redirects
+                    if end {
+                        break;
+                    }
+                }
+                Event::ResponseBody { .. } => {
+                    // Implicitly, if we find ourselves here, we are following a redirect and need
+                    // to consume the body to be able to make the next request.
                 }
             }
         }

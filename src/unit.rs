@@ -16,6 +16,7 @@ pub(crate) struct Unit<'c, 'a, 'b> {
     state: State<'a>,
     body: Body<'b>,
     queued_event: VecDeque<Event<'static>>,
+    redirect_count: u32,
 }
 
 type Flow<'a, State> = hoot::client::flow::Flow<'a, (), State>;
@@ -51,7 +52,8 @@ pub enum Event<'a> {
     Transmit { amount: usize, timeout: Duration },
     AwaitInput { timeout: Duration },
     InputConsumed { amount: usize },
-    Response { response: Response<()> },
+    Response { response: Response<()>, end: bool },
+    ResponseBody { amount: usize },
 }
 
 pub enum Input<'a> {
@@ -77,6 +79,7 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
             state: State::Begin(Flow::new(request)?),
             body,
             queued_event: VecDeque::new(),
+            redirect_count: 0,
         })
     }
 
@@ -276,7 +279,17 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
                         None => return Ok(()),
                     };
 
-                    self.queued_event.push_back(Event::Response { response });
+                    let end = if response.status().is_redirection() {
+                        self.redirect_count += 1;
+                        // If we reached max redirections set end: true to
+                        // make outer loop stop and return the body.
+                        self.redirect_count < self.config.max_redirects
+                    } else {
+                        true
+                    };
+
+                    self.queued_event
+                        .push_back(Event::Response { response, end });
 
                     let flow = extract!(&mut self.state, State::RecvResponse)
                         .expect("Input::Input requires State::RecvResponse");
