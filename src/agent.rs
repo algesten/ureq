@@ -1,20 +1,23 @@
 use std::fmt::Debug;
+use std::net::SocketAddr;
 use std::time::Duration;
 
 use hoot::client::flow::RedirectAuthHeaders;
 use http::{Request, Response, Uri};
 
 use crate::body::RecvBody;
-use crate::pool::ConnectionPool;
+use crate::pool::{Connection, ConnectionPool};
+use crate::resolver::{DefaultResolver, Resolver};
 use crate::time::Instant;
-use crate::transport::{Conn, Transport};
-use crate::unit::Unit;
+use crate::transport::{Socket, Transport};
+use crate::unit::{Event, Input, Unit};
 use crate::{Body, Error};
 
 #[derive(Debug)]
 pub struct Agent {
     config: AgentConfig,
     pool: ConnectionPool,
+    resolver: Box<dyn Resolver>,
 }
 
 /// Config as built by AgentBuilder and then static for the lifetime of the Agent.
@@ -37,7 +40,7 @@ pub struct AgentConfig {
     /// Because most platforms do not have an async syscall for looking up
     /// a host name, setting this might force str0m to spawn a thread to handle
     /// the timeout.
-    pub timeout_dns_lookup: Option<Duration>,
+    pub timeout_resolve: Option<Duration>,
 
     /// Max duration for establishing the connection
     ///
@@ -96,7 +99,7 @@ impl Default for AgentConfig {
         Self {
             timeout_global: None,
             timeout_per_call: None,
-            timeout_dns_lookup: None,
+            timeout_resolve: None,
             timeout_connect: None,
             timeout_send_request: None,
             timeout_await_100: Some(Duration::from_secs(1)),
@@ -113,19 +116,24 @@ impl Default for AgentConfig {
 }
 
 impl Agent {
-    pub fn new(config: AgentConfig, pool: impl Transport) -> Self {
+    pub fn new(config: AgentConfig, pool: impl Transport, resolver: impl Resolver) -> Self {
         Agent {
             config,
             pool: ConnectionPool::new(pool),
+            resolver: Box::new(resolver),
         }
     }
 
     pub(crate) fn new_default() -> Self {
-        Agent::new(AgentConfig::default(), RustlConnectionPool)
+        Agent::new(
+            AgentConfig::default(),
+            RustlConnectionPool,
+            DefaultResolver::default(),
+        )
     }
 
     // TODO(martin): Can we improve this signature? The ideal would be:
-    // fn run(&self, request: &Request<impl Body>) -> Result<Response<impl Body>, Error>
+    // fn run(&self, request: Request<impl Body>) -> Result<Response<impl Body>, Error>
 
     // TODO(martin): One design idea is to be able to create requests in one thread, then
     // actually run them to completion in another. &mut self here makes it impossible to use
@@ -137,7 +145,68 @@ impl Agent {
     ) -> Result<Response<RecvBody>, Error> {
         let start_time = Instant::now();
 
-        let unit = Unit::new(&self.config, start_time, request, body)?;
+        let mut unit = Unit::new(&self.config, start_time, request, body)?;
+
+        let mut addr = None;
+        let mut connection: Option<Connection> = None;
+        let mut response = None;
+
+        loop {
+            // The buffer is owned by the connection. Before we have an open connection,
+            // there is no buffer.
+            let buffer = connection
+                .as_mut()
+                .map(|c| c.buffer_borrow())
+                .unwrap_or(&mut []);
+
+            match unit.poll_event(Instant::now(), buffer)? {
+                Event::Reset => {
+                    addr = None;
+                    connection = None;
+                    response = None;
+                    unit.handle_input(Instant::now(), Input::Begin)?;
+                }
+                Event::Resolve { uri, timeout } => {
+                    addr = Some(self.resolver.resolve(uri, timeout)?);
+                    unit.handle_input(Instant::now(), Input::Resolved)?;
+                }
+                Event::OpenConnection { uri, timeout } => {
+                    let addr = addr.expect("addr to be available after Event::Resolve");
+                    connection = Some(self.pool.connect(uri, addr, timeout)?);
+                    unit.handle_input(Instant::now(), Input::ConnectionOpen)?;
+                }
+                Event::Await100 { timeout } => {
+                    let connection = connection.as_mut().expect("connection for AwaitInput");
+
+                    match connection.input_await(timeout) {
+                        Ok(input) => unit.handle_input(Instant::now(), Input::Input { input })?,
+
+                        // If we get a timeout while waiting for input, that is not an error,
+                        // EndAwait100 progresses the state machine to start reading a response.
+                        Err(Error::Timeout(_)) => {
+                            unit.handle_input(Instant::now(), Input::EndAwait100)?
+                        }
+                        Err(e) => return Err(e),
+                    };
+                }
+                Event::Transmit { amount, timeout } => {
+                    let connection = connection.as_mut().expect("connection for Transmit");
+                    connection.buffer_transmit(amount, timeout)?;
+                }
+                Event::AwaitInput { timeout } => {
+                    let connection = connection.as_mut().expect("connection for AwaitInput");
+                    let input = connection.input_await(timeout)?;
+                    unit.handle_input(Instant::now(), Input::Input { input })?;
+                }
+                Event::InputConsumed { amount } => {
+                    let connection = connection.as_mut().expect("connection for InputConsumed");
+                    connection.input_consume(amount);
+                }
+                Event::Response { response: r } => {
+                    response = Some(r);
+                }
+            }
+        }
 
         todo!()
     }
@@ -147,7 +216,12 @@ impl Agent {
 pub struct RustlConnectionPool;
 
 impl Transport for RustlConnectionPool {
-    fn connect(&mut self, _uri: &Uri) -> Result<Box<dyn Conn>, Error> {
+    fn connect(
+        &mut self,
+        _uri: &Uri,
+        addr: SocketAddr,
+        timeout: Duration,
+    ) -> Result<Box<dyn Socket>, Error> {
         todo!()
     }
 }

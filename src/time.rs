@@ -14,6 +14,20 @@ impl Instant {
     pub fn now() -> Self {
         Instant::Exact(time::Instant::now())
     }
+
+    pub(crate) fn duration_since(&self, earlier: Instant) -> Duration {
+        match (self, earlier) {
+            (Instant::AlreadyHappened, Instant::AlreadyHappened) => Duration::ZERO,
+            (Instant::AlreadyHappened, Instant::Exact(_)) => Duration::ZERO,
+            (Instant::AlreadyHappened, Instant::NotHappening) => Duration::ZERO,
+            (Instant::Exact(_), Instant::NotHappening) => Duration::ZERO,
+            (Instant::Exact(v1), Instant::Exact(v2)) => v1.duration_since(v2),
+            (Instant::Exact(_), Instant::AlreadyHappened) => Duration::from_secs(u64::MAX),
+            (Instant::NotHappening, Instant::AlreadyHappened) => Duration::from_secs(u64::MAX),
+            (Instant::NotHappening, Instant::Exact(_)) => Duration::from_secs(u64::MAX),
+            (Instant::NotHappening, Instant::NotHappening) => Duration::from_secs(u64::MAX),
+        }
+    }
 }
 
 impl Add<Duration> for Instant {

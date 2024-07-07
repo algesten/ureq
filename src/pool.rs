@@ -1,6 +1,9 @@
+use std::net::SocketAddr;
+use std::time::Duration;
+
 use http::Uri;
 
-use crate::transport::{Conn, Transport};
+use crate::transport::{Socket, Transport};
 use crate::Error;
 
 #[derive(Debug)]
@@ -15,35 +18,36 @@ impl ConnectionPool {
         }
     }
 
-    pub fn connect(&mut self, uri: &Uri) -> Result<Connection, Error> {
+    pub fn connect(
+        &mut self,
+        uri: &Uri,
+        addr: SocketAddr,
+        timeout: Duration,
+    ) -> Result<Connection, Error> {
         Ok(Connection {
-            conn: self.connector.connect(uri)?,
+            conn: self.connector.connect(uri, addr, timeout)?,
         })
     }
 }
 
 pub(crate) struct Connection {
-    conn: Box<dyn Conn>,
+    conn: Box<dyn Socket>,
 }
 
 impl Connection {
-    pub fn output_buffer(&mut self) -> OutputBuffer {
-        todo!()
+    pub fn buffer_borrow(&mut self) -> &mut [u8] {
+        self.conn.buffer_borrow()
     }
-}
 
-pub(crate) struct OutputBuffer<'a> {
-    transport: &'a mut dyn Conn,
-}
-
-impl<'a> OutputBuffer<'a> {
-    pub fn flush(self, amount: usize) -> Result<(), Error> {
-        self.transport.output_buffer_flush(amount)
+    pub fn buffer_transmit(&mut self, amount: usize, timeout: Duration) -> Result<(), Error> {
+        self.conn.buffer_transmit(amount, timeout)
     }
-}
 
-impl<'a> AsMut<[u8]> for OutputBuffer<'a> {
-    fn as_mut(&mut self) -> &mut [u8] {
-        self.transport.output_buffer()
+    pub fn input_await(&mut self, timeout: Duration) -> Result<&[u8], Error> {
+        self.conn.input_await(timeout)
+    }
+
+    pub fn input_consume(&mut self, amount: usize) {
+        self.conn.input_consume(amount)
     }
 }
