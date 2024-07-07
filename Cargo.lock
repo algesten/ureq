@@ -26,7 +26,7 @@ dependencies = [
 [[package]]
 name = "hoot"
 version = "0.2.0"
-source = "git+https://github.com/algesten/hoot?rev=3e52ff1#3e52ff18903b304dd152d4dbf70583510b872ede"
+source = "git+https://github.com/algesten/hoot?rev=2e2eac5#2e2eac528c3f37cda41101640408c3b001620036"
 dependencies = [
  "http",
  "httparse",

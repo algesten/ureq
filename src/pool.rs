@@ -19,7 +19,7 @@ impl ConnectionPool {
     }
 
     pub fn connect(
-        &mut self,
+        &self,
         uri: &Uri,
         addr: SocketAddr,
         timeout: Duration,
