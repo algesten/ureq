@@ -50,4 +50,12 @@ impl Connection {
     pub fn consume_input(&mut self, amount: usize) {
         self.conn.consume_input(amount)
     }
+
+    pub(crate) fn close(self) {
+        todo!()
+    }
+
+    pub(crate) fn reuse(self) {
+        todo!()
+    }
 }

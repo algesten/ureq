@@ -159,10 +159,18 @@ impl Agent {
                 .unwrap_or(Buffers::empty());
 
             match unit.poll_event(current_time(), buffers)? {
-                Event::Reset => {
+                Event::Reset { must_close } => {
                     addr = None;
-                    connection = None;
                     response = None;
+
+                    if let Some(c) = connection.take() {
+                        if must_close {
+                            c.close();
+                        } else {
+                            c.reuse();
+                        }
+                    }
+
                     unit.handle_input(current_time(), Input::Begin, &mut [])?;
                 }
 
@@ -226,6 +234,9 @@ impl Agent {
                 }
             }
         }
+
+        let response = response.expect("above loop to exit when there is a response");
+        let unit = unit.release_body();
 
         todo!()
     }
