@@ -23,12 +23,16 @@ pub enum Error {
 #[derive(Debug)]
 pub enum TimeoutReason {
     Resolver,
+    Global,
+    Call,
 }
 
 impl fmt::Display for TimeoutReason {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             TimeoutReason::Resolver => write!(f, "resolver"),
+            TimeoutReason::Global => write!(f, "global"),
+            TimeoutReason::Call => write!(f, "call"),
         }
     }
 }

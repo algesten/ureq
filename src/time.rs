@@ -21,7 +21,7 @@ impl Instant {
             (Instant::AlreadyHappened, Instant::Exact(_)) => Duration::ZERO,
             (Instant::AlreadyHappened, Instant::NotHappening) => Duration::ZERO,
             (Instant::Exact(_), Instant::NotHappening) => Duration::ZERO,
-            (Instant::Exact(v1), Instant::Exact(v2)) => v1.duration_since(v2),
+            (Instant::Exact(v1), Instant::Exact(v2)) => v1.saturating_duration_since(v2),
             (Instant::Exact(_), Instant::AlreadyHappened) => Duration::from_secs(u64::MAX),
             (Instant::NotHappening, Instant::AlreadyHappened) => Duration::from_secs(u64::MAX),
             (Instant::NotHappening, Instant::Exact(_)) => Duration::from_secs(u64::MAX),
