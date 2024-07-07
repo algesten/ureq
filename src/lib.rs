@@ -26,6 +26,7 @@ mod unit;
 pub use agent::{Agent, AgentConfig};
 pub use body::Body;
 pub use error::Error;
+use time::Instant;
 
 pub fn run(request: Request<impl AsBody>) -> Result<Response<RecvBody>, Error> {
     let mut agent = Agent::new_default();
@@ -34,7 +35,7 @@ pub fn run(request: Request<impl AsBody>) -> Result<Response<RecvBody>, Error> {
     let body = body.as_body();
     let request = Request::from_parts(parts, ());
 
-    agent.run(&request, body)
+    agent.run(&request, body, Instant::now)
 }
 
 fn builder<T>(method: Method, uri: T) -> RequestBuilder
