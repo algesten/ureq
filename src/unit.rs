@@ -2,17 +2,16 @@ use std::collections::VecDeque;
 use std::mem;
 use std::time::Duration;
 
-use hoot::client::flow::{
-    state::*, Await100Result, RecvBodyResult, RecvResponseResult, SendRequestResult,
-};
+use hoot::client::flow::{state::*, Await100Result, RecvResponseResult, SendRequestResult};
 use http::{Request, Response, Uri};
 
+use crate::error::TimeoutReason;
 use crate::time::Instant;
 use crate::{AgentConfig, Body, Error};
 
 pub(crate) struct Unit<'c, 'a, 'b> {
     config: &'c AgentConfig,
-    time_start: Instant,
+    global_start: Instant,
     call_timings: CallTimings,
     state: State<'a>,
     body: Body<'b>,
@@ -67,18 +66,25 @@ pub enum Input<'a> {
 impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
     pub fn new(
         config: &'c AgentConfig,
-        time_start: Instant,
+        global_start: Instant,
         request: &'b Request<()>,
         body: Body<'a>,
     ) -> Result<Self, Error> {
         Ok(Self {
             config,
-            time_start,
+            global_start,
             call_timings: CallTimings::default(),
             state: State::Begin(Flow::new(request)?),
             body,
             queued_event: VecDeque::new(),
         })
+    }
+
+    fn global_timeout(&self) -> Instant {
+        self.config
+            .timeout_global
+            .map(|t| self.global_start + t)
+            .unwrap_or(Instant::NotHappening)
     }
 
     pub fn poll_event(&mut self, now: Instant, buffer: &mut [u8]) -> Result<Event, Error> {
@@ -87,10 +93,21 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
             return Ok(queued);
         }
 
-        let timeout_at = self.call_timings.next_timeout(&self.state, &self.config);
-        assert!(timeout_at >= now);
+        let call_timeout_at = self.call_timings.next_timeout(&self.state, &self.config);
+        let call_timeout = call_timeout_at.duration_since(now);
 
-        let timeout = timeout_at.duration_since(now);
+        let global_timeout_at = self.global_timeout();
+        let global_timeout = global_timeout_at.duration_since(now);
+
+        let timeout = call_timeout.min(global_timeout);
+
+        if timeout.is_zero() {
+            return Err(Error::Timeout(if global_timeout.is_zero() {
+                TimeoutReason::Global
+            } else {
+                TimeoutReason::Call
+            }));
+        }
 
         // These outputs don't borrow from the State, but they might proceed the FSM. Hence
         // we return an Output<'static> meaning we are free the call self.maybe_change_state()
@@ -157,7 +174,7 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
         }
 
         // These Outputs borrow from the State, but they don't proceed the FSM.
-        Ok(match &mut self.state {
+        let output = match &mut self.state {
             State::Resolve(flow) => Event::Resolve {
                 uri: flow.uri(),
                 timeout,
@@ -167,16 +184,16 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
                 timeout,
             },
             _ => unreachable!("State must be covered in first or second match"),
-        })
+        };
+
+        Ok(output)
     }
 
     fn poll_output_maybe_proceed_state(&mut self, now: Instant) {
         let state = mem::replace(&mut self.state, State::Empty);
 
         let new_state = match state {
-            State::Begin(flow) => State::Begin(flow),
-            State::Resolve(flow) => State::Resolve(flow),
-            State::OpenConnection(flow) => State::OpenConnection(flow),
+            // State might move on poll_output
             State::SendRequest(flow) => {
                 if flow.can_proceed() {
                     self.call_timings.time_send_request = Some(now);
@@ -197,30 +214,16 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
                     State::SendBody(flow)
                 }
             }
+
+            // State might move on handle_input()
+            State::Begin(flow) => State::Begin(flow),
+            State::Resolve(flow) => State::Resolve(flow),
+            State::OpenConnection(flow) => State::OpenConnection(flow),
             State::Await100(flow) => State::Await100(flow),
-            State::RecvResponse(flow) => {
-                if flow.can_proceed() {
-                    self.call_timings.time_recv_response = Some(now);
-                    match flow.proceed().unwrap() {
-                        RecvResponseResult::RecvBody(flow) => State::RecvBody(flow),
-                        RecvResponseResult::Redirect(flow) => State::Redirect(flow),
-                        RecvResponseResult::Cleanup(flow) => State::Cleanup(flow),
-                    }
-                } else {
-                    State::RecvResponse(flow)
-                }
-            }
-            State::RecvBody(flow) => {
-                if flow.can_proceed() {
-                    self.call_timings.time_recv_body = Some(now);
-                    match flow.proceed().unwrap() {
-                        RecvBodyResult::Redirect(flow) => State::Redirect(flow),
-                        RecvBodyResult::Cleanup(flow) => State::Cleanup(flow),
-                    }
-                } else {
-                    State::RecvBody(flow)
-                }
-            }
+            State::RecvResponse(flow) => State::RecvResponse(flow),
+
+            // TODO(martin): decide when state moves
+            State::RecvBody(flow) => State::RecvBody(flow),
             State::Redirect(flow) => State::Redirect(flow),
             State::Cleanup(flow) => State::Cleanup(flow),
             State::Empty => unreachable!("self.state should never be State::Empty"),
@@ -287,6 +290,7 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
                     self.call_timings.time_recv_response = Some(now);
                     self.state = state;
                 }
+
                 State::RecvBody(_flow) => {
                     todo!()
                 }
