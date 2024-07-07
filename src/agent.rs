@@ -165,15 +165,18 @@ impl Agent {
                     response = None;
                     unit.handle_input(current_time(), Input::Begin, &mut [])?;
                 }
+
                 Event::Resolve { uri, timeout } => {
                     addr = Some(self.resolver.resolve(uri, timeout)?);
                     unit.handle_input(current_time(), Input::Resolved, &mut [])?;
                 }
+
                 Event::OpenConnection { uri, timeout } => {
                     let addr = addr.expect("addr to be available after Event::Resolve");
                     connection = Some(self.pool.connect(uri, addr, timeout)?);
                     unit.handle_input(current_time(), Input::ConnectionOpen, &mut [])?;
                 }
+
                 Event::Await100 { timeout } => {
                     let connection = connection.as_mut().expect("connection for AwaitInput");
 
@@ -190,19 +193,23 @@ impl Agent {
                         Err(e) => return Err(e),
                     };
                 }
+
                 Event::Transmit { amount, timeout } => {
                     let connection = connection.as_mut().expect("connection for Transmit");
                     connection.transmit_output(amount, timeout)?;
                 }
+
                 Event::AwaitInput { timeout, is_body } => {
                     let connection = connection.as_mut().expect("connection for AwaitInput");
                     let Buffers { input, output } = connection.await_input(timeout, is_body)?;
                     unit.handle_input(current_time(), Input::Input { input }, output)?;
                 }
+
                 Event::InputConsumed { amount } => {
                     let connection = connection.as_mut().expect("connection for InputConsumed");
                     connection.consume_input(amount);
                 }
+
                 Event::Response { response: r, end } => {
                     response = Some(r);
 
@@ -213,6 +220,7 @@ impl Agent {
                         break;
                     }
                 }
+
                 Event::ResponseBody { .. } => {
                     // Implicitly, if we find ourselves here, we are following a redirect and need
                     // to consume the body to be able to make the next request.

@@ -120,6 +120,7 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
         // since self.state is not borrowed.
         let output: Option<Event<'static>> = match &mut self.state {
             State::Begin(_) => Some(Event::Reset),
+
             // State::Resolve (see below)
             // State::OpenConnection (see below)
             State::SendRequest(flow) => {
@@ -130,6 +131,7 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
                     timeout,
                 })
             }
+
             State::SendBody(flow) => {
                 let input_len = input.len();
 
@@ -159,11 +161,14 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
                     timeout,
                 })
             }
+
             State::Await100(_) => Some(Event::Await100 { timeout }),
+
             State::RecvResponse(_) => Some(Event::AwaitInput {
                 timeout,
                 is_body: false,
             }),
+
             State::RecvBody(_) => Some(Event::AwaitInput {
                 timeout,
                 is_body: true,
@@ -184,7 +189,9 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
             }
 
             State::Cleanup(_) => todo!(),
+
             State::Empty => unreachable!("self.state should never be in State::Empty"),
+
             _ => None,
         };
 
@@ -199,10 +206,12 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
                 uri: flow.uri(),
                 timeout,
             },
+
             State::OpenConnection(flow) => Event::OpenConnection {
                 uri: flow.uri(),
                 timeout,
             },
+
             _ => unreachable!("State must be covered in first or second match"),
         };
 
@@ -266,6 +275,7 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
                 self.call_timings.time_call_start = Some(now);
                 self.state = State::Resolve(flow);
             }
+
             Input::Resolved => {
                 let flow = extract!(&mut self.state, State::Resolve)
                     .expect("Input::Resolved requires State::Resolve");
@@ -273,6 +283,7 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
                 self.call_timings.time_resolve = Some(now);
                 self.state = State::OpenConnection(flow)
             }
+
             Input::ConnectionOpen => {
                 let flow = extract!(&mut self.state, State::OpenConnection)
                     .expect("Input::ConnectionOpen requires State::OpenConnection");
@@ -280,7 +291,9 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
                 self.call_timings.time_connect = Some(now);
                 self.state = State::SendRequest(flow.proceed());
             }
+
             Input::EndAwait100 => self.end_await_100(now),
+
             Input::Input { input } => match &mut self.state {
                 State::Await100(flow) => {
                     let amount = flow.try_read_100(input)?;
@@ -292,6 +305,7 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
                         self.end_await_100(now);
                     }
                 }
+
                 State::RecvResponse(flow) => {
                     let (amount, maybe_response) = flow.try_response(input)?;
                     self.queued_event.push_back(Event::InputConsumed { amount });
