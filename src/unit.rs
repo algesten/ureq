@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::mem;
+use std::sync::Arc;
 use std::time::Duration;
 
 use hoot::client::flow::{
@@ -12,29 +13,29 @@ use crate::time::Instant;
 use crate::transport::Buffers;
 use crate::{AgentConfig, Body, Error};
 
-pub(crate) struct Unit<'c, 'a, 'b> {
-    config: &'c AgentConfig,
+pub(crate) struct Unit<'b> {
+    config: Arc<AgentConfig>,
     global_start: Instant,
     call_timings: CallTimings,
-    state: State<'a>,
+    state: State,
     body: Body<'b>,
     queued_event: VecDeque<Event<'static>>,
     redirect_count: u32,
 }
 
-type Flow<'a, State> = hoot::client::flow::Flow<'a, (), State>;
+type Flow<State> = hoot::client::flow::Flow<(), State>;
 
-enum State<'a> {
-    Begin(Flow<'a, Prepare>),
-    Resolve(Flow<'a, Prepare>),
-    OpenConnection(Flow<'a, Prepare>),
-    SendRequest(Flow<'a, SendRequest>),
-    SendBody(Flow<'a, SendBody>),
-    Await100(Flow<'a, Await100>),
-    RecvResponse(Flow<'a, RecvResponse>),
-    RecvBody(Flow<'a, RecvBody>),
-    Redirect(Flow<'a, Redirect>),
-    Cleanup(Flow<'a, Cleanup>),
+enum State {
+    Begin(Flow<Prepare>),
+    Resolve(Flow<Prepare>),
+    OpenConnection(Flow<Prepare>),
+    SendRequest(Flow<SendRequest>),
+    SendBody(Flow<SendBody>),
+    Await100(Flow<Await100>),
+    RecvResponse(Flow<RecvResponse>),
+    RecvBody(Flow<RecvBody>),
+    Redirect(Flow<Redirect>),
+    Cleanup(Flow<Cleanup>),
     Empty,
 }
 
@@ -67,12 +68,12 @@ pub enum Input<'a> {
 }
 
 // impl<'c, 'a, 'b> Unit<'c, 'a, 'b> {
-impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
+impl<'b> Unit<'b> {
     pub fn new(
-        config: &'c AgentConfig,
+        config: Arc<AgentConfig>,
         global_start: Instant,
-        request: &'b Request<()>,
-        body: Body<'a>,
+        request: Request<()>,
+        body: Body<'b>,
     ) -> Result<Self, Error> {
         Ok(Self {
             config,
@@ -367,7 +368,7 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
         };
     }
 
-    pub fn release_body(self) -> Unit<'c, 'b, 'static> {
+    pub fn release_body(self) -> Unit<'static> {
         Unit {
             config: self.config,
             global_start: self.global_start,

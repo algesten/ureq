@@ -1,12 +1,14 @@
 use std::fmt::Debug;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use hoot::client::flow::RedirectAuthHeaders;
 use http::{Request, Response, Uri};
 
-use crate::body::RecvBody;
+use crate::body::AsBody;
 use crate::pool::{Connection, ConnectionPool};
+use crate::recv::RecvBody;
 use crate::resolver::{DefaultResolver, Resolver};
 use crate::time::Instant;
 use crate::transport::{Buffers, Socket, Transport};
@@ -15,9 +17,9 @@ use crate::{Body, Error};
 
 #[derive(Debug)]
 pub struct Agent {
-    config: AgentConfig,
-    pool: ConnectionPool,
-    resolver: Box<dyn Resolver>,
+    config: Arc<AgentConfig>,
+    pool: Arc<ConnectionPool>,
+    resolver: Arc<Box<dyn Resolver>>,
 }
 
 /// Config as built by AgentBuilder and then static for the lifetime of the Agent.
@@ -118,9 +120,9 @@ impl Default for AgentConfig {
 impl Agent {
     pub fn new(config: AgentConfig, pool: impl Transport, resolver: impl Resolver) -> Self {
         Agent {
-            config,
-            pool: ConnectionPool::new(pool),
-            resolver: Box::new(resolver),
+            config: Arc::new(config),
+            pool: Arc::new(ConnectionPool::new(pool)),
+            resolver: Arc::new(Box::new(resolver)),
         }
     }
 
@@ -132,23 +134,31 @@ impl Agent {
         )
     }
 
+    pub fn run(&self, request: Request<impl AsBody>) -> Result<Response<RecvBody>, Error> {
+        let (parts, mut body) = request.into_parts();
+        let body = body.as_body();
+        let request = Request::from_parts(parts, ());
+
+        self.do_run(request, body, Instant::now)
+    }
+
     // TODO(martin): Can we improve this signature? The ideal would be:
     // fn run(&self, request: Request<impl Body>) -> Result<Response<impl Body>, Error>
 
     // TODO(martin): One design idea is to be able to create requests in one thread, then
     // actually run them to completion in another. &mut self here makes it impossible to use
     // Agent in such a design. Is that a concern?
-    pub(crate) fn run(
-        &mut self,
-        request: &Request<()>,
+    pub(crate) fn do_run(
+        &self,
+        request: Request<()>,
         body: Body,
-        current_time: impl Fn() -> Instant,
+        current_time: impl Fn() -> Instant + 'static,
     ) -> Result<Response<RecvBody>, Error> {
-        let mut unit = Unit::new(&self.config, current_time(), request, body)?;
+        let mut unit = Unit::new(self.config.clone(), current_time(), request, body)?;
 
         let mut addr = None;
         let mut connection: Option<Connection> = None;
-        let mut response = None;
+        let mut response;
 
         loop {
             // The buffer is owned by the connection. Before we have an open connection,
@@ -161,7 +171,6 @@ impl Agent {
             match unit.poll_event(current_time(), buffers)? {
                 Event::Reset { must_close } => {
                     addr = None;
-                    response = None;
 
                     if let Some(c) = connection.take() {
                         if must_close {
@@ -236,9 +245,14 @@ impl Agent {
         }
 
         let response = response.expect("above loop to exit when there is a response");
+        let connection = connection.expect("connection to be open");
         let unit = unit.release_body();
 
-        todo!()
+        let (parts, _) = response.into_parts();
+        let recv_body = RecvBody::new(unit, connection, current_time);
+        let response = Response::from_parts(parts, recv_body);
+
+        Ok(response)
     }
 }
 
@@ -247,7 +261,7 @@ pub struct RustlConnectionPool;
 
 impl Transport for RustlConnectionPool {
     fn connect(
-        &mut self,
+        &self,
         _uri: &Uri,
         addr: SocketAddr,
         timeout: Duration,
