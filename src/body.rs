@@ -2,6 +2,8 @@ use std::fs::File;
 use std::io::{self, Read, Stdin};
 use std::net::TcpStream;
 
+use crate::recv::RecvBody;
+
 pub struct Body<'a> {
     inner: BodyInner<'a>,
     ended: bool,
@@ -105,14 +107,6 @@ use std::os::unix::net::UnixStream;
 #[cfg(target_family = "unix")]
 impl_into_body!(UnixStream, Reader);
 
-pub struct RecvBody;
-
-impl Read for RecvBody {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        todo!()
-    }
-}
-
 impl<'a> From<BodyInner<'a>> for Body<'a> {
     fn from(inner: BodyInner<'a>) -> Self {
         Body {
@@ -122,7 +116,12 @@ impl<'a> From<BodyInner<'a>> for Body<'a> {
     }
 }
 
-impl_into_body!(RecvBody, Reader);
+impl Private for RecvBody {}
+impl AsBody for RecvBody {
+    fn as_body(&mut self) -> Body {
+        BodyInner::Reader(self).into()
+    }
+}
 
 impl Private for Response<RecvBody> {}
 impl AsBody for Response<RecvBody> {

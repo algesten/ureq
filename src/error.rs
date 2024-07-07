@@ -23,6 +23,16 @@ pub enum Error {
     RedirectFailed,
 }
 
+impl Error {
+    pub(crate) fn into_io(self) -> io::Error {
+        if let Self::Io(e) = self {
+            e
+        } else {
+            io::Error::new(io::ErrorKind::Other, self)
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum TimeoutReason {
     Resolver,

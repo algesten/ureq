@@ -2,7 +2,8 @@ use std::convert::TryFrom;
 
 use http::{HeaderName, HeaderValue, Method, Request, Response, Uri};
 
-use crate::body::{AsBody, RecvBody};
+use crate::body::AsBody;
+use crate::recv::RecvBody;
 use crate::time::Instant;
 use crate::{Agent, Body, Error};
 
@@ -86,12 +87,8 @@ impl RequestBuilder {
     }
 }
 
-fn do_call(
-    mut agent: Agent,
-    request: Request<()>,
-    body: Body,
-) -> Result<Response<RecvBody>, Error> {
-    let response = agent.run(&request, body, Instant::now)?;
+fn do_call(agent: Agent, request: Request<()>, body: Body) -> Result<Response<RecvBody>, Error> {
+    let response = agent.do_run(request, body, Instant::now)?;
     Ok(response)
 }
 

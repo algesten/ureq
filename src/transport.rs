@@ -8,7 +8,7 @@ use crate::Error;
 
 pub trait Transport: Debug + 'static {
     fn connect(
-        &mut self,
+        &self,
         uri: &Uri,
         addr: SocketAddr,
         timeout: Duration,
