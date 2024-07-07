@@ -1,10 +1,11 @@
+use std::collections::VecDeque;
 use std::mem;
-use std::net::SocketAddr;
+use std::time::Duration;
 
 use hoot::client::flow::{
     state::*, Await100Result, RecvBodyResult, RecvResponseResult, SendRequestResult,
 };
-use http::{Request, Uri};
+use http::{Request, Response, Uri};
 
 use crate::time::Instant;
 use crate::{AgentConfig, Body, Error};
@@ -15,14 +16,14 @@ pub(crate) struct Unit<'c, 'a, 'b> {
     call_timings: CallTimings,
     state: State<'a>,
     body: Body<'b>,
-    addr: Option<SocketAddr>,
+    queued_event: VecDeque<Event<'static>>,
 }
 
 type Flow<'a, State> = hoot::client::flow::Flow<'a, (), State>;
 
 enum State<'a> {
     Begin(Flow<'a, Prepare>),
-    DnsLookup(Flow<'a, Prepare>),
+    Resolve(Flow<'a, Prepare>),
     OpenConnection(Flow<'a, Prepare>),
     SendRequest(Flow<'a, SendRequest>),
     SendBody(Flow<'a, SendBody>),
@@ -34,35 +35,32 @@ enum State<'a> {
     Empty,
 }
 
-pub enum Output<'a> {
+macro_rules! extract {
+    ($e:expr, $p:path) => {
+        match mem::replace($e, State::Empty) {
+            $p(value) => Some(value),
+            _ => None,
+        }
+    };
+}
+
+pub enum Event<'a> {
     Reset,
-    DnsLookup {
-        uri: &'a Uri,
-        timeout: Instant,
-    },
-    OpenConnection {
-        uri: &'a Uri,
-        addr: SocketAddr,
-        timeout: Instant,
-    },
-    Await100 {
-        timeout: Instant,
-    },
-    Transmit {
-        amount: usize,
-        timeout: Instant,
-    },
-    AwaitInput {
-        timeout: Instant,
-    },
+    Resolve { uri: &'a Uri, timeout: Duration },
+    OpenConnection { uri: &'a Uri, timeout: Duration },
+    Await100 { timeout: Duration },
+    Transmit { amount: usize, timeout: Duration },
+    AwaitInput { timeout: Duration },
+    InputConsumed { amount: usize },
+    Response { response: Response<()> },
 }
 
 pub enum Input<'a> {
     Begin,
-    SocketAddr(SocketAddr),
+    Resolved,
     ConnectionOpen,
     EndAwait100,
-    Input { data: &'a [u8] },
+    Input { input: &'a [u8] },
 }
 
 // impl<'c, 'a, 'b> Unit<'c, 'a, 'b> {
@@ -79,28 +77,32 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
             call_timings: CallTimings::default(),
             state: State::Begin(Flow::new(request)?),
             body,
-            addr: None,
+            queued_event: VecDeque::new(),
         })
     }
 
-    pub fn poll_output(
-        &mut self,
-        now: Instant,
-        transmit_buffer: &mut [u8],
-    ) -> Result<Output, Error> {
-        let timeout = self.call_timings.next_timeout(&self.state, &self.config);
+    pub fn poll_event(&mut self, now: Instant, buffer: &mut [u8]) -> Result<Event, Error> {
+        // Queued events go first.
+        if let Some(queued) = self.queued_event.pop_front() {
+            return Ok(queued);
+        }
+
+        let timeout_at = self.call_timings.next_timeout(&self.state, &self.config);
+        assert!(timeout_at >= now);
+
+        let timeout = timeout_at.duration_since(now);
 
         // These outputs don't borrow from the State, but they might proceed the FSM. Hence
         // we return an Output<'static> meaning we are free the call self.maybe_change_state()
         // since self.state is not borrowed.
-        let output: Option<Output<'static>> = match &mut self.state {
-            State::Begin(_) => Some(Output::Reset),
-            // State::DnsLookup (see below)
+        let output: Option<Event<'static>> = match &mut self.state {
+            State::Begin(_) => Some(Event::Reset),
+            // State::Resolve (see below)
             // State::OpenConnection (see below)
             State::SendRequest(flow) => {
-                let output_used = flow.write(transmit_buffer)?;
+                let output_used = flow.write(buffer)?;
 
-                Some(Output::Transmit {
+                Some(Event::Transmit {
                     amount: output_used,
                     timeout,
                 })
@@ -109,9 +111,9 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
                 // Split the transmit butter in 2. The second half is used to read input
                 // from the incoming body. The first half is used to write output via hoot.
                 // The Output::Transmit amount is from the beginning of the buffer.
-                let buf_len = transmit_buffer.len();
+                let buf_len = buffer.len();
 
-                let (output, input) = transmit_buffer.split_at_mut(buf_len / 2);
+                let (output, input) = buffer.split_at_mut(buf_len / 2);
                 let input_len = input.len();
 
                 // The + 1 and floor() is to make even powers of 16 right.
@@ -135,14 +137,14 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
                 // the entire input we read from the body should also be shipped to the output.
                 assert!(input_used == n);
 
-                Some(Output::Transmit {
+                Some(Event::Transmit {
                     amount: output_used,
                     timeout,
                 })
             }
-            State::Await100(_) => Some(Output::Await100 { timeout }),
-            State::RecvResponse(_) => Some(Output::AwaitInput { timeout }),
-            State::RecvBody(_) => Some(Output::AwaitInput { timeout }),
+            State::Await100(_) => Some(Event::Await100 { timeout }),
+            State::RecvResponse(_) => Some(Event::AwaitInput { timeout }),
+            State::RecvBody(_) => Some(Event::AwaitInput { timeout }),
             State::Redirect(_) => todo!(),
             State::Cleanup(_) => todo!(),
             State::Empty => unreachable!("self.state should never be in State::Empty"),
@@ -156,13 +158,12 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
 
         // These Outputs borrow from the State, but they don't proceed the FSM.
         Ok(match &mut self.state {
-            State::DnsLookup(flow) => Output::DnsLookup {
+            State::Resolve(flow) => Event::Resolve {
                 uri: flow.uri(),
                 timeout,
             },
-            State::OpenConnection(flow) => Output::OpenConnection {
+            State::OpenConnection(flow) => Event::OpenConnection {
                 uri: flow.uri(),
-                addr: self.addr.unwrap(),
                 timeout,
             },
             _ => unreachable!("State must be covered in first or second match"),
@@ -174,7 +175,7 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
 
         let new_state = match state {
             State::Begin(flow) => State::Begin(flow),
-            State::DnsLookup(flow) => State::DnsLookup(flow),
+            State::Resolve(flow) => State::Resolve(flow),
             State::OpenConnection(flow) => State::OpenConnection(flow),
             State::SendRequest(flow) => {
                 if flow.can_proceed() {
@@ -228,30 +229,20 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
         self.state = new_state;
     }
 
-    pub fn handle_input(&mut self, now: Instant, input: Input) {
-        macro_rules! extract {
-            ($e:expr, $p:path) => {
-                match mem::replace($e, State::Empty) {
-                    $p(value) => Some(value),
-                    _ => None,
-                }
-            };
-        }
-
+    pub fn handle_input(&mut self, now: Instant, input: Input) -> Result<(), Error> {
         match input {
             Input::Begin => {
                 let flow = extract!(&mut self.state, State::Begin)
                     .expect("Input::Begin requires State::Begin");
 
                 self.call_timings.time_call_start = Some(now);
-                self.state = State::DnsLookup(flow);
+                self.state = State::Resolve(flow);
             }
-            Input::SocketAddr(addr) => {
-                let flow = extract!(&mut self.state, State::DnsLookup)
-                    .expect("Input::SocketAddr requires State::DnsLookup");
+            Input::Resolved => {
+                let flow = extract!(&mut self.state, State::Resolve)
+                    .expect("Input::Resolved requires State::Resolve");
 
-                self.call_timings.time_dns_lookup = Some(now);
-                self.addr = Some(addr);
+                self.call_timings.time_resolve = Some(now);
                 self.state = State::OpenConnection(flow)
             }
             Input::ConnectionOpen => {
@@ -261,25 +252,67 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
                 self.call_timings.time_connect = Some(now);
                 self.state = State::SendRequest(flow.proceed());
             }
-            Input::EndAwait100 => {
-                let flow = extract!(&mut self.state, State::Await100)
-                    .expect("Input::EndAwait100 requires State::Await100");
+            Input::EndAwait100 => self.end_await_100(now),
+            Input::Input { input } => match &mut self.state {
+                State::Await100(flow) => {
+                    let amount = flow.try_read_100(input)?;
+                    self.queued_event.push_back(Event::InputConsumed { amount });
 
-                self.call_timings.time_await_100 = Some(now);
-                self.state = match flow.proceed() {
-                    Await100Result::SendBody(flow) => State::SendBody(flow),
-                    Await100Result::RecvResponse(flow) => State::RecvResponse(flow),
-                };
-            }
-            Input::Input { data } => todo!(),
+                    // If we did indeed receive a 100-continue, we can't keep waiting for it,
+                    // so the state progresses.
+                    if !flow.can_keep_await_100() {
+                        self.end_await_100(now);
+                    }
+                }
+                State::RecvResponse(flow) => {
+                    let (amount, maybe_response) = flow.try_response(input)?;
+                    self.queued_event.push_back(Event::InputConsumed { amount });
+
+                    let response = match maybe_response {
+                        Some(v) => v,
+                        None => return Ok(()),
+                    };
+
+                    self.queued_event.push_back(Event::Response { response });
+
+                    let flow = extract!(&mut self.state, State::RecvResponse)
+                        .expect("Input::Input requires State::RecvResponse");
+
+                    let state = match flow.proceed().unwrap() {
+                        RecvResponseResult::RecvBody(flow) => State::RecvBody(flow),
+                        RecvResponseResult::Redirect(flow) => State::Redirect(flow),
+                        RecvResponseResult::Cleanup(flow) => State::Cleanup(flow),
+                    };
+
+                    self.call_timings.time_recv_response = Some(now);
+                    self.state = state;
+                }
+                State::RecvBody(_flow) => {
+                    todo!()
+                }
+                _ => {}
+            },
         }
+
+        Ok(())
+    }
+
+    fn end_await_100(&mut self, now: Instant) {
+        let flow = extract!(&mut self.state, State::Await100)
+            .expect("Input::EndAwait100 requires State::Await100");
+
+        self.call_timings.time_await_100 = Some(now);
+        self.state = match flow.proceed() {
+            Await100Result::SendBody(flow) => State::SendBody(flow),
+            Await100Result::RecvResponse(flow) => State::RecvResponse(flow),
+        };
     }
 }
 
 #[derive(Debug, Default)]
 pub(crate) struct CallTimings {
     pub time_call_start: Option<Instant>,
-    pub time_dns_lookup: Option<Instant>,
+    pub time_resolve: Option<Instant>,
     pub time_connect: Option<Instant>,
     pub time_send_request: Option<Instant>,
     pub time_send_body: Option<Instant>,
@@ -294,12 +327,12 @@ impl CallTimings {
         // bug where we progressed to a certain State without setting the corresponding time.
         match state {
             State::Begin(_) => None,
-            State::DnsLookup(_) => config
-                .timeout_dns_lookup
+            State::Resolve(_) => config
+                .timeout_resolve
                 .map(|t| self.time_call_start.unwrap() + t),
             State::OpenConnection(_) => config
                 .timeout_connect
-                .map(|t| self.time_dns_lookup.unwrap() + t),
+                .map(|t| self.time_resolve.unwrap() + t),
             State::SendRequest(_) => config
                 .timeout_send_request
                 .map(|t| self.time_connect.unwrap() + t),

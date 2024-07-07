@@ -3,7 +3,6 @@
 // #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
 use std::convert::TryFrom;
-use std::mem;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use body::{AsBody, RecvBody};
@@ -19,8 +18,9 @@ mod body;
 mod error;
 mod pool;
 mod request;
+pub mod resolver;
 mod time;
-mod transport;
+pub mod transport;
 mod unit;
 
 pub use agent::{Agent, AgentConfig};
