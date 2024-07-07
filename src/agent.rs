@@ -9,7 +9,7 @@ use crate::body::RecvBody;
 use crate::pool::{Connection, ConnectionPool};
 use crate::resolver::{DefaultResolver, Resolver};
 use crate::time::Instant;
-use crate::transport::{Socket, Transport};
+use crate::transport::{Buffers, Socket, Transport};
 use crate::unit::{Event, Input, Unit};
 use crate::{Body, Error};
 
@@ -153,53 +153,55 @@ impl Agent {
         loop {
             // The buffer is owned by the connection. Before we have an open connection,
             // there is no buffer.
-            let buffer = connection
+            let buffers = connection
                 .as_mut()
-                .map(|c| c.buffer_borrow())
-                .unwrap_or(&mut []);
+                .map(|c| c.borrow_buffers())
+                .unwrap_or(Buffers::empty());
 
-            match unit.poll_event(current_time(), buffer)? {
+            match unit.poll_event(current_time(), buffers)? {
                 Event::Reset => {
                     addr = None;
                     connection = None;
                     response = None;
-                    unit.handle_input(current_time(), Input::Begin)?;
+                    unit.handle_input(current_time(), Input::Begin, &mut [])?;
                 }
                 Event::Resolve { uri, timeout } => {
                     addr = Some(self.resolver.resolve(uri, timeout)?);
-                    unit.handle_input(current_time(), Input::Resolved)?;
+                    unit.handle_input(current_time(), Input::Resolved, &mut [])?;
                 }
                 Event::OpenConnection { uri, timeout } => {
                     let addr = addr.expect("addr to be available after Event::Resolve");
                     connection = Some(self.pool.connect(uri, addr, timeout)?);
-                    unit.handle_input(current_time(), Input::ConnectionOpen)?;
+                    unit.handle_input(current_time(), Input::ConnectionOpen, &mut [])?;
                 }
                 Event::Await100 { timeout } => {
                     let connection = connection.as_mut().expect("connection for AwaitInput");
 
-                    match connection.input_await(timeout) {
-                        Ok(input) => unit.handle_input(current_time(), Input::Input { input })?,
+                    match connection.await_input(timeout, false) {
+                        Ok(Buffers { input, .. }) => {
+                            unit.handle_input(current_time(), Input::Input { input }, &mut [])?
+                        }
 
                         // If we get a timeout while waiting for input, that is not an error,
                         // EndAwait100 progresses the state machine to start reading a response.
                         Err(Error::Timeout(_)) => {
-                            unit.handle_input(current_time(), Input::EndAwait100)?
+                            unit.handle_input(current_time(), Input::EndAwait100, &mut [])?
                         }
                         Err(e) => return Err(e),
                     };
                 }
                 Event::Transmit { amount, timeout } => {
                     let connection = connection.as_mut().expect("connection for Transmit");
-                    connection.buffer_transmit(amount, timeout)?;
+                    connection.transmit_output(amount, timeout)?;
                 }
-                Event::AwaitInput { timeout } => {
+                Event::AwaitInput { timeout, is_body } => {
                     let connection = connection.as_mut().expect("connection for AwaitInput");
-                    let input = connection.input_await(timeout)?;
-                    unit.handle_input(current_time(), Input::Input { input })?;
+                    let Buffers { input, output } = connection.await_input(timeout, is_body)?;
+                    unit.handle_input(current_time(), Input::Input { input }, output)?;
                 }
                 Event::InputConsumed { amount } => {
                     let connection = connection.as_mut().expect("connection for InputConsumed");
-                    connection.input_consume(amount);
+                    connection.consume_input(amount);
                 }
                 Event::Response { response: r, end } => {
                     response = Some(r);

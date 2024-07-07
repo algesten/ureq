@@ -7,6 +7,7 @@ use http::{Request, Response, Uri};
 
 use crate::error::TimeoutReason;
 use crate::time::Instant;
+use crate::transport::Buffers;
 use crate::{AgentConfig, Body, Error};
 
 pub(crate) struct Unit<'c, 'a, 'b> {
@@ -50,7 +51,7 @@ pub enum Event<'a> {
     OpenConnection { uri: &'a Uri, timeout: Duration },
     Await100 { timeout: Duration },
     Transmit { amount: usize, timeout: Duration },
-    AwaitInput { timeout: Duration },
+    AwaitInput { timeout: Duration, is_body: bool },
     InputConsumed { amount: usize },
     Response { response: Response<()>, end: bool },
     ResponseBody { amount: usize },
@@ -90,7 +91,9 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
             .unwrap_or(Instant::NotHappening)
     }
 
-    pub fn poll_event(&mut self, now: Instant, buffer: &mut [u8]) -> Result<Event, Error> {
+    pub fn poll_event(&mut self, now: Instant, buffers: Buffers) -> Result<Event, Error> {
+        let Buffers { input, output } = buffers;
+
         // Queued events go first.
         if let Some(queued) = self.queued_event.pop_front() {
             return Ok(queued);
@@ -120,7 +123,7 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
             // State::Resolve (see below)
             // State::OpenConnection (see below)
             State::SendRequest(flow) => {
-                let output_used = flow.write(buffer)?;
+                let output_used = flow.write(output)?;
 
                 Some(Event::Transmit {
                     amount: output_used,
@@ -128,12 +131,6 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
                 })
             }
             State::SendBody(flow) => {
-                // Split the transmit butter in 2. The second half is used to read input
-                // from the incoming body. The first half is used to write output via hoot.
-                // The Output::Transmit amount is from the beginning of the buffer.
-                let buf_len = buffer.len();
-
-                let (output, input) = buffer.split_at_mut(buf_len / 2);
                 let input_len = input.len();
 
                 // The + 1 and floor() is to make even powers of 16 right.
@@ -163,8 +160,14 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
                 })
             }
             State::Await100(_) => Some(Event::Await100 { timeout }),
-            State::RecvResponse(_) => Some(Event::AwaitInput { timeout }),
-            State::RecvBody(_) => Some(Event::AwaitInput { timeout }),
+            State::RecvResponse(_) => Some(Event::AwaitInput {
+                timeout,
+                is_body: false,
+            }),
+            State::RecvBody(_) => Some(Event::AwaitInput {
+                timeout,
+                is_body: true,
+            }),
             State::Redirect(_) => todo!(),
             State::Cleanup(_) => todo!(),
             State::Empty => unreachable!("self.state should never be in State::Empty"),
@@ -235,7 +238,12 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
         self.state = new_state;
     }
 
-    pub fn handle_input(&mut self, now: Instant, input: Input) -> Result<(), Error> {
+    pub fn handle_input(
+        &mut self,
+        now: Instant,
+        input: Input,
+        output: &mut [u8],
+    ) -> Result<(), Error> {
         match input {
             Input::Begin => {
                 let flow = extract!(&mut self.state, State::Begin)
@@ -304,8 +312,13 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
                     self.state = state;
                 }
 
-                State::RecvBody(_flow) => {
-                    todo!()
+                State::RecvBody(flow) => {
+                    let (input_used, output_used) = flow.read(input, output)?;
+                    self.queued_event
+                        .push_back(Event::InputConsumed { amount: input_used });
+                    self.queued_event.push_back(Event::ResponseBody {
+                        amount: output_used,
+                    });
                 }
                 _ => {}
             },
