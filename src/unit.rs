@@ -52,7 +52,6 @@ pub enum Event<'a> {
     Await100 { timeout: Duration },
     Transmit { amount: usize, timeout: Duration },
     AwaitInput { timeout: Duration, is_body: bool },
-    InputConsumed { amount: usize },
     Response { response: Response<()>, end: bool },
     ResponseBody { amount: usize },
 }
@@ -266,7 +265,7 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
         now: Instant,
         input: Input,
         output: &mut [u8],
-    ) -> Result<(), Error> {
+    ) -> Result<usize, Error> {
         match input {
             Input::Begin => {
                 let flow = extract!(&mut self.state, State::Begin)
@@ -296,23 +295,23 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
 
             Input::Input { input } => match &mut self.state {
                 State::Await100(flow) => {
-                    let amount = flow.try_read_100(input)?;
-                    self.queued_event.push_back(Event::InputConsumed { amount });
+                    let input_used = flow.try_read_100(input)?;
 
                     // If we did indeed receive a 100-continue, we can't keep waiting for it,
                     // so the state progresses.
                     if !flow.can_keep_await_100() {
                         self.end_await_100(now);
                     }
+
+                    return Ok(input_used);
                 }
 
                 State::RecvResponse(flow) => {
-                    let (amount, maybe_response) = flow.try_response(input)?;
-                    self.queued_event.push_back(Event::InputConsumed { amount });
+                    let (input_used, maybe_response) = flow.try_response(input)?;
 
                     let response = match maybe_response {
                         Some(v) => v,
-                        None => return Ok(()),
+                        None => return Ok(input_used),
                     };
 
                     let end = if response.status().is_redirection() {
@@ -338,21 +337,24 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
 
                     self.call_timings.time_recv_response = Some(now);
                     self.state = state;
+
+                    return Ok(input_used);
                 }
 
                 State::RecvBody(flow) => {
                     let (input_used, output_used) = flow.read(input, output)?;
-                    self.queued_event
-                        .push_back(Event::InputConsumed { amount: input_used });
+
                     self.queued_event.push_back(Event::ResponseBody {
                         amount: output_used,
                     });
+
+                    return Ok(input_used);
                 }
                 _ => {}
             },
         }
 
-        Ok(())
+        Ok(0)
     }
 
     fn end_await_100(&mut self, now: Instant) {

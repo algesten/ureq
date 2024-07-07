@@ -152,7 +152,7 @@ impl Agent {
 
         loop {
             // The buffer is owned by the connection. Before we have an open connection,
-            // there is no buffer.
+            // there are no buffers (and the code below should not need it).
             let buffers = connection
                 .as_mut()
                 .map(|c| c.borrow_buffers())
@@ -202,12 +202,11 @@ impl Agent {
                 Event::AwaitInput { timeout, is_body } => {
                     let connection = connection.as_mut().expect("connection for AwaitInput");
                     let Buffers { input, output } = connection.await_input(timeout, is_body)?;
-                    unit.handle_input(current_time(), Input::Input { input }, output)?;
-                }
 
-                Event::InputConsumed { amount } => {
-                    let connection = connection.as_mut().expect("connection for InputConsumed");
-                    connection.consume_input(amount);
+                    let input_used =
+                        unit.handle_input(current_time(), Input::Input { input }, output)?;
+
+                    connection.consume_input(input_used);
                 }
 
                 Event::Response { response: r, end } => {
