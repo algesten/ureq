@@ -18,6 +18,9 @@ pub enum Error {
 
     #[error("host not found")]
     HostNotFound,
+
+    #[error("redirect failed")]
+    RedirectFailed,
 }
 
 #[derive(Debug)]

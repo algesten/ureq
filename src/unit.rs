@@ -168,7 +168,21 @@ impl<'c, 'b, 'a> Unit<'c, 'b, 'a> {
                 timeout,
                 is_body: true,
             }),
-            State::Redirect(_) => todo!(),
+
+            State::Redirect(flow) => {
+                let maybe_new_flow = flow.as_new_flow(self.config.redirect_auth_headers)?;
+
+                if let Some(flow) = maybe_new_flow {
+                    // Start over the state
+                    self.state = State::Begin(flow);
+
+                    // Tell caller to reset state
+                    Some(Event::Reset)
+                } else {
+                    return Err(Error::RedirectFailed);
+                }
+            }
+
             State::Cleanup(_) => todo!(),
             State::Empty => unreachable!("self.state should never be in State::Empty"),
             _ => None,
