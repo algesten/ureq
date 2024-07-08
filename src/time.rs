@@ -92,6 +92,16 @@ impl Ord for Instant {
     }
 }
 
+pub trait DurationExt {
+    fn is_not_happening(&self) -> bool;
+}
+
+impl DurationExt for Duration {
+    fn is_not_happening(&self) -> bool {
+        *self >= Duration::from_secs(u64::MAX)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
