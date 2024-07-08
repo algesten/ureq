@@ -11,7 +11,7 @@ use crate::pool::{Connection, ConnectionPool};
 use crate::recv::RecvBody;
 use crate::resolver::{DefaultResolver, Resolver};
 use crate::time::Instant;
-use crate::transport::{Buffers, Socket, Transport};
+use crate::transport::{Buffers, Connector, Transport};
 use crate::unit::{Event, Input, Unit};
 use crate::{Body, Error};
 
@@ -118,7 +118,7 @@ impl Default for AgentConfig {
 }
 
 impl Agent {
-    pub fn new(config: AgentConfig, pool: impl Transport, resolver: impl Resolver) -> Self {
+    pub fn new(config: AgentConfig, pool: impl Connector, resolver: impl Resolver) -> Self {
         Agent {
             config: Arc::new(config),
             pool: Arc::new(ConnectionPool::new(pool)),
@@ -259,13 +259,13 @@ impl Agent {
 #[derive(Debug)]
 pub struct RustlConnectionPool;
 
-impl Transport for RustlConnectionPool {
+impl Connector for RustlConnectionPool {
     fn connect(
         &self,
         _uri: &Uri,
         addr: SocketAddr,
         timeout: Duration,
-    ) -> Result<Box<dyn Socket>, Error> {
+    ) -> Result<Box<dyn Transport>, Error> {
         todo!()
     }
 }

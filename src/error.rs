@@ -21,6 +21,9 @@ pub enum Error {
 
     #[error("redirect failed")]
     RedirectFailed,
+
+    #[error("invalid proxy url")]
+    InvalidProxyUrl,
 }
 
 impl Error {
