@@ -3,10 +3,13 @@ use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::thread::{self};
 use std::time::Duration;
+use std::vec::IntoIter;
 
+use http::uri::{Authority, Scheme};
 use http::Uri;
 
 use crate::error::TimeoutReason;
+use crate::time::DurationExt;
 use crate::Error;
 
 pub trait Resolver: fmt::Debug + 'static {
@@ -30,38 +33,68 @@ pub enum AddrSelect {
     First,
     // TODO(martin): implement round robin per hostname
 }
+impl DefaultResolver {
+    pub fn host_and_port(scheme: &Scheme, authority: &Authority) -> String {
+        let port = authority
+            .port_u16()
+            .unwrap_or_else(|| DefaultResolver::scheme_default_port(scheme));
+
+        format!("{}:{}", authority.host(), port)
+    }
+
+    pub fn scheme_default_port(scheme: &Scheme) -> u16 {
+        if *scheme == Scheme::HTTP {
+            80
+        } else if *scheme == Scheme::HTTPS {
+            443
+        } else {
+            // Unclear why http-crate Scheme is not an enum. Are we expecting
+            // more schemes in the future?
+            unreachable!("Unknown scheme")
+        }
+    }
+}
 
 impl Resolver for DefaultResolver {
     fn resolve(&self, uri: &Uri, timeout: Duration) -> Result<SocketAddr, Error> {
-        let host = uri
-            .authority()
-            .map(|a| a.host())
-            .ok_or(Error::Other("No host in uri"))?
-            // There is no way around allocating here. We can't use a scoped thread below,
-            // because if we time out, we're going to exit the function and leave the
-            // thread running (causing a panic as per scoped thread contract).
-            .to_string();
+        let scheme = uri.scheme().ok_or(Error::Other("No scheme in uri"))?;
+        let authority = uri.authority().ok_or(Error::Other("No host in uri"))?;
 
-        // TODO(martin): On Linux we have getaddrinfo_a which is a libc async way of
-        // doing host lookup. We should make a subcrate that uses a native async method
-        // when possible, and otherwise fall back on this thread behavior.
-        let (tx, rx) = mpsc::sync_channel(1);
-        thread::spawn(move || tx.send(host.to_socket_addrs()).ok());
+        // This will be on the form "myspecialhost.org:1234". The port is mandatory.
+        let addr = DefaultResolver::host_and_port(scheme, authority);
 
-        let iter = match rx.recv_timeout(timeout) {
-            Ok(v) => v,
-            Err(c) => match c {
-                // Timeout results in None
-                RecvTimeoutError::Timeout => return Err(Error::Timeout(TimeoutReason::Resolver)),
-                // The sender going away is nonsensical. Did the thread just die?
-                RecvTimeoutError::Disconnected => unreachable!("mpsc sender gone"),
-            },
-        }?;
+        // Determine if we want to use the async behavior.
+        let use_sync = timeout.is_not_happening();
+
+        let iter = if use_sync {
+            // When timeout is not set, we do not spawn any threads.
+            addr.to_socket_addrs()?
+        } else {
+            resolve_async(addr, timeout)?
+        };
 
         let wanted = self.family.keep_wanted(iter);
         let maybe_addr = self.select.choose(wanted);
 
         maybe_addr.ok_or(Error::HostNotFound)
+    }
+}
+
+fn resolve_async(addr: String, timeout: Duration) -> Result<IntoIter<SocketAddr>, Error> {
+    // TODO(martin): On Linux we have getaddrinfo_a which is a libc async way of
+    // doing host lookup. We should make a subcrate that uses a native async method
+    // when possible, and otherwise fall back on this thread behavior.
+    let (tx, rx) = mpsc::sync_channel(1);
+    thread::spawn(move || tx.send(addr.to_socket_addrs()).ok());
+
+    match rx.recv_timeout(timeout) {
+        Ok(v) => Ok(v?),
+        Err(c) => match c {
+            // Timeout results in None
+            RecvTimeoutError::Timeout => return Err(Error::Timeout(TimeoutReason::Resolver)),
+            // The sender going away is nonsensical. Did the thread just die?
+            RecvTimeoutError::Disconnected => unreachable!("mpsc sender gone"),
+        },
     }
 }
 
