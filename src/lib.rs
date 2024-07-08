@@ -3,14 +3,12 @@
 // #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
 use std::convert::TryFrom;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use body::AsBody;
 /// Re-exported http-crate.
 pub use http;
 
 use http::{Method, Request, Response, Uri};
-use once_cell::sync::Lazy;
 use recv::RecvBody;
 use request::RequestBuilder;
 
@@ -61,18 +59,12 @@ where
     builder(Method::POST, uri)
 }
 
-// is_test returns false so long as it has only ever been called with false.
-// If it has ever been called with true, it will always return true after that.
-// This is a public but hidden function used to allow doctests to use the test_agent.
-// Note that we use this approach for doctests rather the #[cfg(test)], because
-// doctests are run against a copy of the crate build without cfg(test) set.
-// We also can't use #[cfg(doctest)] to do this, because cfg(doctest) is only set
-// when collecting doctests, not when building the crate.
-#[doc(hidden)]
-pub fn is_test(is: bool) -> bool {
-    static IS_TEST: Lazy<AtomicBool> = Lazy::new(|| AtomicBool::new(false));
-    if is {
-        IS_TEST.store(true, Ordering::SeqCst);
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn simple_get() {
+        get("https://httpbin.org/get").call().unwrap();
     }
-    IS_TEST.load(Ordering::SeqCst)
 }
