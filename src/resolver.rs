@@ -10,7 +10,7 @@ use http::Uri;
 
 use crate::error::TimeoutReason;
 use crate::time::DurationExt;
-use crate::transport::SchemeExt;
+use crate::util::SchemeExt;
 use crate::Error;
 
 pub trait Resolver: fmt::Debug + 'static {
