@@ -8,10 +8,11 @@ use http::{Request, Response, Uri};
 
 use crate::body::AsBody;
 use crate::pool::{Connection, ConnectionPool};
+use crate::proxy::Proxy;
 use crate::recv::RecvBody;
 use crate::resolver::{DefaultResolver, Resolver};
 use crate::time::Instant;
-use crate::transport::{Buffers, Connector, Transport};
+use crate::transport::{Buffers, Connector, DefaultConnector, Transport};
 use crate::unit::{Event, Input, Unit};
 use crate::{Body, Error};
 
@@ -19,7 +20,8 @@ use crate::{Body, Error};
 pub struct Agent {
     config: Arc<AgentConfig>,
     pool: Arc<ConnectionPool>,
-    resolver: Arc<Box<dyn Resolver>>,
+    resolver: Arc<dyn Resolver>,
+    proxy: Option<Proxy>,
 }
 
 /// Config as built by AgentBuilder and then static for the lifetime of the Agent.
@@ -118,19 +120,26 @@ impl Default for AgentConfig {
 }
 
 impl Agent {
-    pub fn new(config: AgentConfig, pool: impl Connector, resolver: impl Resolver) -> Self {
+    pub fn new(
+        config: AgentConfig,
+        connector: impl Connector,
+        resolver: impl Resolver,
+        proxy: Option<Proxy>,
+    ) -> Self {
         Agent {
             config: Arc::new(config),
-            pool: Arc::new(ConnectionPool::new(pool)),
-            resolver: Arc::new(Box::new(resolver)),
+            pool: Arc::new(ConnectionPool::new(connector)),
+            resolver: Arc::new(resolver),
+            proxy,
         }
     }
 
     pub(crate) fn new_default() -> Self {
         Agent::new(
             AgentConfig::default(),
-            RustlConnectionPool,
+            DefaultConnector,
             DefaultResolver::default(),
+            Proxy::try_from_system(),
         )
     }
 
@@ -190,7 +199,13 @@ impl Agent {
 
                 Event::OpenConnection { uri, timeout } => {
                     let addr = addr.expect("addr to be available after Event::Resolve");
-                    connection = Some(self.pool.connect(uri, addr, timeout)?);
+                    connection = Some(self.pool.connect(
+                        uri,
+                        addr,
+                        &self.proxy,
+                        &*self.resolver,
+                        timeout,
+                    )?);
                     unit.handle_input(current_time(), Input::ConnectionOpen, &mut [])?;
                 }
 
@@ -253,19 +268,5 @@ impl Agent {
         let response = Response::from_parts(parts, recv_body);
 
         Ok(response)
-    }
-}
-
-#[derive(Debug)]
-pub struct RustlConnectionPool;
-
-impl Connector for RustlConnectionPool {
-    fn connect(
-        &self,
-        _uri: &Uri,
-        addr: SocketAddr,
-        timeout: Duration,
-    ) -> Result<Box<dyn Transport>, Error> {
-        todo!()
     }
 }

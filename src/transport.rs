@@ -5,15 +5,20 @@ use std::time::Duration;
 use http::uri::Scheme;
 use http::Uri;
 
+use crate::proxy::Proxy;
+use crate::resolver::Resolver;
 use crate::Error;
 
 pub trait Connector: Debug + 'static {
-    fn connect(
-        &self,
-        uri: &Uri,
-        addr: SocketAddr,
-        timeout: Duration,
-    ) -> Result<Box<dyn Transport>, Error>;
+    fn connect(&self, details: &ConnectionDetails) -> Result<Box<dyn Transport>, Error>;
+}
+
+pub struct ConnectionDetails<'a> {
+    pub uri: &'a Uri,
+    pub addr: SocketAddr,
+    pub proxy: &'a Option<Proxy>,
+    pub resolver: &'a dyn Resolver,
+    pub timeout: Duration,
 }
 
 pub trait Transport: Debug {
@@ -50,5 +55,14 @@ impl SchemeExt for Scheme {
         } else {
             panic!("Unknown scheme: {}", self);
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct DefaultConnector;
+
+impl Connector for DefaultConnector {
+    fn connect(&self, _details: &ConnectionDetails) -> Result<Box<dyn Transport>, Error> {
+        todo!()
     }
 }
