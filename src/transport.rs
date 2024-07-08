@@ -2,7 +2,6 @@ use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use http::uri::Scheme;
 use http::Uri;
 
 use crate::proxy::Proxy;
@@ -38,22 +37,6 @@ impl Buffers<'_> {
         Buffers {
             input: &mut [],
             output: &mut [],
-        }
-    }
-}
-
-pub trait SchemeExt {
-    fn default_port(&self) -> u16;
-}
-
-impl SchemeExt for Scheme {
-    fn default_port(&self) -> u16 {
-        if *self == Scheme::HTTPS {
-            443
-        } else if *self == Scheme::HTTP {
-            80
-        } else {
-            panic!("Unknown scheme: {}", self);
         }
     }
 }
