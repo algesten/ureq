@@ -2,7 +2,7 @@ use core::fmt;
 use std::hash::{Hash, Hasher};
 use std::ops::{Deref, DerefMut};
 
-use http::uri::Authority;
+use http::uri::{Authority, Scheme};
 
 pub struct Secret<T>(T);
 
@@ -86,5 +86,21 @@ impl AuthorityExt for Authority {
     fn password(&self) -> Option<&str> {
         self.userinfo()
             .and_then(|a| a.rfind(':').map(|i| &a[i + 1..]))
+    }
+}
+
+pub trait SchemeExt {
+    fn default_port(&self) -> u16;
+}
+
+impl SchemeExt for Scheme {
+    fn default_port(&self) -> u16 {
+        if *self == Scheme::HTTPS {
+            443
+        } else if *self == Scheme::HTTP {
+            80
+        } else {
+            panic!("Unknown scheme: {}", self);
+        }
     }
 }
