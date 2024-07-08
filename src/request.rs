@@ -30,14 +30,11 @@ impl RequestBuilder {
     /// # Examples
     ///
     /// ```
-    /// # fn main() -> Result<(), ureq::Error> {
-    /// # ureq::is_test(true);
     /// let res = ureq::get("https://host.test/my-path")
     ///     .header("Accept", "text/html")
     ///     .header("X-Custom-Foo", "bar")
     ///     .call()?;
-    /// # Ok(())
-    /// # }
+    /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn header<K, V>(mut self, key: K, value: V) -> RequestBuilder
     where
@@ -56,12 +53,9 @@ impl RequestBuilder {
     /// Content-Length nor Transfer-Encoding.
     ///
     /// ```
-    /// # fn main() -> Result<(), ureq::Error> {
-    /// # ureq::is_test(true);
     /// let resp = ureq::get("http://httpbin.org/get")
     ///     .call()?;
-    /// # Ok(())
-    /// # }
+    /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn call(self) -> Result<Response<RecvBody>, Error> {
         let request = self.builder.body(()).unwrap();
@@ -73,12 +67,9 @@ impl RequestBuilder {
     /// The `Content-Length` header is implicitly set to the length of the serialized value.
     ///
     /// ```
-    /// # fn main() -> Result<(), ureq::Error> {
-    /// # ureq::is_test(true);
     /// let resp = ureq::post("http://httpbin.org/put")
     ///     .send_bytes(&[0; 1000])?;
-    /// # Ok(())
-    /// # }
+    /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn send_bytes(self, data: &[u8]) -> Result<Response<RecvBody>, Error> {
         let request = self.builder.body(()).unwrap();
