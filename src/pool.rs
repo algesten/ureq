@@ -1,18 +1,20 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
+use http::uri::Scheme;
 use http::Uri;
 
-use crate::transport::{Buffers, Socket, Transport};
+use crate::proxy::Proxy;
+use crate::transport::{Buffers, Connector, Transport};
 use crate::Error;
 
 #[derive(Debug)]
 pub(crate) struct ConnectionPool {
-    connector: Box<dyn Transport>,
+    connector: Box<dyn Connector>,
 }
 
 impl ConnectionPool {
-    pub fn new(connector: impl Transport) -> Self {
+    pub fn new(connector: impl Connector) -> Self {
         ConnectionPool {
             connector: Box::new(connector),
         }
@@ -31,7 +33,7 @@ impl ConnectionPool {
 }
 
 pub(crate) struct Connection {
-    conn: Box<dyn Socket>,
+    conn: Box<dyn Transport>,
 }
 
 impl Connection {
@@ -58,4 +60,12 @@ impl Connection {
     pub(crate) fn reuse(self) {
         todo!()
     }
+}
+
+#[derive(PartialEq, Clone, Eq, Hash)]
+pub(crate) struct PoolKey {
+    scheme: Scheme,
+    hostname: String,
+    port: u16,
+    proxy: Option<Proxy>,
 }

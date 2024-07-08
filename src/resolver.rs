@@ -10,6 +10,7 @@ use http::Uri;
 
 use crate::error::TimeoutReason;
 use crate::time::DurationExt;
+use crate::transport::SchemeExt;
 use crate::Error;
 
 pub trait Resolver: fmt::Debug + 'static {
@@ -37,21 +38,9 @@ impl DefaultResolver {
     pub fn host_and_port(scheme: &Scheme, authority: &Authority) -> String {
         let port = authority
             .port_u16()
-            .unwrap_or_else(|| DefaultResolver::scheme_default_port(scheme));
+            .unwrap_or_else(|| scheme.default_port());
 
         format!("{}:{}", authority.host(), port)
-    }
-
-    pub fn scheme_default_port(scheme: &Scheme) -> u16 {
-        if *scheme == Scheme::HTTP {
-            80
-        } else if *scheme == Scheme::HTTPS {
-            443
-        } else {
-            // Unclear why http-crate Scheme is not an enum. Are we expecting
-            // more schemes in the future?
-            unreachable!("Unknown scheme")
-        }
     }
 }
 
