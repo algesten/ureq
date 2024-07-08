@@ -16,12 +16,14 @@ mod agent;
 mod body;
 mod error;
 mod pool;
+mod proxy;
 mod recv;
 mod request;
 pub mod resolver;
 mod time;
 pub mod transport;
 mod unit;
+mod util;
 
 pub use agent::{Agent, AgentConfig};
 pub use body::Body;
