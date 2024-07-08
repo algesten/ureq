@@ -27,5 +27,4 @@ features = []
 hoot = { git = "https://github.com/algesten/hoot", rev = "2e2eac5" }
 http = "1.1.0"
 log = "0.4.22"
-once_cell = "1.19.0"
 thiserror = "1.0.61"
