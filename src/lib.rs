@@ -63,11 +63,17 @@ where
 
 #[cfg(test)]
 mod test {
+    use std::io::Read;
+
     use super::*;
 
     #[test]
     fn simple_get() {
-        get("https://httpbin.org/get").call().unwrap();
+        let mut response = get("http://httpbin.org/get").call().unwrap();
+        println!("{:#?}", response);
+        let mut body = String::new();
+        response.body_mut().read_to_string(&mut body).unwrap();
+        println!("body: {:?}", body);
     }
 
     // This doesn't need to run, just compile.

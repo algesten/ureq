@@ -38,12 +38,16 @@ impl LazyBuffers {
     /// This allocates first time it's used.
     ///
     /// The input buffer might be scaled to what's left unconsumed if we are in "fill mode".
-    pub fn borrow_mut(&mut self) -> Buffers<'_> {
+    pub fn borrow_mut(&mut self, input_as_tmp: bool) -> Buffers<'_> {
         if self.input.is_empty() {
             self.input.resize(self.input_size, 0);
         }
         if self.output.is_empty() {
             self.output.resize(self.output_size, 0);
+        }
+
+        if input_as_tmp && self.input_filled.is_some() {
+            panic!("input used as tmp when filled");
         }
 
         // Unput is scaled to whatever is unconsumed.

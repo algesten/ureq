@@ -42,7 +42,7 @@ pub struct ConnectionDetails<'a> {
 }
 
 pub trait Transport: Debug + Send + Sync {
-    fn borrow_buffers(&mut self) -> Buffers;
+    fn borrow_buffers(&mut self, input_as_tmp: bool) -> Buffers;
     fn transmit_output(&mut self, amount: usize, timeout: Duration) -> Result<(), Error>;
     fn await_input(&mut self, timeout: Duration, is_body: bool) -> Result<Buffers, Error>;
     fn consume_input(&mut self, amount: usize);
