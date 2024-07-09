@@ -7,15 +7,15 @@ use crate::unit::{Event, Input, Unit};
 use crate::Error;
 
 pub struct RecvBody {
-    unit: Unit<'static>,
+    unit: Unit<()>,
     connection: Connection,
-    current_time: Box<dyn Fn() -> Instant>,
+    current_time: Box<dyn Fn() -> Instant + Send + Sync>,
 }
 impl RecvBody {
     pub(crate) fn new(
-        unit: Unit<'static>,
+        unit: Unit<()>,
         connection: Connection,
-        current_time: impl Fn() -> Instant + 'static,
+        current_time: impl Fn() -> Instant + Send + Sync + 'static,
     ) -> Self {
         RecvBody {
             unit,

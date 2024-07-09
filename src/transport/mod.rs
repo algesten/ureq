@@ -10,7 +10,7 @@ use crate::{AgentConfig, Error};
 
 mod tcp;
 
-pub trait Connector: Debug + 'static {
+pub trait Connector: Debug + Send + Sync + 'static {
     fn connect(
         &self,
         details: &ConnectionDetails,
@@ -29,7 +29,7 @@ pub struct ConnectionDetails<'a> {
     pub timeout: Duration,
 }
 
-pub trait Transport: Debug {
+pub trait Transport: Debug + Send + Sync {
     fn borrow_buffers(&mut self) -> Buffers;
     fn transmit_output(&mut self, amount: usize, timeout: Duration) -> Result<(), Error>;
     fn await_input(&mut self, timeout: Duration, is_body: bool) -> Result<Buffers, Error>;

@@ -13,12 +13,12 @@ use crate::time::Instant;
 use crate::transport::Buffers;
 use crate::{AgentConfig, Body, Error};
 
-pub(crate) struct Unit<'b> {
+pub(crate) struct Unit<B> {
     config: Arc<AgentConfig>,
     global_start: Instant,
     call_timings: CallTimings,
     state: State,
-    body: Body<'b>,
+    body: B,
     queued_event: VecDeque<Event<'static>>,
     redirect_count: u32,
 }
@@ -67,8 +67,7 @@ pub enum Input<'a> {
     Input { input: &'a [u8] },
 }
 
-// impl<'c, 'a, 'b> Unit<'c, 'a, 'b> {
-impl<'b> Unit<'b> {
+impl<'b> Unit<Body<'b>> {
     pub fn new(
         config: Arc<AgentConfig>,
         global_start: Instant,
@@ -86,34 +85,13 @@ impl<'b> Unit<'b> {
         })
     }
 
-    fn global_timeout(&self) -> Instant {
-        self.config
-            .timeout_global
-            .map(|t| self.global_start + t)
-            .unwrap_or(Instant::NotHappening)
-    }
-
     pub fn poll_event(&mut self, now: Instant, buffers: Buffers) -> Result<Event, Error> {
         // Queued events go first.
         if let Some(queued) = self.queued_event.pop_front() {
             return Ok(queued);
         }
 
-        let call_timeout_at = self.call_timings.next_timeout(&self.state, &self.config);
-        let call_timeout = call_timeout_at.duration_since(now);
-
-        let global_timeout_at = self.global_timeout();
-        let global_timeout = global_timeout_at.duration_since(now);
-
-        let timeout = call_timeout.min(global_timeout);
-
-        if timeout.is_zero() {
-            return Err(Error::Timeout(if global_timeout.is_zero() {
-                TimeoutReason::Global
-            } else {
-                TimeoutReason::Call
-            }));
-        }
+        let timeout = self.next_timeout(now)?;
 
         // Events that do not borrow any state, but might proceed the FSM
         let maybe_event = self.poll_event_static(buffers, timeout)?;
@@ -328,28 +306,8 @@ impl<'b> Unit<'b> {
                     return Ok(input_used);
                 }
 
-                State::RecvBody(flow) => {
-                    let (input_used, output_used) = flow.read(input, output)?;
+                State::RecvBody(_) => return self.handle_input_recv_body(now, input, output),
 
-                    self.queued_event.push_back(Event::ResponseBody {
-                        amount: output_used,
-                    });
-
-                    if flow.can_proceed() {
-                        let flow = extract!(&mut self.state, State::RecvBody)
-                            .expect("Input::Input requires State::RecvBody");
-
-                        let state = match flow.proceed().unwrap() {
-                            RecvBodyResult::Redirect(flow) => State::Redirect(flow),
-                            RecvBodyResult::Cleanup(flow) => State::Cleanup(flow),
-                        };
-
-                        self.call_timings.time_recv_body = Some(now);
-                        self.state = state;
-                    }
-
-                    return Ok(input_used);
-                }
                 _ => {}
             },
         }
@@ -368,16 +326,110 @@ impl<'b> Unit<'b> {
         };
     }
 
-    pub fn release_body(self) -> Unit<'static> {
+    pub fn release_body(self) -> Unit<()> {
         Unit {
             config: self.config,
             global_start: self.global_start,
             call_timings: self.call_timings,
             state: self.state,
-            body: Body::empty(),
+            body: (),
             queued_event: self.queued_event,
             redirect_count: self.redirect_count,
         }
+    }
+}
+
+// Unit<()> is for receiving the body. We have let go of the input body.
+impl Unit<()> {
+    pub fn poll_event(&mut self, now: Instant, _buffers: Buffers) -> Result<Event, Error> {
+        // Queued events go first.
+        if let Some(queued) = self.queued_event.pop_front() {
+            return Ok(queued);
+        }
+
+        let timeout = self.next_timeout(now)?;
+
+        match &self.state {
+            State::RecvBody(_) => Ok(Event::AwaitInput {
+                timeout,
+                is_body: true,
+            }),
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn handle_input(
+        &mut self,
+        now: Instant,
+        input: Input,
+        output: &mut [u8],
+    ) -> Result<usize, Error> {
+        match input {
+            Input::Input { input } => self.handle_input_recv_body(now, input, output),
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl<B> Unit<B> {
+    fn global_timeout(&self) -> Instant {
+        self.config
+            .timeout_global
+            .map(|t| self.global_start + t)
+            .unwrap_or(Instant::NotHappening)
+    }
+
+    fn next_timeout(&mut self, now: Instant) -> Result<Duration, Error> {
+        let call_timeout_at = self.call_timings.next_timeout(&self.state, &self.config);
+        let call_timeout = call_timeout_at.duration_since(now);
+
+        let global_timeout_at = self.global_timeout();
+        let global_timeout = global_timeout_at.duration_since(now);
+
+        let timeout = call_timeout.min(global_timeout);
+
+        if timeout.is_zero() {
+            return Err(Error::Timeout(if global_timeout.is_zero() {
+                TimeoutReason::Global
+            } else {
+                TimeoutReason::Call
+            }));
+        }
+
+        Ok(timeout)
+    }
+
+    fn handle_input_recv_body(
+        &mut self,
+        now: Instant,
+        input: &[u8],
+        output: &mut [u8],
+    ) -> Result<usize, Error> {
+        let flow = match &mut self.state {
+            State::RecvBody(v) => v,
+            _ => unreachable!(),
+        };
+
+        let (input_used, output_used) = flow.read(input, output)?;
+
+        self.queued_event.push_back(Event::ResponseBody {
+            amount: output_used,
+        });
+
+        if flow.can_proceed() {
+            let flow = extract!(&mut self.state, State::RecvBody)
+                .expect("Input::Input requires State::RecvBody");
+
+            let state = match flow.proceed().unwrap() {
+                RecvBodyResult::Redirect(flow) => State::Redirect(flow),
+                RecvBodyResult::Cleanup(flow) => State::Cleanup(flow),
+            };
+
+            self.call_timings.time_recv_body = Some(now);
+            self.state = state;
+        }
+
+        return Ok(input_used);
     }
 }
 
