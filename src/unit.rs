@@ -360,6 +360,12 @@ impl Unit<()> {
                 timeout,
                 is_body: true,
             }),
+            State::Cleanup(flow) => Ok(Event::Reset {
+                must_close: flow.must_close_connection(),
+            }),
+            State::Redirect(flow) => Ok(Event::Reset {
+                must_close: flow.must_close_connection(),
+            }),
             _ => unreachable!(),
         }
     }
