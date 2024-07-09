@@ -1,10 +1,9 @@
 use std::fmt::Debug;
-use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
 use hoot::client::flow::RedirectAuthHeaders;
-use http::{Request, Response, Uri};
+use http::{Request, Response};
 
 use crate::body::AsBody;
 use crate::pool::{Connection, ConnectionPool};
@@ -12,7 +11,7 @@ use crate::proxy::Proxy;
 use crate::recv::RecvBody;
 use crate::resolver::{DefaultResolver, Resolver};
 use crate::time::Instant;
-use crate::transport::{Buffers, Connector, DefaultConnector, Transport};
+use crate::transport::{Buffers, Connector, DefaultConnector};
 use crate::unit::{Event, Input, Unit};
 use crate::{Body, Error};
 
