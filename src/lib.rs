@@ -75,10 +75,26 @@ mod test {
         fn is_send(_t: impl Send) {}
         fn is_sync(_t: impl Sync) {}
 
+        // Agent
         is_send(Agent::new_default());
         is_sync(Agent::new_default());
 
-        is_send(get("https://example.test").call());
-        is_sync(get("https://example.test").call());
+        // ResponseBuilder
+        is_send(get("https://example.test"));
+        is_sync(get("https://example.test"));
+
+        let data = vec![0_u8, 1, 2, 3, 4];
+
+        // Response<RecvBody> via ResponseBuilder
+        is_send(post("https://example.test").send_bytes(&data));
+        is_sync(post("https://example.test").send_bytes(&data));
+
+        // Request<impl AsBody>
+        is_send(Request::post("https://yaz").body(&data).unwrap());
+        is_sync(Request::post("https://yaz").body(&data).unwrap());
+
+        // Response<RecvBody> via Agent::run
+        is_send(run(Request::post("https://yaz").body(&data).unwrap()));
+        is_sync(run(Request::post("https://yaz").body(&data).unwrap()));
     }
 }
