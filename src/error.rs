@@ -24,6 +24,9 @@ pub enum Error {
 
     #[error("invalid proxy url")]
     InvalidProxyUrl,
+
+    #[error("connection failed")]
+    ConnectionFailed,
 }
 
 impl Error {
