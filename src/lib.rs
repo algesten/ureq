@@ -69,4 +69,16 @@ mod test {
     fn simple_get() {
         get("https://httpbin.org/get").call().unwrap();
     }
+
+    // This doesn't need to run, just compile.
+    fn _ensure_send_sync() {
+        fn is_send(_t: impl Send) {}
+        fn is_sync(_t: impl Sync) {}
+
+        is_send(Agent::new_default());
+        is_sync(Agent::new_default());
+
+        is_send(get("https://example.test").call());
+        is_sync(get("https://example.test").call());
+    }
 }
