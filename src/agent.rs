@@ -152,7 +152,7 @@ impl Agent {
     pub(crate) fn new_default() -> Self {
         Agent::new(
             AgentConfig::default(),
-            DefaultConnector,
+            DefaultConnector::new(),
             DefaultResolver::default(),
             Proxy::try_from_system(),
         )
