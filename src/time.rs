@@ -5,6 +5,7 @@ use std::time::{self, Duration};
 /// Wrapper for [`std::time::Instant`] that provides additional time points in the past or future
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Instant {
+    #[allow(dead_code)]
     AlreadyHappened,
     Exact(time::Instant),
     NotHappening,

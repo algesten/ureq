@@ -1,4 +1,4 @@
-use std::fmt;
+use std::fmt::{self, Debug};
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::thread::{self};
@@ -13,7 +13,7 @@ use crate::time::DurationExt;
 use crate::util::SchemeExt;
 use crate::Error;
 
-pub trait Resolver: fmt::Debug + 'static {
+pub trait Resolver: Debug + 'static {
     fn resolve(&self, uri: &Uri, timeout: Duration) -> Result<SocketAddr, Error>;
 }
 
