@@ -9,7 +9,7 @@ use crate::Error;
 
 use super::{Buffers, ConnectionDetails, Connector, LazyBuffers, Transport};
 
-pub struct TcpConnector {}
+pub struct TcpConnector;
 
 impl Connector for TcpConnector {
     fn connect(
