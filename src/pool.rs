@@ -1,10 +1,5 @@
-use std::net::SocketAddr;
 use std::time::Duration;
 
-use http::Uri;
-
-use crate::proxy::Proxy;
-use crate::resolver::Resolver;
 use crate::transport::{Buffers, ConnectionDetails, Connector, Transport};
 use crate::Error;
 
@@ -20,24 +15,12 @@ impl ConnectionPool {
         }
     }
 
-    pub fn connect(
-        &self,
-        uri: &Uri,
-        addr: SocketAddr,
-        proxy: &Option<Proxy>,
-        resolver: &dyn Resolver,
-        timeout: Duration,
-    ) -> Result<Connection, Error> {
-        let details = ConnectionDetails {
-            uri,
-            addr,
-            proxy,
-            resolver,
-            timeout,
-        };
-
+    pub fn connect(&self, details: &ConnectionDetails) -> Result<Connection, Error> {
         Ok(Connection {
-            conn: self.connector.connect(&details)?,
+            conn: self
+                .connector
+                .connect(&details, None)?
+                .ok_or(Error::ConnectionFailed)?,
         })
     }
 }

@@ -11,7 +11,7 @@ use crate::proxy::Proxy;
 use crate::recv::RecvBody;
 use crate::resolver::{DefaultResolver, Resolver};
 use crate::time::Instant;
-use crate::transport::{Buffers, Connector, DefaultConnector};
+use crate::transport::{Buffers, ConnectionDetails, Connector, DefaultConnector};
 use crate::unit::{Event, Input, Unit};
 use crate::{Body, Error};
 
@@ -95,6 +95,20 @@ pub struct AgentConfig {
     ///
     /// Defaults to `ureq <version>`
     pub user_agent: String,
+
+    /// Default size of the input buffer
+    ///
+    /// The default connectors use this setting.
+    ///
+    /// Defaults to 512kb.
+    pub input_buffer_size: usize,
+
+    /// Default size of the output buffer.
+    ///
+    /// The default connectors use this setting.
+    ///
+    /// Defaults to 512kb.
+    pub output_buffer_size: usize,
 }
 
 impl Default for AgentConfig {
@@ -114,6 +128,8 @@ impl Default for AgentConfig {
             max_redirects: 10,
             redirect_auth_headers: RedirectAuthHeaders::Never,
             user_agent: "ureq".to_string(), // TODO(martin): add version
+            input_buffer_size: 512 * 1024,
+            output_buffer_size: 512 * 1024,
         }
     }
 }
@@ -198,13 +214,17 @@ impl Agent {
 
                 Event::OpenConnection { uri, timeout } => {
                     let addr = addr.expect("addr to be available after Event::Resolve");
-                    connection = Some(self.pool.connect(
+
+                    let details = ConnectionDetails {
                         uri,
                         addr,
-                        &self.proxy,
-                        &*self.resolver,
+                        proxy: &self.proxy,
+                        resolver: &*self.resolver,
+                        config: &self.config,
                         timeout,
-                    )?);
+                    };
+                    connection = Some(self.pool.connect(&details)?);
+
                     unit.handle_input(current_time(), Input::ConnectionOpen, &mut [])?;
                 }
 
