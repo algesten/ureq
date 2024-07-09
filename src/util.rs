@@ -1,5 +1,6 @@
 use core::fmt;
 use std::hash::{Hash, Hasher};
+use std::io::{self, ErrorKind};
 use std::ops::{Deref, DerefMut};
 
 use http::uri::{Authority, Scheme};
@@ -101,6 +102,24 @@ impl SchemeExt for Scheme {
             80
         } else {
             panic!("Unknown scheme: {}", self);
+        }
+    }
+}
+
+/// Windows causes kind `TimedOut` while unix does `WouldBlock`. Since we are not
+/// using non-blocking streams, we normalize `WouldBlock` -> `TimedOut`.
+pub trait IoResultExt {
+    fn normalize_would_block(self) -> Self;
+}
+
+impl<T> IoResultExt for io::Result<T> {
+    fn normalize_would_block(self) -> Self {
+        match self {
+            Ok(v) => Ok(v),
+            Err(e) if e.kind() == ErrorKind::WouldBlock => {
+                Err(io::Error::new(ErrorKind::TimedOut, e))
+            }
+            Err(e) => Err(e),
         }
     }
 }
