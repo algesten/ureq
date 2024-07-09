@@ -189,7 +189,7 @@ impl Agent {
             // there are no buffers (and the code below should not need it).
             let buffers = connection
                 .as_mut()
-                .map(|c| c.borrow_buffers())
+                .map(|c| c.borrow_buffers(unit.need_input_as_tmp()))
                 .unwrap_or(Buffers::empty());
 
             match unit.poll_event(current_time(), buffers)? {

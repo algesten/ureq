@@ -30,8 +30,8 @@ pub(crate) struct Connection {
 }
 
 impl Connection {
-    pub fn borrow_buffers(&mut self) -> Buffers {
-        self.conn.borrow_buffers()
+    pub fn borrow_buffers(&mut self, input_as_tmp: bool) -> Buffers {
+        self.conn.borrow_buffers(input_as_tmp)
     }
 
     pub fn transmit_output(&mut self, amount: usize, timeout: Duration) -> Result<(), Error> {
