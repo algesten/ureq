@@ -13,7 +13,7 @@ use crate::time::DurationExt;
 use crate::util::SchemeExt;
 use crate::Error;
 
-pub trait Resolver: Debug + 'static {
+pub trait Resolver: Debug + Send + Sync + 'static {
     fn resolve(&self, uri: &Uri, timeout: Duration) -> Result<SocketAddr, Error>;
 }
 

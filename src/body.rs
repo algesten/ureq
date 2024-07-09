@@ -18,7 +18,10 @@ impl<'a> Body<'a> {
         BodyInner::Reader(reader).into()
     }
 
-    pub fn from_owned_reader(reader: impl Read + 'static) -> Body<'static> {
+    pub fn from_owned_reader<R>(reader: R) -> Body<'static>
+    where
+        R: Read + Send + Sync + 'static,
+    {
         BodyInner::OwnedReader(Box::new(reader)).into()
     }
 
@@ -62,7 +65,7 @@ pub trait AsBody: Private {
 pub(crate) enum BodyInner<'a> {
     ByteSlice(&'a [u8]),
     Reader(&'a mut dyn Read),
-    OwnedReader(Box<dyn Read>),
+    OwnedReader(Box<dyn Read + Send + Sync>),
 }
 
 macro_rules! impl_into_body_slice {

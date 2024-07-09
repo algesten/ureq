@@ -176,7 +176,7 @@ impl Agent {
         &self,
         request: Request<()>,
         body: Body,
-        current_time: impl Fn() -> Instant + 'static,
+        current_time: impl Fn() -> Instant + Send + Sync + 'static,
     ) -> Result<Response<RecvBody>, Error> {
         let mut unit = Unit::new(self.config.clone(), current_time(), request, body)?;
 
