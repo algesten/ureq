@@ -12,6 +12,7 @@ use cookie::Cookie;
 
 use crate::agent::RedirectAuthHeaders;
 use crate::body::{self, BodySize, Payload, SizedReader};
+use crate::connect::ArcTcpConnector;
 use crate::error::{Error, ErrorKind};
 use crate::header;
 use crate::header::{get_header, Header};
@@ -113,6 +114,10 @@ impl Unit {
 
     pub fn resolver(&self) -> ArcResolver {
         self.agent.state.resolver.clone()
+    }
+
+    pub fn tcp_connector(&self) -> ArcTcpConnector {
+        self.agent.state.tcp_connector.clone()
     }
 
     #[cfg(test)]

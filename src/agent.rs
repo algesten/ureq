@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use url::Url;
 
+use crate::connect::{ArcTcpConnector, StdTcpConnector};
 use crate::middleware::Middleware;
 use crate::pool::ConnectionPool;
 use crate::proxy::Proxy;
@@ -45,6 +46,7 @@ pub struct AgentBuilder {
     #[cfg(feature = "cookies")]
     cookie_store: Option<CookieStore>,
     resolver: ArcResolver,
+    tcp_connector: ArcTcpConnector,
     middleware: Vec<Box<dyn Middleware>>,
 }
 
@@ -126,6 +128,7 @@ pub(crate) struct AgentState {
     #[cfg(feature = "cookies")]
     pub(crate) cookie_tin: CookieTin,
     pub(crate) resolver: ArcResolver,
+    pub(crate) tcp_connector: ArcTcpConnector,
     pub(crate) middleware: Vec<Box<dyn Middleware>>,
 }
 
@@ -271,6 +274,7 @@ impl AgentBuilder {
             max_idle_connections: DEFAULT_MAX_IDLE_CONNECTIONS,
             max_idle_connections_per_host: DEFAULT_MAX_IDLE_CONNECTIONS_PER_HOST,
             resolver: StdResolver.into(),
+            tcp_connector: StdTcpConnector.into(),
             #[cfg(feature = "cookies")]
             cookie_store: None,
             middleware: vec![],
@@ -298,6 +302,7 @@ impl AgentBuilder {
                 #[cfg(feature = "cookies")]
                 cookie_tin: CookieTin::new(self.cookie_store.unwrap_or_else(CookieStore::default)),
                 resolver: self.resolver,
+                tcp_connector: self.tcp_connector,
                 middleware: self.middleware,
             }),
         }
@@ -399,6 +404,16 @@ impl AgentBuilder {
     /// ```
     pub fn resolver(mut self, resolver: impl crate::Resolver + 'static) -> Self {
         self.resolver = resolver.into();
+        self
+    }
+
+    /// Configures a custom TCP connector to be used by this agent.
+    /// By default, tcp-connect is done by std::net::TcpStream.
+    /// This allows you to override that connection with your own alternative.
+    ///
+    /// See `examples/bind_connect.rs` for example.
+    pub fn tcp_connector(mut self, tcp_connector: impl crate::TcpConnector + 'static) -> Self {
+        self.tcp_connector = tcp_connector.into();
         self
     }
 
