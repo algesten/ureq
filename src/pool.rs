@@ -47,10 +47,10 @@ impl Connection {
     }
 
     pub(crate) fn close(self) {
-        todo!()
+        //
     }
 
     pub(crate) fn reuse(self) {
-        todo!()
+        //
     }
 }

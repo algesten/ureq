@@ -9,7 +9,7 @@ use crate::Error;
 
 pub struct RecvBody {
     unit: Unit<()>,
-    connection: Connection,
+    connection: Option<Connection>,
     current_time: Box<dyn Fn() -> Instant + Send + Sync>,
 }
 
@@ -21,13 +21,18 @@ impl RecvBody {
     ) -> Self {
         RecvBody {
             unit,
-            connection,
+            connection: Some(connection),
             current_time: Box::new(current_time),
         }
     }
 
     fn do_read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
-        let buffers = self.connection.borrow_buffers(false);
+        let connection = match &mut self.connection {
+            Some(v) => v,
+            None => return Ok(0),
+        };
+
+        let buffers = connection.borrow_buffers(false);
         let event = self.unit.poll_event((self.current_time)(), buffers)?;
 
         let timeout = match event {
@@ -35,16 +40,31 @@ impl RecvBody {
                 assert!(is_body);
                 timeout
             }
+            Event::Reset { must_close } => {
+                if let Some(connection) = self.connection.take() {
+                    if must_close {
+                        connection.close()
+                    } else {
+                        connection.reuse()
+                    }
+                }
+                return Ok(0);
+            }
             _ => unreachable!("expected event AwaitInput"),
         };
 
-        let Buffers { input, .. } = self.connection.await_input(timeout, true)?;
+        let Buffers { input, .. } = connection.await_input(timeout, true)?;
+
+        let max = input.len().min(buf.len());
+        let input = &input[..max];
+
         let input_used =
             self.unit
                 .handle_input((self.current_time)(), Input::Input { input }, buf)?;
-        self.connection.consume_input(input_used);
 
-        let buffers = self.connection.borrow_buffers(false);
+        connection.consume_input(input_used);
+
+        let buffers = connection.borrow_buffers(false);
         let event = self.unit.poll_event((self.current_time)(), buffers)?;
 
         let output_used = match event {
@@ -58,9 +78,9 @@ impl RecvBody {
 
 impl Read for RecvBody {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.do_read(buf).map_err(|e| e.into_io())?;
+        let n = self.do_read(buf).map_err(|e| e.into_io())?;
 
-        Ok(0)
+        Ok(n)
     }
 }
 
