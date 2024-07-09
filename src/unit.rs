@@ -337,6 +337,12 @@ impl<'b> Unit<Body<'b>> {
             redirect_count: self.redirect_count,
         }
     }
+
+    // When we are doing SendBody, we user Buffers::input as a temporary scratch space
+    // for reading from the Body<'a> (as a reader) to write the output.
+    pub fn need_input_as_tmp(&self) -> bool {
+        matches!(self.state, State::SendBody(_))
+    }
 }
 
 // Unit<()> is for receiving the body. We have let go of the input body.

@@ -1,3 +1,4 @@
+use core::fmt;
 use std::io::{self, Read};
 
 use crate::pool::Connection;
@@ -11,6 +12,7 @@ pub struct RecvBody {
     connection: Connection,
     current_time: Box<dyn Fn() -> Instant + Send + Sync>,
 }
+
 impl RecvBody {
     pub(crate) fn new(
         unit: Unit<()>,
@@ -25,7 +27,7 @@ impl RecvBody {
     }
 
     fn do_read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
-        let buffers = self.connection.borrow_buffers();
+        let buffers = self.connection.borrow_buffers(false);
         let event = self.unit.poll_event((self.current_time)(), buffers)?;
 
         let timeout = match event {
@@ -42,7 +44,7 @@ impl RecvBody {
                 .handle_input((self.current_time)(), Input::Input { input }, buf)?;
         self.connection.consume_input(input_used);
 
-        let buffers = self.connection.borrow_buffers();
+        let buffers = self.connection.borrow_buffers(false);
         let event = self.unit.poll_event((self.current_time)(), buffers)?;
 
         let output_used = match event {
@@ -59,5 +61,11 @@ impl Read for RecvBody {
         self.do_read(buf).map_err(|e| e.into_io())?;
 
         Ok(0)
+    }
+}
+
+impl fmt::Debug for RecvBody {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RecvBody").finish()
     }
 }
