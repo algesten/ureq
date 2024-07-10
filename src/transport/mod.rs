@@ -8,6 +8,9 @@ use crate::proxy::Proxy;
 use crate::resolver::Resolver;
 use crate::{AgentConfig, Error};
 
+#[cfg(feature = "rustls")]
+use crate::tls::RustlsConnector;
+
 use self::tcp::TcpConnector;
 
 mod lazybuf;
@@ -44,7 +47,7 @@ pub struct ConnectionDetails<'a> {
 pub trait Transport: Debug + Send + Sync {
     fn borrow_buffers(&mut self, input_as_tmp: bool) -> Buffers;
     fn transmit_output(&mut self, amount: usize, timeout: Duration) -> Result<(), Error>;
-    fn await_input(&mut self, timeout: Duration, is_body: bool) -> Result<Buffers, Error>;
+    fn await_input(&mut self, timeout: Duration) -> Result<Buffers, Error>;
     fn consume_input(&mut self, amount: usize);
 }
 
@@ -99,8 +102,9 @@ pub struct DefaultConnector {
 impl DefaultConnector {
     pub fn new() -> Self {
         let chain = ChainedConnector::new([
-            //
             TcpConnector.boxed(),
+            #[cfg(feature = "rustls")]
+            RustlsConnector::default().boxed(),
         ]);
 
         DefaultConnector { chain }

@@ -36,10 +36,7 @@ impl RecvBody {
         let event = self.unit.poll_event((self.current_time)(), buffers)?;
 
         let timeout = match event {
-            Event::AwaitInput { timeout, is_body } => {
-                assert!(is_body);
-                timeout
-            }
+            Event::AwaitInput { timeout } => timeout,
             Event::Reset { must_close } => {
                 if let Some(connection) = self.connection.take() {
                     if must_close {
@@ -53,7 +50,7 @@ impl RecvBody {
             _ => unreachable!("expected event AwaitInput"),
         };
 
-        let Buffers { input, .. } = connection.await_input(timeout, true)?;
+        let Buffers { input, .. } = connection.await_input(timeout)?;
 
         let max = input.len().min(buf.len());
         let input = &input[..max];

@@ -38,8 +38,8 @@ impl Connection {
         self.conn.transmit_output(amount, timeout)
     }
 
-    pub fn await_input(&mut self, timeout: Duration, is_body: bool) -> Result<Buffers, Error> {
-        self.conn.await_input(timeout, is_body)
+    pub fn await_input(&mut self, timeout: Duration) -> Result<Buffers, Error> {
+        self.conn.await_input(timeout)
     }
 
     pub fn consume_input(&mut self, amount: usize) {
