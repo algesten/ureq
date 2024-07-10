@@ -33,16 +33,20 @@ pub enum Error {
 
     #[cfg(feature = "rustls")]
     #[error("rustls: {0}")]
-    Rustls(#[from] rustls::Error)
+    Rustls(#[from] rustls::Error),
 }
 
 impl Error {
-    pub(crate) fn into_io(self) -> io::Error {
+    pub fn into_io(self) -> io::Error {
         if let Self::Io(e) = self {
             e
         } else {
             io::Error::new(io::ErrorKind::Other, self)
         }
+    }
+
+    pub(crate) fn disconnected() -> Error {
+        io::Error::new(io::ErrorKind::UnexpectedEof, "Peer disconnected").into()
     }
 }
 

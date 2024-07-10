@@ -254,6 +254,10 @@ impl<'b> Unit<Body<'b>> {
 
             Input::Input { input } => match &mut self.state {
                 State::Await100(flow) => {
+                    if input.is_empty() {
+                        return Err(Error::disconnected());
+                    }
+
                     let input_used = flow.try_read_100(input)?;
 
                     // If we did indeed receive a 100-continue, we can't keep waiting for it,
@@ -266,6 +270,10 @@ impl<'b> Unit<Body<'b>> {
                 }
 
                 State::RecvResponse(flow) => {
+                    if input.is_empty() {
+                        return Err(Error::disconnected());
+                    }
+
                     let (input_used, maybe_response) = flow.try_response(input)?;
 
                     let response = match maybe_response {
