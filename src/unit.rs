@@ -54,7 +54,7 @@ pub enum Event<'a> {
     OpenConnection { uri: &'a Uri, timeout: Duration },
     Await100 { timeout: Duration },
     Transmit { amount: usize, timeout: Duration },
-    AwaitInput { timeout: Duration, is_body: bool },
+    AwaitInput { timeout: Duration },
     Response { response: Response<()>, end: bool },
     ResponseBody { amount: usize },
 }
@@ -126,15 +126,9 @@ impl<'b> Unit<Body<'b>> {
 
             State::Await100(_) => Some(Event::Await100 { timeout }),
 
-            State::RecvResponse(_) => Some(Event::AwaitInput {
-                timeout,
-                is_body: false,
-            }),
+            State::RecvResponse(_) => Some(Event::AwaitInput { timeout }),
 
-            State::RecvBody(_) => Some(Event::AwaitInput {
-                timeout,
-                is_body: true,
-            }),
+            State::RecvBody(_) => Some(Event::AwaitInput { timeout }),
 
             State::Redirect(flow) => {
                 // Whether the previous connection must be closed.
@@ -356,10 +350,7 @@ impl Unit<()> {
         let timeout = self.next_timeout(now)?;
 
         match &self.state {
-            State::RecvBody(_) => Ok(Event::AwaitInput {
-                timeout,
-                is_body: true,
-            }),
+            State::RecvBody(_) => Ok(Event::AwaitInput { timeout }),
             State::Cleanup(flow) => Ok(Event::Reset {
                 must_close: flow.must_close_connection(),
             }),

@@ -15,6 +15,9 @@ use crate::transport::{Buffers, ConnectionDetails, Connector, DefaultConnector};
 use crate::unit::{Event, Input, Unit};
 use crate::{Body, Error};
 
+#[cfg(all(feature = "tls"))]
+use crate::tls::TlsConfig;
+
 #[derive(Debug)]
 pub struct Agent {
     config: Arc<AgentConfig>,
@@ -109,6 +112,12 @@ pub struct AgentConfig {
     ///
     /// Defaults to 512kb.
     pub output_buffer_size: usize,
+
+    /// Config for TLS.
+    ///
+    /// This config is generic for all TLS connectors.
+    #[cfg(feature = "tls")]
+    pub tls_config: TlsConfig,
 }
 
 impl Default for AgentConfig {
@@ -130,6 +139,9 @@ impl Default for AgentConfig {
             user_agent: "ureq".to_string(), // TODO(martin): add version
             input_buffer_size: 512 * 1024,
             output_buffer_size: 512 * 1024,
+
+            #[cfg(all(feature = "tls"))]
+            tls_config: TlsConfig::with_native_roots(),
         }
     }
 }
@@ -231,7 +243,7 @@ impl Agent {
                 Event::Await100 { timeout } => {
                     let connection = connection.as_mut().expect("connection for AwaitInput");
 
-                    match connection.await_input(timeout, false) {
+                    match connection.await_input(timeout) {
                         Ok(Buffers { input, .. }) => {
                             unit.handle_input(current_time(), Input::Input { input }, &mut [])?
                         }
@@ -250,9 +262,9 @@ impl Agent {
                     connection.transmit_output(amount, timeout)?;
                 }
 
-                Event::AwaitInput { timeout, is_body } => {
+                Event::AwaitInput { timeout } => {
                     let connection = connection.as_mut().expect("connection for AwaitInput");
-                    let Buffers { input, output } = connection.await_input(timeout, is_body)?;
+                    let Buffers { input, output } = connection.await_input(timeout)?;
 
                     let input_used =
                         unit.handle_input(current_time(), Input::Input { input }, output)?;

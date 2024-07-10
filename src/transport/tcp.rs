@@ -91,7 +91,7 @@ impl Transport for TcpTransport {
         Ok(())
     }
 
-    fn await_input(&mut self, timeout: Duration, _is_body: bool) -> Result<Buffers, Error> {
+    fn await_input(&mut self, timeout: Duration) -> Result<Buffers, Error> {
         // There might be input left from the previous await_input.
         if self.buffers.unconsumed() > 0 {
             return Ok(self.buffers.borrow_mut(false));
