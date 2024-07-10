@@ -19,9 +19,12 @@ exclude = ["/cargo_deny.sh", "/deny.toml", "/test.sh"]
 rust-version = "1.63"
 
 [package.metadata.docs.rs]
-features = []
+features = ["tls"]
 
 [features]
+default = ["rustls"]
+rustls = ["dep:rustls", "tls"]
+tls = ["dep:rustls-pemfile"]
 
 [dependencies]
 base64 = "0.22.1"
@@ -29,3 +32,6 @@ hoot = { git = "https://github.com/algesten/hoot", rev = "2e2eac5" }
 http = "1.1.0"
 log = "0.4.22"
 thiserror = "1.0.61"
+
+rustls-pemfile =  { version = "2.1.2", optional = true, default-features = false, features = ["std"] }
+rustls = { version = "0.23.11", optional = true, default-features = false, features  = ["ring", "logging", "std", "tls12"] }
