@@ -27,6 +27,9 @@ pub enum Error {
 
     #[error("connection failed")]
     ConnectionFailed,
+
+    #[error("certificate: {0}")]
+    Certificate(&'static str),
 }
 
 impl Error {
