@@ -16,6 +16,10 @@ impl Instant {
         Instant::Exact(time::Instant::now())
     }
 
+    pub fn duration_until_not_happening() -> Duration {
+        Duration::from_secs(u64::MAX)
+    }
+
     pub(crate) fn duration_since(&self, earlier: Instant) -> Duration {
         match (self, earlier) {
             (Instant::AlreadyHappened, Instant::AlreadyHappened) => Duration::ZERO,

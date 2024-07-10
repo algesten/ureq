@@ -1,8 +1,8 @@
 use std::convert::TryInto;
+use std::fmt;
 use std::io::{Read, Write};
 use std::sync::Arc;
 use std::time::Duration;
-use std::{fmt, io};
 
 use http::uri::Scheme;
 use once_cell::sync::OnceCell;
@@ -13,9 +13,10 @@ use rustls_pki_types::{
     ServerName,
 };
 
-use crate::time::Instant;
 use crate::tls::cert::KeyKind;
-use crate::transport::{Buffers, ConnectionDetails, Connector, LazyBuffers, Transport};
+use crate::transport::{
+    Buffers, ConnectionDetails, Connector, LazyBuffers, Transport, TransportAdapter,
+};
 use crate::Error;
 
 use super::TlsConfig;
@@ -61,10 +62,7 @@ impl Connector for RustlsConnector {
         let conn = ClientConnection::new(config, name)?;
         let stream = StreamOwned {
             conn,
-            sock: StreamAdapter {
-                timeout: Instant::NotHappening.duration_since(Instant::now()),
-                transport,
-            },
+            sock: TransportAdapter::new(transport),
         };
 
         let buffers = LazyBuffers::new(
@@ -118,7 +116,7 @@ fn build_config(tls_config: &TlsConfig) -> Arc<ClientConfig> {
 
 struct RustlsTransport {
     buffers: LazyBuffers,
-    stream: StreamOwned<ClientConnection, StreamAdapter>,
+    stream: StreamOwned<ClientConnection, TransportAdapter>,
 }
 
 impl Transport for RustlsTransport {
@@ -206,43 +204,5 @@ impl fmt::Debug for RustlsTransport {
         f.debug_struct("RustlsTransport")
             .field("chained", &self.stream.sock.transport)
             .finish()
-    }
-}
-
-pub struct StreamAdapter {
-    pub timeout: Duration,
-    pub transport: Box<dyn Transport>,
-}
-
-impl io::Read for StreamAdapter {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let buffers = self
-            .transport
-            .await_input(self.timeout)
-            .map_err(|e| e.into_io())?;
-
-        let max = buf.len().min(buffers.input.len());
-        buf[..max].copy_from_slice(&buffers.input[..max]);
-        self.transport.consume_input(max);
-
-        Ok(max)
-    }
-}
-
-impl io::Write for StreamAdapter {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let buffers = self.transport.borrow_buffers(false);
-
-        let max = buf.len().min(buffers.output.len());
-        buffers.output[..max].copy_from_slice(&buf[..max]);
-        self.transport
-            .transmit_output(max, self.timeout)
-            .map_err(|e| e.into_io())?;
-
-        Ok(max)
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
     }
 }
