@@ -2,6 +2,9 @@
 #![warn(clippy::all)]
 // #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
+#[macro_use]
+extern crate log;
+
 use std::convert::TryFrom;
 
 use body::AsBody;
@@ -21,6 +24,7 @@ mod recv;
 mod request;
 pub mod resolver;
 mod time;
+pub mod tls;
 pub mod transport;
 mod unit;
 mod util;
