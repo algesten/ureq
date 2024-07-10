@@ -29,7 +29,7 @@ native-roots = ["dep:rustls-native-certs"]
 
 [dependencies]
 base64 = "0.22.1"
-hoot = { git = "https://github.com/algesten/hoot", rev = "f2d4717" }
+hoot = { git = "https://github.com/algesten/hoot", rev = "3a7dafb" }
 http = "1.1.0"
 log = "0.4.22"
 thiserror = "1.0.61"
