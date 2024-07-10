@@ -18,6 +18,9 @@ pub use lazybuf::LazyBuffers;
 
 mod tcp;
 
+mod io;
+pub use io::TransportAdapter;
+
 pub trait Connector: Debug + Send + Sync + 'static {
     fn boxed(self) -> Box<dyn Connector>
     where
