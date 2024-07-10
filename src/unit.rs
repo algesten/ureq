@@ -466,15 +466,10 @@ fn send_body(
 ) -> Result<Event<'static>, Error> {
     let input_len = input.len();
 
-    // The + 1 and floor() is to make even powers of 16 right.
-    // The + 4 is for the \r\n overhead. A chunk is:
-    // <digits_in_hex>\r\n
-    // <chunk>\r\n
-    // 0\r\n
-    // \r\n
-    let chunk_overhead = ((output.len() as f64).log(16.0) + 1.0).floor() as usize + 4;
-    assert!(input_len > chunk_overhead);
-    let max_input = input_len - chunk_overhead;
+    let overhead = flow.calculate_output_overhead(output.len());
+
+    assert!(input_len > overhead);
+    let max_input = input_len - overhead;
 
     // TODO(martin): for any body that is BodyInner::ByteSlice, it's not great to
     // go via self.body.read() since we're incurring on more memcopy than we need.
