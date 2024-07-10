@@ -466,21 +466,32 @@ fn send_body(
 ) -> Result<Event<'static>, Error> {
     let input_len = input.len();
 
-    let overhead = flow.calculate_output_overhead(output.len());
-
+    let overhead = flow.calculate_output_overhead(output.len())?;
     assert!(input_len > overhead);
     let max_input = input_len - overhead;
 
-    // TODO(martin): for any body that is BodyInner::ByteSlice, it's not great to
-    // go via self.body.read() since we're incurring on more memcopy than we need.
-    let input = &mut input[..max_input];
-    let n = body.read(input)?;
+    let output_used = if overhead == 0 {
+        // overhead == 0 means we are not doing chunked transfer. The body can be written
+        // directly to the output. This optimizes away a memcopy if we were to go via
+        // flow.write().
+        let output_used = body.read(output)?;
 
-    let (input_used, output_used) = flow.write(&input[..n], output)?;
+        // Size checking is still in the flow.
+        flow.consume_direct_write(output_used)?;
 
-    // Since output is "a bit" larger than the input (compensate for chunk ovherhead),
-    // the entire input we read from the body should also be shipped to the output.
-    assert!(input_used == n);
+        output_used
+    } else {
+        let input = &mut input[..max_input];
+        let n = body.read(input)?;
+
+        let (input_used, output_used) = flow.write(&input[..n], output)?;
+
+        // Since output is "a bit" larger than the input (compensate for chunk ovherhead),
+        // the entire input we read from the body should also be shipped to the output.
+        assert!(input_used == n);
+
+        output_used
+    };
 
     Ok(Event::Transmit {
         amount: output_used,
