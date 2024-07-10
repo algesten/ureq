@@ -75,7 +75,7 @@ mod test {
 
     #[test]
     fn simple_get() {
-        let mut response = get("https://httpbin.org/get").call().unwrap();
+        let mut response = get("https://www.lookback.com/").call().unwrap();
         println!("{:#?}", response);
         let mut body = String::new();
         response.body_mut().read_to_string(&mut body).unwrap();

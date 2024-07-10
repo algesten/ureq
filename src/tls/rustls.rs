@@ -138,11 +138,15 @@ impl Transport for RustlsTransport {
             return Ok(self.buffers.borrow_mut(false));
         }
 
+        // Ensure we get the entire input buffer to write to.
+        self.buffers.assert_and_clear_input_filled();
+
         // Read more
         self.stream.sock.timeout = timeout;
         let buffers = self.buffers.borrow_mut(false);
         let amount = self.stream.read(buffers.input)?;
 
+        // Cap the input
         self.buffers.set_input_filled(amount);
 
         Ok(self.buffers.borrow_mut(false))
