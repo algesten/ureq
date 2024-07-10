@@ -8,7 +8,7 @@ use self::cert::load_root_certs;
 #[cfg(feature = "rustls")]
 mod rustls;
 #[cfg(feature = "rustls")]
-pub use rustls::RustlsConnector;
+pub use self::rustls::RustlsConnector;
 
 #[derive(Debug, Clone)]
 pub struct TlsConfig {
