@@ -24,10 +24,12 @@ mod recv;
 mod request;
 pub mod resolver;
 mod time;
-pub mod tls;
 pub mod transport;
 mod unit;
 mod util;
+
+#[cfg(feature = "tls")]
+pub mod tls;
 
 pub use agent::{Agent, AgentConfig};
 pub use body::Body;
@@ -73,7 +75,7 @@ mod test {
 
     #[test]
     fn simple_get() {
-        let mut response = get("http://httpbin.org/get").call().unwrap();
+        let mut response = get("https://httpbin.org/get").call().unwrap();
         println!("{:#?}", response);
         let mut body = String::new();
         response.body_mut().read_to_string(&mut body).unwrap();

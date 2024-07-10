@@ -30,6 +30,10 @@ pub enum Error {
 
     #[error("certificate: {0}")]
     Certificate(&'static str),
+
+    #[cfg(feature = "rustls")]
+    #[error("rustls: {0}")]
+    Rustls(#[from] rustls::Error)
 }
 
 impl Error {
