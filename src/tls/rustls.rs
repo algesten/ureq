@@ -7,7 +7,7 @@ use std::time::Duration;
 use http::uri::Scheme;
 use once_cell::sync::OnceCell;
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
-use rustls::{ClientConfig, ClientConnection, RootCertStore, StreamOwned};
+use rustls::{ClientConfig, ClientConnection, RootCertStore, StreamOwned, ALL_VERSIONS};
 use rustls_pki_types::{
     CertificateDer, PrivateKeyDer, PrivatePkcs1KeyDer, PrivatePkcs8KeyDer, PrivateSec1KeyDer,
     ServerName,
@@ -77,19 +77,27 @@ impl Connector for RustlsConnector {
 }
 
 fn build_config(tls_config: &TlsConfig) -> Arc<ClientConfig> {
-    let root_certs = tls_config
-        .root_certs
-        .iter()
-        .map(|c| CertificateDer::from(c.der()));
-    let mut root_store = RootCertStore::empty();
-    root_store.add_parsable_certificates(root_certs);
+    // Improve chances of ureq working out-of-the-box by not requiring the user
+    // to select a default crypto provider.
+    let provider = Arc::new(rustls::crypto::ring::default_provider());
+
+    let builder = ClientConfig::builder_with_provider(provider)
+        .with_protocol_versions(ALL_VERSIONS)
+        .expect("all TLS versions");
 
     let builder = if tls_config.disable_verification {
-        ClientConfig::builder()
+        builder
             .dangerous()
             .with_custom_certificate_verifier(Arc::new(DisabledVerifier))
     } else {
-        ClientConfig::builder().with_root_certificates(root_store)
+        let root_certs = tls_config
+            .root_certs
+            .iter()
+            .map(|c| CertificateDer::from(c.der()));
+        let mut root_store = RootCertStore::empty();
+        root_store.add_parsable_certificates(root_certs);
+
+        builder.with_root_certificates(root_store)
     };
 
     let config = if let Some((certs, key)) = &tls_config.client_cert {
