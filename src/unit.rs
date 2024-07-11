@@ -123,7 +123,10 @@ impl<'b> Unit<Body<'b>> {
         timeout: Duration,
     ) -> Result<Option<Event<'static>>, Error> {
         Ok(match &mut self.state {
-            State::Begin(_) => Some(Event::Reset { must_close: false }),
+            State::Begin(flow) => {
+                info!("{} {}", flow.method(), flow.uri());
+                Some(Event::Reset { must_close: false })
+            }
 
             // State::Resolve (see below)
             // State::OpenConnection (see below)
@@ -142,8 +145,11 @@ impl<'b> Unit<Body<'b>> {
                 let must_close = flow.must_close_connection();
 
                 let maybe_new_flow = flow.as_new_flow(self.config.redirect_auth_headers)?;
+                let status = flow.status();
 
                 if let Some(flow) = maybe_new_flow {
+                    info!("Redirect ({}): {} {}", status, flow.method(), flow.uri());
+
                     // Start over the state
                     self.set_state(State::Begin(flow));
 
@@ -154,7 +160,9 @@ impl<'b> Unit<Body<'b>> {
                 }
             }
 
-            State::Cleanup(_) => todo!(),
+            State::Cleanup(flow) => Some(Event::Reset {
+                must_close: flow.must_close_connection(),
+            }),
 
             State::Empty => unreachable!("self.state should never be in State::Empty"),
 
@@ -292,7 +300,7 @@ impl<'b> Unit<Body<'b>> {
                         self.redirect_count += 1;
                         // If we reached max redirections set end: true to
                         // make outer loop stop and return the body.
-                        self.redirect_count < self.config.max_redirects
+                        self.redirect_count >= self.config.max_redirects
                     } else {
                         true
                     };
@@ -353,7 +361,7 @@ impl<'b> Unit<Body<'b>> {
 impl Unit<()> {
     pub fn poll_event(&mut self, now: Instant) -> Result<Event, Error> {
         let event = self.do_poll_event(now)?;
-        trace!("poll_event: {:?}", event);
+        trace!("poll_event (recv): {:?}", event);
         Ok(event)
     }
 
