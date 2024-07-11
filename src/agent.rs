@@ -300,6 +300,8 @@ impl Agent {
         let recv_body = RecvBody::new(unit, connection, current_time);
         let response = Response::from_parts(parts, recv_body);
 
+        info!("{}", response.status());
+
         Ok(response)
     }
 }

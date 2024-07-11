@@ -77,7 +77,9 @@ mod test {
     #[test]
     fn simple_get() {
         env_logger::init();
-        let mut response = get("https://www.lookback.com/").call().unwrap();
+        let mut response = get("https://httpbin.org/relative-redirect/3")
+            .call()
+            .unwrap();
         // println!("{:#?}", response);
         let mut body = String::new();
         response.body_mut().read_to_string(&mut body).unwrap();

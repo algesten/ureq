@@ -212,7 +212,7 @@ impl ServerCertVerifier for DisabledVerifier {
     }
 
     fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-        todo!()
+        vec![]
     }
 }
 
