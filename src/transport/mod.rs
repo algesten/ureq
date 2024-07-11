@@ -5,7 +5,7 @@ use http::Uri;
 
 use crate::proxy::Proxy;
 use crate::resolver::Resolver;
-use crate::time::Duration;
+use crate::time::{Duration, Instant};
 use crate::{AgentConfig, Error};
 
 use self::tcp::TcpConnector;
@@ -48,6 +48,7 @@ pub struct ConnectionDetails<'a> {
     pub resolver: &'a dyn Resolver,
     pub config: &'a AgentConfig,
 
+    pub now: Instant,
     // TODO(martin): Make mechanism to lower duration for each step in the connector chain.
     pub timeout: Duration,
 }
