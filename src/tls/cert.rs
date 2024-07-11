@@ -173,12 +173,17 @@ impl<'a> Iterator for PemIter<'a> {
 }
 
 pub fn load_root_certs() -> Vec<Certificate<'static>> {
+    trace!("Try load root certs");
     let certs = match rustls_native_certs::load_native_certs() {
         Ok(v) => v,
-        Err(e) => panic!("failed to load root certs: {}", e),
+        Err(e) => panic!("Failed to load root certs: {}", e),
     };
 
-    certs.into_iter().map(Certificate::from_pki_types).collect()
+    let ret: Vec<_> = certs.into_iter().map(Certificate::from_pki_types).collect();
+
+    debug!("Loaded {} root certs", ret.len());
+
+    ret
 }
 
 impl<'a> From<Certificate<'a>> for PemItem<'a> {
@@ -195,8 +200,7 @@ impl<'a> From<PrivateKey<'a>> for PemItem<'a> {
 
 impl<'a> fmt::Debug for Certificate<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Certificate")
-            .finish()
+        f.debug_struct("Certificate").finish()
     }
 }
 

@@ -1,7 +1,6 @@
 use std::io;
-use std::time::Duration;
 
-use crate::time::Instant;
+use crate::time::Duration;
 
 use super::Transport;
 
@@ -13,7 +12,7 @@ pub struct TransportAdapter {
 impl TransportAdapter {
     pub(crate) fn new(transport: Box<dyn Transport>) -> Self {
         Self {
-            timeout: Instant::duration_until_not_happening(),
+            timeout: Duration::NotHappening,
             transport,
         }
     }

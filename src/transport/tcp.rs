@@ -1,9 +1,8 @@
 use std::io::{Read, Write};
 use std::net::TcpStream;
-use std::time::Duration;
-use std::{fmt, io};
+use std::{fmt, io, time};
 
-use crate::time::DurationExt;
+use crate::time::Duration;
 use crate::util::IoResultExt;
 use crate::Error;
 
@@ -20,13 +19,18 @@ impl Connector for TcpConnector {
         if chained.is_some() {
             // The chained connection overrides whatever we were to open here.
             // In the DefaultConnector chain this would be a SOCKS proxy connection.
+            trace!("Skip");
             return Ok(chained);
         }
 
-        let stream = TcpStream::connect_timeout(&details.addr, details.timeout)?;
+        trace!("Try connect TcpStream to {}", details.addr);
+
+        let stream = TcpStream::connect_timeout(&details.addr, *details.timeout)?;
         let config = &details.config;
         let buffers = LazyBuffers::new(config.input_buffer_size, config.output_buffer_size);
         let transport = TcpTransport::new(stream, buffers);
+
+        debug!("Connected TcpStream to {}", details.addr);
 
         Ok(Some(Box::new(transport)))
     }
@@ -55,7 +59,7 @@ fn maybe_update_timeout(
     timeout: Duration,
     previous: &mut Option<Duration>,
     stream: &TcpStream,
-    f: impl Fn(&TcpStream, Option<Duration>) -> io::Result<()>,
+    f: impl Fn(&TcpStream, Option<time::Duration>) -> io::Result<()>,
 ) -> io::Result<()> {
     let maybe_timeout = if timeout.is_zero() || timeout.is_not_happening() {
         None
@@ -64,7 +68,7 @@ fn maybe_update_timeout(
     };
 
     if maybe_timeout != *previous {
-        (f)(stream, maybe_timeout)?;
+        (f)(stream, maybe_timeout.map(|t| *t))?;
         *previous = maybe_timeout;
     }
 
