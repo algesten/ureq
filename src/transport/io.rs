@@ -10,7 +10,7 @@ pub struct TransportAdapter {
 }
 
 impl TransportAdapter {
-    pub(crate) fn new(transport: Box<dyn Transport>) -> Self {
+    pub fn new(transport: Box<dyn Transport>) -> Self {
         Self {
             timeout: Duration::NotHappening,
             transport,
