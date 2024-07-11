@@ -31,7 +31,7 @@ socks-proxy = ["dep:socks"]
 
 [dependencies]
 base64 = "0.22.1"
-hoot = { git = "https://github.com/algesten/hoot", rev = "3a7dafb" }
+hoot = { git = "https://github.com/algesten/hoot", rev = "994e1ff" }
 http = "1.1.0"
 log = "0.4.22"
 thiserror = "1.0.61"
