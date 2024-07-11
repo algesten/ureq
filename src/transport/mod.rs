@@ -6,6 +6,7 @@ use http::Uri;
 
 use crate::proxy::Proxy;
 use crate::resolver::Resolver;
+use crate::tls::NativeTlsConnector;
 use crate::{AgentConfig, Error};
 
 #[cfg(feature = "rustls")]
@@ -13,8 +14,8 @@ use crate::tls::RustlsConnector;
 
 use self::tcp::TcpConnector;
 
-mod lazybuf;
-pub use lazybuf::LazyBuffers;
+mod buf;
+pub use buf::{Buffers, LazyBuffers, NoBuffers};
 
 mod tcp;
 
@@ -48,25 +49,20 @@ pub struct ConnectionDetails<'a> {
 }
 
 pub trait Transport: Debug + Send + Sync {
-    fn borrow_buffers(&mut self, input_as_tmp: bool) -> Buffers;
+    fn buffers(&mut self) -> &mut dyn Buffers;
     fn transmit_output(&mut self, amount: usize, timeout: Duration) -> Result<(), Error>;
-    fn await_input(&mut self, timeout: Duration) -> Result<Buffers, Error>;
+    fn await_input(&mut self, timeout: Duration) -> Result<(), Error>;
     fn consume_input(&mut self, amount: usize);
-}
-
-pub struct Buffers<'a> {
-    pub input: &'a mut [u8],
-    pub output: &'a mut [u8],
-}
-
-impl Buffers<'_> {
-    pub(crate) fn empty() -> Buffers<'static> {
-        Buffers {
-            input: &mut [],
-            output: &mut [],
-        }
+    fn is_tls(&self) -> bool {
+        false
     }
 }
+
+// fn buffer_output(&mut self) -> &mut [u8];
+// fn buffer_tmp_and_output(&mut self) -> (&mut [u8], &mut [u8]);
+// fn transmit_output(&mut self, amount: usize, timeout: Duration) -> Result<(), Error>;
+// fn await_input(&mut self, timeout: Duration) -> Result<&[u8], Error>;
+// fn consume_input(&mut self, amount: usize);
 
 #[derive(Debug)]
 pub struct ChainedConnector {
@@ -108,6 +104,8 @@ impl DefaultConnector {
             TcpConnector.boxed(),
             #[cfg(feature = "rustls")]
             RustlsConnector::default().boxed(),
+            #[cfg(feature = "native-tls")]
+            NativeTlsConnector::default().boxed(),
         ]);
 
         DefaultConnector { chain }

@@ -30,15 +30,15 @@ pub(crate) struct Connection {
 }
 
 impl Connection {
-    pub fn borrow_buffers(&mut self, input_as_tmp: bool) -> Buffers {
-        self.conn.borrow_buffers(input_as_tmp)
+    pub fn buffers(&mut self) -> &mut dyn Buffers {
+        self.conn.buffers()
     }
 
     pub fn transmit_output(&mut self, amount: usize, timeout: Duration) -> Result<(), Error> {
         self.conn.transmit_output(amount, timeout)
     }
 
-    pub fn await_input(&mut self, timeout: Duration) -> Result<Buffers, Error> {
+    pub fn await_input(&mut self, timeout: Duration) -> Result<(), Error> {
         self.conn.await_input(timeout)
     }
 

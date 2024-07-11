@@ -11,7 +11,7 @@ use crate::proxy::Proxy;
 use crate::recv::RecvBody;
 use crate::resolver::{DefaultResolver, Resolver};
 use crate::time::Instant;
-use crate::transport::{Buffers, ConnectionDetails, Connector, DefaultConnector};
+use crate::transport::{ConnectionDetails, Connector, DefaultConnector, NoBuffers};
 use crate::unit::{Event, Input, Unit};
 use crate::{Body, Error};
 
@@ -137,8 +137,8 @@ impl Default for AgentConfig {
             max_redirects: 10,
             redirect_auth_headers: RedirectAuthHeaders::Never,
             user_agent: "ureq".to_string(), // TODO(martin): add version
-            input_buffer_size: 512 * 1024,
-            output_buffer_size: 512 * 1024,
+            input_buffer_size: 128 * 1024,
+            output_buffer_size: 128 * 1024,
 
             #[cfg(all(feature = "tls"))]
             tls_config: TlsConfig::with_native_roots(),
@@ -195,14 +195,15 @@ impl Agent {
         let mut addr = None;
         let mut connection: Option<Connection> = None;
         let mut response;
+        let mut no_buffers = NoBuffers;
 
         loop {
             // The buffer is owned by the connection. Before we have an open connection,
             // there are no buffers (and the code below should not need it).
             let buffers = connection
                 .as_mut()
-                .map(|c| c.borrow_buffers(unit.need_input_as_tmp()))
-                .unwrap_or(Buffers::empty());
+                .map(|c| c.buffers())
+                .unwrap_or(&mut no_buffers);
 
             match unit.poll_event(current_time(), buffers)? {
                 Event::Reset { must_close } => {
@@ -244,7 +245,8 @@ impl Agent {
                     let connection = connection.as_mut().expect("connection for AwaitInput");
 
                     match connection.await_input(timeout) {
-                        Ok(Buffers { input, .. }) => {
+                        Ok(_) => {
+                            let input = connection.buffers().input();
                             unit.handle_input(current_time(), Input::Input { input }, &mut [])?
                         }
 
@@ -264,7 +266,8 @@ impl Agent {
 
                 Event::AwaitInput { timeout } => {
                     let connection = connection.as_mut().expect("connection for AwaitInput");
-                    let Buffers { input, output } = connection.await_input(timeout)?;
+                    connection.await_input(timeout)?;
+                    let (input, output) = connection.buffers().input_and_output();
 
                     let input_used =
                         unit.handle_input(current_time(), Input::Input { input }, output)?;

@@ -3,7 +3,6 @@ use std::io::{self, Read};
 
 use crate::pool::Connection;
 use crate::time::Instant;
-use crate::transport::Buffers;
 use crate::unit::{Event, Input, Unit};
 use crate::Error;
 
@@ -32,8 +31,7 @@ impl RecvBody {
             None => return Ok(0),
         };
 
-        let buffers = connection.borrow_buffers(false);
-        let event = self.unit.poll_event((self.current_time)(), buffers)?;
+        let event = self.unit.poll_event((self.current_time)())?;
 
         let timeout = match event {
             Event::AwaitInput { timeout } => timeout,
@@ -50,7 +48,8 @@ impl RecvBody {
             _ => unreachable!("expected event AwaitInput"),
         };
 
-        let Buffers { input, .. } = connection.await_input(timeout)?;
+        connection.await_input(timeout)?;
+        let input = connection.buffers().input();
 
         let max = input.len().min(buf.len());
         let input = &input[..max];
@@ -61,8 +60,7 @@ impl RecvBody {
 
         connection.consume_input(input_used);
 
-        let buffers = connection.borrow_buffers(false);
-        let event = self.unit.poll_event((self.current_time)(), buffers)?;
+        let event = self.unit.poll_event((self.current_time)())?;
 
         let output_used = match event {
             Event::ResponseBody { amount } => amount,
