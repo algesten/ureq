@@ -45,7 +45,7 @@ impl RecvBody {
                 }
                 return Ok(0);
             }
-            _ => unreachable!("expected event AwaitInput"),
+            _ => unreachable!("Expected event AwaitInput"),
         };
 
         connection.await_input(timeout)?;
@@ -64,7 +64,7 @@ impl RecvBody {
 
         let output_used = match event {
             Event::ResponseBody { amount } => amount,
-            _ => unreachable!("expected event ResponseBody"),
+            _ => unreachable!("Expected event ResponseBody"),
         };
 
         Ok(output_used)

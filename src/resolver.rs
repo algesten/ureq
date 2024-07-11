@@ -2,14 +2,13 @@ use std::fmt::{self, Debug};
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::thread::{self};
-use std::time::Duration;
 use std::vec::IntoIter;
 
 use http::uri::{Authority, Scheme};
 use http::Uri;
 
 use crate::error::TimeoutReason;
-use crate::time::DurationExt;
+use crate::time::Duration;
 use crate::util::SchemeExt;
 use crate::Error;
 
@@ -56,14 +55,18 @@ impl Resolver for DefaultResolver {
         let use_sync = timeout.is_not_happening();
 
         let iter = if use_sync {
+            trace!("Resolve: {}", addr);
             // When timeout is not set, we do not spawn any threads.
             addr.to_socket_addrs()?
         } else {
+            trace!("Resolve with timeout ({:?}): {} ", timeout, addr);
             resolve_async(addr, timeout)?
         };
 
         let wanted = self.family.keep_wanted(iter);
         let maybe_addr = self.select.choose(wanted);
+
+        debug!("Resolved: {:?}", maybe_addr);
 
         maybe_addr.ok_or(Error::HostNotFound)
     }
@@ -76,7 +79,7 @@ fn resolve_async(addr: String, timeout: Duration) -> Result<IntoIter<SocketAddr>
     let (tx, rx) = mpsc::sync_channel(1);
     thread::spawn(move || tx.send(addr.to_socket_addrs()).ok());
 
-    match rx.recv_timeout(timeout) {
+    match rx.recv_timeout(*timeout) {
         Ok(v) => Ok(v?),
         Err(c) => match c {
             // Timeout results in None

@@ -1,5 +1,4 @@
-use std::time::Duration;
-
+use crate::time::Duration;
 use crate::transport::{Buffers, ConnectionDetails, Connector, Transport};
 use crate::Error;
 

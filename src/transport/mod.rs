@@ -1,11 +1,11 @@
 use std::fmt::Debug;
 use std::net::SocketAddr;
-use std::time::Duration;
 
 use http::Uri;
 
 use crate::proxy::Proxy;
 use crate::resolver::Resolver;
+use crate::time::Duration;
 use crate::{AgentConfig, Error};
 
 use self::tcp::TcpConnector;
@@ -24,7 +24,7 @@ pub use chain::ChainedConnector;
 #[cfg(feature = "socks-proxy")]
 mod socks;
 #[cfg(feature = "socks-proxy")]
-pub use socks::SocksConnector;
+pub use self::socks::SocksConnector;
 
 pub trait Connector: Debug + Send + Sync + 'static {
     fn boxed(self) -> Box<dyn Connector>

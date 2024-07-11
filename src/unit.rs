@@ -1,7 +1,7 @@
+use core::fmt;
 use std::collections::VecDeque;
 use std::mem;
 use std::sync::Arc;
-use std::time::Duration;
 
 use hoot::client::flow::{
     state::*, Await100Result, RecvBodyResult, RecvResponseResult, SendRequestResult,
@@ -9,8 +9,9 @@ use hoot::client::flow::{
 use http::{Request, Response, Uri};
 
 use crate::error::TimeoutReason;
-use crate::time::Instant;
+use crate::time::{Duration, Instant};
 use crate::transport::Buffers;
+use crate::util::DebugResponse;
 use crate::{AgentConfig, Body, Error};
 
 pub(crate) struct Unit<B> {
@@ -21,6 +22,7 @@ pub(crate) struct Unit<B> {
     body: B,
     queued_event: VecDeque<Event<'static>>,
     redirect_count: u32,
+    prev_state: &'static str,
 }
 
 type Flow<State> = hoot::client::flow::Flow<(), State>;
@@ -82,10 +84,17 @@ impl<'b> Unit<Body<'b>> {
             body,
             queued_event: VecDeque::new(),
             redirect_count: 0,
+            prev_state: "",
         })
     }
 
     pub fn poll_event(&mut self, now: Instant, buffers: &mut dyn Buffers) -> Result<Event, Error> {
+        let event = self.do_poll_event(now, buffers)?;
+        trace!("poll_event: {:?}", event);
+        Ok(event)
+    }
+
+    fn do_poll_event(&mut self, now: Instant, buffers: &mut dyn Buffers) -> Result<Event, Error> {
         // Queued events go first.
         if let Some(queued) = self.queued_event.pop_front() {
             return Ok(queued);
@@ -136,7 +145,7 @@ impl<'b> Unit<Body<'b>> {
 
                 if let Some(flow) = maybe_new_flow {
                     // Start over the state
-                    self.state = State::Begin(flow);
+                    self.set_state(State::Begin(flow));
 
                     // Tell caller to reset state
                     Some(Event::Reset { must_close })
@@ -195,7 +204,7 @@ impl<'b> Unit<Body<'b>> {
             State::Empty => unreachable!("self.state should never be State::Empty"),
         };
 
-        self.state = new_state;
+        self.set_state(new_state);
     }
 
     // These events borrow from the State, but they don't proceed the FSM.
@@ -229,7 +238,7 @@ impl<'b> Unit<Body<'b>> {
                     .expect("Input::Begin requires State::Begin");
 
                 self.call_timings.time_call_start = Some(now);
-                self.state = State::Resolve(flow);
+                self.set_state(State::Resolve(flow));
             }
 
             Input::Resolved => {
@@ -237,7 +246,7 @@ impl<'b> Unit<Body<'b>> {
                     .expect("Input::Resolved requires State::Resolve");
 
                 self.call_timings.time_resolve = Some(now);
-                self.state = State::OpenConnection(flow)
+                self.set_state(State::OpenConnection(flow));
             }
 
             Input::ConnectionOpen => {
@@ -245,7 +254,7 @@ impl<'b> Unit<Body<'b>> {
                     .expect("Input::ConnectionOpen requires State::OpenConnection");
 
                 self.call_timings.time_connect = Some(now);
-                self.state = State::SendRequest(flow.proceed());
+                self.set_state(State::SendRequest(flow.proceed()));
             }
 
             Input::EndAwait100 => self.end_await_100(now),
@@ -301,7 +310,7 @@ impl<'b> Unit<Body<'b>> {
                     };
 
                     self.call_timings.time_recv_response = Some(now);
-                    self.state = state;
+                    self.set_state(state);
 
                     return Ok(input_used);
                 }
@@ -320,10 +329,10 @@ impl<'b> Unit<Body<'b>> {
             .expect("Input::EndAwait100 requires State::Await100");
 
         self.call_timings.time_await_100 = Some(now);
-        self.state = match flow.proceed() {
+        self.set_state(match flow.proceed() {
             Await100Result::SendBody(flow) => State::SendBody(flow),
             Await100Result::RecvResponse(flow) => State::RecvResponse(flow),
-        };
+        });
     }
 
     pub fn release_body(self) -> Unit<()> {
@@ -335,6 +344,7 @@ impl<'b> Unit<Body<'b>> {
             body: (),
             queued_event: self.queued_event,
             redirect_count: self.redirect_count,
+            prev_state: self.prev_state,
         }
     }
 }
@@ -342,6 +352,12 @@ impl<'b> Unit<Body<'b>> {
 // Unit<()> is for receiving the body. We have let go of the input body.
 impl Unit<()> {
     pub fn poll_event(&mut self, now: Instant) -> Result<Event, Error> {
+        let event = self.do_poll_event(now)?;
+        trace!("poll_event: {:?}", event);
+        Ok(event)
+    }
+
+    fn do_poll_event(&mut self, now: Instant) -> Result<Event, Error> {
         // Queued events go first.
         if let Some(queued) = self.queued_event.pop_front() {
             return Ok(queued);
@@ -375,6 +391,19 @@ impl Unit<()> {
 }
 
 impl<B> Unit<B> {
+    fn set_state(&mut self, state: State) {
+        let new_name = state.name();
+        if new_name != self.prev_state {
+            if self.prev_state != "" {
+                trace!("{} -> {}", self.prev_state, new_name);
+            } else {
+                trace!("Start state: {}", new_name);
+            }
+            self.prev_state = new_name;
+        }
+        self.state = state
+    }
+
     fn global_timeout(&self) -> Instant {
         self.config
             .timeout_global
@@ -429,7 +458,7 @@ impl<B> Unit<B> {
             };
 
             self.call_timings.time_recv_body = Some(now);
-            self.state = state;
+            self.set_state(state);
         }
 
         return Ok(input_used);
@@ -541,5 +570,66 @@ impl CallTimings {
             State::Empty => unreachable!("next_timeout should never be called for State::Empty"),
         }
         .unwrap_or(Instant::NotHappening)
+    }
+}
+
+impl State {
+    fn name(&self) -> &'static str {
+        match self {
+            State::Begin(_) => "Begin",
+            State::Resolve(_) => "Resolve",
+            State::OpenConnection(_) => "OpenConnection",
+            State::SendRequest(_) => "SendRequest",
+            State::SendBody(_) => "SendBody",
+            State::Await100(_) => "Await100",
+            State::RecvResponse(_) => "RecvResponse",
+            State::RecvBody(_) => "RecvBody",
+            State::Redirect(_) => "Redirect",
+            State::Cleanup(_) => "Cleanup",
+            State::Empty => "Empty (wrong!)",
+        }
+    }
+}
+
+impl fmt::Debug for Event<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Reset { must_close } => f
+                .debug_struct("Reset")
+                .field("must_close", must_close)
+                .finish(),
+            Self::Resolve { uri, timeout } => f
+                .debug_struct("Resolve")
+                .field("uri", uri)
+                .field("timeout", timeout)
+                .finish(),
+            Self::OpenConnection { uri, timeout } => f
+                .debug_struct("OpenConnection")
+                .field("uri", uri)
+                .field("timeout", timeout)
+                .finish(),
+            Self::Await100 { timeout } => f
+                .debug_struct("Await100")
+                .field("timeout", timeout)
+                .finish(),
+            Self::Transmit { amount, timeout } => f
+                .debug_struct("Transmit")
+                .field("amount", amount)
+                .field("timeout", timeout)
+                .finish(),
+            Self::AwaitInput { timeout } => f
+                .debug_struct("AwaitInput")
+                .field("timeout", timeout)
+                .finish(),
+            Self::Response { response, end } => f
+                .debug_struct("Response")
+                .field("response", &DebugResponse(&response))
+                .field("end", end)
+                .finish(),
+            Self::ResponseBody { amount } => f
+                .debug_struct("ResponseBody")
+                .field("amount", amount)
+                .finish(),
+        }
     }
 }

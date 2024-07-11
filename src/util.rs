@@ -5,6 +5,7 @@ use std::io::{self, ErrorKind};
 use std::ops::{Deref, DerefMut};
 
 use http::uri::{Authority, Scheme};
+use http::{HeaderMap, Response};
 
 use crate::proxy::Proto;
 
@@ -126,5 +127,54 @@ impl<T> IoResultExt for io::Result<T> {
             }
             Err(e) => Err(e),
         }
+    }
+}
+
+/// Wrapper to only log non-sensitive data.
+pub struct DebugResponse<'a, B>(pub &'a Response<B>);
+
+impl<'a, B> fmt::Debug for DebugResponse<'a, B> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DebugResponse")
+            .field("status", &self.0.status())
+            .field("version", &self.0.version())
+            .field("headers", &DebugHeaders(&self.0.headers()))
+            .finish()
+    }
+}
+
+struct DebugHeaders<'a>(&'a HeaderMap);
+
+const NON_SENSITIVE_HEADERS: &[&str] = &[
+    "date",
+    "content-type",
+    "content-length",
+    "transfer-encoding",
+    "connection",
+];
+
+impl<'a> fmt::Debug for DebugHeaders<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut debug = f.debug_map();
+        debug.entries(
+            self.0
+                .iter()
+                .filter(|(name, _)| NON_SENSITIVE_HEADERS.contains(&name.as_str())),
+        );
+
+        let redact_count = self
+            .0
+            .iter()
+            .filter(|(name, _)| !NON_SENSITIVE_HEADERS.contains(&name.as_str()))
+            .count();
+
+        if redact_count > 0 {
+            debug.entry(
+                &"<NOTICE>",
+                &format!("{} HEADERS ARE REDACTED", redact_count),
+            );
+        }
+
+        debug.finish()
     }
 }

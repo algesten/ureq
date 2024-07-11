@@ -2,8 +2,8 @@ use std::convert::TryFrom;
 use std::fmt;
 use std::io::{Read, Write};
 use std::sync::Arc;
-use std::time::Duration;
 
+use crate::time::Duration;
 use crate::{transport::*, Error};
 use der::pem::LineEnding;
 use der::Document;
@@ -32,9 +32,11 @@ impl Connector for NativeTlsConnector {
         // Only add TLS if we are connecting via HTTPS and the transport isn't TLS
         // already, otherwise use chained transport as is.
         if details.uri.scheme() != Some(&Scheme::HTTPS) || transport.is_tls() {
-            trace!("NativeTlsConnector skip");
+            trace!("Skip");
             return Ok(Some(transport));
         }
+
+        trace!("Try wrap TLS");
 
         let tls_config = &details.config.tls_config;
 
@@ -68,6 +70,8 @@ impl Connector for NativeTlsConnector {
 
         let transport = Box::new(NativeTlsTransport { buffers, stream });
 
+        debug!("Wrapped TLS");
+
         Ok(Some(transport))
     }
 }
@@ -76,21 +80,27 @@ fn build_connector(tls_config: &TlsConfig) -> Result<Arc<TlsConnector>, Error> {
     let mut builder = TlsConnector::builder();
 
     if tls_config.disable_verification {
+        debug!("Certificate verification disabled");
         builder.danger_accept_invalid_certs(true);
         builder.danger_accept_invalid_hostnames(true);
     } else {
+        let mut added = 0;
+        let mut ignored = 0;
         for cert in &tls_config.root_certs {
             let c = match Certificate::from_der(cert.der()) {
                 Ok(v) => v,
                 Err(e) => {
                     // Invalid/expired/broken root certs are expected
                     // in a native root store.
-                    trace!("Skip invalid root cert: {}", e);
+                    trace!("Ignore invalid root cert: {}", e);
+                    ignored += 1;
                     continue;
                 }
             };
             builder.add_root_certificate(c);
+            added += 1;
         }
+        debug!("Added {} and ignored {} root certs", added, ignored);
     }
 
     if let Some((certs, key)) = &tls_config.client_cert {
@@ -101,11 +111,17 @@ fn build_connector(tls_config: &TlsConfig) -> Result<Arc<TlsConnector>, Error> {
 
         let key_pem = pemify(key.der(), "PRIVATE KEY")?;
 
+        debug!("Use client certficiate with key kind {:?}", key.kind());
+
         let identity = Identity::from_pkcs8(certs_pem.as_bytes(), key_pem.as_bytes())?;
         builder.identity(identity);
     }
 
     builder.use_sni(tls_config.use_sni);
+
+    if !tls_config.use_sni {
+        debug!("Disable SNI");
+    }
 
     let conn = builder.build()?;
 

@@ -1,6 +1,5 @@
 use std::fmt::Debug;
 use std::sync::Arc;
-use std::time::Duration;
 
 use hoot::client::flow::RedirectAuthHeaders;
 use http::{Request, Response};
@@ -10,7 +9,7 @@ use crate::pool::{Connection, ConnectionPool};
 use crate::proxy::Proxy;
 use crate::recv::RecvBody;
 use crate::resolver::{DefaultResolver, Resolver};
-use crate::time::Instant;
+use crate::time::{Duration, Instant};
 use crate::transport::{ConnectionDetails, Connector, DefaultConnector, NoBuffers};
 use crate::unit::{Event, Input, Unit};
 use crate::{Body, Error};
