@@ -2,7 +2,6 @@ use std::convert::TryInto;
 use std::fmt;
 use std::io::{Read, Write};
 use std::sync::Arc;
-use std::time::Duration;
 
 use http::uri::Scheme;
 use once_cell::sync::OnceCell;
@@ -13,6 +12,7 @@ use rustls_pki_types::{
     ServerName,
 };
 
+use crate::time::Duration;
 use crate::tls::cert::KeyKind;
 use crate::transport::{
     Buffers, ConnectionDetails, Connector, LazyBuffers, Transport, TransportAdapter,
@@ -40,9 +40,11 @@ impl Connector for RustlsConnector {
         // Only add TLS if we are connecting via HTTPS and the transport isn't TLS
         // already, otherwise use chained transport as is.
         if details.uri.scheme() != Some(&Scheme::HTTPS) || transport.is_tls() {
-            trace!("RustlsConnector skip");
+            trace!("Skip");
             return Ok(Some(transport));
         }
+
+        trace!("Try wrap in TLS");
 
         let tls_config = &details.config.tls_config;
 
@@ -73,6 +75,8 @@ impl Connector for RustlsConnector {
 
         let transport = Box::new(RustlsTransport { buffers, stream });
 
+        debug!("Wrapped TLS");
+
         Ok(Some(transport))
     }
 }
@@ -87,6 +91,7 @@ fn build_config(tls_config: &TlsConfig) -> Arc<ClientConfig> {
         .expect("all TLS versions");
 
     let builder = if tls_config.disable_verification {
+        debug!("Certificate verification disabled");
         builder
             .dangerous()
             .with_custom_certificate_verifier(Arc::new(DisabledVerifier))
@@ -96,7 +101,8 @@ fn build_config(tls_config: &TlsConfig) -> Arc<ClientConfig> {
             .iter()
             .map(|c| CertificateDer::from(c.der()));
         let mut root_store = RootCertStore::empty();
-        root_store.add_parsable_certificates(root_certs);
+        let (added, ignored) = root_store.add_parsable_certificates(root_certs);
+        debug!("Added {} and ignored {} root certs", added, ignored);
 
         builder.with_root_certificates(root_store)
     };
@@ -112,6 +118,7 @@ fn build_config(tls_config: &TlsConfig) -> Arc<ClientConfig> {
             KeyKind::Sec1 => PrivateKeyDer::Sec1(PrivateSec1KeyDer::from(key.der())),
         }
         .clone_key();
+        debug!("Use client certficiate with key kind {:?}", key.kind());
 
         builder
             .with_client_auth_cert(cert_chain.collect(), key_der)
@@ -121,6 +128,10 @@ fn build_config(tls_config: &TlsConfig) -> Arc<ClientConfig> {
     };
 
     config.enable_sni = tls_config.use_sni;
+
+    if !tls_config.use_sni {
+        debug!("Disable SNI");
+    }
 
     Arc::new(config)
 }

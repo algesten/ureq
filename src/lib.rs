@@ -78,10 +78,10 @@ mod test {
     fn simple_get() {
         env_logger::init();
         let mut response = get("https://www.lookback.com/").call().unwrap();
-        println!("{:#?}", response);
+        // println!("{:#?}", response);
         let mut body = String::new();
         response.body_mut().read_to_string(&mut body).unwrap();
-        println!("body: {:?}", body);
+        // println!("body: {:?}", body);
     }
 
     // This doesn't need to run, just compile.

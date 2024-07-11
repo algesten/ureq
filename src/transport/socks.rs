@@ -7,7 +7,6 @@ use socks::{Socks4Stream, Socks5Stream};
 
 use crate::error::TimeoutReason;
 use crate::proxy::{Proto, Proxy};
-use crate::time::DurationExt;
 use crate::transport::tcp::TcpTransport;
 use crate::transport::LazyBuffers;
 use crate::Error;
@@ -33,7 +32,7 @@ impl Connector for SocksConnector {
         };
 
         if chained.is_some() {
-            trace!("SocksConnector skip");
+            trace!("Skip");
             return Ok(chained);
         }
 
@@ -53,7 +52,7 @@ impl Connector for SocksConnector {
 
             thread::spawn(move || tx.send(connect_proxy(&proxy, proxy_addr, target_addr)));
 
-            match rx.recv_timeout(details.timeout) {
+            match rx.recv_timeout(*details.timeout) {
                 Ok(v) => v?,
                 Err(RecvTimeoutError::Timeout) => return Err(Error::Timeout(TimeoutReason::Socks)),
                 Err(RecvTimeoutError::Disconnected) => unreachable!("mpsc sender gone"),
