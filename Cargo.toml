@@ -19,14 +19,15 @@ exclude = ["/cargo_deny.sh", "/deny.toml", "/test.sh"]
 rust-version = "1.63"
 
 [package.metadata.docs.rs]
-features = ["rustls"]
+features = ["rustls", "native-roots", "native-tls", "socks-proxy"]
 
 [features]
-default = ["rustls", "native-roots", "native-tls"]
+default = ["rustls", "native-roots", "native-tls", "socks-proxy"]
 rustls = ["dep:rustls", "tls"]
 native-tls = ["dep:native-tls", "dep:der", "tls"]
 tls = ["dep:rustls-pemfile", "dep:rustls-pki-types"]
 native-roots = ["dep:rustls-native-certs"]
+socks-proxy = ["dep:socks"]
 
 [dependencies]
 base64 = "0.22.1"
@@ -46,6 +47,8 @@ rustls = { version = "0.23.11", optional = true, default-features = false, featu
 native-tls = { version = "0.2.12", optional = true, default-features = false }
 # Needed for MSRV 1.63 (0.7.0 require 1.65)
 der = { version = "=0.6.1", optional = true, default-features = false, features = ["pem", "std"] }
+
+socks = { version = "0.3.4", optional = true }
 
 [build-dependencies]
 # Needed for MSRV 1.63 (1.0.106 requires 1.67)

@@ -166,7 +166,7 @@ impl Agent {
             AgentConfig::default(),
             DefaultConnector::new(),
             DefaultResolver::default(),
-            Proxy::try_from_system(),
+            Proxy::try_from_env(),
         )
     }
 
