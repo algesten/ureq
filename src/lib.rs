@@ -11,9 +11,10 @@ use body::AsBody;
 /// Re-exported http-crate.
 pub use http;
 
-use http::{Method, Request, Response, Uri};
+use http::Method;
+pub use http::{Request, Response, Uri};
 use recv::RecvBody;
-use request::RequestBuilder;
+pub use request::RequestBuilder;
 
 mod agent;
 mod body;
