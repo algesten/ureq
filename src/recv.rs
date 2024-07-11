@@ -25,7 +25,7 @@ impl RecvBody {
         }
     }
 
-    fn do_read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
+    fn do_read(&mut self, now: Instant, buf: &mut [u8]) -> Result<usize, Error> {
         let connection = match &mut self.connection {
             Some(v) => v,
             None => return Ok(0),
@@ -40,7 +40,7 @@ impl RecvBody {
                     if must_close {
                         connection.close()
                     } else {
-                        connection.reuse()
+                        connection.reuse(now)
                     }
                 }
                 return Ok(0);
@@ -73,7 +73,9 @@ impl RecvBody {
 
 impl Read for RecvBody {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let n = self.do_read(buf).map_err(|e| e.into_io())?;
+        let n = self
+            .do_read((self.current_time)(), buf)
+            .map_err(|e| e.into_io())?;
 
         Ok(n)
     }

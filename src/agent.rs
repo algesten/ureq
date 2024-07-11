@@ -17,7 +17,7 @@ use crate::{Body, Error};
 #[cfg(all(feature = "tls"))]
 use crate::tls::TlsConfig;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Agent {
     config: Arc<AgentConfig>,
     pool: Arc<ConnectionPool>,
@@ -117,6 +117,16 @@ pub struct AgentConfig {
     /// This config is generic for all TLS connectors.
     #[cfg(feature = "tls")]
     pub tls_config: TlsConfig,
+
+    /// Max number of idle pooled connections.
+    ///
+    /// Defaults to 10
+    pub max_idle_connections: usize,
+
+    /// Max duration to keep an idle connection in the pool
+    ///
+    /// Defaults to 15 seconds
+    pub max_idle_age: Duration,
 }
 
 impl Default for AgentConfig {
@@ -141,6 +151,9 @@ impl Default for AgentConfig {
 
             #[cfg(all(feature = "tls"))]
             tls_config: TlsConfig::with_native_roots(),
+
+            max_idle_connections: 10,
+            max_idle_age: Duration::from_secs(15),
         }
     }
 }
@@ -212,7 +225,7 @@ impl Agent {
                         if must_close {
                             c.close();
                         } else {
-                            c.reuse();
+                            c.reuse(current_time());
                         }
                     }
 
@@ -233,6 +246,7 @@ impl Agent {
                         proxy: &self.proxy,
                         resolver: &*self.resolver,
                         config: &self.config,
+                        now: current_time(),
                         timeout,
                     };
                     connection = Some(self.pool.connect(&details)?);
