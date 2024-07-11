@@ -30,7 +30,7 @@ impl RequestBuilder {
     /// # Examples
     ///
     /// ```
-    /// let res = ureq::get("https://host.test/my-path")
+    /// let res = ureq::get("https://httpbin.org/get")
     ///     .header("Accept", "text/html")
     ///     .header("X-Custom-Foo", "bar")
     ///     .call()?;

@@ -85,7 +85,7 @@ impl<'b> Unit<Body<'b>> {
         })
     }
 
-    pub fn poll_event(&mut self, now: Instant, buffers: Buffers) -> Result<Event, Error> {
+    pub fn poll_event(&mut self, now: Instant, buffers: &mut dyn Buffers) -> Result<Event, Error> {
         // Queued events go first.
         if let Some(queued) = self.queued_event.pop_front() {
             return Ok(queued);
@@ -110,19 +110,17 @@ impl<'b> Unit<Body<'b>> {
     // since self.state is not borrowed.
     fn poll_event_static(
         &mut self,
-        buffers: Buffers,
+        buffers: &mut dyn Buffers,
         timeout: Duration,
     ) -> Result<Option<Event<'static>>, Error> {
-        let Buffers { input, output } = buffers;
-
         Ok(match &mut self.state {
             State::Begin(_) => Some(Event::Reset { must_close: false }),
 
             // State::Resolve (see below)
             // State::OpenConnection (see below)
-            State::SendRequest(flow) => Some(send_request(flow, output, timeout)?),
+            State::SendRequest(flow) => Some(send_request(flow, buffers.output_mut(), timeout)?),
 
-            State::SendBody(flow) => Some(send_body(flow, input, output, timeout, &mut self.body)?),
+            State::SendBody(flow) => Some(send_body(flow, buffers, timeout, &mut self.body)?),
 
             State::Await100(_) => Some(Event::Await100 { timeout }),
 
@@ -339,17 +337,11 @@ impl<'b> Unit<Body<'b>> {
             redirect_count: self.redirect_count,
         }
     }
-
-    // When we are doing SendBody, we user Buffers::input as a temporary scratch space
-    // for reading from the Body<'a> (as a reader) to write the output.
-    pub fn need_input_as_tmp(&self) -> bool {
-        matches!(self.state, State::SendBody(_))
-    }
 }
 
 // Unit<()> is for receiving the body. We have let go of the input body.
 impl Unit<()> {
-    pub fn poll_event(&mut self, now: Instant, _buffers: Buffers) -> Result<Event, Error> {
+    pub fn poll_event(&mut self, now: Instant) -> Result<Event, Error> {
         // Queued events go first.
         if let Some(queued) = self.queued_event.pop_front() {
             return Ok(queued);
@@ -459,12 +451,13 @@ fn send_request(
 
 fn send_body(
     flow: &mut Flow<SendBody>,
-    input: &mut [u8],
-    output: &mut [u8],
+    buffers: &mut dyn Buffers,
     timeout: Duration,
     body: &mut Body,
 ) -> Result<Event<'static>, Error> {
-    let input_len = input.len();
+    let (tmp, output) = buffers.tmp_and_output();
+
+    let input_len = tmp.len();
 
     let overhead = flow.calculate_output_overhead(output.len())?;
     assert!(input_len > overhead);
@@ -481,10 +474,10 @@ fn send_body(
 
         output_used
     } else {
-        let input = &mut input[..max_input];
-        let n = body.read(input)?;
+        let tmp = &mut tmp[..max_input];
+        let n = body.read(tmp)?;
 
-        let (input_used, output_used) = flow.write(&input[..n], output)?;
+        let (input_used, output_used) = flow.write(&tmp[..n], output)?;
 
         // Since output is "a bit" larger than the input (compensate for chunk ovherhead),
         // the entire input we read from the body should also be shipped to the output.

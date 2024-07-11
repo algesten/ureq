@@ -37,9 +37,10 @@ impl Connector for RustlsConnector {
             None => panic!("RustlConnector requires a chained transport"),
         };
 
-        // Only add TLS if we are connecting via HTTPS, otherwise
-        // use chained transport as is.
-        if details.uri.scheme() != Some(&Scheme::HTTPS) {
+        // Only add TLS if we are connecting via HTTPS and the transport isn't TLS
+        // already, otherwise use chained transport as is.
+        if details.uri.scheme() != Some(&Scheme::HTTPS) || transport.is_tls() {
+            trace!("RustlsConnector skip");
             return Ok(Some(transport));
         }
 
@@ -100,7 +101,7 @@ fn build_config(tls_config: &TlsConfig) -> Arc<ClientConfig> {
         builder.with_root_certificates(root_store)
     };
 
-    let config = if let Some((certs, key)) = &tls_config.client_cert {
+    let mut config = if let Some((certs, key)) = &tls_config.client_cert {
         let cert_chain = certs
             .iter()
             .map(|c| CertificateDer::from(c.der()).into_owned());
@@ -119,6 +120,8 @@ fn build_config(tls_config: &TlsConfig) -> Arc<ClientConfig> {
         builder.with_no_client_auth()
     };
 
+    config.enable_sni = tls_config.use_sni;
+
     Arc::new(config)
 }
 
@@ -128,38 +131,39 @@ struct RustlsTransport {
 }
 
 impl Transport for RustlsTransport {
-    fn borrow_buffers(&mut self, input_as_tmp: bool) -> Buffers {
-        self.buffers.borrow_mut(input_as_tmp)
+    fn buffers(&mut self) -> &mut dyn Buffers {
+        &mut self.buffers
     }
 
     fn transmit_output(&mut self, amount: usize, timeout: Duration) -> Result<(), Error> {
-        let buffers = self.buffers.borrow_mut(false);
-        self.stream.sock.timeout = timeout;
-        self.stream.write_all(&buffers.output[..amount])?;
+        self.stream.get_mut().timeout = timeout;
+
+        let output = &self.buffers.output()[..amount];
+        self.stream.write_all(output)?;
+
         Ok(())
     }
 
-    fn await_input(&mut self, timeout: Duration) -> Result<Buffers, Error> {
-        if self.buffers.unconsumed() > 0 {
-            return Ok(self.buffers.borrow_mut(false));
+    fn await_input(&mut self, timeout: Duration) -> Result<(), Error> {
+        if self.buffers.can_use_input() {
+            return Ok(());
         }
 
-        // Ensure we get the entire input buffer to write to.
-        self.buffers.assert_and_clear_input_filled();
+        self.stream.get_mut().timeout = timeout;
 
-        // Read more
-        self.stream.sock.timeout = timeout;
-        let buffers = self.buffers.borrow_mut(false);
-        let amount = self.stream.read(buffers.input)?;
+        let input = self.buffers.input_mut();
+        let amount = self.stream.read(input)?;
+        self.buffers.add_filled(amount);
 
-        // Cap the input
-        self.buffers.set_input_filled(amount);
-
-        Ok(self.buffers.borrow_mut(false))
+        Ok(())
     }
 
     fn consume_input(&mut self, amount: usize) {
-        self.buffers.consume_input(amount)
+        self.buffers.consume(amount);
+    }
+
+    fn is_tls(&self) -> bool {
+        true
     }
 }
 

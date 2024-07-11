@@ -10,6 +10,11 @@ mod rustls;
 #[cfg(feature = "rustls")]
 pub use self::rustls::RustlsConnector;
 
+#[cfg(feature = "native-tls")]
+mod native_tls;
+#[cfg(feature = "native-tls")]
+pub use self::native_tls::NativeTlsConnector;
+
 #[derive(Debug, Clone)]
 pub struct TlsConfig {
     pub client_cert: Option<(Vec<Certificate<'static>>, Arc<PrivateKey<'static>>)>,

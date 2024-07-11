@@ -72,8 +72,8 @@ fn maybe_update_timeout(
 }
 
 impl Transport for TcpTransport {
-    fn borrow_buffers(&mut self, input_as_tmp: bool) -> Buffers {
-        self.buffers.borrow_mut(input_as_tmp)
+    fn buffers(&mut self) -> &mut dyn Buffers {
+        &mut self.buffers
     }
 
     fn transmit_output(&mut self, amount: usize, timeout: Duration) -> Result<(), Error> {
@@ -84,17 +84,15 @@ impl Transport for TcpTransport {
             TcpStream::set_write_timeout,
         )?;
 
-        let buffers = self.buffers.borrow_mut(false);
-        let output = &buffers.output[..amount];
+        let output = &self.buffers.output()[..amount];
         self.stream.write_all(output).normalize_would_block()?;
 
         Ok(())
     }
 
-    fn await_input(&mut self, timeout: Duration) -> Result<Buffers, Error> {
-        // There might be input left from the previous await_input.
-        if self.buffers.unconsumed() > 0 {
-            return Ok(self.buffers.borrow_mut(false));
+    fn await_input(&mut self, timeout: Duration) -> Result<(), Error> {
+        if self.buffers.can_use_input() {
+            return Ok(());
         }
 
         // Proceed to fill the buffers from the TcpStream
@@ -105,20 +103,15 @@ impl Transport for TcpTransport {
             TcpStream::set_read_timeout,
         )?;
 
-        // Ensure we get the entire input buffer to write to.
-        self.buffers.assert_and_clear_input_filled();
+        let input = self.buffers.input_mut();
+        let amount = self.stream.read(input)?;
+        self.buffers.add_filled(amount);
 
-        let buffers = self.buffers.borrow_mut(false);
-        let amount = self.stream.read(buffers.input).normalize_would_block()?;
-
-        // Cap the input buffer.
-        self.buffers.set_input_filled(amount);
-
-        Ok(self.buffers.borrow_mut(false))
+        Ok(())
     }
 
     fn consume_input(&mut self, amount: usize) {
-        self.buffers.consume_input(amount);
+        self.buffers.consume(amount);
     }
 }
 
