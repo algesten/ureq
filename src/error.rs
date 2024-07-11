@@ -34,6 +34,14 @@ pub enum Error {
     #[cfg(feature = "rustls")]
     #[error("rustls: {0}")]
     Rustls(#[from] rustls::Error),
+
+    #[cfg(feature = "native-tls")]
+    #[error("native-tls: {0}")]
+    NativeTls(#[from] native_tls::Error),
+
+    #[cfg(feature = "native-tls")]
+    #[error("der: {0}")]
+    Der(#[from] der::Error),
 }
 
 impl Error {

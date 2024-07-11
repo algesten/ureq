@@ -9,6 +9,7 @@ pub struct TransportAdapter {
     pub timeout: Duration,
     pub transport: Box<dyn Transport>,
 }
+
 impl TransportAdapter {
     pub(crate) fn new(transport: Box<dyn Transport>) -> Self {
         Self {
@@ -20,13 +21,13 @@ impl TransportAdapter {
 
 impl io::Read for TransportAdapter {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let buffers = self
-            .transport
+        self.transport
             .await_input(self.timeout)
             .map_err(|e| e.into_io())?;
+        let input = self.transport.buffers().input();
 
-        let max = buf.len().min(buffers.input.len());
-        buf[..max].copy_from_slice(&buffers.input[..max]);
+        let max = buf.len().min(input.len());
+        buf[..max].copy_from_slice(&input[..max]);
         self.transport.consume_input(max);
 
         Ok(max)
@@ -35,10 +36,10 @@ impl io::Read for TransportAdapter {
 
 impl io::Write for TransportAdapter {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let buffers = self.transport.borrow_buffers(false);
+        let output = self.transport.buffers().output_mut();
 
-        let max = buf.len().min(buffers.output.len());
-        buffers.output[..max].copy_from_slice(&buf[..max]);
+        let max = buf.len().min(output.len());
+        output[..max].copy_from_slice(&buf[..max]);
         self.transport
             .transmit_output(max, self.timeout)
             .map_err(|e| e.into_io())?;

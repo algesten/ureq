@@ -75,6 +75,7 @@ mod test {
 
     #[test]
     fn simple_get() {
+        env_logger::init();
         let mut response = get("https://www.lookback.com/").call().unwrap();
         println!("{:#?}", response);
         let mut body = String::new();
