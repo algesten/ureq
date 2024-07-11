@@ -9,17 +9,23 @@ use crate::Error;
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Proto {
     HTTP,
+    HTTPS,
     SOCKS4,
     SOCKS4A,
     SOCKS5,
 }
 
 impl Proto {
-    fn default_port(&self) -> u16 {
+    pub fn default_port(&self) -> u16 {
         match self {
             Proto::HTTP => 80,
+            Proto::HTTPS => 443,
             Proto::SOCKS4 | Proto::SOCKS4A | Proto::SOCKS5 => 1080,
         }
+    }
+
+    pub fn is_socks(&self) -> bool {
+        matches!(self, Self::SOCKS4 | Self::SOCKS4A | Self::SOCKS5)
     }
 }
 
@@ -28,6 +34,7 @@ impl Proto {
 pub struct Proxy {
     proto: Proto,
     uri: Uri,
+    from_env: bool,
 }
 
 impl Proxy {
@@ -52,6 +59,10 @@ impl Proxy {
     /// * `john:smith@socks.google.com:8000`
     /// * `localhost`
     pub fn new(proxy: &str) -> Result<Self, Error> {
+        Self::new_with_flag(proxy, false)
+    }
+
+    fn new_with_flag(proxy: &str, from_env: bool) -> Result<Self, Error> {
         let uri = proxy.parse::<Uri>().unwrap();
 
         // The uri must have an authority part (with the host), or
@@ -62,15 +73,19 @@ impl Proxy {
         let scheme = uri.scheme_str().unwrap_or("http");
         let proto = scheme.try_into()?;
 
-        Ok(Self { proto, uri })
+        Ok(Self {
+            proto,
+            uri,
+            from_env,
+        })
     }
 
-    pub(crate) fn try_from_system() -> Option<Self> {
+    pub fn try_from_env() -> Option<Self> {
         macro_rules! try_env {
             ($($env:literal),+) => {
                 $(
                     if let Ok(env) = std::env::var($env) {
-                        if let Ok(proxy) = Self::new(&env) {
+                        if let Ok(proxy) = Self::new_with_flag(&env, true) {
                             return Some(proxy);
                         }
                     }
@@ -93,6 +108,10 @@ impl Proxy {
         self.proto
     }
 
+    pub fn uri(&self) -> &Uri {
+        &self.uri
+    }
+
     pub fn host(&self) -> &str {
         self.uri
             .authority()
@@ -113,6 +132,10 @@ impl Proxy {
 
     pub fn password(&self) -> Option<&str> {
         self.uri.authority().and_then(|a| a.password())
+    }
+
+    pub fn is_from_env(&self) -> bool {
+        self.from_env
     }
 
     //     pub(crate) fn connect<S: AsRef<str>>(&self, host: S, port: u16, user_agent: &str) -> String {
@@ -160,8 +183,9 @@ impl TryFrom<&str> for Proto {
     type Error = Error;
 
     fn try_from(scheme: &str) -> Result<Self, Self::Error> {
-        match scheme {
+        match scheme.to_ascii_lowercase().as_str() {
             "http" => Ok(Proto::HTTP),
+            "https" => Ok(Proto::HTTPS),
             "socks4" => Ok(Proto::SOCKS4),
             "socks4a" => Ok(Proto::SOCKS4A),
             "socks" => Ok(Proto::SOCKS5),

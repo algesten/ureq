@@ -63,6 +63,7 @@ pub enum TimeoutReason {
     Resolver,
     Global,
     Call,
+    Socks,
 }
 
 impl fmt::Display for TimeoutReason {
@@ -71,6 +72,7 @@ impl fmt::Display for TimeoutReason {
             TimeoutReason::Resolver => write!(f, "resolver"),
             TimeoutReason::Global => write!(f, "global"),
             TimeoutReason::Call => write!(f, "call"),
+            TimeoutReason::Socks => write!(f, "socks"),
         }
     }
 }

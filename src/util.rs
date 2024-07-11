@@ -1,9 +1,12 @@
 use core::fmt;
+use std::convert::TryFrom;
 use std::hash::{Hash, Hasher};
 use std::io::{self, ErrorKind};
 use std::ops::{Deref, DerefMut};
 
 use http::uri::{Authority, Scheme};
+
+use crate::proxy::Proto;
 
 pub struct Secret<T>(T);
 
@@ -100,6 +103,8 @@ impl SchemeExt for Scheme {
             443
         } else if *self == Scheme::HTTP {
             80
+        } else if let Some(proxy) = Proto::try_from(self.as_str()).ok() {
+            proxy.default_port()
         } else {
             panic!("Unknown scheme: {}", self);
         }
