@@ -80,7 +80,6 @@ mk_method!(trace, TRACE);
 
 #[cfg(test)]
 mod test {
-    use std::io::Read;
 
     use super::*;
 
@@ -91,8 +90,7 @@ mod test {
             .call()
             .unwrap();
         // println!("{:#?}", response);
-        let mut body = String::new();
-        response.body_mut().read_to_string(&mut body).unwrap();
+        let _body = response.body_mut().read_to_string(16384).unwrap();
         // println!("body: {:?}", body);
     }
 
@@ -111,7 +109,7 @@ mod test {
 
         let data = vec![0_u8, 1, 2, 3, 4];
 
-        // Response<RecvBody> via ResponseBuilder
+        // Response<Body> via ResponseBuilder
         is_send(post("https://example.test").send_bytes(&data));
         is_sync(post("https://example.test").send_bytes(&data));
 
@@ -119,8 +117,23 @@ mod test {
         is_send(Request::post("https://yaz").body(&data).unwrap());
         is_sync(Request::post("https://yaz").body(&data).unwrap());
 
-        // Response<RecvBody> via Agent::run
+        // Response<Body> via Agent::run
         is_send(run(Request::post("https://yaz").body(&data).unwrap()));
         is_sync(run(Request::post("https://yaz").body(&data).unwrap()));
+
+        // Response<BodyReader<'a>>
+        let mut response = post("https://yaz").send_bytes(&data).unwrap();
+        let shared_reader = response.body_mut().as_reader(1000);
+        is_send(shared_reader);
+        let shared_reader = response.body_mut().as_reader(1000);
+        is_sync(shared_reader);
+
+        // Response<BodyReader<'static>>
+        let response = post("https://yaz").send_bytes(&data).unwrap();
+        let owned_reader = response.into_parts().1.into_reader(1000);
+        is_send(owned_reader);
+        let response = post("https://yaz").send_bytes(&data).unwrap();
+        let owned_reader = response.into_parts().1.into_reader(1000);
+        is_sync(owned_reader);
     }
 }

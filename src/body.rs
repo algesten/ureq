@@ -25,7 +25,31 @@ impl Body {
         }
     }
 
-    fn do_read(&mut self, now: Instant, buf: &mut [u8]) -> Result<usize, Error> {
+    pub fn as_reader(&mut self, limit: u64) -> BodyReader {
+        BodyReader::shared(self, limit)
+    }
+
+    pub fn into_reader(self, limit: u64) -> BodyReader<'static> {
+        BodyReader::owned(self, limit)
+    }
+
+    pub fn read_to_string(&mut self, limit: usize) -> Result<String, Error> {
+        let mut buf = String::new();
+        let mut reader = self.as_reader(limit as u64);
+        reader.read_to_string(&mut buf)?;
+        Ok(buf)
+    }
+
+    pub fn read_to_vec(&mut self, limit: usize) -> Result<Vec<u8>, Error> {
+        let mut buf = Vec::new();
+        let mut reader = self.as_reader(limit as u64);
+        reader.read_to_end(&mut buf)?;
+        Ok(buf)
+    }
+
+    fn do_read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
+        let now = (self.current_time)();
+
         let connection = match &mut self.connection {
             Some(v) => v,
             None => return Ok(0),
@@ -71,11 +95,58 @@ impl Body {
     }
 }
 
-impl Read for Body {
+pub struct BodyReader<'a> {
+    body: BodyRef<'a>,
+    left: u64,
+}
+
+enum BodyRef<'a> {
+    Shared(&'a mut Body),
+    Owned(Body),
+}
+
+impl<'a> BodyReader<'a> {
+    fn shared(body: &'a mut Body, limit: u64) -> BodyReader<'a> {
+        Self {
+            body: BodyRef::Shared(body),
+            left: limit,
+        }
+    }
+}
+
+impl BodyReader<'static> {
+    fn owned(body: Body, limit: u64) -> BodyReader<'static> {
+        Self {
+            body: BodyRef::Owned(body),
+            left: limit,
+        }
+    }
+}
+
+impl<'a> BodyRef<'a> {
+    fn do_read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
+        match self {
+            BodyRef::Shared(v) => v.do_read(buf),
+            BodyRef::Owned(v) => v.do_read(buf),
+        }
+    }
+}
+
+impl<'a> Read for BodyReader<'a> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if self.left == 0 {
+            return Err(Error::BodyExceedsLimit.into_io());
+        }
+
+        // The max buffer size is usize, which may be 32 bit.
+        let max = (self.left.min(usize::MAX as u64) as usize).min(buf.len());
+
         let n = self
-            .do_read((self.current_time)(), buf)
+            .body
+            .do_read(&mut buf[..max])
             .map_err(|e| e.into_io())?;
+
+        self.left -= n as u64;
 
         Ok(n)
     }
@@ -83,6 +154,6 @@ impl Read for Body {
 
 impl fmt::Debug for Body {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("RecvBody").finish()
+        f.debug_struct("Body").finish()
     }
 }

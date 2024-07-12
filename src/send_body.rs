@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::{self, Read, Stdin};
 use std::net::TcpStream;
 
-use crate::body::Body;
+use crate::body::{Body, BodyReader};
 
 pub struct SendBody<'a> {
     inner: BodyInner<'a>,
@@ -37,6 +37,7 @@ impl<'a> SendBody<'a> {
             }
             BodyInner::Reader(v) => v.read(buf),
             BodyInner::OwnedReader(v) => v.read(buf),
+            BodyInner::Body(v) => v.read(buf),
         }?;
 
         if n == 0 {
@@ -65,6 +66,7 @@ pub trait AsBody: Private {
 pub(crate) enum BodyInner<'a> {
     ByteSlice(&'a [u8]),
     Reader(&'a mut dyn Read),
+    Body(BodyReader<'a>),
     OwnedReader(Box<dyn Read + Send + Sync>),
 }
 
@@ -124,13 +126,13 @@ impl<'a> From<BodyInner<'a>> for SendBody<'a> {
 impl Private for Body {}
 impl AsBody for Body {
     fn as_body(&mut self) -> SendBody {
-        BodyInner::Reader(self).into()
+        BodyInner::Body(self.as_reader(u64::MAX)).into()
     }
 }
 
 impl Private for Response<Body> {}
 impl AsBody for Response<Body> {
     fn as_body(&mut self) -> SendBody {
-        BodyInner::Reader(self.body_mut()).into()
+        BodyInner::Body(self.body_mut().as_reader(u64::MAX)).into()
     }
 }
