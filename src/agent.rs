@@ -1,8 +1,9 @@
+use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::sync::Arc;
 
 use hoot::client::flow::RedirectAuthHeaders;
-use http::{Request, Response};
+use http::{Method, Request, Response, Uri};
 
 use crate::body::AsBody;
 use crate::pool::{Connection, ConnectionPool};
@@ -12,7 +13,8 @@ use crate::resolver::{DefaultResolver, Resolver};
 use crate::time::{Duration, Instant};
 use crate::transport::{ConnectionDetails, Connector, DefaultConnector, NoBuffers};
 use crate::unit::{Event, Input, Unit};
-use crate::{Body, Error};
+use crate::util::UriExt;
+use crate::{builder, Body, Error, RequestBuilder};
 
 #[cfg(all(feature = "tls"))]
 use crate::tls::TlsConfig;
@@ -23,6 +25,9 @@ pub struct Agent {
     pool: Arc<ConnectionPool>,
     resolver: Arc<dyn Resolver>,
     proxy: Option<Proxy>,
+
+    #[cfg(feature = "cookies")]
+    jar: Arc<crate::cookies::SharedCookieJar>,
 }
 
 /// Config as built by AgentBuilder and then static for the lifetime of the Agent.
@@ -177,6 +182,9 @@ impl Agent {
             pool,
             resolver: Arc::new(resolver),
             proxy,
+
+            #[cfg(feature = "cookies")]
+            jar: Arc::new(crate::cookies::SharedCookieJar::new()),
         }
     }
 
@@ -189,12 +197,44 @@ impl Agent {
         )
     }
 
+    /// Access the cookie jar.
+    ///
+    /// Used to persist and manipulate the cookies.
+    ///
+    /// ```no_run
+    /// use std::io::Write;
+    /// use std::fs::File;
+    ///
+    /// let agent = ureq::agent();
+    ///
+    /// // Cookies set by www.google.com are stored in agent.
+    /// agent.get("https://www.google.com/").call()?;
+    ///
+    /// // Saves (persistent) cookies
+    /// let mut file = File::create("cookies.json")?;
+    /// agent.cookie_jar().save_json(&mut file).unwrap();
+    /// # Ok::<_, ureq::Error>(())
+    /// ```
+    #[cfg(feature = "cookies")]
+    pub fn cookie_jar(&self) -> crate::cookies::CookieJar<'_> {
+        self.jar.lock()
+    }
+
     pub fn run(&self, request: Request<impl AsBody>) -> Result<Response<RecvBody>, Error> {
         let (parts, mut body) = request.into_parts();
         let body = body.as_body();
         let request = Request::from_parts(parts, ());
 
         self.do_run(request, body, Instant::now)
+    }
+
+    /// Make a GET request.
+    pub fn get<T>(&self, uri: T) -> RequestBuilder
+    where
+        Uri: TryFrom<T>,
+        <Uri as TryFrom<T>>::Error: Into<http::Error>,
+    {
+        builder(Method::GET, uri)
     }
 
     // TODO(martin): Can we improve this signature? The ideal would be:
@@ -239,7 +279,29 @@ impl Agent {
                     unit.handle_input(current_time(), Input::Begin, &mut [])?;
                 }
 
+                Event::Prepare { uri } => {
+                    #[cfg(not(feature = "cookies"))]
+                    let _ = uri;
+                    #[cfg(feature = "cookies")]
+                    {
+                        let value = self.jar.get_request_cookies(uri);
+                        let input = Input::Header {
+                            name: http::HeaderName::from_static("cookie"),
+                            value: http::HeaderValue::from_str(&value).map_err(|_| {
+                                Error::Other("Cookie value is an invalid http-header")
+                            })?,
+                        };
+                        unit.handle_input(current_time(), input, &mut [])?;
+                    }
+
+                    unit.handle_input(current_time(), Input::Prepared, &mut [])?;
+                }
+
                 Event::Resolve { uri, timeout } => {
+                    // Before resolving the URI we need to ensure it is a full URI. We
+                    // cannot make requests with partial uri like "/path".
+                    uri.ensure_full_url()?;
+
                     addr = Some(self.resolver.resolve(uri, timeout)?);
                     unit.handle_input(current_time(), Input::Resolved, &mut [])?;
                 }
