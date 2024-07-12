@@ -2,10 +2,10 @@ use std::convert::TryFrom;
 
 use http::{HeaderName, HeaderValue, Method, Request, Response, Uri};
 
-use crate::body::AsBody;
-use crate::recv::RecvBody;
+use crate::body::Body;
+use crate::send_body::AsBody;
 use crate::time::Instant;
-use crate::{Agent, Body, Error};
+use crate::{Agent, Error, SendBody};
 
 #[derive(Debug)]
 pub struct RequestBuilder {
@@ -57,9 +57,9 @@ impl RequestBuilder {
     ///     .call()?;
     /// # Ok::<_, ureq::Error>(())
     /// ```
-    pub fn call(self) -> Result<Response<RecvBody>, Error> {
+    pub fn call(self) -> Result<Response<Body>, Error> {
         let request = self.builder.body(()).unwrap();
-        do_call(self.agent, request, Body::empty())
+        do_call(self.agent, request, SendBody::empty())
     }
 
     /// Send data as bytes.
@@ -71,14 +71,14 @@ impl RequestBuilder {
     ///     .send_bytes(&[0; 1000])?;
     /// # Ok::<_, ureq::Error>(())
     /// ```
-    pub fn send_bytes(self, data: &[u8]) -> Result<Response<RecvBody>, Error> {
+    pub fn send_bytes(self, data: &[u8]) -> Result<Response<Body>, Error> {
         let request = self.builder.body(()).unwrap();
         let mut data_ref = data;
         do_call(self.agent, request, (&mut data_ref).as_body())
     }
 }
 
-fn do_call(agent: Agent, request: Request<()>, body: Body) -> Result<Response<RecvBody>, Error> {
+fn do_call(agent: Agent, request: Request<()>, body: SendBody) -> Result<Response<Body>, Error> {
     let response = agent.do_run(request, body, Instant::now)?;
     Ok(response)
 }

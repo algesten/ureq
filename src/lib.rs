@@ -7,13 +7,13 @@ extern crate log;
 
 use std::convert::TryFrom;
 
-use body::AsBody;
 /// Re-exported http-crate.
 pub use http;
+use send_body::AsBody;
 
+pub use body::Body;
 use http::Method;
 pub use http::{Request, Response, Uri};
-use recv::RecvBody;
 pub use request::RequestBuilder;
 
 mod agent;
@@ -21,8 +21,8 @@ mod body;
 mod error;
 mod pool;
 mod proxy;
-mod recv;
 mod request;
+mod send_body;
 mod time;
 mod unit;
 mod util;
@@ -39,11 +39,11 @@ mod cookies;
 pub use cookies::CookieJar;
 
 pub use agent::{Agent, AgentConfig};
-pub use body::Body;
 pub use error::Error;
+pub use send_body::SendBody;
 
 /// Run a [`http::Request`]
-pub fn run(request: Request<impl AsBody>) -> Result<Response<RecvBody>, Error> {
+pub fn run(request: Request<impl AsBody>) -> Result<Response<Body>, Error> {
     let agent = Agent::new_default();
     agent.run(request)
 }
