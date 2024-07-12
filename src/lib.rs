@@ -23,14 +23,20 @@ mod pool;
 mod proxy;
 mod recv;
 mod request;
-pub mod resolver;
 mod time;
-pub mod transport;
 mod unit;
 mod util;
 
+pub mod resolver;
+pub mod transport;
+
 #[cfg(feature = "tls")]
 pub mod tls;
+
+#[cfg(feature = "cookies")]
+mod cookies;
+#[cfg(feature = "cookies")]
+pub use cookies::CookieJar;
 
 pub use agent::{Agent, AgentConfig};
 pub use body::Body;
@@ -39,6 +45,10 @@ pub use error::Error;
 pub fn run(request: Request<impl AsBody>) -> Result<Response<RecvBody>, Error> {
     let agent = Agent::new_default();
     agent.run(request)
+}
+
+pub fn agent() -> Agent {
+    Agent::new_default()
 }
 
 fn builder<T>(method: Method, uri: T) -> RequestBuilder

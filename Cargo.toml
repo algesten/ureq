@@ -19,19 +19,21 @@ exclude = ["/cargo_deny.sh", "/deny.toml", "/test.sh"]
 rust-version = "1.63"
 
 [package.metadata.docs.rs]
-features = ["rustls", "native-roots", "native-tls", "socks-proxy"]
+features = ["rustls", "native-roots", "native-tls", "socks-proxy", "cookies"]
 
 [features]
-default = ["rustls", "native-roots", "native-tls", "socks-proxy"]
+default = ["rustls", "native-roots", "native-tls", "socks-proxy", "cookies"]
 rustls = ["dep:rustls", "tls"]
 native-tls = ["dep:native-tls", "dep:der", "tls"]
 tls = ["dep:rustls-pemfile", "dep:rustls-pki-types"]
 native-roots = ["dep:rustls-native-certs"]
 socks-proxy = ["dep:socks"]
+cookies = ["dep:cookie_store", "_url"]
+_url = ["dep:url"]
 
 [dependencies]
 base64 = "0.22.1"
-hoot = { git = "https://github.com/algesten/hoot", rev = "994e1ff" }
+hoot = { git = "https://github.com/algesten/hoot", rev = "02992fe" }
 http = "1.1.0"
 log = "0.4.22"
 thiserror = "1.0.61"
@@ -49,6 +51,11 @@ native-tls = { version = "0.2.12", optional = true, default-features = false }
 der = { version = "=0.6.1", optional = true, default-features = false, features = ["pem", "std"] }
 
 socks = { version = "0.3.4", optional = true }
+
+# cookie_store uses Url, while http-crate has its own Uri.
+# Keep url crate in lockstep with cookie_store.
+cookie_store = { version = "0.21.0", optional = true, default-features = false, features = ["preserve_order"] }
+url = { version = "2.3.1", optional = true, default-features = false }
 
 [build-dependencies]
 # Needed for MSRV 1.63 (1.0.106 requires 1.67)
