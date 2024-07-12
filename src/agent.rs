@@ -5,11 +5,11 @@ use std::sync::Arc;
 use hoot::client::flow::RedirectAuthHeaders;
 use http::{Method, Request, Response, Uri};
 
-use crate::send_body::AsBody;
+use crate::body::Body;
 use crate::pool::{Connection, ConnectionPool};
 use crate::proxy::Proxy;
-use crate::body::Body;
 use crate::resolver::{DefaultResolver, Resolver};
+use crate::send_body::AsBody;
 use crate::time::{Duration, Instant};
 use crate::transport::{ConnectionDetails, Connector, DefaultConnector, NoBuffers};
 use crate::unit::{Event, Input, Unit};
