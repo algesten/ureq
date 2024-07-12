@@ -38,7 +38,7 @@ impl ConnectionPool {
 
         let transport = self
             .connector
-            .connect(&details, None)?
+            .connect(details, None)?
             .ok_or(Error::ConnectionFailed)?;
 
         let conn = Connection {

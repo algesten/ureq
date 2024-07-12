@@ -77,14 +77,14 @@ fn connect_proxy(
     target_addr: SocketAddr,
 ) -> Result<TcpStream, Error> {
     let stream = match proxy.proto() {
-        Proto::SOCKS4 | Proto::SOCKS4A => {
+        Proto::Socks4 | Proto::Socks4A => {
             if proxy.username().is_some() {
                 warn!("SOCKS4 does not support username/password");
             }
 
             Socks4Stream::connect(proxy_addr, target_addr, "")?.into_inner()
         }
-        Proto::SOCKS5 => {
+        Proto::Socks5 => {
             if let Some(username) = proxy.username() {
                 // Connect with authentication.
                 let password = proxy.password().unwrap_or("");

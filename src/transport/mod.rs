@@ -68,6 +68,12 @@ pub struct DefaultConnector {
     chain: ChainedConnector,
 }
 
+impl Default for DefaultConnector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DefaultConnector {
     pub fn new() -> Self {
         let chain = ChainedConnector::new([
@@ -129,6 +135,6 @@ impl Connector for WarnOnNoSocksConnector {
                 }
             }
         }
-        return Ok(chained);
+        Ok(chained)
     }
 }
