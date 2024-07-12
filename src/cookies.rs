@@ -1,7 +1,8 @@
+use std::borrow::Cow;
 use std::io;
 use std::sync::{Mutex, MutexGuard};
 
-use cookie_store::{Cookie, CookieStore};
+use cookie_store::CookieStore;
 use http::Uri;
 
 use crate::util::UriExt;
@@ -15,23 +16,76 @@ pub(crate) struct SharedCookieJar {
 /// Handle to access the cookies
 pub struct CookieJar<'a>(MutexGuard<'a, CookieStore>);
 
+pub struct Cookie<'a>(CookieInner<'a>);
+
+enum CookieInner<'a> {
+    Borrowed(&'a cookie_store::Cookie<'a>),
+    Owned(cookie_store::Cookie<'a>),
+}
+
+impl<'a> Cookie<'a> {
+    /// Parses a new [`Cookie`] from a string
+    pub fn parse<S>(cookie_str: S, uri: &Uri) -> Result<Cookie<'a>, Error>
+    where
+        S: Into<Cow<'a, str>>,
+    {
+        let cookie = cookie_store::Cookie::parse(cookie_str, &uri.try_into_url()?)?;
+        Ok(Cookie(CookieInner::Owned(cookie)))
+    }
+
+    pub fn name(&self) -> &str {
+        match &self.0 {
+            CookieInner::Borrowed(v) => v.name(),
+            CookieInner::Owned(v) => v.name(),
+        }
+    }
+
+    pub fn value(&self) -> &str {
+        match &self.0 {
+            CookieInner::Borrowed(v) => v.value(),
+            CookieInner::Owned(v) => v.value(),
+        }
+    }
+
+    #[cfg(test)]
+    fn as_cookie_store(&self) -> &cookie_store::Cookie<'a> {
+        match &self.0 {
+            CookieInner::Borrowed(v) => v,
+            CookieInner::Owned(v) => v,
+        }
+    }
+}
+
+impl Cookie<'static> {
+    fn into_owned(self) -> cookie_store::Cookie<'static> {
+        match self.0 {
+            CookieInner::Owned(v) => v,
+            _ => unreachable!(),
+        }
+    }
+}
+
 impl<'a> CookieJar<'a> {
     /// Returns a reference to the __unexpired__ `Cookie` corresponding to the specified `domain`,
     /// `path`, and `name`.
-    pub fn get(&self, domain: &str, path: &str, name: &str) -> Option<&Cookie<'_>> {
-        self.0.get(domain, path, name)
+    pub fn get(&self, domain: &str, path: &str, name: &str) -> Option<Cookie<'_>> {
+        self.0
+            .get(domain, path, name)
+            .map(|c| Cookie(CookieInner::Borrowed(c)))
     }
 
     /// Removes a `Cookie` from the jar, returning the `Cookie` if it was in the jar
     pub fn remove(&mut self, domain: &str, path: &str, name: &str) -> Option<Cookie<'static>> {
-        self.0.remove(domain, path, name)
+        self.0
+            .remove(domain, path, name)
+            .map(|c| Cookie(CookieInner::Owned(c)))
     }
 
     /// Inserts `cookie`, received from `uri`, into the jar, following the rules of the
     /// [IETF RFC6265 Storage Model](https://datatracker.ietf.org/doc/html/rfc6265#section-5.3).
     pub fn insert(&mut self, cookie: Cookie<'static>, uri: &Uri) -> Result<(), Error> {
         let url = uri.try_into_url()?;
-        self.0.insert(cookie, &url)?;
+        self.0.insert(cookie.into_owned(), &url)?;
         Ok(())
     }
 
@@ -41,8 +95,10 @@ impl<'a> CookieJar<'a> {
     }
 
     /// An iterator visiting all the __unexpired__ cookies in the jar
-    pub fn iter(&self) -> impl Iterator<Item = &Cookie<'static>> {
-        self.0.iter_unexpired()
+    pub fn iter(&self) -> impl Iterator<Item = Cookie<'_>> {
+        self.0
+            .iter_unexpired()
+            .map(|c| Cookie(CookieInner::Borrowed(c)))
     }
 
     /// Serialize any __unexpired__ and __persistent__ cookies in the jar to JSON format and
@@ -97,7 +153,7 @@ impl SharedCookieJar {
     }
 }
 
-fn is_cookie_rfc_compliant(cookie: &Cookie) -> bool {
+fn is_cookie_rfc_compliant(cookie: &cookie_store::Cookie) -> bool {
     // https://tools.ietf.org/html/rfc6265#page-9
     // set-cookie-header = "Set-Cookie:" SP set-cookie-string
     // set-cookie-string = cookie-pair *( ";" SP cookie-av )
@@ -171,29 +227,30 @@ pub(crate) fn is_tchar(b: &u8) -> bool {
 
 #[cfg(test)]
 mod test {
-    use url::Url;
+
+    use std::convert::TryFrom;
 
     use super::*;
 
-    fn url() -> Url {
-        Url::parse("https://example.test").unwrap()
+    fn uri() -> Uri {
+        Uri::try_from("https://example.test").unwrap()
     }
 
     #[test]
     fn illegal_cookie_name() {
-        let cookie = Cookie::parse("borked/=value", &url()).unwrap();
-        assert!(!is_cookie_rfc_compliant(&cookie));
+        let cookie = Cookie::parse("borked/=value", &uri()).unwrap();
+        assert!(!is_cookie_rfc_compliant(cookie.as_cookie_store()));
     }
 
     #[test]
     fn illegal_cookie_value() {
-        let cookie = Cookie::parse("name=borked,", &url()).unwrap();
-        assert!(!is_cookie_rfc_compliant(&cookie));
+        let cookie = Cookie::parse("name=borked,", &uri()).unwrap();
+        assert!(!is_cookie_rfc_compliant(cookie.as_cookie_store()));
     }
 
     #[test]
     fn legal_cookie_name_value() {
-        let cookie = Cookie::parse("name=value", &url()).unwrap();
-        assert!(is_cookie_rfc_compliant(&cookie));
+        let cookie = Cookie::parse("name=value", &uri()).unwrap();
+        assert!(is_cookie_rfc_compliant(cookie.as_cookie_store()));
     }
 }
