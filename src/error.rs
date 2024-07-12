@@ -34,6 +34,9 @@ pub enum Error {
     #[error("certificate: {0}")]
     Certificate(&'static str),
 
+    #[error("the response body is larger than request limit")]
+    BodyExceedsLimit,
+
     #[cfg(feature = "rustls")]
     #[error("rustls: {0}")]
     Rustls(#[from] rustls::Error),
