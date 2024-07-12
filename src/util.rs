@@ -153,6 +153,7 @@ const NON_SENSITIVE_HEADERS: &[&str] = &[
     "transfer-encoding",
     "connection",
     "location",
+    "content-encoding",
 ];
 
 impl<'a> fmt::Debug for DebugHeaders<'a> {
