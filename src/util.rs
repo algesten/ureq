@@ -5,9 +5,10 @@ use std::io::{self, ErrorKind};
 use std::ops::{Deref, DerefMut};
 
 use http::uri::{Authority, Scheme};
-use http::{HeaderMap, Response};
+use http::{HeaderMap, Response, Uri};
 
 use crate::proxy::Proto;
+use crate::Error;
 
 pub struct Secret<T>(T);
 
@@ -177,5 +178,35 @@ impl<'a> fmt::Debug for DebugHeaders<'a> {
         }
 
         debug.finish()
+    }
+}
+
+pub trait UriExt {
+    fn ensure_full_url(&self) -> Result<(), Error>;
+
+    #[cfg(feature = "_url")]
+    fn try_into_url(&self) -> Result<url::Url, Error>;
+}
+
+impl UriExt for Uri {
+    fn ensure_full_url(&self) -> Result<(), Error> {
+        self.scheme()
+            .ok_or_else(|| Error::BadUrl(format!("{} is missing scheme", self)))?;
+
+        self.authority()
+            .ok_or_else(|| Error::BadUrl(format!("{} is missing host/port", self)))?;
+
+        Ok(())
+    }
+
+    #[cfg(feature = "_url")]
+    fn try_into_url(&self) -> Result<url::Url, Error> {
+        self.ensure_full_url()?;
+        let uri = self.to_string();
+
+        // If ensure_full_url() works, we expect to be able to parse it to a url
+        let url = url::Url::parse(&uri).expect("parsed url");
+
+        Ok(url)
     }
 }

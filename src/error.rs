@@ -4,6 +4,9 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("bad url: {0}")]
+    BadUrl(String),
+
     #[error("{0}")]
     Other(&'static str),
 
@@ -42,6 +45,14 @@ pub enum Error {
     #[cfg(feature = "native-tls")]
     #[error("der: {0}")]
     Der(#[from] der::Error),
+
+    #[cfg(feature = "cookies")]
+    #[error("cookie: {0}")]
+    Cookie(#[from] cookie_store::CookieError),
+
+    #[cfg(feature = "cookies")]
+    #[error("cookie: {0}")]
+    CookieJar(#[from] cookie_store::Error),
 }
 
 impl Error {

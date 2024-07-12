@@ -6,7 +6,7 @@ use std::sync::Arc;
 use hoot::client::flow::{
     state::*, Await100Result, RecvBodyResult, RecvResponseResult, SendRequestResult,
 };
-use http::{Request, Response, Uri};
+use http::{HeaderName, HeaderValue, Request, Response, Uri};
 
 use crate::error::TimeoutReason;
 use crate::time::{Duration, Instant};
@@ -29,6 +29,7 @@ type Flow<State> = hoot::client::flow::Flow<(), State>;
 
 enum State {
     Begin(Flow<Prepare>),
+    Prepare(Flow<Prepare>),
     Resolve(Flow<Prepare>),
     OpenConnection(Flow<Prepare>),
     SendRequest(Flow<SendRequest>),
@@ -52,6 +53,7 @@ macro_rules! extract {
 
 pub enum Event<'a> {
     Reset { must_close: bool },
+    Prepare { uri: &'a Uri },
     Resolve { uri: &'a Uri, timeout: Duration },
     OpenConnection { uri: &'a Uri, timeout: Duration },
     Await100 { timeout: Duration },
@@ -61,12 +63,20 @@ pub enum Event<'a> {
     ResponseBody { amount: usize },
 }
 
+#[allow(unused)]
 pub enum Input<'a> {
     Begin,
+    Header {
+        name: HeaderName,
+        value: HeaderValue,
+    },
+    Prepared,
     Resolved,
     ConnectionOpen,
     EndAwait100,
-    Input { input: &'a [u8] },
+    Input {
+        input: &'a [u8],
+    },
 }
 
 impl<'b> Unit<Body<'b>> {
@@ -201,6 +211,7 @@ impl<'b> Unit<Body<'b>> {
 
             // State moves on handle_input()
             State::Begin(flow) => State::Begin(flow),
+            State::Prepare(flow) => State::Prepare(flow),
             State::Resolve(flow) => State::Resolve(flow),
             State::OpenConnection(flow) => State::OpenConnection(flow),
             State::Await100(flow) => State::Await100(flow),
@@ -218,6 +229,8 @@ impl<'b> Unit<Body<'b>> {
     // These events borrow from the State, but they don't proceed the FSM.
     fn poll_event_borrow(&self, timeout: Duration) -> Result<Event, Error> {
         let event = match &self.state {
+            State::Prepare(flow) => Event::Prepare { uri: flow.uri() },
+
             State::Resolve(flow) => Event::Resolve {
                 uri: flow.uri(),
                 timeout,
@@ -244,6 +257,22 @@ impl<'b> Unit<Body<'b>> {
             Input::Begin => {
                 let flow = extract!(&mut self.state, State::Begin)
                     .expect("Input::Begin requires State::Begin");
+
+                self.call_timings.time_call_start = Some(now);
+                self.set_state(State::Prepare(flow));
+            }
+
+            Input::Header { name, value } => {
+                let mut flow = extract!(&mut self.state, State::Prepare)
+                    .expect("Input::Header requires State::Prepare");
+
+                flow.header(name, value)?;
+                self.set_state(State::Prepare(flow));
+            }
+
+            Input::Prepared => {
+                let flow = extract!(&mut self.state, State::Prepare)
+                    .expect("Input::Prepared requires State::Prepare");
 
                 self.call_timings.time_call_start = Some(now);
                 self.set_state(State::Resolve(flow));
@@ -547,6 +576,7 @@ impl CallTimings {
         // bug where we progressed to a certain State without setting the corresponding time.
         match state {
             State::Begin(_) => None,
+            State::Prepare(_) => None,
             State::Resolve(_) => config
                 .timeout_resolve
                 .map(|t| self.time_call_start.unwrap() + t),
@@ -585,6 +615,7 @@ impl State {
     fn name(&self) -> &'static str {
         match self {
             State::Begin(_) => "Begin",
+            State::Prepare(_) => "Prepare",
             State::Resolve(_) => "Resolve",
             State::OpenConnection(_) => "OpenConnection",
             State::SendRequest(_) => "SendRequest",
@@ -606,6 +637,7 @@ impl fmt::Debug for Event<'_> {
                 .debug_struct("Reset")
                 .field("must_close", must_close)
                 .finish(),
+            Self::Prepare { uri } => f.debug_struct("Prepare").field("uri", uri).finish(),
             Self::Resolve { uri, timeout } => f
                 .debug_struct("Resolve")
                 .field("uri", uri)
