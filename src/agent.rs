@@ -228,15 +228,6 @@ impl Agent {
         self.do_run(request, body, Instant::now)
     }
 
-    /// Make a GET request
-    pub fn get<T>(&self, uri: T) -> RequestBuilder
-    where
-        Uri: TryFrom<T>,
-        <Uri as TryFrom<T>>::Error: Into<http::Error>,
-    {
-        RequestBuilder::new(self.clone(), Method::GET, uri)
-    }
-
     // TODO(martin): Can we improve this signature? The ideal would be:
     // fn run(&self, request: Request<impl Body>) -> Result<Response<impl Body>, Error>
 
@@ -388,3 +379,25 @@ impl Agent {
         Ok(response)
     }
 }
+
+macro_rules! mk_method {
+    ($($f:tt, $m:tt),*) => {
+        impl Agent {
+            $(
+                #[doc = concat!("Make a ", stringify!($m), " request")]
+                pub fn $f<T>(&self, uri: T) -> RequestBuilder
+                where
+                    Uri: TryFrom<T>,
+                    <Uri as TryFrom<T>>::Error: Into<http::Error>,
+                {
+                    RequestBuilder::new(self.clone(), Method::$m, uri)
+                }
+            )*
+        }
+    };
+}
+
+mk_method!(
+    get, GET, post, POST, put, PUT, delete, DELETE, head, HEAD, options, OPTIONS, connect, CONNECT,
+    patch, PATCH, trace, TRACE
+);
