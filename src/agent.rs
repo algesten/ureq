@@ -14,7 +14,7 @@ use crate::time::{Duration, Instant};
 use crate::transport::{ConnectionDetails, Connector, DefaultConnector, NoBuffers};
 use crate::unit::{Event, Input, Unit};
 use crate::util::UriExt;
-use crate::{builder, Body, Error, RequestBuilder};
+use crate::{Body, Error, RequestBuilder};
 
 #[cfg(all(feature = "tls"))]
 use crate::tls::TlsConfig;
@@ -228,13 +228,13 @@ impl Agent {
         self.do_run(request, body, Instant::now)
     }
 
-    /// Make a GET request.
+    /// Make a GET request
     pub fn get<T>(&self, uri: T) -> RequestBuilder
     where
         Uri: TryFrom<T>,
         <Uri as TryFrom<T>>::Error: Into<http::Error>,
     {
-        builder(Method::GET, uri)
+        RequestBuilder::new(self.clone(), Method::GET, uri)
     }
 
     // TODO(martin): Can we improve this signature? The ideal would be:

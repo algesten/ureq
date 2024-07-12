@@ -42,41 +42,41 @@ pub use agent::{Agent, AgentConfig};
 pub use body::Body;
 pub use error::Error;
 
+/// Run a [`http::Request`]
 pub fn run(request: Request<impl AsBody>) -> Result<Response<RecvBody>, Error> {
     let agent = Agent::new_default();
     agent.run(request)
 }
 
+/// A new agent with default configuration
+///
+/// Agents are used to hold configuration and keep state between requests.
 pub fn agent() -> Agent {
     Agent::new_default()
 }
 
-fn builder<T>(method: Method, uri: T) -> RequestBuilder
-where
-    Uri: TryFrom<T>,
-    <Uri as TryFrom<T>>::Error: Into<http::Error>,
-{
-    let agent = Agent::new_default();
-    RequestBuilder::new(agent, method, uri)
+macro_rules! mk_method {
+    ($f:tt, $m:tt) => {
+        #[doc = concat!("Make a ", stringify!($m), " request")]
+        pub fn $f<T>(uri: T) -> RequestBuilder
+        where
+            Uri: TryFrom<T>,
+            <Uri as TryFrom<T>>::Error: Into<http::Error>,
+        {
+            RequestBuilder::new(Agent::new_default(), Method::$m, uri)
+        }
+    };
 }
 
-/// Make a GET request.
-pub fn get<T>(uri: T) -> RequestBuilder
-where
-    Uri: TryFrom<T>,
-    <Uri as TryFrom<T>>::Error: Into<http::Error>,
-{
-    builder(Method::GET, uri)
-}
-
-/// Make a POST request.
-pub fn post<T>(uri: T) -> RequestBuilder
-where
-    Uri: TryFrom<T>,
-    <Uri as TryFrom<T>>::Error: Into<http::Error>,
-{
-    builder(Method::POST, uri)
-}
+mk_method!(get, GET);
+mk_method!(post, POST);
+mk_method!(put, PUT);
+mk_method!(delete, DELETE);
+mk_method!(head, HEAD);
+mk_method!(options, OPTIONS);
+mk_method!(connect, CONNECT);
+mk_method!(patch, PATCH);
+mk_method!(trace, TRACE);
 
 #[cfg(test)]
 mod test {
