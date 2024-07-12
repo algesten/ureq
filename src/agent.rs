@@ -112,21 +112,26 @@ pub struct AgentConfig {
     /// Defaults to 512kb.
     pub output_buffer_size: usize,
 
-    /// Config for TLS.
-    ///
-    /// This config is generic for all TLS connectors.
-    #[cfg(feature = "tls")]
-    pub tls_config: TlsConfig,
-
-    /// Max number of idle pooled connections.
+    /// Max number of idle pooled connections overall.
     ///
     /// Defaults to 10
     pub max_idle_connections: usize,
+
+    /// Max number of idle pooled connections per host/port combo.
+    ///
+    /// Defaults to 3
+    pub max_idle_connections_per_host: usize,
 
     /// Max duration to keep an idle connection in the pool
     ///
     /// Defaults to 15 seconds
     pub max_idle_age: Duration,
+
+    /// Config for TLS.
+    ///
+    /// This config is generic for all TLS connectors.
+    #[cfg(feature = "tls")]
+    pub tls_config: TlsConfig,
 }
 
 impl Default for AgentConfig {
@@ -148,12 +153,12 @@ impl Default for AgentConfig {
             user_agent: "ureq".to_string(), // TODO(martin): add version
             input_buffer_size: 128 * 1024,
             output_buffer_size: 128 * 1024,
+            max_idle_connections: 10,
+            max_idle_connections_per_host: 3,
+            max_idle_age: Duration::from_secs(15),
 
             #[cfg(all(feature = "tls"))]
             tls_config: TlsConfig::with_native_roots(),
-
-            max_idle_connections: 10,
-            max_idle_age: Duration::from_secs(15),
         }
     }
 }
@@ -165,9 +170,11 @@ impl Agent {
         resolver: impl Resolver,
         proxy: Option<Proxy>,
     ) -> Self {
+        let pool = Arc::new(ConnectionPool::new(connector, &config));
+
         Agent {
             config: Arc::new(config),
-            pool: Arc::new(ConnectionPool::new(connector)),
+            pool,
             resolver: Arc::new(resolver),
             proxy,
         }

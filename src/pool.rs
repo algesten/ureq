@@ -1,37 +1,34 @@
 use core::fmt;
 use std::collections::VecDeque;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, Weak};
 
-use http::uri::Authority;
+use http::uri::{Authority, Scheme};
 use http::Uri;
 
+use crate::proxy::Proxy;
 use crate::time::{Duration, Instant};
 use crate::transport::{Buffers, ConnectionDetails, Connector, Transport};
-use crate::Error;
+use crate::{AgentConfig, Error};
 
 pub(crate) struct ConnectionPool {
     connector: Box<dyn Connector>,
-    pool: Pool,
+    pool: Arc<Mutex<Pool>>,
 }
 
 impl ConnectionPool {
-    pub fn new(connector: impl Connector) -> Self {
+    pub fn new(connector: impl Connector, config: &AgentConfig) -> Self {
         ConnectionPool {
             connector: Box::new(connector),
-            pool: Pool::default(),
+            pool: Arc::new(Mutex::new(Pool::new(config))),
         }
     }
 
     pub fn connect(&self, details: &ConnectionDetails) -> Result<Connection, Error> {
-        let key = PoolKey::from(details.uri);
+        let key = PoolKey::new(details.uri, details.proxy);
 
         {
-            let mut pool = self.pool.lock();
-            pool.purge(
-                details.now,
-                details.config.max_idle_connections,
-                details.config.max_idle_age,
-            );
+            let mut pool = self.pool.lock().unwrap();
+            pool.purge(details.now);
 
             if let Some(conn) = pool.get(&key) {
                 debug!("Use pooled: {:?}", key);
@@ -48,7 +45,8 @@ impl ConnectionPool {
             transport,
             key,
             last_use: details.now,
-            pool: self.pool.clone(), // Cheap Arc clone
+            pool: Arc::downgrade(&self.pool),
+            position_per_host: None,
         };
 
         Ok(conn)
@@ -59,7 +57,27 @@ pub(crate) struct Connection {
     transport: Box<dyn Transport>,
     key: PoolKey,
     last_use: Instant,
-    pool: Pool,
+    pool: Weak<Mutex<Pool>>,
+
+    /// Used to prune max_idle_connections_by_host.
+    ///
+    /// # Example
+    ///
+    /// If we have a max idle per hosts set to 3, and we have the following LRU:
+    ///
+    /// ```text
+    /// [B, A, A, B, A, B, A]
+    /// ```
+    ///
+    /// This field is used to enumerate the elements per host reverse:
+    ///
+    /// ```text
+    /// [B2, A3, A2, B1, A1, B0, A0]
+    /// ```
+    ///
+    /// Once we have that enumeration, we can drop elements from the front where there
+    /// position_per_host >= idle_per_host.
+    position_per_host: Option<usize>,
 }
 
 impl Connection {
@@ -85,11 +103,22 @@ impl Connection {
     }
 
     pub fn reuse(mut self, now: Instant) {
-        debug!("Return to pool: {:?}", self.key);
-        let copy = self.pool.clone();
-        let mut pool = copy.lock();
         self.last_use = now;
-        pool.0.push_back(self);
+
+        let arc = match self.pool.upgrade() {
+            Some(v) => v,
+            None => {
+                debug!("Pool gone: {:?}", self.key);
+                return;
+            }
+        };
+
+        debug!("Return to pool: {:?}", self.key);
+
+        let mut pool = arc.lock().unwrap();
+
+        pool.add(self);
+        pool.purge(now);
     }
 
     fn age(&self, now: Instant) -> Duration {
@@ -97,41 +126,115 @@ impl Connection {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct PoolKey(Authority);
+/// The pool key is the Scheme, Authority from the uri and the Proxy setting
+///
+///
+/// ```notrust
+/// abc://username:password@example.com:123/path/data?key=value&key2=value2#fragid1
+/// |-|   |-------------------------------||--------| |-------------------| |-----|
+///  |                  |                       |               |              |
+/// scheme          authority                 path            query         fragment
+/// ```
+///
+/// It's correct to include username/password since connections with differing such and
+/// the same host/port must not be mixed up.
+///
+#[derive(Clone, PartialEq, Eq)]
+struct PoolKey(Arc<PoolKeyInner>);
 
-#[derive(Debug, Default, Clone)]
-struct Pool(Arc<Mutex<VecDeque<Connection>>>);
+impl PoolKey {
+    fn new(uri: &Uri, proxy: &Option<Proxy>) -> Self {
+        let inner = PoolKeyInner(
+            uri.scheme().expect("uri with scheme").clone(),
+            uri.authority().expect("uri with authority").clone(),
+            proxy.clone(),
+        );
 
-impl Pool {
-    fn lock(&self) -> PoolLock {
-        let lock = self.0.lock().unwrap();
-        PoolLock(lock)
+        PoolKey(Arc::new(inner))
     }
 }
 
-struct PoolLock<'a>(MutexGuard<'a, VecDeque<Connection>>);
+#[derive(PartialEq, Eq)]
+struct PoolKeyInner(Scheme, Authority, Option<Proxy>);
 
-impl<'a> PoolLock<'a> {
-    fn purge(&mut self, now: Instant, max_entries: usize, max_age: Duration) {
-        while self.0.len() > max_entries || self.0.front().map(|c| c.age(now)) > Some(max_age) {
-            self.0.pop_front();
+#[derive(Debug)]
+struct Pool {
+    lru: VecDeque<Connection>,
+    max_idle_connections: usize,
+    max_idle_connections_per_host: usize,
+    max_idle_age: Duration,
+}
+
+impl Pool {
+    fn new(config: &AgentConfig) -> Self {
+        Pool {
+            lru: VecDeque::new(),
+            max_idle_connections: config.max_idle_connections,
+            max_idle_connections_per_host: config.max_idle_connections_per_host,
+            max_idle_age: config.max_idle_age,
         }
     }
 
+    fn purge(&mut self, now: Instant) {
+        while self.lru.len() > self.max_idle_connections || self.front_is_too_old(now) {
+            self.lru.pop_front();
+        }
+
+        self.update_position_per_host();
+
+        let max = self.max_idle_connections_per_host;
+
+        // unwrap is ok because update_position_per_host() should have set all
+        self.lru.retain(|c| c.position_per_host.unwrap() < max);
+    }
+
+    fn front_is_too_old(&self, now: Instant) -> bool {
+        self.lru.front().map(|c| c.age(now)) > Some(self.max_idle_age)
+    }
+
+    fn update_position_per_host(&mut self) {
+        // Reset position counters
+        for c in &mut self.lru {
+            c.position_per_host = None;
+        }
+
+        loop {
+            let maybe_uncounted = self
+                .lru
+                .iter()
+                .rev()
+                .find(|c| c.position_per_host.is_none());
+
+            let uncounted = match maybe_uncounted {
+                Some(v) => v,
+                None => break, // nothing more to count.
+            };
+
+            let key_to_count = uncounted.key.clone();
+
+            for (position, c) in self
+                .lru
+                .iter_mut()
+                .rev()
+                .filter(|c| c.key == key_to_count)
+                .enumerate()
+            {
+                c.position_per_host = Some(position);
+            }
+        }
+    }
+
+    fn add(&mut self, conn: Connection) {
+        self.lru.push_back(conn)
+    }
+
     fn get(&mut self, key: &PoolKey) -> Option<Connection> {
-        if let Some(i) = self.0.iter().position(|c| c.key == *key) {
-            let conn = self.0.remove(i).unwrap(); // unwrap ok since we just got the position
+        if let Some(i) = self.lru.iter().position(|c| c.key == *key) {
+            let conn = self.lru.remove(i).unwrap(); // unwrap ok since we just got the position
             Some(conn)
         } else {
             None
         }
-    }
-}
-
-impl From<&Uri> for PoolKey {
-    fn from(uri: &Uri) -> Self {
-        PoolKey(uri.authority().expect("uri with authority").clone())
     }
 }
 
@@ -148,6 +251,16 @@ impl fmt::Debug for Connection {
         f.debug_struct("Connection")
             .field("key", &self.key)
             .field("conn", &self.transport)
+            .finish()
+    }
+}
+
+impl fmt::Debug for PoolKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PoolKey")
+            .field("scheme", &self.0 .0)
+            .field("authority", &self.0 .1)
+            .field("proxy", &self.0 .2)
             .finish()
     }
 }
