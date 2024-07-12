@@ -16,7 +16,7 @@ use crate::unit::{Event, Input, Unit};
 use crate::util::UriExt;
 use crate::{Error, RequestBuilder, SendBody};
 
-#[cfg(feature = "tls")]
+#[cfg(feature = "_tls")]
 use crate::tls::TlsConfig;
 
 #[derive(Debug, Clone)]
@@ -135,7 +135,7 @@ pub struct AgentConfig {
     /// Config for TLS.
     ///
     /// This config is generic for all TLS connectors.
-    #[cfg(feature = "tls")]
+    #[cfg(feature = "_tls")]
     pub tls_config: TlsConfig,
 }
 
@@ -162,7 +162,7 @@ impl Default for AgentConfig {
             max_idle_connections_per_host: 3,
             max_idle_age: Duration::from_secs(15),
 
-            #[cfg(feature = "tls")]
+            #[cfg(feature = "_tls")]
             tls_config: TlsConfig::with_native_roots(),
         }
     }

@@ -30,7 +30,7 @@ mod util;
 pub mod resolver;
 pub mod transport;
 
-#[cfg(feature = "tls")]
+#[cfg(feature = "_tls")]
 pub mod tls;
 
 #[cfg(feature = "cookies")]
