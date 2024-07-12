@@ -322,9 +322,8 @@ impl<'b> Unit<SendBody<'b>> {
 
                     let (input_used, maybe_response) = flow.try_response(input)?;
 
-                    let response = match maybe_response {
-                        Some(v) => v,
-                        None => return Ok(input_used),
+                    let Some(response) = maybe_response else {
+                        return Ok(input_used);
                     };
 
                     let end = if response.status().is_redirection() {
@@ -476,9 +475,8 @@ impl<B> Unit<B> {
         input: &[u8],
         output: &mut [u8],
     ) -> Result<usize, Error> {
-        let flow = match &mut self.state {
-            State::RecvBody(v) => v,
-            _ => unreachable!(),
+        let State::RecvBody(flow) = &mut self.state else {
+            unreachable!()
         };
 
         let (input_used, output_used) = flow.read(input, output)?;

@@ -41,9 +41,8 @@ impl<'a> Certificate<'a> {
             // None means there were no matches in the PEM chain
             .ok_or(Error::Certificate("no pem encoded cert found"))??;
 
-        let cert = match item {
-            PemItem::Certificate(v) => v,
-            PemItem::PrivateKey(_) => unreachable!("matches! above for Certificate"),
+        let PemItem::Certificate(cert) = item else {
+            unreachable!("matches! above for Certificate");
         };
 
         Ok(cert)
@@ -90,9 +89,8 @@ impl<'a> PrivateKey<'a> {
             // None means there were no matches in the PEM chain
             .ok_or(Error::Certificate("no pem encoded private key found"))??;
 
-        let key = match item {
-            PemItem::PrivateKey(v) => v,
-            PemItem::Certificate(_) => unreachable!("matches! above for PrivateKey"),
+        let PemItem::PrivateKey(key) = item else {
+            unreachable!("matches! above for PrivateKey");
         };
 
         Ok(key)

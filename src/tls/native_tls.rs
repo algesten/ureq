@@ -24,9 +24,8 @@ impl Connector for NativeTlsConnector {
         details: &ConnectionDetails,
         chained: Option<Box<dyn Transport>>,
     ) -> Result<Option<Box<dyn Transport>>, Error> {
-        let transport = match chained {
-            Some(v) => v,
-            None => panic!("RustlConnector requires a chained transport"),
+        let Some(transport) = chained else {
+            panic!("NativeTlsConnector requires a chained transport");
         };
 
         // Only add TLS if we are connecting via HTTPS and the transport isn't TLS
