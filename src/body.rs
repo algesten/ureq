@@ -79,7 +79,7 @@ impl Body {
 
         let input_used =
             self.unit
-                .handle_input((self.current_time)(), Input::Input { input }, buf)?;
+                .handle_input((self.current_time)(), Input::Data { input }, buf)?;
 
         connection.consume_input(input_used);
 

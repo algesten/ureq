@@ -105,7 +105,7 @@ impl SchemeExt for Scheme {
             443
         } else if *self == Scheme::HTTP {
             80
-        } else if let Some(proxy) = Proto::try_from(self.as_str()).ok() {
+        } else if let Ok(proxy) = Proto::try_from(self.as_str()) {
             proxy.default_port()
         } else {
             panic!("Unknown scheme: {}", self);
@@ -139,7 +139,7 @@ impl<'a, B> fmt::Debug for DebugResponse<'a, B> {
         f.debug_struct("DebugResponse")
             .field("status", &self.0.status())
             .field("version", &self.0.version())
-            .field("headers", &DebugHeaders(&self.0.headers()))
+            .field("headers", &DebugHeaders(self.0.headers()))
             .finish()
     }
 }

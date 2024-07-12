@@ -18,6 +18,7 @@ pub struct CookieJar<'a>(MutexGuard<'a, CookieStore>);
 
 pub struct Cookie<'a>(CookieInner<'a>);
 
+#[allow(clippy::large_enum_variant)]
 enum CookieInner<'a> {
     Borrowed(&'a cookie_store::Cookie<'a>),
     Owned(cookie_store::Cookie<'a>),
@@ -143,7 +144,7 @@ impl SharedCookieJar {
             }
 
             if !cookies.is_empty() {
-                cookies.push_str(";");
+                cookies.push(';');
             }
 
             cookies.push_str(&c.to_string());

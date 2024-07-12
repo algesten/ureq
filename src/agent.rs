@@ -16,7 +16,7 @@ use crate::unit::{Event, Input, Unit};
 use crate::util::UriExt;
 use crate::{Error, RequestBuilder, SendBody};
 
-#[cfg(all(feature = "tls"))]
+#[cfg(feature = "tls")]
 use crate::tls::TlsConfig;
 
 #[derive(Debug, Clone)]
@@ -162,7 +162,7 @@ impl Default for AgentConfig {
             max_idle_connections_per_host: 3,
             max_idle_age: Duration::from_secs(15),
 
-            #[cfg(all(feature = "tls"))]
+            #[cfg(feature = "tls")]
             tls_config: TlsConfig::with_native_roots(),
         }
     }
@@ -320,7 +320,7 @@ impl Agent {
                     match connection.await_input(timeout) {
                         Ok(_) => {
                             let input = connection.buffers().input();
-                            unit.handle_input(current_time(), Input::Input { input }, &mut [])?
+                            unit.handle_input(current_time(), Input::Data { input }, &mut [])?
                         }
 
                         // If we get a timeout while waiting for input, that is not an error,
@@ -343,7 +343,7 @@ impl Agent {
                     let (input, output) = connection.buffers().input_and_output();
 
                     let input_used =
-                        unit.handle_input(current_time(), Input::Input { input }, output)?;
+                        unit.handle_input(current_time(), Input::Data { input }, output)?;
 
                     connection.consume_input(input_used);
                 }

@@ -71,16 +71,15 @@ impl Add<Duration> for Instant {
     fn add(self, rhs: Duration) -> Self::Output {
         match self {
             Instant::Exact(v) => Instant::Exact(v.add(*rhs)),
-            x @ _ => x,
+            x => x,
         }
     }
 }
 
 impl AddAssign<Duration> for Instant {
     fn add_assign(&mut self, rhs: Duration) {
-        match self {
-            Instant::Exact(v) => v.add_assign(*rhs),
-            _ => {}
+        if let Instant::Exact(v) = self {
+            v.add_assign(*rhs)
         }
     }
 }
@@ -91,23 +90,28 @@ impl Sub<Duration> for Instant {
     fn sub(self, rhs: Duration) -> Self::Output {
         match self {
             Instant::Exact(v) => Instant::Exact(v.sub(*rhs)),
-            x @ _ => x,
+            x => x,
         }
     }
 }
 
 impl SubAssign<Duration> for Instant {
     fn sub_assign(&mut self, rhs: Duration) {
-        match self {
-            Instant::Exact(v) => v.sub_assign(*rhs),
-            _ => {}
+        if let Instant::Exact(v) = self {
+            v.sub_assign(*rhs)
         }
     }
 }
 
 impl PartialOrd for Instant {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(match (self, other) {
+        Some(Self::cmp(self, other))
+    }
+}
+
+impl Ord for Instant {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self, other) {
             (Instant::AlreadyHappened, Instant::AlreadyHappened) => Ordering::Equal,
             (Instant::AlreadyHappened, Instant::Exact(_)) => Ordering::Less,
             (Instant::AlreadyHappened, Instant::NotHappening) => Ordering::Less,
@@ -117,30 +121,24 @@ impl PartialOrd for Instant {
             (Instant::NotHappening, Instant::AlreadyHappened) => Ordering::Greater,
             (Instant::NotHappening, Instant::Exact(_)) => Ordering::Greater,
             (Instant::NotHappening, Instant::NotHappening) => Ordering::Equal,
-        })
-    }
-}
-
-impl Ord for Instant {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other).unwrap()
+        }
     }
 }
 
 impl PartialOrd for Duration {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(match (self, other) {
-            (Duration::Exact(v1), Duration::Exact(v2)) => v1.cmp(v2),
-            (Duration::Exact(_), Duration::NotHappening) => Ordering::Less,
-            (Duration::NotHappening, Duration::Exact(_)) => Ordering::Greater,
-            (Duration::NotHappening, Duration::NotHappening) => Ordering::Equal,
-        })
+        Some(Self::cmp(self, other))
     }
 }
 
 impl Ord for Duration {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other).unwrap()
+        match (self, other) {
+            (Duration::Exact(v1), Duration::Exact(v2)) => v1.cmp(v2),
+            (Duration::Exact(_), Duration::NotHappening) => Ordering::Less,
+            (Duration::NotHappening, Duration::Exact(_)) => Ordering::Greater,
+            (Duration::NotHappening, Duration::NotHappening) => Ordering::Equal,
+        }
     }
 }
 

@@ -8,24 +8,24 @@ use crate::Error;
 /// Proxy protocol
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Proto {
-    HTTP,
-    HTTPS,
-    SOCKS4,
-    SOCKS4A,
-    SOCKS5,
+    Http,
+    Https,
+    Socks4,
+    Socks4A,
+    Socks5,
 }
 
 impl Proto {
     pub fn default_port(&self) -> u16 {
         match self {
-            Proto::HTTP => 80,
-            Proto::HTTPS => 443,
-            Proto::SOCKS4 | Proto::SOCKS4A | Proto::SOCKS5 => 1080,
+            Proto::Http => 80,
+            Proto::Https => 443,
+            Proto::Socks4 | Proto::Socks4A | Proto::Socks5 => 1080,
         }
     }
 
     pub fn is_socks(&self) -> bool {
-        matches!(self, Self::SOCKS4 | Self::SOCKS4A | Self::SOCKS5)
+        matches!(self, Self::Socks4 | Self::Socks4A | Self::Socks5)
     }
 }
 
@@ -184,12 +184,12 @@ impl TryFrom<&str> for Proto {
 
     fn try_from(scheme: &str) -> Result<Self, Self::Error> {
         match scheme.to_ascii_lowercase().as_str() {
-            "http" => Ok(Proto::HTTP),
-            "https" => Ok(Proto::HTTPS),
-            "socks4" => Ok(Proto::SOCKS4),
-            "socks4a" => Ok(Proto::SOCKS4A),
-            "socks" => Ok(Proto::SOCKS5),
-            "socks5" => Ok(Proto::SOCKS5),
+            "http" => Ok(Proto::Http),
+            "https" => Ok(Proto::Https),
+            "socks4" => Ok(Proto::Socks4),
+            "socks4a" => Ok(Proto::Socks4A),
+            "socks" => Ok(Proto::Socks5),
+            "socks5" => Ok(Proto::Socks5),
             _ => Err(Error::InvalidProxyUrl),
         }
     }
@@ -211,7 +211,7 @@ mod tests {
         assert_eq!(proxy.password(), Some("p@ssw0rd"));
         assert_eq!(proxy.host(), "localhost");
         assert_eq!(proxy.port(), 9999);
-        assert_eq!(proxy.proto, Proto::HTTP);
+        assert_eq!(proxy.proto, Proto::Http);
     }
 
     #[test]
@@ -221,7 +221,7 @@ mod tests {
         assert_eq!(proxy.password(), Some("p@ssw0rd"));
         assert_eq!(proxy.host(), "localhost");
         assert_eq!(proxy.port(), 9999);
-        assert_eq!(proxy.proto, Proto::HTTP);
+        assert_eq!(proxy.proto, Proto::Http);
     }
 
     #[test]
@@ -231,7 +231,7 @@ mod tests {
         assert_eq!(proxy.password(), Some("p@ssw0rd"));
         assert_eq!(proxy.host(), "localhost");
         assert_eq!(proxy.port(), 9999);
-        assert_eq!(proxy.proto, Proto::SOCKS4);
+        assert_eq!(proxy.proto, Proto::Socks4);
     }
 
     #[test]
@@ -241,7 +241,7 @@ mod tests {
         assert_eq!(proxy.password(), Some("p@ssw0rd"));
         assert_eq!(proxy.host(), "localhost");
         assert_eq!(proxy.port(), 9999);
-        assert_eq!(proxy.proto, Proto::SOCKS4A);
+        assert_eq!(proxy.proto, Proto::Socks4A);
     }
 
     #[test]
@@ -251,7 +251,7 @@ mod tests {
         assert_eq!(proxy.password(), Some("p@ssw0rd"));
         assert_eq!(proxy.host(), "localhost");
         assert_eq!(proxy.port(), 9999);
-        assert_eq!(proxy.proto, Proto::SOCKS5);
+        assert_eq!(proxy.proto, Proto::Socks5);
     }
 
     #[test]
@@ -261,7 +261,7 @@ mod tests {
         assert_eq!(proxy.password(), Some("p@ssw0rd"));
         assert_eq!(proxy.host(), "localhost");
         assert_eq!(proxy.port(), 9999);
-        assert_eq!(proxy.proto, Proto::SOCKS5);
+        assert_eq!(proxy.proto, Proto::Socks5);
     }
 
     #[test]
@@ -271,7 +271,7 @@ mod tests {
         assert_eq!(proxy.password(), Some("p@ssw0rd"));
         assert_eq!(proxy.host(), "localhost");
         assert_eq!(proxy.port(), 9999);
-        assert_eq!(proxy.proto, Proto::HTTP);
+        assert_eq!(proxy.proto, Proto::Http);
     }
 
     #[test]
@@ -281,7 +281,7 @@ mod tests {
         assert_eq!(proxy.password(), None);
         assert_eq!(proxy.host(), "localhost");
         assert_eq!(proxy.port(), 9999);
-        assert_eq!(proxy.proto, Proto::HTTP);
+        assert_eq!(proxy.proto, Proto::Http);
     }
 
     #[test]
@@ -291,6 +291,6 @@ mod tests {
         assert_eq!(proxy.password(), None);
         assert_eq!(proxy.host(), "localhost");
         assert_eq!(proxy.port(), 80);
-        assert_eq!(proxy.proto, Proto::HTTP);
+        assert_eq!(proxy.proto, Proto::Http);
     }
 }

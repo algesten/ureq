@@ -83,7 +83,7 @@ fn resolve_async(addr: String, timeout: Duration) -> Result<IntoIter<SocketAddr>
         Ok(v) => Ok(v?),
         Err(c) => match c {
             // Timeout results in None
-            RecvTimeoutError::Timeout => return Err(Error::Timeout(TimeoutReason::Resolver)),
+            RecvTimeoutError::Timeout => Err(Error::Timeout(TimeoutReason::Resolver)),
             // The sender going away is nonsensical. Did the thread just die?
             RecvTimeoutError::Disconnected => unreachable!("mpsc sender gone"),
         },
