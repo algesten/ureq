@@ -5,7 +5,7 @@ use std::sync::Arc;
 use hoot::client::flow::RedirectAuthHeaders;
 use http::{Method, Request, Response, Uri};
 
-use crate::body::Body;
+use crate::body::{Body, ResponseInfo};
 use crate::pool::{Connection, ConnectionPool};
 use crate::proxy::Proxy;
 use crate::resolver::{DefaultResolver, Resolver};
@@ -285,6 +285,27 @@ impl Agent {
                         unit.handle_input(current_time(), input, &mut [])?;
                     }
 
+                    #[cfg(any(feature = "gzip", feature = "brotli"))]
+                    {
+                        use once_cell::sync::Lazy;
+                        static ACCEPTS: Lazy<String> = Lazy::new(|| {
+                            let mut value = String::with_capacity(10);
+                            #[cfg(feature = "gzip")]
+                            value.push_str("gzip");
+                            #[cfg(all(feature = "gzip", feature = "brotli"))]
+                            value.push_str(", ");
+                            #[cfg(feature = "brotli")]
+                            value.push_str("br");
+                            value
+                        });
+                        let input = Input::Header {
+                            name: http::HeaderName::from_static("accept-encoding"),
+                            // unwrap is ok because above ACCEPTS will produce a valid value
+                            value: http::HeaderValue::from_str(&ACCEPTS).unwrap(),
+                        };
+                        unit.handle_input(current_time(), input, &mut [])?;
+                    }
+
                     unit.handle_input(current_time(), Input::Prepared, &mut [])?;
                 }
 
@@ -371,7 +392,8 @@ impl Agent {
         let unit = unit.release_body();
 
         let (parts, _) = response.into_parts();
-        let recv_body = Body::new(unit, connection, current_time);
+        let info = ResponseInfo::new(&parts.headers);
+        let recv_body = Body::new(unit, connection, info, current_time);
         let response = Response::from_parts(parts, recv_body);
 
         info!("{}", response.status());

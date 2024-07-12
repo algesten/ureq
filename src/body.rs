@@ -9,28 +9,58 @@ use crate::Error;
 pub struct Body {
     unit: Unit<()>,
     connection: Option<Connection>,
+    info: ResponseInfo,
     current_time: Box<dyn Fn() -> Instant + Send + Sync>,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct ResponseInfo {
+    content_encoding: ContentEncoding,
+}
+
+#[derive(Clone, Copy)]
+enum ContentEncoding {
+    None,
+    Gzip,
+    Brotli,
+    Unknown,
+}
+
+impl ResponseInfo {
+    pub fn new(headers: &http::HeaderMap) -> Self {
+        let content_encoding = headers
+            .get("content-encoding")
+            .and_then(|v| v.to_str().ok())
+            .map(ContentEncoding::from)
+            .unwrap_or(ContentEncoding::None);
+
+        ResponseInfo { content_encoding }
+    }
 }
 
 impl Body {
     pub(crate) fn new(
         unit: Unit<()>,
         connection: Connection,
+        info: ResponseInfo,
         current_time: impl Fn() -> Instant + Send + Sync + 'static,
     ) -> Self {
         Body {
             unit,
             connection: Some(connection),
+            info,
             current_time: Box::new(current_time),
         }
     }
 
     pub fn as_reader(&mut self, limit: u64) -> BodyReader {
-        BodyReader::shared(self, limit)
+        let info = self.info;
+        BodyReader::new(LimitReader::shared(self, limit), info)
     }
 
     pub fn into_reader(self, limit: u64) -> BodyReader<'static> {
-        BodyReader::owned(self, limit)
+        let info = self.info;
+        BodyReader::new(LimitReader::owned(self, limit), info)
     }
 
     pub fn read_to_string(&mut self, limit: usize) -> Result<String, Error> {
@@ -94,6 +124,70 @@ impl Body {
 }
 
 pub struct BodyReader<'a> {
+    reader: ContentDecoder<'a>,
+}
+
+impl<'a> BodyReader<'a> {
+    fn new(reader: LimitReader<'a>, info: ResponseInfo) -> BodyReader<'a> {
+        let reader = match info.content_encoding {
+            ContentEncoding::None => ContentDecoder::PassThrough(reader),
+            #[cfg(feature = "gzip")]
+            ContentEncoding::Gzip => {
+                ContentDecoder::Gzip(flate2::read::MultiGzDecoder::new(reader))
+            }
+            #[cfg(not(feature = "gzip"))]
+            ContentEncoding::Gzip => {
+                info!("Not decompressing. Enable feature gzip");
+                ContentDecoder::Gzip(reader)
+            }
+            #[cfg(feature = "brotli")]
+            ContentEncoding::Brotli => {
+                ContentDecoder::Brotli(brotli_decompressor::Decompressor::new(reader, 4096))
+            }
+            #[cfg(not(feature = "brotli"))]
+            ContentEncoding::Brotli => {
+                info!("Not decompressing. Enable feature brotli");
+                ContentDecoder::Brotli(reader)
+            }
+            ContentEncoding::Unknown => {
+                info!("Unknown content-encoding");
+                ContentDecoder::PassThrough(reader)
+            }
+        };
+
+        BodyReader { reader }
+    }
+}
+
+impl<'a> Read for BodyReader<'a> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.reader.read(buf)
+    }
+}
+
+enum ContentDecoder<'a> {
+    #[cfg(feature = "gzip")]
+    Gzip(flate2::read::MultiGzDecoder<LimitReader<'a>>),
+    #[cfg(not(feature = "gzip"))]
+    Gzip(LimitReader<'a>),
+    #[cfg(feature = "brotli")]
+    Brotli(brotli_decompressor::Decompressor<LimitReader<'a>>),
+    #[cfg(not(feature = "brotli"))]
+    Brotli(LimitReader<'a>),
+    PassThrough(LimitReader<'a>),
+}
+
+impl<'a> Read for ContentDecoder<'a> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        match self {
+            ContentDecoder::Gzip(v) => v.read(buf),
+            ContentDecoder::Brotli(v) => v.read(buf),
+            ContentDecoder::PassThrough(v) => v.read(buf),
+        }
+    }
+}
+
+struct LimitReader<'a> {
     body: BodyRef<'a>,
     left: u64,
 }
@@ -101,24 +195,6 @@ pub struct BodyReader<'a> {
 enum BodyRef<'a> {
     Shared(&'a mut Body),
     Owned(Body),
-}
-
-impl<'a> BodyReader<'a> {
-    fn shared(body: &'a mut Body, limit: u64) -> BodyReader<'a> {
-        Self {
-            body: BodyRef::Shared(body),
-            left: limit,
-        }
-    }
-}
-
-impl BodyReader<'static> {
-    fn owned(body: Body, limit: u64) -> BodyReader<'static> {
-        Self {
-            body: BodyRef::Owned(body),
-            left: limit,
-        }
-    }
 }
 
 impl<'a> BodyRef<'a> {
@@ -130,7 +206,25 @@ impl<'a> BodyRef<'a> {
     }
 }
 
-impl<'a> Read for BodyReader<'a> {
+impl<'a> LimitReader<'a> {
+    fn shared(body: &'a mut Body, limit: u64) -> LimitReader<'a> {
+        Self {
+            body: BodyRef::Shared(body),
+            left: limit,
+        }
+    }
+}
+
+impl LimitReader<'static> {
+    fn owned(body: Body, limit: u64) -> LimitReader<'static> {
+        Self {
+            body: BodyRef::Owned(body),
+            left: limit,
+        }
+    }
+}
+
+impl<'a> Read for LimitReader<'a> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         if self.left == 0 {
             return Err(Error::BodyExceedsLimit.into_io());
@@ -153,5 +247,18 @@ impl<'a> Read for BodyReader<'a> {
 impl fmt::Debug for Body {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Body").finish()
+    }
+}
+
+impl From<&str> for ContentEncoding {
+    fn from(s: &str) -> Self {
+        match s {
+            "gzip" => ContentEncoding::Gzip,
+            "br" => ContentEncoding::Brotli,
+            _ => {
+                info!("Unknown content-encoding: {}", s);
+                ContentEncoding::Unknown
+            }
+        }
     }
 }
