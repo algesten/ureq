@@ -23,13 +23,15 @@ features = ["rustls", "native-roots", "native-tls", "socks-proxy", "cookies"]
 
 [features]
 default = ["rustls", "native-roots", "native-tls", "socks-proxy", "cookies"]
-rustls = ["dep:rustls", "tls"]
-native-tls = ["dep:native-tls", "dep:der", "tls"]
-tls = ["dep:rustls-pemfile", "dep:rustls-pki-types"]
+rustls = ["dep:rustls", "_tls"]
+native-tls = ["dep:native-tls", "dep:der", "_tls"]
 native-roots = ["dep:rustls-native-certs"]
 socks-proxy = ["dep:socks"]
 cookies = ["dep:cookie_store", "_url"]
+
+# Underscore prefixed features are internal
 _url = ["dep:url"]
+_tls = ["dep:rustls-pemfile", "dep:rustls-pki-types"]
 
 [dependencies]
 base64 = "0.22.1"
