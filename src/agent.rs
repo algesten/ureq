@@ -5,16 +5,16 @@ use std::sync::Arc;
 use hoot::client::flow::RedirectAuthHeaders;
 use http::{Method, Request, Response, Uri};
 
-use crate::body::AsBody;
+use crate::send_body::AsBody;
 use crate::pool::{Connection, ConnectionPool};
 use crate::proxy::Proxy;
-use crate::recv::RecvBody;
+use crate::body::Body;
 use crate::resolver::{DefaultResolver, Resolver};
 use crate::time::{Duration, Instant};
 use crate::transport::{ConnectionDetails, Connector, DefaultConnector, NoBuffers};
 use crate::unit::{Event, Input, Unit};
 use crate::util::UriExt;
-use crate::{Body, Error, RequestBuilder};
+use crate::{Error, RequestBuilder, SendBody};
 
 #[cfg(all(feature = "tls"))]
 use crate::tls::TlsConfig;
@@ -220,7 +220,7 @@ impl Agent {
         self.jar.lock()
     }
 
-    pub fn run(&self, request: Request<impl AsBody>) -> Result<Response<RecvBody>, Error> {
+    pub fn run(&self, request: Request<impl AsBody>) -> Result<Response<Body>, Error> {
         let (parts, mut body) = request.into_parts();
         let body = body.as_body();
         let request = Request::from_parts(parts, ());
@@ -237,9 +237,9 @@ impl Agent {
     pub(crate) fn do_run(
         &self,
         request: Request<()>,
-        body: Body,
+        body: SendBody,
         current_time: impl Fn() -> Instant + Send + Sync + 'static,
-    ) -> Result<Response<RecvBody>, Error> {
+    ) -> Result<Response<Body>, Error> {
         let mut unit = Unit::new(self.config.clone(), current_time(), request, body)?;
 
         let mut addr = None;
@@ -371,7 +371,7 @@ impl Agent {
         let unit = unit.release_body();
 
         let (parts, _) = response.into_parts();
-        let recv_body = RecvBody::new(unit, connection, current_time);
+        let recv_body = Body::new(unit, connection, current_time);
         let response = Response::from_parts(parts, recv_body);
 
         info!("{}", response.status());
