@@ -105,12 +105,9 @@ impl Connection {
     pub fn reuse(mut self, now: Instant) {
         self.last_use = now;
 
-        let arc = match self.pool.upgrade() {
-            Some(v) => v,
-            None => {
-                debug!("Pool gone: {:?}", self.key);
-                return;
-            }
+        let Some(arc) = self.pool.upgrade() else {
+            debug!("Pool gone: {:?}", self.key);
+            return;
         };
 
         debug!("Return to pool: {:?}", self.key);
@@ -205,9 +202,8 @@ impl Pool {
                 .rev()
                 .find(|c| c.position_per_host.is_none());
 
-            let uncounted = match maybe_uncounted {
-                Some(v) => v,
-                None => break, // nothing more to count.
+            let Some(uncounted) = maybe_uncounted else {
+                break; // nothing more to count.
             };
 
             let key_to_count = uncounted.key.clone();
