@@ -3,16 +3,18 @@ use std::collections::VecDeque;
 use std::mem;
 use std::sync::Arc;
 
-use hoot::client::flow::{
-    state::*, Await100Result, RecvBodyResult, RecvResponseResult, SendRequestResult,
+use hoot::client::flow::state::{
+    Await100, Cleanup, Prepare, RecvBody, RecvResponse, Redirect, SendBody as FlowSendBody,
+    SendRequest,
 };
+use hoot::client::flow::{Await100Result, RecvBodyResult, RecvResponseResult, SendRequestResult};
 use http::{HeaderName, HeaderValue, Request, Response, Uri};
 
 use crate::error::TimeoutReason;
 use crate::time::{Duration, Instant};
 use crate::transport::Buffers;
 use crate::util::DebugResponse;
-use crate::{AgentConfig, Body, Error};
+use crate::{AgentConfig, Error, SendBody};
 
 pub(crate) struct Unit<B> {
     config: Arc<AgentConfig>,
@@ -33,7 +35,7 @@ enum State {
     Resolve(Flow<Prepare>),
     OpenConnection(Flow<Prepare>),
     SendRequest(Flow<SendRequest>),
-    SendBody(Flow<SendBody>),
+    SendBody(Flow<FlowSendBody>),
     Await100(Flow<Await100>),
     RecvResponse(Flow<RecvResponse>),
     RecvBody(Flow<RecvBody>),
@@ -79,12 +81,12 @@ pub enum Input<'a> {
     },
 }
 
-impl<'b> Unit<Body<'b>> {
+impl<'b> Unit<SendBody<'b>> {
     pub fn new(
         config: Arc<AgentConfig>,
         global_start: Instant,
         request: Request<()>,
-        body: Body<'b>,
+        body: SendBody<'b>,
     ) -> Result<Self, Error> {
         Ok(Self {
             config,
@@ -516,10 +518,10 @@ fn send_request(
 }
 
 fn send_body(
-    flow: &mut Flow<SendBody>,
+    flow: &mut Flow<FlowSendBody>,
     buffers: &mut dyn Buffers,
     timeout: Duration,
-    body: &mut Body,
+    body: &mut SendBody,
 ) -> Result<Event<'static>, Error> {
     let (tmp, output) = buffers.tmp_and_output();
 
