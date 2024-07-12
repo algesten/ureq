@@ -23,8 +23,8 @@ impl<'a> AsRef<[u8]> for CertDer<'a> {
     fn as_ref(&self) -> &[u8] {
         match self {
             CertDer::Borrowed(v) => v,
-            CertDer::Owned(v) => &v,
-            CertDer::PkiTypes(v) => &v,
+            CertDer::Owned(v) => v,
+            CertDer::PkiTypes(v) => v,
         }
     }
 }
@@ -128,7 +128,7 @@ impl<'a> Iterator for PemIter<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            match rustls_pemfile::read_one_from_slice(&self.0) {
+            match rustls_pemfile::read_one_from_slice(self.0) {
                 Ok(Some((cert, rest))) => {
                     // A bit backwards engineering to figure out which part of the input
                     // was parsed to an complete item.

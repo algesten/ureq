@@ -76,7 +76,7 @@ pub enum Input<'a> {
     Resolved,
     ConnectionOpen,
     EndAwait100,
-    Input {
+    Data {
         input: &'a [u8],
     },
 }
@@ -298,7 +298,7 @@ impl<'b> Unit<SendBody<'b>> {
 
             Input::EndAwait100 => self.end_await_100(now),
 
-            Input::Input { input } => match &mut self.state {
+            Input::Data { input } => match &mut self.state {
                 State::Await100(flow) => {
                     if input.is_empty() {
                         return Err(Error::disconnected());
@@ -422,7 +422,7 @@ impl Unit<()> {
         output: &mut [u8],
     ) -> Result<usize, Error> {
         match input {
-            Input::Input { input } => self.handle_input_recv_body(now, input, output),
+            Input::Data { input } => self.handle_input_recv_body(now, input, output),
             _ => unreachable!(),
         }
     }
@@ -432,7 +432,7 @@ impl<B> Unit<B> {
     fn set_state(&mut self, state: State) {
         let new_name = state.name();
         if new_name != self.prev_state {
-            if self.prev_state != "" {
+            if !self.prev_state.is_empty() {
                 trace!("{} -> {}", self.prev_state, new_name);
             } else {
                 trace!("Start state: {}", new_name);
@@ -498,7 +498,7 @@ impl<B> Unit<B> {
             self.set_state(state);
         }
 
-        return Ok(input_used);
+        Ok(input_used)
     }
 }
 
@@ -663,7 +663,7 @@ impl fmt::Debug for Event<'_> {
                 .finish(),
             Self::Response { response, end } => f
                 .debug_struct("Response")
-                .field("response", &DebugResponse(&response))
+                .field("response", &DebugResponse(response))
                 .field("end", end)
                 .finish(),
             Self::ResponseBody { amount } => f
