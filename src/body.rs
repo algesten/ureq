@@ -50,9 +50,8 @@ impl Body {
     fn do_read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
         let now = (self.current_time)();
 
-        let connection = match &mut self.connection {
-            Some(v) => v,
-            None => return Ok(0),
+        let Some(connection) = &mut self.connection else {
+            return Ok(0);
         };
 
         let event = self.unit.poll_event((self.current_time)())?;
@@ -86,12 +85,11 @@ impl Body {
 
         let event = self.unit.poll_event((self.current_time)())?;
 
-        let output_used = match event {
-            Event::ResponseBody { amount } => amount,
-            _ => unreachable!("Expected event ResponseBody"),
+        let Event::ResponseBody { amount } = event else {
+            unreachable!("Expected event ResponseBody");
         };
 
-        Ok(output_used)
+        Ok(amount)
     }
 }
 
