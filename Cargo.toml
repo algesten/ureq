@@ -16,7 +16,7 @@ exclude = ["/cargo_deny.sh", "/deny.toml", "/test.sh"]
 
 
 # MSRV
-rust-version = "1.63"
+rust-version = "1.67"
 
 [package.metadata.docs.rs]
 features = ["rustls", "native-roots", "native-tls", "socks-proxy", "cookies"]
@@ -47,8 +47,7 @@ rustls-native-certs = { version = "0.7.1", optional = true, default-features = f
 # ring has a higher chance of compiling cleanly without additional developer environment
 rustls = { version = "0.23.11", optional = true, default-features = false, features = ["ring", "logging", "std", "tls12"] }
 native-tls = { version = "0.2.12", optional = true, default-features = false }
-# Needed for MSRV 1.63 (0.7.0 require 1.65)
-der = { version = "=0.6.1", optional = true, default-features = false, features = ["pem", "std"] }
+der = { version = "0.7.9", optional = true, default-features = false, features = ["pem", "std"] }
 
 socks = { version = "0.3.4", optional = true }
 
@@ -58,10 +57,8 @@ cookie_store = { version = "0.21.0", optional = true, default-features = false, 
 url = { version = "2.3.1", optional = true, default-features = false }
 
 [build-dependencies]
-# Needed for MSRV 1.63 (1.0.106 requires 1.67)
-cc = "=1.0.105"
+cc = "1.0.106"
 
 [dev-dependencies]
-# Needed for MSRV 1.63 (0.11 requires 1.71)
+# Needed for MSRV 1.67 (0.11 requires 1.71)
 env_logger = "=0.10.2"
-regex = "=1.9.6"
