@@ -36,7 +36,7 @@ pub mod tls;
 #[cfg(feature = "cookies")]
 mod cookies;
 #[cfg(feature = "cookies")]
-pub use cookies::CookieJar;
+pub use cookies::{Cookie, CookieJar};
 
 pub use agent::{Agent, AgentConfig};
 pub use error::Error;
