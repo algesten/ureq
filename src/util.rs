@@ -158,7 +158,7 @@ impl<'a, B> fmt::Debug for DebugResponse<'a, B> {
     }
 }
 
-struct DebugHeaders<'a>(&'a HeaderMap);
+pub struct DebugHeaders<'a>(pub &'a HeaderMap);
 
 const NON_SENSITIVE_HEADERS: &[&str] = &[
     "date",
@@ -168,6 +168,14 @@ const NON_SENSITIVE_HEADERS: &[&str] = &[
     "connection",
     "location",
     "content-encoding",
+    "host",
+    "accept",
+    "accept-encoding",
+    "accept-charset",
+    "date",
+    "connection",
+    "server",
+    "agent",
 ];
 
 impl<'a> fmt::Debug for DebugHeaders<'a> {
@@ -182,7 +190,10 @@ impl<'a> fmt::Debug for DebugHeaders<'a> {
         let redact_count = self
             .0
             .iter()
-            .filter(|(name, _)| !NON_SENSITIVE_HEADERS.contains(&name.as_str()))
+            .filter(|(name, _)| {
+                // println!("{}", name);
+                !NON_SENSITIVE_HEADERS.contains(&name.as_str())
+            })
             .count();
 
         if redact_count > 0 {

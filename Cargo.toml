@@ -38,7 +38,7 @@ _tls = ["dep:rustls-pemfile", "dep:rustls-pki-types"]
 
 [dependencies]
 base64 = "0.22.1"
-hoot = { git = "https://github.com/algesten/hoot", rev = "9b6dc26" }
+hoot = { git = "https://github.com/algesten/hoot", rev = "d1c81b8" }
 http = "1.1.0"
 log = "0.4.22"
 thiserror = "1.0.61"

@@ -8,12 +8,12 @@ use hoot::client::flow::state::{
     SendRequest,
 };
 use hoot::client::flow::{Await100Result, RecvBodyResult, RecvResponseResult, SendRequestResult};
-use http::{HeaderName, HeaderValue, Request, Response, Uri};
+use http::{HeaderMap, HeaderName, HeaderValue, Method, Request, Response, Uri, Version};
 
 use crate::error::TimeoutReason;
 use crate::time::{Duration, Instant};
 use crate::transport::Buffers;
-use crate::util::{DebugResponse, DebugUri};
+use crate::util::{DebugHeaders, DebugUri};
 use crate::{AgentConfig, Error, SendBody};
 
 pub(crate) struct Unit<B> {
@@ -390,6 +390,30 @@ impl<'b> Unit<SendBody<'b>> {
             prev_state: self.prev_state,
         }
     }
+
+    pub fn fake_request(&mut self) -> Result<FakeRequest<'_>, Error> {
+        let State::SendRequest(flow) = &mut self.state else {
+            unreachable!();
+        };
+
+        let headers = flow.headers_map()?;
+
+        let r = FakeRequest {
+            method: flow.method(),
+            uri: flow.uri(),
+            version: flow.version(),
+            headers,
+        };
+
+        Ok(r)
+    }
+}
+
+pub(crate) struct FakeRequest<'a> {
+    method: &'a Method,
+    uri: &'a Uri,
+    version: Version,
+    headers: HeaderMap<HeaderValue>,
 }
 
 // Unit<()> is for receiving the body. We have let go of the input body.
@@ -669,9 +693,9 @@ impl fmt::Debug for Event<'_> {
                 .debug_struct("AwaitInput")
                 .field("timeout", timeout)
                 .finish(),
-            Self::Response { response, end } => f
+            Self::Response { end, .. } => f
                 .debug_struct("Response")
-                .field("response", &DebugResponse(response))
+                .field("response", &"Response { ... }")
                 .field("end", end)
                 .finish(),
             Self::ResponseBody { amount } => f
@@ -679,5 +703,16 @@ impl fmt::Debug for Event<'_> {
                 .field("amount", amount)
                 .finish(),
         }
+    }
+}
+
+impl<'a> fmt::Debug for FakeRequest<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Request")
+            .field("method", &self.method)
+            .field("uri", &DebugUri(self.uri))
+            .field("version", &self.version)
+            .field("headers", &DebugHeaders(&self.headers))
+            .finish()
     }
 }

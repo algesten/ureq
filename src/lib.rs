@@ -86,7 +86,9 @@ mod test {
     #[test]
     fn simple_get() {
         env_logger::init();
-        let mut response = get("https://httpbin.org/get").call().unwrap();
+        let mut response = get("https://secret:santa@httpbin.org/redirect/1")
+            .call()
+            .unwrap();
         // println!("{:#?}", response);
         let _body = response.body_mut().read_to_string(16384).unwrap();
         // println!("body: {:?}", body);
