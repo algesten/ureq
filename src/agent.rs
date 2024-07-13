@@ -13,7 +13,7 @@ use crate::send_body::AsBody;
 use crate::time::{Duration, Instant};
 use crate::transport::{ConnectionDetails, Connector, DefaultConnector, NoBuffers};
 use crate::unit::{Event, Input, Unit};
-use crate::util::UriExt;
+use crate::util::{DebugRequest, UriExt};
 use crate::{Error, RequestBuilder, SendBody};
 
 #[cfg(feature = "_tls")]
@@ -240,6 +240,8 @@ impl Agent {
         body: SendBody,
         current_time: impl Fn() -> Instant + Send + Sync + 'static,
     ) -> Result<Response<Body>, Error> {
+        info!("Run {:?}", DebugRequest(&request));
+
         let mut unit = Unit::new(self.config.clone(), current_time(), request, body)?;
 
         let mut addr = None;

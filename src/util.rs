@@ -5,7 +5,7 @@ use std::io::{self, ErrorKind};
 use std::ops::{Deref, DerefMut};
 
 use http::uri::{Authority, Scheme};
-use http::{HeaderMap, Response, Uri};
+use http::{HeaderMap, Request, Response, Uri};
 
 use crate::proxy::Proto;
 use crate::Error;
@@ -132,11 +132,24 @@ impl<T> IoResultExt for io::Result<T> {
 }
 
 /// Wrapper to only log non-sensitive data.
+pub struct DebugRequest<'a, B>(pub &'a Request<B>);
+
+impl<'a, B> fmt::Debug for DebugRequest<'a, B> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Request")
+            .field("method", &self.0.method())
+            .field("version", &self.0.version())
+            .field("headers", &DebugHeaders(self.0.headers()))
+            .finish()
+    }
+}
+
+/// Wrapper to only log non-sensitive data.
 pub struct DebugResponse<'a, B>(pub &'a Response<B>);
 
 impl<'a, B> fmt::Debug for DebugResponse<'a, B> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("DebugResponse")
+        f.debug_struct("Response")
             .field("status", &self.0.status())
             .field("version", &self.0.version())
             .field("headers", &DebugHeaders(self.0.headers()))
@@ -209,5 +222,63 @@ impl UriExt for Uri {
         let url = url::Url::parse(&uri).expect("parsed url");
 
         Ok(url)
+    }
+}
+
+pub(crate) struct ConsumeBuf {
+    buf: Vec<u8>,
+    filled: usize,
+    consumed: usize,
+}
+
+impl ConsumeBuf {
+    pub fn new(size: usize) -> Self {
+        ConsumeBuf {
+            buf: vec![0; size],
+            filled: 0,
+            consumed: 0,
+        }
+    }
+
+    pub fn free_mut(&mut self) -> &mut [u8] {
+        self.maybe_shift();
+        &mut self.buf[self.filled..]
+    }
+
+    pub fn add_used(&mut self, amount: usize) {
+        self.filled += amount;
+        assert!(self.filled <= self.buf.len());
+    }
+
+    pub fn unconsumed(&self) -> &[u8] {
+        &self.buf[self.consumed..self.filled]
+    }
+
+    pub fn consume(&mut self, amount: usize) {
+        self.consumed += amount;
+        assert!(self.consumed <= self.filled);
+    }
+
+    fn maybe_shift(&mut self) {
+        if self.consumed == 0 {
+            return;
+        }
+
+        if self.consumed == self.filled {
+            self.consumed = 0;
+            self.filled = 0;
+        } else if self.filled > self.buf.len() {
+            self.buf.copy_within(self.consumed..self.filled, 0);
+            self.filled -= self.consumed;
+            self.consumed = 0;
+        }
+    }
+}
+
+impl Deref for ConsumeBuf {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        self.unconsumed()
     }
 }
