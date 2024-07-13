@@ -8,6 +8,7 @@ use http::Uri;
 use crate::proxy::Proxy;
 use crate::time::{Duration, Instant};
 use crate::transport::{Buffers, ConnectionDetails, Connector, Transport};
+use crate::util::DebugAuthority;
 use crate::{AgentConfig, Error};
 
 pub(crate) struct ConnectionPool {
@@ -265,7 +266,7 @@ impl fmt::Debug for PoolKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("PoolKey")
             .field("scheme", &self.0 .0)
-            .field("authority", &self.0 .1)
+            .field("authority", &DebugAuthority(&self.0 .1))
             .field("proxy", &self.0 .2)
             .finish()
     }

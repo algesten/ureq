@@ -1,8 +1,9 @@
 use std::convert::{TryFrom, TryInto};
+use std::fmt;
 
 use http::Uri;
 
-use crate::util::AuthorityExt;
+use crate::util::{AuthorityExt, DebugUri};
 use crate::Error;
 
 /// Proxy protocol
@@ -30,7 +31,7 @@ impl Proto {
 }
 
 /// Proxy server definition
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Eq, Hash, PartialEq)]
 pub struct Proxy {
     proto: Proto,
     uri: Uri,
@@ -192,6 +193,16 @@ impl TryFrom<&str> for Proto {
             "socks5" => Ok(Proto::Socks5),
             _ => Err(Error::InvalidProxyUrl),
         }
+    }
+}
+
+impl fmt::Debug for Proxy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Proxy")
+            .field("proto", &self.proto)
+            .field("uri", &DebugUri(&self.uri))
+            .field("from_env", &self.from_env)
+            .finish()
     }
 }
 

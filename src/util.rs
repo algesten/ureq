@@ -1,74 +1,13 @@
 use core::fmt;
 use std::convert::TryFrom;
-use std::hash::{Hash, Hasher};
 use std::io::{self, ErrorKind};
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 
 use http::uri::{Authority, Scheme};
 use http::{HeaderMap, Request, Response, Uri};
 
 use crate::proxy::Proto;
 use crate::Error;
-
-pub struct Secret<T>(T);
-
-impl<T> fmt::Debug for Secret<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Secret(******)")
-    }
-}
-
-impl<T> fmt::Display for Secret<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "******")
-    }
-}
-
-impl<T> Deref for Secret<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<T> DerefMut for Secret<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl<T: Clone> Clone for Secret<T> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone())
-    }
-}
-
-impl<T: PartialEq> PartialEq for Secret<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-
-impl<T: Eq> Eq for Secret<T> {}
-
-impl<T: Hash> Hash for Secret<T> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
-    }
-}
-
-impl<T: Default> Default for Secret<T> {
-    fn default() -> Self {
-        Self(Default::default())
-    }
-}
-
-impl<T> From<T> for Secret<T> {
-    fn from(value: T) -> Self {
-        Self(value)
-    }
-}
 
 pub trait AuthorityExt {
     fn userinfo(&self) -> Option<&str>;
@@ -128,6 +67,68 @@ impl<T> IoResultExt for io::Result<T> {
             }
             Err(e) => Err(e),
         }
+    }
+}
+
+pub(crate) struct ConsumeBuf {
+    buf: Vec<u8>,
+    filled: usize,
+    consumed: usize,
+}
+
+impl ConsumeBuf {
+    pub fn new(size: usize) -> Self {
+        ConsumeBuf {
+            buf: vec![0; size],
+            filled: 0,
+            consumed: 0,
+        }
+    }
+
+    pub fn resize(&mut self, size: usize) {
+        self.buf.resize(size, 0);
+    }
+
+    pub fn free_mut(&mut self) -> &mut [u8] {
+        self.maybe_shift();
+        &mut self.buf[self.filled..]
+    }
+
+    pub fn add_filled(&mut self, amount: usize) {
+        self.filled += amount;
+        assert!(self.filled <= self.buf.len());
+    }
+
+    pub fn unconsumed(&self) -> &[u8] {
+        &self.buf[self.consumed..self.filled]
+    }
+
+    pub fn consume(&mut self, amount: usize) {
+        self.consumed += amount;
+        assert!(self.consumed <= self.filled);
+    }
+
+    fn maybe_shift(&mut self) {
+        if self.consumed == 0 {
+            return;
+        }
+
+        if self.consumed == self.filled {
+            self.consumed = 0;
+            self.filled = 0;
+        } else if self.filled > self.buf.len() {
+            self.buf.copy_within(self.consumed..self.filled, 0);
+            self.filled -= self.consumed;
+            self.consumed = 0;
+        }
+    }
+}
+
+impl Deref for ConsumeBuf {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        self.unconsumed()
     }
 }
 
@@ -195,6 +196,59 @@ impl<'a> fmt::Debug for DebugHeaders<'a> {
     }
 }
 
+/// Wrapper to only log non-sensitive data.
+pub struct DebugUri<'a>(pub &'a Uri);
+
+impl<'a> fmt::Debug for DebugUri<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(s) = self.0.scheme_str() {
+            write!(f, "{}://", s)?;
+        }
+
+        if let Some(a) = self.0.authority() {
+            write!(f, "{:?}", DebugAuthority(a))?;
+        }
+
+        if let Some(q) = self.0.path_and_query() {
+            write!(f, "{}", q)?;
+        }
+
+        Ok(())
+    }
+}
+
+pub struct DebugAuthority<'a>(pub &'a Authority);
+
+impl<'a> fmt::Debug for DebugAuthority<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut at = false;
+
+        if let Some(u) = self.0.username() {
+            at = true;
+            if let Some(x) = u.chars().next() {
+                write!(f, "{}*****", x)?;
+            }
+        }
+
+        if let Some(_) = self.0.password() {
+            at = true;
+            write!(f, ":******")?;
+        }
+
+        if at {
+            write!(f, "@")?;
+        }
+
+        write!(f, "{}", self.0.host())?;
+
+        if let Some(p) = self.0.port_u16() {
+            write!(f, ":{}", p)?;
+        }
+
+        Ok(())
+    }
+}
+
 pub trait UriExt {
     fn ensure_full_url(&self) -> Result<(), Error>;
 
@@ -222,67 +276,5 @@ impl UriExt for Uri {
         let url = url::Url::parse(&uri).expect("parsed url");
 
         Ok(url)
-    }
-}
-
-pub(crate) struct ConsumeBuf {
-    buf: Vec<u8>,
-    filled: usize,
-    consumed: usize,
-}
-
-impl ConsumeBuf {
-    pub fn new(size: usize) -> Self {
-        ConsumeBuf {
-            buf: vec![0; size],
-            filled: 0,
-            consumed: 0,
-        }
-    }
-
-    pub fn resize(&mut self, size: usize) {
-        self.buf.resize(size, 0);
-    }
-
-    pub fn free_mut(&mut self) -> &mut [u8] {
-        self.maybe_shift();
-        &mut self.buf[self.filled..]
-    }
-
-    pub fn add_filled(&mut self, amount: usize) {
-        self.filled += amount;
-        assert!(self.filled <= self.buf.len());
-    }
-
-    pub fn unconsumed(&self) -> &[u8] {
-        &self.buf[self.consumed..self.filled]
-    }
-
-    pub fn consume(&mut self, amount: usize) {
-        self.consumed += amount;
-        assert!(self.consumed <= self.filled);
-    }
-
-    fn maybe_shift(&mut self) {
-        if self.consumed == 0 {
-            return;
-        }
-
-        if self.consumed == self.filled {
-            self.consumed = 0;
-            self.filled = 0;
-        } else if self.filled > self.buf.len() {
-            self.buf.copy_within(self.consumed..self.filled, 0);
-            self.filled -= self.consumed;
-            self.consumed = 0;
-        }
-    }
-}
-
-impl Deref for ConsumeBuf {
-    type Target = [u8];
-
-    fn deref(&self) -> &Self::Target {
-        self.unconsumed()
     }
 }

@@ -230,12 +230,6 @@ impl Agent {
         self.do_run(request, body, Instant::now)
     }
 
-    // TODO(martin): Can we improve this signature? The ideal would be:
-    // fn run(&self, request: Request<impl Body>) -> Result<Response<impl Body>, Error>
-
-    // TODO(martin): One design idea is to be able to create requests in one thread, then
-    // actually run them to completion in another. &mut self here makes it impossible to use
-    // Agent in such a design. Is that a concern?
     pub(crate) fn do_run(
         &self,
         request: Request<()>,
