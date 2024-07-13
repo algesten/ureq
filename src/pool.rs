@@ -121,6 +121,10 @@ impl Connection {
     fn age(&self, now: Instant) -> Duration {
         now.duration_since(now)
     }
+
+    fn is_open(&mut self) -> bool {
+        self.transport.is_open()
+    }
 }
 
 /// The pool key is the Scheme, Authority from the uri and the Proxy setting
@@ -225,12 +229,18 @@ impl Pool {
     }
 
     fn get(&mut self, key: &PoolKey) -> Option<Connection> {
-        if let Some(i) = self.lru.iter().position(|c| c.key == *key) {
-            let conn = self.lru.remove(i).unwrap(); // unwrap ok since we just got the position
-            Some(conn)
-        } else {
-            None
+        while let Some(i) = self.lru.iter().position(|c| c.key == *key) {
+            let mut conn = self.lru.remove(i).unwrap(); // unwrap ok since we just got the position
+
+            // Before we release the connection, we probe that it appears to still work.
+            if !conn.is_open() {
+                // This connection is broken. Try find another one.
+                continue;
+            }
+
+            return Some(conn);
         }
+        None
     }
 }
 
