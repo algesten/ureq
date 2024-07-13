@@ -4,6 +4,9 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("http: {0}")]
+    Http(#[from] http::Error),
+
     #[error("bad url: {0}")]
     BadUrl(String),
 
@@ -92,5 +95,18 @@ impl fmt::Display for TimeoutReason {
             TimeoutReason::Call => write!(f, "call"),
             TimeoutReason::Socks => write!(f, "socks"),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn ensure_error_size() {
+        // This is platform dependent, so we can't be too strict or precise.
+        let size = std::mem::size_of::<Error>();
+        println!("Error size: {}", size);
+        assert!(size < 100); // 40 on Macbook M1
     }
 }
