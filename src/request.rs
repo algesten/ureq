@@ -1,12 +1,14 @@
 use std::convert::TryFrom;
+use std::ops::{Deref, DerefMut};
 
-use http::{HeaderName, HeaderValue, Method, Request, Response, Uri};
+use http::{Method, Request, Response, Uri};
 
 use crate::body::Body;
 use crate::send_body::AsBody;
 use crate::time::Instant;
 use crate::{Agent, Error, SendBody};
 
+/// Transparent wrapper around [`http::request::Builder`].
 #[derive(Debug)]
 pub struct RequestBuilder {
     agent: Agent,
@@ -25,28 +27,6 @@ impl RequestBuilder {
         }
     }
 
-    /// Appends a header to this request builder.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let res = ureq::get("https://httpbin.org/get")
-    ///     .header("Accept", "text/html")
-    ///     .header("X-Custom-Foo", "bar")
-    ///     .call()?;
-    /// # Ok::<_, ureq::Error>(())
-    /// ```
-    pub fn header<K, V>(mut self, key: K, value: V) -> RequestBuilder
-    where
-        HeaderName: TryFrom<K>,
-        <HeaderName as TryFrom<K>>::Error: Into<http::Error>,
-        HeaderValue: TryFrom<V>,
-        <HeaderValue as TryFrom<V>>::Error: Into<http::Error>,
-    {
-        self.builder = self.builder.header(key, value);
-        self
-    }
-
     /// Sends the request with no body and blocks the caller until done.
     ///
     /// Use this with GET, HEAD, OPTIONS or TRACE. It sends neither
@@ -58,7 +38,7 @@ impl RequestBuilder {
     /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn call(self) -> Result<Response<Body>, Error> {
-        let request = self.builder.body(()).unwrap();
+        let request = self.builder.body(())?;
         do_call(self.agent, request, SendBody::empty())
     }
 
@@ -72,7 +52,7 @@ impl RequestBuilder {
     /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn send_bytes(self, data: &[u8]) -> Result<Response<Body>, Error> {
-        let request = self.builder.body(()).unwrap();
+        let request = self.builder.body(())?;
         let mut data_ref = data;
         do_call(self.agent, request, (&mut data_ref).as_body())
     }
@@ -81,6 +61,20 @@ impl RequestBuilder {
 fn do_call(agent: Agent, request: Request<()>, body: SendBody) -> Result<Response<Body>, Error> {
     let response = agent.do_run(request, body, Instant::now)?;
     Ok(response)
+}
+
+impl Deref for RequestBuilder {
+    type Target = http::request::Builder;
+
+    fn deref(&self) -> &Self::Target {
+        &self.builder
+    }
+}
+
+impl DerefMut for RequestBuilder {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.builder
+    }
 }
 
 // TODO(martin): implement reasonable Debug

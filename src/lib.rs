@@ -9,12 +9,12 @@ use std::convert::TryFrom;
 
 /// Re-exported http-crate.
 pub use http;
-use send_body::AsBody;
 
-pub use body::Body;
+pub use body::{Body, BodyReader};
 use http::Method;
 pub use http::{Request, Response, Uri};
 pub use request::RequestBuilder;
+pub use send_body::AsBody;
 
 mod agent;
 mod body;
@@ -44,7 +44,7 @@ pub use send_body::SendBody;
 
 /// Run a [`http::Request`]
 pub fn run(request: Request<impl AsBody>) -> Result<Response<Body>, Error> {
-    let agent = Agent::new_default();
+    let agent = Agent::new_with_defaults();
     agent.run(request)
 }
 
@@ -52,7 +52,7 @@ pub fn run(request: Request<impl AsBody>) -> Result<Response<Body>, Error> {
 ///
 /// Agents are used to hold configuration and keep state between requests.
 pub fn agent() -> Agent {
-    Agent::new_default()
+    Agent::new_with_defaults()
 }
 
 macro_rules! mk_method {
@@ -63,7 +63,7 @@ macro_rules! mk_method {
             Uri: TryFrom<T>,
             <Uri as TryFrom<T>>::Error: Into<http::Error>,
         {
-            RequestBuilder::new(Agent::new_default(), Method::$m, uri)
+            RequestBuilder::new(Agent::new_with_defaults(), Method::$m, uri)
         }
     };
 }
@@ -80,18 +80,65 @@ mk_method!(trace, TRACE);
 
 #[cfg(test)]
 mod test {
-
     use super::*;
 
     #[test]
-    fn simple_get() {
-        env_logger::init();
-        let mut response = get("https://secret:santa@httpbin.org/redirect/1")
-            .call()
-            .unwrap();
-        // println!("{:#?}", response);
-        let _body = response.body_mut().read_to_string(16384).unwrap();
-        // println!("body: {:?}", body);
+    fn connect_http_google() {
+        let agent = Agent::new_with_defaults();
+
+        let resp = agent.get("http://www.google.com/").call().unwrap();
+        assert_eq!(
+            "text/html;charset=ISO-8859-1",
+            resp.headers()
+                .get("content-type")
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .replace("; ", ";")
+        );
+        assert_eq!(resp.body().mime_type(), Some("text/html"));
+    }
+
+    #[test]
+    #[cfg(feature = "rustls")]
+    fn connect_https_google_rustls() {
+        let agent = Agent::new_with_defaults();
+
+        let resp = agent.get("https://www.google.com/").call().unwrap();
+        assert_eq!(
+            "text/html;charset=ISO-8859-1",
+            resp.headers()
+                .get("content-type")
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .replace("; ", ";")
+        );
+        assert_eq!(resp.body().mime_type(), Some("text/html"));
+    }
+
+    // #[test]
+    // #[cfg(feature = "native-tls")]
+    // fn connect_https_google_native_tls() {
+    //     use std::sync::Arc;
+
+    //     let tls_config = native_tls::TlsConnector::new().unwrap();
+    //     let agent = builder().tls_connector(Arc::new(tls_config)).build();
+
+    //     let resp = agent.get("https://www.google.com/").call().unwrap();
+    //     assert_eq!(
+    //         "text/html;charset=ISO-8859-1",
+    //         resp.header("content-type").unwrap().replace("; ", ";")
+    //     );
+    //     assert_eq!("text/html", resp.content_type());
+    // }
+
+    #[test]
+    fn connect_https_invalid_name() {
+        let result = get("https://example.com{REQUEST_URI}/").call();
+        let err = result.unwrap_err();
+        assert!(matches!(err, Error::Http(_)));
+        assert_eq!(err.to_string(), "http: invalid uri character");
     }
 
     // This doesn't need to run, just compile.
@@ -100,8 +147,8 @@ mod test {
         fn is_sync(_t: impl Sync) {}
 
         // Agent
-        is_send(Agent::new_default());
-        is_sync(Agent::new_default());
+        is_send(Agent::new_with_defaults());
+        is_sync(Agent::new_with_defaults());
 
         // ResponseBuilder
         is_send(get("https://example.test"));
