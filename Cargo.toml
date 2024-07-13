@@ -22,7 +22,7 @@ rust-version = "1.67"
 features = ["rustls", "native-roots", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset"]
 
 [features]
-default = ["rustls", "native-roots", "native-tls", "socks-proxy", "cookies"]
+default = ["rustls", "native-roots", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset"]
 rustls = ["dep:rustls", "_tls"]
 native-tls = ["dep:native-tls", "dep:der", "_tls"]
 native-roots = ["dep:rustls-native-certs"]
