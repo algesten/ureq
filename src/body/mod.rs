@@ -6,7 +6,7 @@ use crate::time::Instant;
 use crate::unit::Unit;
 use crate::Error;
 
-use self::handler::UnitHandler;
+use self::handler::{UnitHandler, UnitHandlerRef};
 use self::limit::LimitReader;
 
 mod handler;
@@ -50,13 +50,16 @@ impl Body {
 
     pub fn as_reader(&mut self, limit: u64) -> BodyReader {
         BodyReader::new(
-            LimitReader::shared(&mut self.unit_handler, limit),
+            LimitReader::new(UnitHandlerRef::Shared(&mut self.unit_handler), limit),
             &self.info,
         )
     }
 
     pub fn into_reader(self, limit: u64) -> BodyReader<'static> {
-        BodyReader::new(LimitReader::owned(self.unit_handler, limit), &self.info)
+        BodyReader::new(
+            LimitReader::new(UnitHandlerRef::Owned(self.unit_handler), limit),
+            &self.info,
+        )
     }
 
     pub fn read_to_string(&mut self, limit: usize) -> Result<String, Error> {
@@ -125,11 +128,11 @@ fn split_content_type(content_type: &str) -> (Option<String>, Option<String>) {
 }
 
 pub struct BodyReader<'a> {
-    reader: CharsetDecoder<ContentDecoder<LimitReader<'a>>>,
+    reader: CharsetDecoder<ContentDecoder<LimitReader<UnitHandlerRef<'a>>>>,
 }
 
 impl<'a> BodyReader<'a> {
-    fn new(reader: LimitReader<'a>, info: &ResponseInfo) -> BodyReader<'a> {
+    fn new(reader: LimitReader<UnitHandlerRef<'a>>, info: &ResponseInfo) -> BodyReader<'a> {
         let reader = content_decoder(reader, info.content_encoding);
         let reader = charset_decoder(reader, info.mime_type.as_deref(), info.charset.as_deref());
         BodyReader { reader }
