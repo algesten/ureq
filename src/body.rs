@@ -154,7 +154,7 @@ impl ResponseInfo {
 
 fn split_content_type(content_type: &str) -> (Option<String>, Option<String>) {
     // Content-Type: text/plain; charset=iso-8859-1
-    let mut split = content_type.split(";");
+    let mut split = content_type.split(';');
 
     let Some(mime_type) = split.next() else {
         return (None, None);
@@ -162,10 +162,10 @@ fn split_content_type(content_type: &str) -> (Option<String>, Option<String>) {
 
     let mut charset = None;
 
-    while let Some(maybe_charset) = split.next() {
+    for maybe_charset in split {
         let maybe_charset = maybe_charset.trim();
-        if maybe_charset.starts_with("charset=") {
-            charset = Some((&maybe_charset[8..]).to_string());
+        if let Some(s) = maybe_charset.strip_prefix("charset=") {
+            charset = Some(s.to_string());
         }
     }
 
