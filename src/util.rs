@@ -230,7 +230,7 @@ impl<'a> fmt::Debug for DebugAuthority<'a> {
             }
         }
 
-        if let Some(_) = self.0.password() {
+        if self.0.password().is_some() {
             at = true;
             write!(f, ":******")?;
         }
