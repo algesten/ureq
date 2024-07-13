@@ -82,9 +82,11 @@ pub struct AgentConfig {
     /// Defaults to `false`.
     pub https_only: bool,
 
-    /// Disable the nagle algorithm
+    /// Disable Nagle's algorithm
     ///
-    /// TODO(martin): more words here
+    /// Set TCP_NODELAY. It's up to the transport whether this flag is honored.
+    ///
+    /// Defaults to `true`.
     pub no_delay: bool,
 
     /// The max number of redirects to follow before giving up
