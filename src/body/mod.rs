@@ -15,6 +15,12 @@ mod limit;
 #[cfg(feature = "charset")]
 mod charset;
 
+#[cfg(feature = "gzip")]
+mod gzip;
+
+#[cfg(feature = "brotli")]
+mod brotli;
+
 pub struct Body {
     info: ResponseInfo,
     unit_handler: UnitHandler,
@@ -133,45 +139,27 @@ pub struct BodyReader<'a> {
 
 impl<'a> BodyReader<'a> {
     fn new(reader: LimitReader<UnitHandlerRef<'a>>, info: &ResponseInfo) -> BodyReader<'a> {
-        let reader = content_decoder(reader, info.content_encoding);
+        let reader = match info.content_encoding {
+            ContentEncoding::None | ContentEncoding::Unknown => ContentDecoder::PassThrough(reader),
+            #[cfg(feature = "gzip")]
+            ContentEncoding::Gzip => ContentDecoder::Gzip(Box::new(gzip::GzipDecoder::new(reader))),
+            #[cfg(not(feature = "gzip"))]
+            ContentEncoding::Gzip => ContentDecoder::PassThrough(reader),
+            #[cfg(feature = "brotli")]
+            ContentEncoding::Brotli => {
+                ContentDecoder::Brotli(Box::new(brotli::BrotliDecoder::new(reader)))
+            }
+            #[cfg(not(feature = "brotli"))]
+            ContentEncoding::Brotli => ContentDecoder::PassThrough(reader),
+        };
+
         let reader = charset_decoder(reader, info.mime_type.as_deref(), info.charset.as_deref());
+
         BodyReader { reader }
     }
 }
 
-fn content_decoder<R: Read>(reader: R, content_encoding: ContentEncoding) -> ContentDecoder<R> {
-    let decoder = match content_encoding {
-        ContentEncoding::None => ContentDecoder::PassThrough(reader),
-        #[cfg(feature = "gzip")]
-        ContentEncoding::Gzip => ContentDecoder::Gzip(flate2::read::MultiGzDecoder::new(reader)),
-        #[cfg(not(feature = "gzip"))]
-        ContentEncoding::Gzip => {
-            info!("Not decompressing. Enable feature gzip");
-            ContentDecoder::Gzip(reader)
-        }
-        #[cfg(feature = "brotli")]
-        ContentEncoding::Brotli => {
-            ContentDecoder::Brotli(brotli_decompressor::Decompressor::new(reader, 4096))
-        }
-        #[cfg(not(feature = "brotli"))]
-        ContentEncoding::Brotli => {
-            info!("Not decompressing. Enable feature brotli");
-            ContentDecoder::Brotli(reader)
-        }
-        ContentEncoding::Unknown => {
-            info!("Unknown content-encoding");
-            ContentDecoder::PassThrough(reader)
-        }
-    };
-
-    debug!(
-        "content_encoding {:?} resulted in decoder: {:?}",
-        content_encoding, decoder
-    );
-
-    decoder
-}
-
+#[allow(unused)]
 fn charset_decoder<R: Read>(
     reader: R,
     mime_type: Option<&str>,
@@ -179,38 +167,30 @@ fn charset_decoder<R: Read>(
 ) -> CharsetDecoder<R> {
     let is_text = mime_type.map(|m| m.starts_with("text/")).unwrap_or(false);
 
-    let decoder = if is_text {
-        #[cfg(feature = "charset")]
-        {
-            let from = charset
-                .and_then(|c| encoding_rs::Encoding::for_label(c.as_bytes()))
-                .unwrap_or(encoding_rs::UTF_8);
+    if !is_text {
+        return CharsetDecoder::PassThrough(reader);
+    }
 
-            if from == encoding_rs::UTF_8 {
-                // Do nothing
-                CharsetDecoder::PassThrough(reader)
-            } else {
-                CharsetDecoder::Decoder(self::charset::CharCodec::new(
-                    reader,
-                    from,
-                    encoding_rs::UTF_8,
-                ))
-            }
+    #[cfg(feature = "charset")]
+    {
+        use encoding_rs::{Encoding, UTF_8};
+
+        let from = charset
+            .and_then(|c| Encoding::for_label(c.as_bytes()))
+            .unwrap_or(UTF_8);
+
+        if from == UTF_8 {
+            // Do nothing
+            CharsetDecoder::PassThrough(reader)
+        } else {
+            CharsetDecoder::Decoder(self::charset::CharCodec::new(reader, from, UTF_8))
         }
-        #[cfg(not(feature = "charset"))]
-        {
-            CharsetDecoder::Decoder(reader)
-        }
-    } else {
+    }
+
+    #[cfg(not(feature = "charset"))]
+    {
         CharsetDecoder::PassThrough(reader)
-    };
-
-    debug!(
-        "mime_type {:?} charset {:?} resulted in decoder: {:?}",
-        mime_type, charset, decoder
-    );
-
-    decoder
+    }
 }
 
 impl<'a> Read for BodyReader<'a> {
@@ -221,15 +201,14 @@ impl<'a> Read for BodyReader<'a> {
 
 enum CharsetDecoder<R> {
     #[cfg(feature = "charset")]
-    Decoder(self::charset::CharCodec<R>),
-    #[cfg(not(feature = "charset"))]
-    Decoder(R),
+    Decoder(charset::CharCodec<R>),
     PassThrough(R),
 }
 
 impl<R: io::Read> Read for CharsetDecoder<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         match self {
+            #[cfg(feature = "charset")]
             CharsetDecoder::Decoder(v) => v.read(buf),
             CharsetDecoder::PassThrough(v) => v.read(buf),
         }
@@ -238,20 +217,18 @@ impl<R: io::Read> Read for CharsetDecoder<R> {
 
 enum ContentDecoder<R: io::Read> {
     #[cfg(feature = "gzip")]
-    Gzip(flate2::read::MultiGzDecoder<R>),
-    #[cfg(not(feature = "gzip"))]
-    Gzip(R),
+    Gzip(Box<gzip::GzipDecoder<R>>),
     #[cfg(feature = "brotli")]
-    Brotli(brotli_decompressor::Decompressor<R>),
-    #[cfg(not(feature = "brotli"))]
-    Brotli(R),
+    Brotli(Box<brotli::BrotliDecoder<R>>),
     PassThrough(R),
 }
 
 impl<R: Read> Read for ContentDecoder<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         match self {
+            #[cfg(feature = "gzip")]
             ContentDecoder::Gzip(v) => v.read(buf),
+            #[cfg(feature = "brotli")]
             ContentDecoder::Brotli(v) => v.read(buf),
             ContentDecoder::PassThrough(v) => v.read(buf),
         }
@@ -273,46 +250,6 @@ impl From<&str> for ContentEncoding {
                 info!("Unknown content-encoding: {}", s);
                 ContentEncoding::Unknown
             }
-        }
-    }
-}
-
-impl<R: Read> fmt::Debug for ContentDecoder<R> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Gzip(_) => f
-                .debug_tuple(
-                    #[cfg(feature = "gzip")]
-                    "Gzip",
-                    #[cfg(not(feature = "gzip"))]
-                    "Gzip(disabled)",
-                )
-                .finish(),
-            Self::Brotli(_) => f
-                .debug_tuple(
-                    #[cfg(feature = "brotli")]
-                    "Brotli",
-                    #[cfg(not(feature = "brotli"))]
-                    "Brotli(disabled)",
-                )
-                .finish(),
-            Self::PassThrough(_) => f.debug_tuple("PassThrough").finish(),
-        }
-    }
-}
-
-impl<R> fmt::Debug for CharsetDecoder<R> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Decoder(_) => f
-                .debug_struct(
-                    #[cfg(feature = "charset")]
-                    "Decoder",
-                    #[cfg(not(feature = "charset"))]
-                    "Decoder(disabled)",
-                )
-                .finish(),
-            Self::PassThrough(_) => f.debug_tuple("PassThrough").finish(),
         }
     }
 }
