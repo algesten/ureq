@@ -6,6 +6,9 @@ use crate::time::Instant;
 use crate::unit::{Event, Input, Unit};
 use crate::Error;
 
+#[cfg(feature = "charset")]
+mod charset;
+
 pub struct Body {
     info: ResponseInfo,
     unit_handler: UnitHandler,
@@ -235,7 +238,7 @@ fn charset_decoder<R: Read>(
                 // Do nothing
                 CharsetDecoder::PassThrough(reader)
             } else {
-                CharsetDecoder::Decoder(crate::charset::CharCodec::new(
+                CharsetDecoder::Decoder(self::charset::CharCodec::new(
                     reader,
                     from,
                     encoding_rs::UTF_8,
@@ -266,7 +269,7 @@ impl<'a> Read for BodyReader<'a> {
 
 enum CharsetDecoder<R> {
     #[cfg(feature = "charset")]
-    Decoder(crate::charset::CharCodec<R>),
+    Decoder(self::charset::CharCodec<R>),
     #[cfg(not(feature = "charset"))]
     Decoder(R),
     PassThrough(R),

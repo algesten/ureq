@@ -38,9 +38,6 @@ mod cookies;
 #[cfg(feature = "cookies")]
 pub use cookies::{Cookie, CookieJar};
 
-#[cfg(feature = "charset")]
-mod charset;
-
 pub use agent::{Agent, AgentConfig};
 pub use error::Error;
 pub use send_body::SendBody;
