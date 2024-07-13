@@ -278,7 +278,9 @@ impl Agent {
                                 Error::Other("Cookie value is an invalid http-header")
                             })?,
                         };
-                        unit.handle_input(current_time(), input, &mut [])?;
+                        if !value.is_empty() {
+                            unit.handle_input(current_time(), input, &mut [])?;
+                        }
                     }
 
                     #[cfg(any(feature = "gzip", feature = "brotli"))]
