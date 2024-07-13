@@ -172,6 +172,10 @@ impl Transport for RustlsTransport {
         self.buffers.consume(amount);
     }
 
+    fn is_open(&mut self) -> bool {
+        self.stream.get_mut().get_mut().is_open()
+    }
+
     fn is_tls(&self) -> bool {
         true
     }

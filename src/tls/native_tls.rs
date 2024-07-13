@@ -172,6 +172,13 @@ impl Transport for NativeTlsTransport {
         self.buffers.consume(amount);
     }
 
+    fn is_open(&mut self) -> bool {
+        self.stream
+            .handshaken()
+            .map(|c| c.get_mut().get_mut().is_open())
+            .unwrap_or(false)
+    }
+
     fn is_tls(&self) -> bool {
         true
     }
