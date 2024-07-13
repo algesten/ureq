@@ -21,6 +21,9 @@ pub use io::TransportAdapter;
 mod chain;
 pub use chain::ChainedConnector;
 
+#[cfg(feature = "_test")]
+mod test;
+
 #[cfg(feature = "socks-proxy")]
 mod socks;
 #[cfg(feature = "socks-proxy")]
@@ -78,6 +81,11 @@ impl Default for DefaultConnector {
 impl DefaultConnector {
     pub fn new() -> Self {
         let chain = ChainedConnector::new([
+            //
+            // When enabled, all tests are connected to a dummy server and will not
+            // make requests to the internet.
+            #[cfg(feature = "_test")]
+            test::TestConnector::default().boxed(),
             //
             // If we are using socks-proxy, that takes precedence over TcpConnector.
             #[cfg(feature = "socks-proxy")]

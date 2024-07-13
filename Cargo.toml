@@ -35,6 +35,7 @@ charset = ["dep:encoding_rs"]
 # Underscore prefixed features are internal
 _url = ["dep:url"]
 _tls = ["dep:rustls-pemfile", "dep:rustls-pki-types"]
+_test = []
 
 [dependencies]
 base64 = "0.22.1"
