@@ -84,4 +84,3 @@ fn do_call(agent: Agent, request: Request<()>, body: SendBody) -> Result<Respons
 }
 
 // TODO(martin): implement reasonable Debug
-// TODO(martin): ureq 2.x implements Clone for Request

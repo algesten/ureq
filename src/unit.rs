@@ -13,7 +13,7 @@ use http::{HeaderName, HeaderValue, Request, Response, Uri};
 use crate::error::TimeoutReason;
 use crate::time::{Duration, Instant};
 use crate::transport::Buffers;
-use crate::util::DebugResponse;
+use crate::util::{DebugResponse, DebugUri};
 use crate::{AgentConfig, Error, SendBody};
 
 pub(crate) struct Unit<B> {
@@ -136,7 +136,7 @@ impl<'b> Unit<SendBody<'b>> {
     ) -> Result<Option<Event<'static>>, Error> {
         Ok(match &mut self.state {
             State::Begin(flow) => {
-                info!("{} {}", flow.method(), flow.uri());
+                info!("{} {:?}", flow.method(), &DebugUri(flow.uri()));
                 Some(Event::Reset { must_close: false })
             }
 
@@ -160,7 +160,12 @@ impl<'b> Unit<SendBody<'b>> {
                 let status = flow.status();
 
                 if let Some(flow) = maybe_new_flow {
-                    info!("Redirect ({}): {} {}", status, flow.method(), flow.uri());
+                    info!(
+                        "Redirect ({}): {} {:?}",
+                        status,
+                        flow.method(),
+                        DebugUri(flow.uri())
+                    );
 
                     // Start over the state
                     self.set_state(State::Begin(flow));
@@ -637,15 +642,18 @@ impl fmt::Debug for Event<'_> {
                 .debug_struct("Reset")
                 .field("must_close", must_close)
                 .finish(),
-            Self::Prepare { uri } => f.debug_struct("Prepare").field("uri", uri).finish(),
+            Self::Prepare { uri } => f
+                .debug_struct("Prepare")
+                .field("uri", &DebugUri(uri))
+                .finish(),
             Self::Resolve { uri, timeout } => f
                 .debug_struct("Resolve")
-                .field("uri", uri)
+                .field("uri", &DebugUri(uri))
                 .field("timeout", timeout)
                 .finish(),
             Self::OpenConnection { uri, timeout } => f
                 .debug_struct("OpenConnection")
-                .field("uri", uri)
+                .field("uri", &DebugUri(uri))
                 .field("timeout", timeout)
                 .finish(),
             Self::Await100 { timeout } => f
