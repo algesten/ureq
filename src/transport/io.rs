@@ -16,6 +16,14 @@ impl TransportAdapter {
             transport,
         }
     }
+
+    pub fn get_ref(&self) -> &dyn Transport {
+        &*self.transport
+    }
+
+    pub(crate) fn get_mut(&mut self) -> &mut dyn Transport {
+        &mut *self.transport
+    }
 }
 
 impl io::Read for TransportAdapter {

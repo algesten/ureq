@@ -122,6 +122,32 @@ impl Transport for TcpTransport {
     fn consume_input(&mut self, amount: usize) {
         self.buffers.consume(amount);
     }
+
+    fn is_open(&mut self) -> bool {
+        probe_tcp_stream(&mut self.stream).unwrap_or(false)
+    }
+}
+
+fn probe_tcp_stream(stream: &mut TcpStream) -> Result<bool, Error> {
+    // Temporary do non-blocking IO
+    stream.set_nonblocking(true)?;
+
+    let mut buf = [0];
+    match stream.read(&mut buf) {
+        Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+            // This is the correct condition. There should be no waiting
+            // bytes, and therefore reading would block
+        }
+        // Any bytes read means the server sent some garbage we didn't ask for
+        Ok(_) => return Ok(false),
+        // Errors such as closed connection
+        Err(_) => return Ok(false),
+    };
+
+    // Reset back to blocking
+    stream.set_nonblocking(false)?;
+
+    Ok(true)
 }
 
 impl fmt::Debug for TcpConnector {

@@ -58,6 +58,7 @@ pub trait Transport: Debug + Send + Sync {
     fn transmit_output(&mut self, amount: usize, timeout: Duration) -> Result<(), Error>;
     fn await_input(&mut self, timeout: Duration) -> Result<(), Error>;
     fn consume_input(&mut self, amount: usize);
+    fn is_open(&mut self) -> bool;
     fn is_tls(&self) -> bool {
         false
     }
