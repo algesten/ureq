@@ -21,7 +21,7 @@ impl TransportAdapter {
         &*self.transport
     }
 
-    pub(crate) fn get_mut(&mut self) -> &mut dyn Transport {
+    pub fn get_mut(&mut self) -> &mut dyn Transport {
         &mut *self.transport
     }
 }
