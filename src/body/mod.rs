@@ -3,11 +3,15 @@ use std::io::{self, Read};
 
 use crate::pool::Connection;
 use crate::time::Instant;
-use crate::unit::{Event, Input, Unit};
+use crate::unit::Unit;
 use crate::Error;
+
+use self::handler::{UnitHandler, UnitHandlerRef};
 
 #[cfg(feature = "charset")]
 mod charset;
+
+mod handler;
 
 pub struct Body {
     info: ResponseInfo,
@@ -21,12 +25,6 @@ pub(crate) struct ResponseInfo {
     charset: Option<String>,
 }
 
-struct UnitHandler {
-    unit: Unit<()>,
-    connection: Option<Connection>,
-    current_time: Box<dyn Fn() -> Instant + Send + Sync>,
-}
-
 impl Body {
     pub(crate) fn new(
         unit: Unit<()>,
@@ -36,11 +34,7 @@ impl Body {
     ) -> Self {
         Body {
             info,
-            unit_handler: UnitHandler {
-                unit,
-                connection: Some(connection),
-                current_time: Box::new(current_time),
-            },
+            unit_handler: UnitHandler::new(unit, connection, current_time),
         }
     }
 
@@ -75,53 +69,6 @@ impl Body {
         let mut reader = self.as_reader(limit as u64);
         reader.read_to_end(&mut buf)?;
         Ok(buf)
-    }
-}
-
-impl UnitHandler {
-    fn do_read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
-        let now = (self.current_time)();
-
-        let Some(connection) = &mut self.connection else {
-            return Ok(0);
-        };
-
-        let event = self.unit.poll_event((self.current_time)())?;
-
-        let timeout = match event {
-            Event::AwaitInput { timeout } => timeout,
-            Event::Reset { must_close } => {
-                if let Some(connection) = self.connection.take() {
-                    if must_close {
-                        connection.close()
-                    } else {
-                        connection.reuse(now)
-                    }
-                }
-                return Ok(0);
-            }
-            _ => unreachable!("Expected event AwaitInput"),
-        };
-
-        connection.await_input(timeout)?;
-        let input = connection.buffers().input();
-
-        let max = input.len().min(buf.len());
-        let input = &input[..max];
-
-        let input_used =
-            self.unit
-                .handle_input((self.current_time)(), Input::Data { input }, buf)?;
-
-        connection.consume_input(input_used);
-
-        let event = self.unit.poll_event((self.current_time)())?;
-
-        let Event::ResponseBody { amount } = event else {
-            unreachable!("Expected event ResponseBody");
-        };
-
-        Ok(amount)
     }
 }
 
@@ -309,20 +256,6 @@ impl<R: Read> Read for ContentDecoder<R> {
 struct LimitReader<'a> {
     unit_handler: UnitHandlerRef<'a>,
     left: u64,
-}
-
-enum UnitHandlerRef<'a> {
-    Shared(&'a mut UnitHandler),
-    Owned(UnitHandler),
-}
-
-impl<'a> UnitHandlerRef<'a> {
-    fn do_read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
-        match self {
-            UnitHandlerRef::Shared(v) => v.do_read(buf),
-            UnitHandlerRef::Owned(v) => v.do_read(buf),
-        }
-    }
 }
 
 impl<'a> LimitReader<'a> {
