@@ -240,12 +240,16 @@ impl ConsumeBuf {
         }
     }
 
+    pub fn resize(&mut self, size: usize) {
+        self.buf.resize(size, 0);
+    }
+
     pub fn free_mut(&mut self) -> &mut [u8] {
         self.maybe_shift();
         &mut self.buf[self.filled..]
     }
 
-    pub fn add_used(&mut self, amount: usize) {
+    pub fn add_filled(&mut self, amount: usize) {
         self.filled += amount;
         assert!(self.filled <= self.buf.len());
     }

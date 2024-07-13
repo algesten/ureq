@@ -70,7 +70,7 @@ impl<R: io::Read> io::Read for CharCodec<R> {
                 dec.decode_to_utf8(input, output, self.reached_end);
 
             self.reader.consume(input_used);
-            self.buf.add_used(output_used);
+            self.buf.add_filled(output_used);
 
             if self.reached_end {
                 // Can't be used again
