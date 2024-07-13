@@ -1,3 +1,4 @@
+use core::fmt;
 use std::borrow::Cow;
 use std::io;
 use std::sync::{Mutex, MutexGuard};
@@ -13,9 +14,27 @@ pub(crate) struct SharedCookieJar {
     inner: Mutex<CookieStore>,
 }
 
-/// Handle to access the cookies
+/// Collection of cookies.
+///
+/// The jar is accessed using [`Agent::cookie_jar`][crate::Agent::cookie_jar].
+/// It can be saved and loaded.
 pub struct CookieJar<'a>(MutexGuard<'a, CookieStore>);
 
+/// Representation of an HTTP cookie.
+///
+/// Conforms to [IETF RFC6265](https://datatracker.ietf.org/doc/html/rfc6265)
+///
+/// ## Constructing a `Cookie`
+///
+/// To construct a cookie it must be parsed and bound to a uri:
+///
+/// ```
+/// use ureq::{Cookie, Uri};
+///
+/// let uri = Uri::from_static("https://my.server.com");
+/// let cookie = Cookie::parse("name=value", &uri).unwrap();
+/// assert_eq!(cookie.to_string(), "name=value");
+/// ```
 pub struct Cookie<'a>(CookieInner<'a>);
 
 #[allow(clippy::large_enum_variant)]
@@ -223,6 +242,15 @@ pub(crate) fn is_tchar(b: &u8) -> bool {
         b'^' | b'_' | b'`' | b'|' | b'~' => true,
         b if b.is_ascii_alphanumeric() => true,
         _ => false,
+    }
+}
+
+impl fmt::Display for Cookie<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.0 {
+            CookieInner::Borrowed(v) => v.fmt(f),
+            CookieInner::Owned(v) => v.fmt(f),
+        }
     }
 }
 
