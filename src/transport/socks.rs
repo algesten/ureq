@@ -59,6 +59,10 @@ impl Connector for SocksConnector {
             }
         };
 
+        if details.config.no_delay {
+            stream.set_nodelay(true)?;
+        }
+
         let buffers = LazyBuffers::new(
             details.config.input_buffer_size,
             details.config.output_buffer_size,

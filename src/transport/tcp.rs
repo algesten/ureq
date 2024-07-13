@@ -26,6 +26,11 @@ impl Connector for TcpConnector {
         trace!("Try connect TcpStream to {}", details.addr);
 
         let stream = TcpStream::connect_timeout(&details.addr, *details.timeout)?;
+
+        if details.config.no_delay {
+            stream.set_nodelay(true)?;
+        }
+
         let config = &details.config;
         let buffers = LazyBuffers::new(config.input_buffer_size, config.output_buffer_size);
         let transport = TcpTransport::new(stream, buffers);
