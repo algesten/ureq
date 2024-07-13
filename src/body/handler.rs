@@ -1,3 +1,5 @@
+use std::io;
+
 use crate::pool::Connection;
 use crate::time::Instant;
 use crate::unit::{Event, Input, Unit};
@@ -79,5 +81,11 @@ impl UnitHandler {
         };
 
         Ok(amount)
+    }
+}
+
+impl<'a> io::Read for UnitHandlerRef<'a> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.do_read(buf).map_err(|e| e.into_io())
     }
 }
