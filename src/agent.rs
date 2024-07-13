@@ -13,7 +13,7 @@ use crate::send_body::AsBody;
 use crate::time::{Duration, Instant};
 use crate::transport::{ConnectionDetails, Connector, DefaultConnector, NoBuffers};
 use crate::unit::{Event, Input, Unit};
-use crate::util::{DebugRequest, UriExt};
+use crate::util::{DebugResponse, UriExt};
 use crate::{Error, RequestBuilder, SendBody};
 
 #[cfg(feature = "_tls")]
@@ -236,8 +236,6 @@ impl Agent {
         body: SendBody,
         current_time: impl Fn() -> Instant + Send + Sync + 'static,
     ) -> Result<Response<Body>, Error> {
-        info!("Run {:?}", DebugRequest(&request));
-
         let mut unit = Unit::new(self.config.clone(), current_time(), request, body)?;
 
         let mut addr = None;
@@ -331,6 +329,13 @@ impl Agent {
                     connection = Some(self.pool.connect(&details)?);
 
                     unit.handle_input(current_time(), Input::ConnectionOpen, &mut [])?;
+
+                    if log_enabled!(log::Level::Info) {
+                        let fake_request = unit
+                            .fake_request()
+                            .expect("fake_request after Input::Prepared");
+                        info!("{:?}", fake_request);
+                    }
                 }
 
                 Event::Await100 { timeout } => {
@@ -394,7 +399,7 @@ impl Agent {
         let recv_body = Body::new(unit, connection, info, current_time);
         let response = Response::from_parts(parts, recv_body);
 
-        info!("{}", response.status());
+        info!("{:?}", DebugResponse(&response));
 
         Ok(response)
     }
