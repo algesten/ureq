@@ -19,10 +19,10 @@ exclude = ["/cargo_deny.sh", "/deny.toml", "/test.sh"]
 rust-version = "1.67"
 
 [package.metadata.docs.rs]
-features = ["rustls", "native-roots", "native-tls", "socks-proxy", "cookies", "gzip", "brotli"]
+features = ["rustls", "native-roots", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset"]
 
 [features]
-default = ["rustls", "native-roots", "native-tls", "socks-proxy", "cookies", "gzip", "brotli"]
+default = ["rustls", "native-roots", "native-tls", "socks-proxy", "cookies"]
 rustls = ["dep:rustls", "_tls"]
 native-tls = ["dep:native-tls", "dep:der", "_tls"]
 native-roots = ["dep:rustls-native-certs"]
@@ -30,6 +30,7 @@ socks-proxy = ["dep:socks"]
 cookies = ["dep:cookie_store", "_url"]
 gzip = ["dep:flate2"]
 brotli = ["dep:brotli-decompressor"]
+charset = ["dep:encoding_rs"]
 
 # Underscore prefixed features are internal
 _url = ["dep:url"]
@@ -37,7 +38,7 @@ _tls = ["dep:rustls-pemfile", "dep:rustls-pki-types"]
 
 [dependencies]
 base64 = "0.22.1"
-hoot = { git = "https://github.com/algesten/hoot", rev = "02992fe" }
+hoot = { git = "https://github.com/algesten/hoot", rev = "9b6dc26" }
 http = "1.1.0"
 log = "0.4.22"
 thiserror = "1.0.61"
@@ -63,6 +64,7 @@ url = { version = "2.3.1", optional = true, default-features = false }
 
 flate2 = { version = "1.0.30", optional = true }
 brotli-decompressor = { version = "4.0.1", optional = true }
+encoding_rs = { version = "0.8.34", optional = true }
 
 [build-dependencies]
 cc = "1.0.106"

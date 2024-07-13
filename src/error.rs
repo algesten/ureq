@@ -56,6 +56,10 @@ pub enum Error {
     #[cfg(feature = "cookies")]
     #[error("cookie: {0}")]
     CookieJar(#[from] cookie_store::Error),
+
+    #[cfg(feature = "charset")]
+    #[error("unknown character set: {0}")]
+    UnknownCharset(String),
 }
 
 impl Error {
