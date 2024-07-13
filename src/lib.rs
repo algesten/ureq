@@ -38,6 +38,9 @@ mod cookies;
 #[cfg(feature = "cookies")]
 pub use cookies::{Cookie, CookieJar};
 
+#[cfg(feature = "charset")]
+mod charset;
+
 pub use agent::{Agent, AgentConfig};
 pub use error::Error;
 pub use send_body::SendBody;
@@ -86,7 +89,7 @@ mod test {
     #[test]
     fn simple_get() {
         env_logger::init();
-        let mut response = get("https://httpbin.org/gzip").call().unwrap();
+        let mut response = get("https://httpbin.org/get").call().unwrap();
         // println!("{:#?}", response);
         let _body = response.body_mut().read_to_string(16384).unwrap();
         // println!("body: {:?}", body);

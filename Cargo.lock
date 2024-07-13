@@ -157,6 +157,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "encoding_rs"
+version = "0.8.34"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b45de904aa0b010bce2ab45264d0631681847fa7b6f2eaa7dab7619943bc4f59"
+dependencies = [
+ "cfg-if",
+]
+
+[[package]]
 name = "env_logger"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -257,7 +266,7 @@ checksum = "d231dfb89cfffdbc30e7fc41579ed6066ad03abda9e567ccafae602b97ec5024"
 [[package]]
 name = "hoot"
 version = "0.2.0"
-source = "git+https://github.com/algesten/hoot?rev=02992fe#02992fea818a3d9a80a8a0f20967223cf84987bd"
+source = "git+https://github.com/algesten/hoot?rev=9b6dc26#9b6dc266ffc8ee97978672a18e9fec18fa002e5d"
 dependencies = [
  "http",
  "httparse",
@@ -822,6 +831,7 @@ dependencies = [
  "cc",
  "cookie_store",
  "der",
+ "encoding_rs",
  "env_logger",
  "flate2",
  "hoot",
