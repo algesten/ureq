@@ -79,22 +79,31 @@ impl Error {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TimeoutReason {
-    Resolver,
     Global,
-    Call,
-    Socks,
+    Resolver,
+    OpenConnection,
+    SendRequest,
+    SendBody,
+    Await100,
+    RecvResponse,
+    RecvBody,
 }
 
 impl fmt::Display for TimeoutReason {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            TimeoutReason::Resolver => write!(f, "resolver"),
-            TimeoutReason::Global => write!(f, "global"),
-            TimeoutReason::Call => write!(f, "call"),
-            TimeoutReason::Socks => write!(f, "socks"),
-        }
+        let r = match self {
+            TimeoutReason::Global => "global",
+            TimeoutReason::Resolver => "resolver",
+            TimeoutReason::OpenConnection => "open connection",
+            TimeoutReason::SendRequest => "send request",
+            TimeoutReason::SendBody => "send body",
+            TimeoutReason::Await100 => "await 100",
+            TimeoutReason::RecvResponse => "receive response",
+            TimeoutReason::RecvBody => "receive body",
+        };
+        write!(f, "{}", r)
     }
 }
 

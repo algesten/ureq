@@ -5,7 +5,6 @@ use std::thread;
 
 use socks::{Socks4Stream, Socks5Stream};
 
-use crate::error::TimeoutReason;
 use crate::proxy::{Proto, Proxy};
 use crate::transport::tcp::TcpTransport;
 use crate::transport::LazyBuffers;
@@ -42,7 +41,7 @@ impl Connector for SocksConnector {
         let target_addr = details.addr;
 
         // The async behavior is only used if we want to time cap connecting.
-        let use_sync = details.timeout.is_not_happening();
+        let use_sync = details.timeout.0.is_not_happening();
 
         let stream = if use_sync {
             connect_proxy(proxy, proxy_addr, target_addr)?
@@ -52,9 +51,9 @@ impl Connector for SocksConnector {
 
             thread::spawn(move || tx.send(connect_proxy(&proxy, proxy_addr, target_addr)));
 
-            match rx.recv_timeout(*details.timeout) {
+            match rx.recv_timeout(*details.timeout.0) {
                 Ok(v) => v?,
-                Err(RecvTimeoutError::Timeout) => return Err(Error::Timeout(TimeoutReason::Socks)),
+                Err(RecvTimeoutError::Timeout) => return Err(Error::Timeout(details.timeout.1)),
                 Err(RecvTimeoutError::Disconnected) => unreachable!("mpsc sender gone"),
             }
         };
