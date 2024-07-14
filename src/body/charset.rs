@@ -7,7 +7,7 @@ use crate::util::ConsumeBuf;
 const MAX_OUTPUT: usize = 4096;
 
 /// Charset transcoder
-pub struct CharCodec<R> {
+pub(crate) struct CharCodec<R> {
     reader: BufReader<R>,
     dec: Option<Decoder>,
     enc: Option<Encoder>,

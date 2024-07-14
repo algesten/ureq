@@ -11,7 +11,8 @@ use crate::{AgentConfig, Error};
 use self::tcp::TcpConnector;
 
 mod buf;
-pub use buf::{Buffers, LazyBuffers, NoBuffers};
+pub(crate) use buf::NoBuffers;
+pub use buf::{Buffers, LazyBuffers};
 
 mod tcp;
 
@@ -123,8 +124,10 @@ impl Connector for DefaultConnector {
 }
 
 #[derive(Debug)]
-pub struct WarnOnNoSocksConnector;
+#[cfg(not(feature = "socks-proxy"))]
+pub(crate) struct WarnOnNoSocksConnector;
 
+#[cfg(not(feature = "socks-proxy"))]
 impl Connector for WarnOnNoSocksConnector {
     fn connect(
         &self,
