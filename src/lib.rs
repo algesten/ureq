@@ -14,7 +14,7 @@ pub use body::{Body, BodyReader};
 use http::Method;
 pub use http::{Request, Response, Uri};
 pub use request::RequestBuilder;
-pub use send_body::AsBody;
+pub use send_body::AsSendBody;
 
 mod agent;
 mod body;
@@ -42,8 +42,8 @@ pub use agent::{Agent, AgentConfig};
 pub use error::Error;
 pub use send_body::SendBody;
 
-/// Run a [`http::Request`]
-pub fn run(request: Request<impl AsBody>) -> Result<Response<Body>, Error> {
+/// Run a [`http::Request<impl AsSendBody>`].
+pub fn run(request: Request<impl AsSendBody>) -> Result<Response<Body>, Error> {
     let agent = Agent::new_with_defaults();
     agent.run(request)
 }
@@ -57,7 +57,7 @@ pub fn agent() -> Agent {
 
 macro_rules! mk_method {
     ($f:tt, $m:tt) => {
-        #[doc = concat!("Make a ", stringify!($m), " request")]
+        #[doc = concat!("Make a ", stringify!($m), " request.\n\nRun on a use-once [`Agent`].")]
         pub fn $f<T>(uri: T) -> RequestBuilder
         where
             Uri: TryFrom<T>,
