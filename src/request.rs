@@ -4,7 +4,7 @@ use std::ops::{Deref, DerefMut};
 use http::{Method, Request, Response, Uri};
 
 use crate::body::Body;
-use crate::send_body::AsBody;
+use crate::send_body::AsSendBody;
 use crate::time::Instant;
 use crate::{Agent, Error, SendBody};
 

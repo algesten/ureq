@@ -9,7 +9,7 @@ use crate::body::{Body, ResponseInfo};
 use crate::pool::{Connection, ConnectionPool};
 use crate::proxy::Proxy;
 use crate::resolver::{DefaultResolver, Resolver};
-use crate::send_body::AsBody;
+use crate::send_body::AsSendBody;
 use crate::time::{Duration, Instant};
 use crate::transport::{ConnectionDetails, Connector, DefaultConnector, NoBuffers};
 use crate::unit::{Event, Input, Unit};
@@ -222,7 +222,7 @@ impl Agent {
         self.jar.lock()
     }
 
-    pub fn run(&self, request: Request<impl AsBody>) -> Result<Response<Body>, Error> {
+    pub fn run(&self, request: Request<impl AsSendBody>) -> Result<Response<Body>, Error> {
         let (parts, mut body) = request.into_parts();
         let body = body.as_body();
         let request = Request::from_parts(parts, ());
@@ -411,7 +411,7 @@ macro_rules! mk_method {
     ($($f:tt, $m:tt),*) => {
         impl Agent {
             $(
-                #[doc = concat!("Make a ", stringify!($m), " request")]
+                #[doc = concat!("Make a ", stringify!($m), " request using this agent.")]
                 pub fn $f<T>(&self, uri: T) -> RequestBuilder
                 where
                     Uri: TryFrom<T>,

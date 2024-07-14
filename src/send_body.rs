@@ -58,7 +58,7 @@ mod private {
 use http::Response;
 use private::Private;
 
-pub trait AsBody: Private {
+pub trait AsSendBody: Private {
     #[doc(hidden)]
     fn as_body(&mut self) -> SendBody;
 }
@@ -73,7 +73,7 @@ pub(crate) enum BodyInner<'a> {
 macro_rules! impl_into_body_slice {
     ($t:ty) => {
         impl Private for $t {}
-        impl AsBody for $t {
+        impl AsSendBody for $t {
             fn as_body(&mut self) -> SendBody {
                 BodyInner::ByteSlice((*self).as_ref()).into()
             }
@@ -91,7 +91,7 @@ impl_into_body_slice!(&Vec<u8>);
 macro_rules! impl_into_body {
     ($t:ty, $s:tt) => {
         impl Private for $t {}
-        impl AsBody for $t {
+        impl AsSendBody for $t {
             fn as_body(&mut self) -> SendBody {
                 BodyInner::$s(self).into()
             }
@@ -124,14 +124,14 @@ impl<'a> From<BodyInner<'a>> for SendBody<'a> {
 }
 
 impl Private for Body {}
-impl AsBody for Body {
+impl AsSendBody for Body {
     fn as_body(&mut self) -> SendBody {
         BodyInner::Body(self.as_reader(u64::MAX)).into()
     }
 }
 
 impl Private for Response<Body> {}
-impl AsBody for Response<Body> {
+impl AsSendBody for Response<Body> {
     fn as_body(&mut self) -> SendBody {
         BodyInner::Body(self.body_mut().as_reader(u64::MAX)).into()
     }
