@@ -4,7 +4,7 @@ use std::{fmt, io, time};
 
 use crate::time::Duration;
 use crate::util::IoResultExt;
-use crate::Error;
+use crate::{Error, TimeoutReason};
 
 use super::{Buffers, ConnectionDetails, Connector, LazyBuffers, Transport};
 
@@ -25,7 +25,15 @@ impl Connector for TcpConnector {
 
         trace!("Try connect TcpStream to {}", details.addr);
 
-        let stream = TcpStream::connect_timeout(&details.addr, *details.timeout)?;
+        let stream = match TcpStream::connect_timeout(&details.addr, *details.timeout.0)
+            .normalize_would_block()
+        {
+            Ok(v) => v,
+            Err(e) if e.kind() == io::ErrorKind::TimedOut => {
+                return Err(Error::Timeout(details.timeout.1))
+            }
+            Err(e) => return Err(e.into()),
+        };
 
         if details.config.no_delay {
             stream.set_nodelay(true)?;
@@ -85,9 +93,13 @@ impl Transport for TcpTransport {
         &mut self.buffers
     }
 
-    fn transmit_output(&mut self, amount: usize, timeout: Duration) -> Result<(), Error> {
+    fn transmit_output(
+        &mut self,
+        amount: usize,
+        timeout: (Duration, TimeoutReason),
+    ) -> Result<(), Error> {
         maybe_update_timeout(
-            timeout,
+            timeout.0,
             &mut self.timeout_write,
             &self.stream,
             TcpStream::set_write_timeout,
@@ -99,14 +111,14 @@ impl Transport for TcpTransport {
         Ok(())
     }
 
-    fn await_input(&mut self, timeout: Duration) -> Result<(), Error> {
+    fn await_input(&mut self, timeout: (Duration, TimeoutReason)) -> Result<(), Error> {
         if self.buffers.can_use_input() {
             return Ok(());
         }
 
         // Proceed to fill the buffers from the TcpStream
         maybe_update_timeout(
-            timeout,
+            timeout.0,
             &mut self.timeout_read,
             &self.stream,
             TcpStream::set_read_timeout,

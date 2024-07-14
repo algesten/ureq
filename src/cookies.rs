@@ -29,7 +29,8 @@ pub struct CookieJar<'a>(MutexGuard<'a, CookieStore>);
 /// To construct a cookie it must be parsed and bound to a uri:
 ///
 /// ```
-/// use ureq::{Cookie, Uri};
+/// use ureq::Cookie;
+/// use ureq::http::Uri;
 ///
 /// let uri = Uri::from_static("https://my.server.com");
 /// let cookie = Cookie::parse("name=value", &uri).unwrap();

@@ -9,7 +9,7 @@ use crate::proxy::Proxy;
 use crate::time::{Duration, Instant};
 use crate::transport::{Buffers, ConnectionDetails, Connector, Transport};
 use crate::util::DebugAuthority;
-use crate::{AgentConfig, Error};
+use crate::{AgentConfig, Error, TimeoutReason};
 
 pub(crate) struct ConnectionPool {
     connector: Box<dyn Connector>,
@@ -86,11 +86,15 @@ impl Connection {
         self.transport.buffers()
     }
 
-    pub fn transmit_output(&mut self, amount: usize, timeout: Duration) -> Result<(), Error> {
+    pub fn transmit_output(
+        &mut self,
+        amount: usize,
+        timeout: (Duration, TimeoutReason),
+    ) -> Result<(), Error> {
         self.transport.transmit_output(amount, timeout)
     }
 
-    pub fn await_input(&mut self, timeout: Duration) -> Result<(), Error> {
+    pub fn await_input(&mut self, timeout: (Duration, TimeoutReason)) -> Result<(), Error> {
         self.transport.await_input(timeout)
     }
 

@@ -55,15 +55,37 @@ macro_rules! extract {
 }
 
 pub(crate) enum Event<'a> {
-    Reset { must_close: bool },
-    Prepare { uri: &'a Uri },
-    Resolve { uri: &'a Uri, timeout: Duration },
-    OpenConnection { uri: &'a Uri, timeout: Duration },
-    Await100 { timeout: Duration },
-    Transmit { amount: usize, timeout: Duration },
-    AwaitInput { timeout: Duration },
-    Response { response: Response<()>, end: bool },
-    ResponseBody { amount: usize },
+    Reset {
+        must_close: bool,
+    },
+    Prepare {
+        uri: &'a Uri,
+    },
+    Resolve {
+        uri: &'a Uri,
+        timeout: (Duration, TimeoutReason),
+    },
+    OpenConnection {
+        uri: &'a Uri,
+        timeout: (Duration, TimeoutReason),
+    },
+    Await100 {
+        timeout: (Duration, TimeoutReason),
+    },
+    Transmit {
+        amount: usize,
+        timeout: (Duration, TimeoutReason),
+    },
+    AwaitInput {
+        timeout: (Duration, TimeoutReason),
+    },
+    Response {
+        response: Response<()>,
+        end: bool,
+    },
+    ResponseBody {
+        amount: usize,
+    },
 }
 
 #[allow(unused)]
@@ -133,7 +155,7 @@ impl<'b> Unit<SendBody<'b>> {
     fn poll_event_static(
         &mut self,
         buffers: &mut dyn Buffers,
-        timeout: Duration,
+        timeout: (Duration, TimeoutReason),
     ) -> Result<Option<Event<'static>>, Error> {
         Ok(match &mut self.state {
             State::Begin(flow) => {
@@ -145,7 +167,7 @@ impl<'b> Unit<SendBody<'b>> {
             // State::OpenConnection (see below)
             State::SendRequest(flow) => Some(send_request(flow, buffers.output_mut(), timeout)?),
 
-            State::SendBody(flow) => Some(send_body(flow, buffers, timeout, &mut self.body)?),
+            State::SendBody(flow) => Some(send_body(flow, buffers, &mut self.body, timeout)?),
 
             State::Await100(_) => Some(Event::Await100 { timeout }),
 
@@ -235,7 +257,7 @@ impl<'b> Unit<SendBody<'b>> {
     }
 
     // These events borrow from the State, but they don't proceed the FSM.
-    fn poll_event_borrow(&self, timeout: Duration) -> Result<Event, Error> {
+    fn poll_event_borrow(&self, timeout: (Duration, TimeoutReason)) -> Result<Event, Error> {
         let event = match &self.state {
             State::Prepare(flow) => Event::Prepare { uri: flow.uri() },
 
@@ -487,8 +509,8 @@ impl<B> Unit<B> {
             .unwrap_or(Instant::NotHappening)
     }
 
-    fn next_timeout(&mut self, now: Instant) -> Result<Duration, Error> {
-        let call_timeout_at = self.call_timings.next_timeout(&self.state, &self.config);
+    fn next_timeout(&mut self, now: Instant) -> Result<(Duration, TimeoutReason), Error> {
+        let (call_timeout_at, reason) = self.call_timings.next_timeout(&self.state, &self.config);
         let call_timeout = call_timeout_at.duration_since(now);
 
         let global_timeout_at = self.global_timeout();
@@ -500,11 +522,11 @@ impl<B> Unit<B> {
             return Err(Error::Timeout(if global_timeout.is_zero() {
                 TimeoutReason::Global
             } else {
-                TimeoutReason::Call
+                reason
             }));
         }
 
-        Ok(timeout)
+        Ok((timeout, reason))
     }
 
     fn handle_input_recv_body(
@@ -543,7 +565,7 @@ impl<B> Unit<B> {
 fn send_request(
     flow: &mut Flow<SendRequest>,
     output: &mut [u8],
-    timeout: Duration,
+    timeout: (Duration, TimeoutReason),
 ) -> Result<Event<'static>, Error> {
     let output_used = flow.write(output)?;
 
@@ -556,8 +578,8 @@ fn send_request(
 fn send_body(
     flow: &mut Flow<FlowSendBody>,
     buffers: &mut dyn Buffers,
-    timeout: Duration,
     body: &mut SendBody,
+    timeout: (Duration, TimeoutReason),
 ) -> Result<Event<'static>, Error> {
     let (tmp, output) = buffers.tmp_and_output();
 
@@ -609,7 +631,7 @@ pub(crate) struct CallTimings {
 }
 
 impl CallTimings {
-    fn next_timeout(&self, state: &State, config: &AgentConfig) -> Instant {
+    fn next_timeout(&self, state: &State, config: &AgentConfig) -> (Instant, TimeoutReason) {
         // self.time_xxx unwraps() below are OK. If the unwrap fails, we have a state
         // bug where we progressed to a certain State without setting the corresponding time.
         match state {
@@ -617,35 +639,44 @@ impl CallTimings {
             State::Prepare(_) => None,
             State::Resolve(_) => config
                 .timeout_resolve
-                .map(|t| self.time_call_start.unwrap() + t),
+                .map(|t| self.time_call_start.unwrap() + t)
+                .map(|t| (t, TimeoutReason::Resolver)),
             State::OpenConnection(_) => config
                 .timeout_connect
-                .map(|t| self.time_resolve.unwrap() + t),
+                .map(|t| self.time_resolve.unwrap() + t)
+                .map(|t| (t, TimeoutReason::OpenConnection)),
             State::SendRequest(_) => config
                 .timeout_send_request
-                .map(|t| self.time_connect.unwrap() + t),
+                .map(|t| self.time_connect.unwrap() + t)
+                .map(|t| (t, TimeoutReason::SendRequest)),
             State::SendBody(_) => config
                 .timeout_send_body
-                .map(|t| self.time_send_request.unwrap() + t),
+                .map(|t| self.time_send_request.unwrap() + t)
+                .map(|t| (t, TimeoutReason::SendBody)),
             State::Await100(_) => config
                 .timeout_await_100
-                .map(|t| self.time_send_request.unwrap() + t),
+                .map(|t| self.time_send_request.unwrap() + t)
+                .map(|t| (t, TimeoutReason::Await100)),
             State::RecvResponse(_) => config.timeout_recv_response.map(|t| {
                 // The fallback order is important. See state diagram in hoot.
-                self.time_send_body
-                    .or(self.time_await_100)
-                    .or(self.time_send_request)
-                    .unwrap()
-                    + t
+                (
+                    self.time_send_body
+                        .or(self.time_await_100)
+                        .or(self.time_send_request)
+                        .unwrap()
+                        + t,
+                    TimeoutReason::RecvResponse,
+                )
             }),
             State::RecvBody(_) => config
                 .timeout_recv_body
-                .map(|t| self.time_recv_response.unwrap() + t),
+                .map(|t| self.time_recv_response.unwrap() + t)
+                .map(|t| (t, TimeoutReason::RecvBody)),
             State::Redirect(_) => None,
             State::Cleanup(_) => None,
             State::Empty => unreachable!("next_timeout should never be called for State::Empty"),
         }
-        .unwrap_or(Instant::NotHappening)
+        .unwrap_or((Instant::NotHappening, TimeoutReason::Global))
     }
 }
 
