@@ -3,7 +3,8 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use hoot::client::flow::RedirectAuthHeaders;
-use http::{Method, Request, Response, Uri};
+use hoot::BodyMode;
+use http::{HeaderName, HeaderValue, Method, Request, Response, Uri};
 
 use crate::body::{Body, ResponseInfo};
 use crate::pool::{Connection, ConnectionPool};
@@ -13,7 +14,7 @@ use crate::send_body::AsSendBody;
 use crate::time::{Duration, Instant};
 use crate::transport::{ConnectionDetails, Connector, DefaultConnector, NoBuffers};
 use crate::unit::{Event, Input, Unit};
-use crate::util::{DebugResponse, UriExt};
+use crate::util::{DebugResponse, HeaderMapExt, UriExt};
 use crate::{Error, RequestBuilder, SendBody};
 use crate::{WithBody, WithoutBody};
 
@@ -211,12 +212,11 @@ impl Agent {
     /// let agent = ureq::agent();
     ///
     /// // Cookies set by www.google.com are stored in agent.
-    /// agent.get("https://www.google.com/").call()?;
+    /// agent.get("https://www.google.com/").call().unwrap();
     ///
     /// // Saves (persistent) cookies
-    /// let mut file = File::create("cookies.json")?;
+    /// let mut file = File::create("cookies.json").unwrap();
     /// agent.cookie_jar().save_json(&mut file).unwrap();
-    /// # Ok::<_, ureq::Error>(())
     /// ```
     #[cfg(feature = "cookies")]
     pub fn cookie_jar(&self) -> crate::cookies::CookieJar<'_> {
@@ -237,12 +237,19 @@ impl Agent {
         body: SendBody,
         current_time: impl Fn() -> Instant + Send + Sync + 'static,
     ) -> Result<Response<Body>, Error> {
+        let send_body_mode = if request.headers().has_send_body_mode() {
+            None
+        } else {
+            Some(body.body_mode())
+        };
+
         let mut unit = Unit::new(self.config.clone(), current_time(), request, body)?;
 
         let mut addr = None;
         let mut connection: Option<Connection> = None;
         let mut response;
         let mut no_buffers = NoBuffers;
+        let mut recv_body_mode = BodyMode::NoBody;
 
         loop {
             // The buffer is owned by the connection. Before we have an open connection,
@@ -273,14 +280,11 @@ impl Agent {
                     #[cfg(feature = "cookies")]
                     {
                         let value = self.jar.get_request_cookies(uri);
-                        let input = Input::Header {
-                            name: http::HeaderName::from_static("cookie"),
-                            value: http::HeaderValue::from_str(&value).map_err(|_| {
-                                Error::Other("Cookie value is an invalid http-header")
-                            })?,
-                        };
                         if !value.is_empty() {
-                            unit.handle_input(current_time(), input, &mut [])?;
+                            let value = HeaderValue::from_str(&value).map_err(|_| {
+                                Error::Other("Cookie value is an invalid http-header")
+                            })?;
+                            set_header(&mut unit, current_time(), "cookie", value);
                         }
                     }
 
@@ -297,12 +301,25 @@ impl Agent {
                             value.push_str("br");
                             value
                         });
-                        let input = Input::Header {
-                            name: http::HeaderName::from_static("accept-encoding"),
-                            // unwrap is ok because above ACCEPTS will produce a valid value
-                            value: http::HeaderValue::from_str(&ACCEPTS).unwrap(),
-                        };
-                        unit.handle_input(current_time(), input, &mut [])?;
+                        // unwrap is ok because above ACCEPTS will produce a valid value
+                        let value = HeaderValue::from_str(&ACCEPTS).unwrap();
+                        set_header(&mut unit, current_time(), "accept-encoding", value);
+                    }
+
+                    if let Some(send_body_mode) = send_body_mode {
+                        println!("{:?}", send_body_mode);
+
+                        match send_body_mode {
+                            BodyMode::LengthDelimited(v) => {
+                                let value = HeaderValue::from(v);
+                                set_header(&mut unit, current_time(), "content-length", value);
+                            }
+                            BodyMode::Chunked => {
+                                let value = HeaderValue::from_static("chunked");
+                                set_header(&mut unit, current_time(), "transfer-encoding", value);
+                            }
+                            _ => {}
+                        }
                     }
 
                     unit.handle_input(current_time(), Input::Prepared, &mut [])?;
@@ -378,6 +395,10 @@ impl Agent {
                 Event::Response { response: r, end } => {
                     response = Some(r);
 
+                    if let Some(b) = unit.body_mode() {
+                        recv_body_mode = b;
+                    }
+
                     // end true means one of two things:
                     // 1. This is a non-redirect response
                     // 2. This is a redirect response, and we are not following (any more) redirects
@@ -398,7 +419,7 @@ impl Agent {
         let unit = unit.release_body();
 
         let (parts, _) = response.into_parts();
-        let info = ResponseInfo::new(&parts.headers);
+        let info = ResponseInfo::new(&parts.headers, recv_body_mode);
         let recv_body = Body::new(unit, connection, info, current_time);
         let response = Response::from_parts(parts, recv_body);
 
@@ -406,6 +427,13 @@ impl Agent {
 
         Ok(response)
     }
+}
+
+fn set_header(unit: &mut Unit<SendBody>, now: Instant, name: &'static str, value: HeaderValue) {
+    let name = HeaderName::from_static(name);
+    let input = Input::Header { name, value };
+    unit.handle_input(now, input, &mut [])
+        .expect("to set header");
 }
 
 macro_rules! mk_method {

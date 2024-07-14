@@ -280,3 +280,31 @@ impl UriExt for Uri {
         Ok(url)
     }
 }
+
+pub(crate) trait HeaderMapExt {
+    fn get_str(&self, k: &str) -> Option<&str>;
+    fn is_chunked(&self) -> bool;
+    fn content_length(&self) -> Option<u64>;
+
+    fn has_send_body_mode(&self) -> bool {
+        self.is_chunked() || self.content_length().is_some()
+    }
+}
+
+impl HeaderMapExt for HeaderMap {
+    fn get_str(&self, k: &str) -> Option<&str> {
+        self.get(k).and_then(|v| v.to_str().ok())
+    }
+
+    fn is_chunked(&self) -> bool {
+        self.get_str("transfer-encoding")
+            .map(|v| v.contains("chunked"))
+            .unwrap_or(false)
+    }
+
+    fn content_length(&self) -> Option<u64> {
+        let h = self.get_str("content-length")?;
+        let len: u64 = h.parse().ok()?;
+        Some(len)
+    }
+}
