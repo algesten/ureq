@@ -8,6 +8,7 @@ use hoot::client::flow::state::{
     SendRequest,
 };
 use hoot::client::flow::{Await100Result, RecvBodyResult, RecvResponseResult, SendRequestResult};
+use hoot::BodyMode;
 use http::{HeaderMap, HeaderName, HeaderValue, Method, Request, Response, Uri, Version};
 
 use crate::error::TimeoutReason;
@@ -406,6 +407,14 @@ impl<'b> Unit<SendBody<'b>> {
         };
 
         Ok(r)
+    }
+
+    pub(crate) fn body_mode(&self) -> Option<BodyMode> {
+        let State::RecvBody(flow) = &self.state else {
+            return None;
+        };
+
+        Some(flow.body_mode())
     }
 }
 

@@ -80,11 +80,20 @@ mk_method!(patch, PATCH, WithBody);
 mk_method!(trace, TRACE, WithoutBody);
 
 #[cfg(test)]
-mod test {
+pub(crate) mod test {
+
+    use once_cell::sync::Lazy;
+
     use super::*;
+
+    pub fn init_test_log() {
+        static INIT_LOG: Lazy<()> = Lazy::new(|| env_logger::init());
+        *INIT_LOG
+    }
 
     #[test]
     fn connect_http_google() {
+        init_test_log();
         let agent = Agent::new_with_defaults();
 
         let resp = agent.get("http://www.google.com/").call().unwrap();
@@ -103,6 +112,7 @@ mod test {
     #[test]
     #[cfg(feature = "rustls")]
     fn connect_https_google_rustls() {
+        init_test_log();
         let agent = Agent::new_with_defaults();
 
         let resp = agent.get("https://www.google.com/").call().unwrap();
@@ -116,6 +126,26 @@ mod test {
                 .replace("; ", ";")
         );
         assert_eq!(resp.body().mime_type(), Some("text/html"));
+    }
+
+    #[test]
+    fn simple_put_content_len() {
+        init_test_log();
+        let mut resp = put("http://httpbin.org/put").send(&[0_u8; 100]).unwrap();
+        let s = resp.body_mut().read_to_string(1000).unwrap();
+        println!("{}", s);
+    }
+
+    #[test]
+    fn simple_put_chunked() {
+        init_test_log();
+        let mut resp = put("http://httpbin.org/put")
+            // override default behavior
+            .header("transfer-encoding", "chunked")
+            .send(&[0_u8; 100])
+            .unwrap();
+        let s = resp.body_mut().read_to_string(1000).unwrap();
+        println!("{}", s);
     }
 
     // #[test]
@@ -158,8 +188,8 @@ mod test {
         let data = vec![0_u8, 1, 2, 3, 4];
 
         // Response<Body> via ResponseBuilder
-        is_send(post("https://example.test").send_bytes(&data));
-        is_sync(post("https://example.test").send_bytes(&data));
+        is_send(post("https://example.test").send(&data));
+        is_sync(post("https://example.test").send(&data));
 
         // Request<impl AsBody>
         is_send(Request::post("https://yaz").body(&data).unwrap());
@@ -170,17 +200,17 @@ mod test {
         is_sync(run(Request::post("https://yaz").body(&data).unwrap()));
 
         // Response<BodyReader<'a>>
-        let mut response = post("https://yaz").send_bytes(&data).unwrap();
+        let mut response = post("https://yaz").send(&data).unwrap();
         let shared_reader = response.body_mut().as_reader(1000);
         is_send(shared_reader);
         let shared_reader = response.body_mut().as_reader(1000);
         is_sync(shared_reader);
 
         // Response<BodyReader<'static>>
-        let response = post("https://yaz").send_bytes(&data).unwrap();
+        let response = post("https://yaz").send(&data).unwrap();
         let owned_reader = response.into_parts().1.into_reader(1000);
         is_send(owned_reader);
-        let response = post("https://yaz").send_bytes(&data).unwrap();
+        let response = post("https://yaz").send(&data).unwrap();
         let owned_reader = response.into_parts().1.into_reader(1000);
         is_sync(owned_reader);
     }

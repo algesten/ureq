@@ -99,19 +99,17 @@ impl RequestBuilder<WithoutBody> {
         }
     }
 
-    /// Sends the request with no body and blocks the caller until done.
+    /// Sends the request and blocks the caller until we receive a response.
     ///
-    /// Use this with GET, HEAD, OPTIONS or TRACE. It sends neither
-    /// Content-Length nor Transfer-Encoding.
+    /// It sends neither `Content-Length` nor `Transfer-Encoding`.
     ///
     /// ```
     /// let resp = ureq::get("http://httpbin.org/get")
-    ///     .call()?;
-    /// # Ok::<_, ureq::Error>(())
+    ///     .call().unwrap();
     /// ```
     pub fn call(self) -> Result<Response<Body>, Error> {
         let request = self.builder.body(())?;
-        do_call(self.agent, request, SendBody::empty())
+        do_call(self.agent, request, SendBody::none())
     }
 }
 
@@ -128,19 +126,16 @@ impl RequestBuilder<WithBody> {
         }
     }
 
-    /// Send data as bytes.
-    ///
-    /// The `Content-Length` header is implicitly set to the length of the serialized value.
+    /// Send body data and blocks te caller until we receive response.
     ///
     /// ```
     /// let resp = ureq::post("http://httpbin.org/put")
-    ///     .send_bytes(&[0; 1000])?;
-    /// # Ok::<_, ureq::Error>(())
+    ///     .send(&[0_u8; 1000]).unwrap();
     /// ```
-    pub fn send_bytes(self, data: &[u8]) -> Result<Response<Body>, Error> {
+    pub fn send(self, data: impl AsSendBody) -> Result<Response<Body>, Error> {
         let request = self.builder.body(())?;
         let mut data_ref = data;
-        do_call(self.agent, request, (&mut data_ref).as_body())
+        do_call(self.agent, request, data_ref.as_body())
     }
 }
 
