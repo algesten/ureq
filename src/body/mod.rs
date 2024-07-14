@@ -1,6 +1,8 @@
 use core::fmt;
 use std::io::{self, Read};
 
+use hoot::BodyMode;
+
 use crate::pool::Connection;
 use crate::time::Instant;
 use crate::unit::Unit;
@@ -51,6 +53,7 @@ pub(crate) struct ResponseInfo {
     content_encoding: ContentEncoding,
     mime_type: Option<String>,
     charset: Option<String>,
+    body_mode: BodyMode,
 }
 
 impl Body {
@@ -124,6 +127,10 @@ impl Body {
         BodyReader::new(
             LimitReader::new(UnitHandlerRef::Shared(&mut self.unit_handler), limit),
             &self.info,
+            // With a shared reader that can be called multiple times, we don't know how
+            // much of the incoming body is going to be used. Thus the only reasonable
+            // BodyMode for a AsSendBody made from this BodyReader is Chunked.
+            BodyMode::Chunked,
         )
     }
 
@@ -145,6 +152,10 @@ impl Body {
         BodyReader::new(
             LimitReader::new(UnitHandlerRef::Owned(self.unit_handler), limit),
             &self.info,
+            // Since we are consuming self, we are guaranteed that the reader
+            // will read the entire incoming body. Thus if we use the BodyReader
+            // for AsSendBody, we can use the incoming body mode to signal outgoing.
+            self.info.body_mode,
         )
     }
 
@@ -192,7 +203,7 @@ enum ContentEncoding {
 }
 
 impl ResponseInfo {
-    pub fn new(headers: &http::HeaderMap) -> Self {
+    pub fn new(headers: &http::HeaderMap, body_mode: BodyMode) -> Self {
         let content_encoding = headers
             .get("content-encoding")
             .and_then(|v| v.to_str().ok())
@@ -209,6 +220,7 @@ impl ResponseInfo {
             content_encoding,
             mime_type,
             charset,
+            body_mode,
         }
     }
 }
@@ -273,27 +285,49 @@ fn split_content_type(content_type: &str) -> (Option<String>, Option<String>) {
 /// ```
 pub struct BodyReader<'a> {
     reader: CharsetDecoder<ContentDecoder<LimitReader<UnitHandlerRef<'a>>>>,
+    body_mode: BodyMode,
 }
 
 impl<'a> BodyReader<'a> {
-    fn new(reader: LimitReader<UnitHandlerRef<'a>>, info: &ResponseInfo) -> BodyReader<'a> {
+    fn new(
+        reader: LimitReader<UnitHandlerRef<'a>>,
+        info: &ResponseInfo,
+        incoming_body_mode: BodyMode,
+    ) -> BodyReader<'a> {
+        // This is outgoing body_mode in case we are using the BodyReader as a send body
+        // in a proxy situation.
+        let mut body_mode = incoming_body_mode;
+
         let reader = match info.content_encoding {
             ContentEncoding::None | ContentEncoding::Unknown => ContentDecoder::PassThrough(reader),
             #[cfg(feature = "gzip")]
-            ContentEncoding::Gzip => ContentDecoder::Gzip(Box::new(gzip::GzipDecoder::new(reader))),
+            ContentEncoding::Gzip => {
+                body_mode = BodyMode::Chunked;
+                ContentDecoder::Gzip(Box::new(gzip::GzipDecoder::new(reader)))
+            }
             #[cfg(not(feature = "gzip"))]
             ContentEncoding::Gzip => ContentDecoder::PassThrough(reader),
             #[cfg(feature = "brotli")]
             ContentEncoding::Brotli => {
+                body_mode = BodyMode::Chunked;
                 ContentDecoder::Brotli(Box::new(brotli::BrotliDecoder::new(reader)))
             }
             #[cfg(not(feature = "brotli"))]
             ContentEncoding::Brotli => ContentDecoder::PassThrough(reader),
         };
 
-        let reader = charset_decoder(reader, info.mime_type.as_deref(), info.charset.as_deref());
+        let reader = charset_decoder(
+            reader,
+            info.mime_type.as_deref(),
+            info.charset.as_deref(),
+            &mut body_mode,
+        );
 
-        BodyReader { reader }
+        BodyReader { body_mode, reader }
+    }
+
+    pub(crate) fn body_mode(&self) -> BodyMode {
+        self.body_mode
     }
 }
 
@@ -302,6 +336,7 @@ fn charset_decoder<R: Read>(
     reader: R,
     mime_type: Option<&str>,
     charset: Option<&str>,
+    body_mode: &mut BodyMode,
 ) -> CharsetDecoder<R> {
     let is_text = mime_type.map(|m| m.starts_with("text/")).unwrap_or(false);
 
@@ -321,6 +356,7 @@ fn charset_decoder<R: Read>(
             // Do nothing
             CharsetDecoder::PassThrough(reader)
         } else {
+            *body_mode = BodyMode::Chunked;
             CharsetDecoder::Decoder(self::charset::CharCodec::new(reader, from, UTF_8))
         }
     }

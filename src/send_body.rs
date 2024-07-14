@@ -11,8 +11,8 @@ pub struct SendBody<'a> {
 }
 
 impl<'a> SendBody<'a> {
-    pub fn empty() -> SendBody<'static> {
-        BodyInner::ByteSlice(&[]).into()
+    pub fn none() -> SendBody<'static> {
+        BodyInner::None.into()
     }
 
     pub fn from_reader(reader: &'a mut dyn Read) -> SendBody<'a> {
@@ -28,6 +28,9 @@ impl<'a> SendBody<'a> {
 
     pub(crate) fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let n = match &mut self.inner {
+            BodyInner::None => {
+                return Ok(0);
+            }
             BodyInner::ByteSlice(v) => {
                 let max = v.len().min(buf.len());
 
@@ -51,8 +54,13 @@ impl<'a> SendBody<'a> {
     pub(crate) fn is_ended(&self) -> bool {
         self.ended
     }
+
+    pub(crate) fn body_mode(&self) -> BodyMode {
+        self.inner.body_mode()
+    }
 }
 
+use hoot::BodyMode;
 use http::Response;
 
 pub trait AsSendBody: Private {
@@ -60,11 +68,40 @@ pub trait AsSendBody: Private {
     fn as_body(&mut self) -> SendBody;
 }
 
+impl<'a> Private for SendBody<'a> {}
+impl<'a> AsSendBody for SendBody<'a> {
+    fn as_body(&mut self) -> SendBody {
+        SendBody {
+            inner: match &mut self.inner {
+                BodyInner::None => BodyInner::None,
+                BodyInner::ByteSlice(v) => BodyInner::ByteSlice(v),
+                BodyInner::Reader(v) => BodyInner::Reader(v),
+                BodyInner::Body(v) => BodyInner::Reader(v),
+                BodyInner::OwnedReader(v) => BodyInner::Reader(v),
+            },
+            ended: self.ended,
+        }
+    }
+}
+
 pub(crate) enum BodyInner<'a> {
+    None,
     ByteSlice(&'a [u8]),
-    Reader(&'a mut dyn Read),
     Body(BodyReader<'a>),
+    Reader(&'a mut dyn Read),
     OwnedReader(Box<dyn Read + Send + Sync>),
+}
+
+impl<'a> BodyInner<'a> {
+    pub fn body_mode(&self) -> BodyMode {
+        match self {
+            BodyInner::None => BodyMode::NoBody,
+            BodyInner::ByteSlice(v) => BodyMode::LengthDelimited(v.len() as u64),
+            BodyInner::Body(v) => v.body_mode(),
+            BodyInner::Reader(_) => BodyMode::Chunked,
+            BodyInner::OwnedReader(_) => BodyMode::Chunked,
+        }
+    }
 }
 
 macro_rules! impl_into_body_slice {
@@ -131,5 +168,12 @@ impl Private for Response<Body> {}
 impl AsSendBody for Response<Body> {
     fn as_body(&mut self) -> SendBody {
         BodyInner::Body(self.body_mut().as_reader(u64::MAX)).into()
+    }
+}
+
+impl<const N: usize> Private for &[u8; N] {}
+impl<const N: usize> AsSendBody for &[u8; N] {
+    fn as_body(&mut self) -> SendBody {
+        BodyInner::ByteSlice(self.as_slice()).into()
     }
 }
