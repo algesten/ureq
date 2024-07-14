@@ -110,7 +110,7 @@ impl Buffers for LazyBuffers {
     }
 }
 
-pub struct NoBuffers;
+pub(crate) struct NoBuffers;
 
 impl Buffers for NoBuffers {
     fn output(&self) -> &[u8] {

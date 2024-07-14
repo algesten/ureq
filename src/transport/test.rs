@@ -13,7 +13,7 @@ use crate::Error;
 use super::{Buffers, ConnectionDetails, Connector, LazyBuffers, Transport};
 
 #[derive(Default)]
-pub struct TestConnector;
+pub(crate) struct TestConnector;
 
 impl Connector for TestConnector {
     fn connect(
