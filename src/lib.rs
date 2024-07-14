@@ -12,9 +12,9 @@ pub use http;
 
 pub use body::{Body, BodyReader};
 use http::Method;
-pub use http::{Request, Response, Uri};
+use http::{Request, Response, Uri};
 pub use request::RequestBuilder;
-pub use request::{WithBody, WithoutBody};
+use request::{WithBody, WithoutBody};
 pub use send_body::AsSendBody;
 
 mod agent;
@@ -40,7 +40,7 @@ mod cookies;
 pub use cookies::{Cookie, CookieJar};
 
 pub use agent::{Agent, AgentConfig};
-pub use error::Error;
+pub use error::{Error, TimeoutReason};
 pub use send_body::SendBody;
 
 /// Run a [`http::Request<impl AsSendBody>`].

@@ -126,7 +126,7 @@ impl RequestBuilder<WithBody> {
         }
     }
 
-    /// Send body data and blocks te caller until we receive response.
+    /// Send body data and blocks the caller until we receive response.
     ///
     /// ```
     /// let resp = ureq::post("http://httpbin.org/put")

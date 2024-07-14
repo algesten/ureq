@@ -17,7 +17,7 @@ use crate::tls::cert::KeyKind;
 use crate::transport::{
     Buffers, ConnectionDetails, Connector, LazyBuffers, Transport, TransportAdapter,
 };
-use crate::Error;
+use crate::{Error, TimeoutReason};
 
 use super::TlsConfig;
 
@@ -145,7 +145,11 @@ impl Transport for RustlsTransport {
         &mut self.buffers
     }
 
-    fn transmit_output(&mut self, amount: usize, timeout: Duration) -> Result<(), Error> {
+    fn transmit_output(
+        &mut self,
+        amount: usize,
+        timeout: (Duration, TimeoutReason),
+    ) -> Result<(), Error> {
         self.stream.get_mut().timeout = timeout;
 
         let output = &self.buffers.output()[..amount];
@@ -154,7 +158,7 @@ impl Transport for RustlsTransport {
         Ok(())
     }
 
-    fn await_input(&mut self, timeout: Duration) -> Result<(), Error> {
+    fn await_input(&mut self, timeout: (Duration, TimeoutReason)) -> Result<(), Error> {
         if self.buffers.can_use_input() {
             return Ok(());
         }

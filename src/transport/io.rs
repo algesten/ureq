@@ -1,18 +1,19 @@
 use std::io;
 
 use crate::time::Duration;
+use crate::TimeoutReason;
 
 use super::Transport;
 
 pub struct TransportAdapter {
-    pub timeout: Duration,
+    pub timeout: (Duration, TimeoutReason),
     pub transport: Box<dyn Transport>,
 }
 
 impl TransportAdapter {
     pub fn new(transport: Box<dyn Transport>) -> Self {
         Self {
-            timeout: Duration::NotHappening,
+            timeout: (Duration::NotHappening, TimeoutReason::Global),
             transport,
         }
     }
