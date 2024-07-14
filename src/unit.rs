@@ -53,7 +53,7 @@ macro_rules! extract {
     };
 }
 
-pub enum Event<'a> {
+pub(crate) enum Event<'a> {
     Reset { must_close: bool },
     Prepare { uri: &'a Uri },
     Resolve { uri: &'a Uri, timeout: Duration },
@@ -66,7 +66,7 @@ pub enum Event<'a> {
 }
 
 #[allow(unused)]
-pub enum Input<'a> {
+pub(crate) enum Input<'a> {
     Begin,
     Header {
         name: HeaderName,

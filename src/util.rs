@@ -4,12 +4,12 @@ use std::io::{self, ErrorKind};
 use std::ops::Deref;
 
 use http::uri::{Authority, Scheme};
-use http::{HeaderMap, Request, Response, Uri};
+use http::{HeaderMap, Response, Uri};
 
 use crate::proxy::Proto;
 use crate::Error;
 
-pub trait AuthorityExt {
+pub(crate) trait AuthorityExt {
     fn userinfo(&self) -> Option<&str>;
     fn username(&self) -> Option<&str>;
     fn password(&self) -> Option<&str>;
@@ -34,7 +34,7 @@ impl AuthorityExt for Authority {
     }
 }
 
-pub trait SchemeExt {
+pub(crate) trait SchemeExt {
     fn default_port(&self) -> u16;
 }
 
@@ -54,7 +54,7 @@ impl SchemeExt for Scheme {
 
 /// Windows causes kind `TimedOut` while unix does `WouldBlock`. Since we are not
 /// using non-blocking streams, we normalize `WouldBlock` -> `TimedOut`.
-pub trait IoResultExt {
+pub(crate) trait IoResultExt {
     fn normalize_would_block(self) -> Self;
 }
 
@@ -133,20 +133,7 @@ impl Deref for ConsumeBuf {
 }
 
 /// Wrapper to only log non-sensitive data.
-pub struct DebugRequest<'a, B>(pub &'a Request<B>);
-
-impl<'a, B> fmt::Debug for DebugRequest<'a, B> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Request")
-            .field("method", &self.0.method())
-            .field("version", &self.0.version())
-            .field("headers", &DebugHeaders(self.0.headers()))
-            .finish()
-    }
-}
-
-/// Wrapper to only log non-sensitive data.
-pub struct DebugResponse<'a, B>(pub &'a Response<B>);
+pub(crate) struct DebugResponse<'a, B>(pub &'a Response<B>);
 
 impl<'a, B> fmt::Debug for DebugResponse<'a, B> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -158,7 +145,7 @@ impl<'a, B> fmt::Debug for DebugResponse<'a, B> {
     }
 }
 
-pub struct DebugHeaders<'a>(pub &'a HeaderMap);
+pub(crate) struct DebugHeaders<'a>(pub &'a HeaderMap);
 
 const NON_SENSITIVE_HEADERS: &[&str] = &[
     "date",
@@ -208,7 +195,7 @@ impl<'a> fmt::Debug for DebugHeaders<'a> {
 }
 
 /// Wrapper to only log non-sensitive data.
-pub struct DebugUri<'a>(pub &'a Uri);
+pub(crate) struct DebugUri<'a>(pub &'a Uri);
 
 impl<'a> fmt::Debug for DebugUri<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -228,7 +215,7 @@ impl<'a> fmt::Debug for DebugUri<'a> {
     }
 }
 
-pub struct DebugAuthority<'a>(pub &'a Authority);
+pub(crate) struct DebugAuthority<'a>(pub &'a Authority);
 
 impl<'a> fmt::Debug for DebugAuthority<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -260,7 +247,7 @@ impl<'a> fmt::Debug for DebugAuthority<'a> {
     }
 }
 
-pub trait UriExt {
+pub(crate) trait UriExt {
     fn ensure_full_url(&self) -> Result<(), Error>;
 
     #[cfg(feature = "_url")]
