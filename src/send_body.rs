@@ -3,6 +3,7 @@ use std::io::{self, Read, Stdin};
 use std::net::TcpStream;
 
 use crate::body::{Body, BodyReader};
+use crate::util::private::Private;
 
 pub struct SendBody<'a> {
     inner: BodyInner<'a>,
@@ -52,11 +53,7 @@ impl<'a> SendBody<'a> {
     }
 }
 
-mod private {
-    pub trait Private {}
-}
 use http::Response;
-use private::Private;
 
 pub trait AsSendBody: Private {
     #[doc(hidden)]

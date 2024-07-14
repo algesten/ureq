@@ -14,6 +14,7 @@ pub use body::{Body, BodyReader};
 use http::Method;
 pub use http::{Request, Response, Uri};
 pub use request::RequestBuilder;
+pub use request::{WithBody, WithoutBody};
 pub use send_body::AsSendBody;
 
 mod agent;
@@ -56,27 +57,27 @@ pub fn agent() -> Agent {
 }
 
 macro_rules! mk_method {
-    ($f:tt, $m:tt) => {
+    ($f:tt, $m:tt, $b:ty) => {
         #[doc = concat!("Make a ", stringify!($m), " request.\n\nRun on a use-once [`Agent`].")]
-        pub fn $f<T>(uri: T) -> RequestBuilder
+        pub fn $f<T>(uri: T) -> RequestBuilder<$b>
         where
             Uri: TryFrom<T>,
             <Uri as TryFrom<T>>::Error: Into<http::Error>,
         {
-            RequestBuilder::new(Agent::new_with_defaults(), Method::$m, uri)
+            RequestBuilder::<$b>::new(Agent::new_with_defaults(), Method::$m, uri)
         }
     };
 }
 
-mk_method!(get, GET);
-mk_method!(post, POST);
-mk_method!(put, PUT);
-mk_method!(delete, DELETE);
-mk_method!(head, HEAD);
-mk_method!(options, OPTIONS);
-mk_method!(connect, CONNECT);
-mk_method!(patch, PATCH);
-mk_method!(trace, TRACE);
+mk_method!(get, GET, WithoutBody);
+mk_method!(post, POST, WithBody);
+mk_method!(put, PUT, WithBody);
+mk_method!(delete, DELETE, WithoutBody);
+mk_method!(head, HEAD, WithBody);
+mk_method!(options, OPTIONS, WithoutBody);
+mk_method!(connect, CONNECT, WithoutBody);
+mk_method!(patch, PATCH, WithBody);
+mk_method!(trace, TRACE, WithoutBody);
 
 #[cfg(test)]
 mod test {
