@@ -1,4 +1,5 @@
 use std::convert::TryFrom;
+use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 
 use http::{Method, Request, Response, Uri};
@@ -6,16 +7,24 @@ use http::{Method, Request, Response, Uri};
 use crate::body::Body;
 use crate::send_body::AsSendBody;
 use crate::time::Instant;
+use crate::util::private::Private;
 use crate::{Agent, Error, SendBody};
 
 /// Transparent wrapper around [`http::request::Builder`].
 #[derive(Debug)]
-pub struct RequestBuilder {
+pub struct RequestBuilder<MethodLimit> {
     agent: Agent,
     builder: http::request::Builder,
+    _ph: PhantomData<MethodLimit>,
 }
 
-impl RequestBuilder {
+pub struct WithoutBody(());
+impl Private for WithoutBody {}
+
+pub struct WithBody(());
+impl Private for WithBody {}
+
+impl RequestBuilder<WithoutBody> {
     pub(crate) fn new<T>(agent: Agent, method: Method, uri: T) -> Self
     where
         Uri: TryFrom<T>,
@@ -24,6 +33,7 @@ impl RequestBuilder {
         Self {
             agent,
             builder: Request::builder().method(method).uri(uri),
+            _ph: PhantomData,
         }
     }
 
@@ -40,6 +50,20 @@ impl RequestBuilder {
     pub fn call(self) -> Result<Response<Body>, Error> {
         let request = self.builder.body(())?;
         do_call(self.agent, request, SendBody::empty())
+    }
+}
+
+impl RequestBuilder<WithBody> {
+    pub(crate) fn new<T>(agent: Agent, method: Method, uri: T) -> Self
+    where
+        Uri: TryFrom<T>,
+        <Uri as TryFrom<T>>::Error: Into<http::Error>,
+    {
+        Self {
+            agent,
+            builder: Request::builder().method(method).uri(uri),
+            _ph: PhantomData,
+        }
     }
 
     /// Send data as bytes.
@@ -63,7 +87,7 @@ fn do_call(agent: Agent, request: Request<()>, body: SendBody) -> Result<Respons
     Ok(response)
 }
 
-impl Deref for RequestBuilder {
+impl<MethodLimit> Deref for RequestBuilder<MethodLimit> {
     type Target = http::request::Builder;
 
     fn deref(&self) -> &Self::Target {
@@ -71,7 +95,7 @@ impl Deref for RequestBuilder {
     }
 }
 
-impl DerefMut for RequestBuilder {
+impl<MethodLimit> DerefMut for RequestBuilder<MethodLimit> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.builder
     }

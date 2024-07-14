@@ -15,6 +15,7 @@ use crate::transport::{ConnectionDetails, Connector, DefaultConnector, NoBuffers
 use crate::unit::{Event, Input, Unit};
 use crate::util::{DebugResponse, UriExt};
 use crate::{Error, RequestBuilder, SendBody};
+use crate::{WithBody, WithoutBody};
 
 #[cfg(feature = "_tls")]
 use crate::tls::TlsConfig;
@@ -408,16 +409,16 @@ impl Agent {
 }
 
 macro_rules! mk_method {
-    ($($f:tt, $m:tt),*) => {
+    ($(($f:tt, $m:tt, $b:ty)),*) => {
         impl Agent {
             $(
                 #[doc = concat!("Make a ", stringify!($m), " request using this agent.")]
-                pub fn $f<T>(&self, uri: T) -> RequestBuilder
+                pub fn $f<T>(&self, uri: T) -> RequestBuilder<$b>
                 where
                     Uri: TryFrom<T>,
                     <Uri as TryFrom<T>>::Error: Into<http::Error>,
                 {
-                    RequestBuilder::new(self.clone(), Method::$m, uri)
+                    RequestBuilder::<$b>::new(self.clone(), Method::$m, uri)
                 }
             )*
         }
@@ -425,6 +426,13 @@ macro_rules! mk_method {
 }
 
 mk_method!(
-    get, GET, post, POST, put, PUT, delete, DELETE, head, HEAD, options, OPTIONS, connect, CONNECT,
-    patch, PATCH, trace, TRACE
+    (get, GET, WithoutBody),
+    (post, POST, WithBody),
+    (put, PUT, WithBody),
+    (delete, DELETE, WithoutBody),
+    (head, HEAD, WithoutBody),
+    (options, OPTIONS, WithoutBody),
+    (connect, CONNECT, WithoutBody),
+    (patch, PATCH, WithBody),
+    (trace, TRACE, WithoutBody)
 );

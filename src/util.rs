@@ -9,6 +9,10 @@ use http::{HeaderMap, Response, Uri};
 use crate::proxy::Proto;
 use crate::Error;
 
+pub(crate) mod private {
+    pub trait Private {}
+}
+
 pub(crate) trait AuthorityExt {
     fn userinfo(&self) -> Option<&str>;
     fn username(&self) -> Option<&str>;
