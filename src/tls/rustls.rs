@@ -12,12 +12,12 @@ use rustls_pki_types::{
     ServerName,
 };
 
-use crate::time::Duration;
+use crate::time::NextTimeout;
 use crate::tls::cert::KeyKind;
 use crate::transport::{
     Buffers, ConnectionDetails, Connector, LazyBuffers, Transport, TransportAdapter,
 };
-use crate::{Error, TimeoutReason};
+use crate::Error;
 
 use super::TlsConfig;
 
@@ -145,11 +145,7 @@ impl Transport for RustlsTransport {
         &mut self.buffers
     }
 
-    fn transmit_output(
-        &mut self,
-        amount: usize,
-        timeout: (Duration, TimeoutReason),
-    ) -> Result<(), Error> {
+    fn transmit_output(&mut self, amount: usize, timeout: NextTimeout) -> Result<(), Error> {
         self.stream.get_mut().timeout = timeout;
 
         let output = &self.buffers.output()[..amount];
@@ -158,7 +154,7 @@ impl Transport for RustlsTransport {
         Ok(())
     }
 
-    fn await_input(&mut self, timeout: (Duration, TimeoutReason)) -> Result<(), Error> {
+    fn await_input(&mut self, timeout: NextTimeout) -> Result<(), Error> {
         if self.buffers.can_use_input() {
             return Ok(());
         }

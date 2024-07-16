@@ -5,8 +5,8 @@ use http::Uri;
 
 use crate::proxy::Proxy;
 use crate::resolver::Resolver;
-use crate::time::{Duration, Instant};
-use crate::{AgentConfig, Error, TimeoutReason};
+use crate::time::{Instant, NextTimeout};
+use crate::{AgentConfig, Error};
 
 use self::tcp::TcpConnector;
 
@@ -54,17 +54,13 @@ pub struct ConnectionDetails<'a> {
 
     pub now: Instant,
     // TODO(martin): Make mechanism to lower duration for each step in the connector chain.
-    pub timeout: (Duration, TimeoutReason),
+    pub timeout: NextTimeout,
 }
 
 pub trait Transport: Debug + Send + Sync {
     fn buffers(&mut self) -> &mut dyn Buffers;
-    fn transmit_output(
-        &mut self,
-        amount: usize,
-        timeout: (Duration, TimeoutReason),
-    ) -> Result<(), Error>;
-    fn await_input(&mut self, timeout: (Duration, TimeoutReason)) -> Result<(), Error>;
+    fn transmit_output(&mut self, amount: usize, timeout: NextTimeout) -> Result<(), Error>;
+    fn await_input(&mut self, timeout: NextTimeout) -> Result<(), Error>;
     fn consume_input(&mut self, amount: usize);
     fn is_open(&mut self) -> bool;
     fn is_tls(&self) -> bool {
@@ -90,7 +86,7 @@ impl DefaultConnector {
             // When enabled, all tests are connected to a dummy server and will not
             // make requests to the internet.
             #[cfg(feature = "_test")]
-            test::TestConnector::default().boxed(),
+            test::TestConnector.boxed(),
             //
             // If we are using socks-proxy, that takes precedence over TcpConnector.
             #[cfg(feature = "socks-proxy")]

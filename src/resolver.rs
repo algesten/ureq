@@ -7,13 +7,12 @@ use std::vec::IntoIter;
 use http::uri::{Authority, Scheme};
 use http::Uri;
 
-use crate::error::TimeoutReason;
-use crate::time::Duration;
+use crate::time::NextTimeout;
 use crate::util::SchemeExt;
 use crate::Error;
 
 pub trait Resolver: Debug + Send + Sync + 'static {
-    fn resolve(&self, uri: &Uri, timeout: (Duration, TimeoutReason)) -> Result<SocketAddr, Error>;
+    fn resolve(&self, uri: &Uri, timeout: NextTimeout) -> Result<SocketAddr, Error>;
 }
 
 pub struct DefaultResolver {
@@ -44,7 +43,7 @@ impl DefaultResolver {
 }
 
 impl Resolver for DefaultResolver {
-    fn resolve(&self, uri: &Uri, timeout: (Duration, TimeoutReason)) -> Result<SocketAddr, Error> {
+    fn resolve(&self, uri: &Uri, timeout: NextTimeout) -> Result<SocketAddr, Error> {
         let scheme = uri.scheme().ok_or(Error::Other("No scheme in uri"))?;
         let authority = uri.authority().ok_or(Error::Other("No host in uri"))?;
 
@@ -52,7 +51,7 @@ impl Resolver for DefaultResolver {
         let addr = DefaultResolver::host_and_port(scheme, authority);
 
         // Determine if we want to use the async behavior.
-        let use_sync = timeout.0.is_not_happening();
+        let use_sync = timeout.after.is_not_happening();
 
         let iter = if use_sync {
             trace!("Resolve: {}", addr);
@@ -72,21 +71,18 @@ impl Resolver for DefaultResolver {
     }
 }
 
-fn resolve_async(
-    addr: String,
-    timeout: (Duration, TimeoutReason),
-) -> Result<IntoIter<SocketAddr>, Error> {
+fn resolve_async(addr: String, timeout: NextTimeout) -> Result<IntoIter<SocketAddr>, Error> {
     // TODO(martin): On Linux we have getaddrinfo_a which is a libc async way of
     // doing host lookup. We should make a subcrate that uses a native async method
     // when possible, and otherwise fall back on this thread behavior.
     let (tx, rx) = mpsc::sync_channel(1);
     thread::spawn(move || tx.send(addr.to_socket_addrs()).ok());
 
-    match rx.recv_timeout(*timeout.0) {
+    match rx.recv_timeout(*timeout.after) {
         Ok(v) => Ok(v?),
         Err(c) => match c {
             // Timeout results in None
-            RecvTimeoutError::Timeout => Err(Error::Timeout(timeout.1)),
+            RecvTimeoutError::Timeout => Err(Error::Timeout(timeout.reason)),
             // The sender going away is nonsensical. Did the thread just die?
             RecvTimeoutError::Disconnected => unreachable!("mpsc sender gone"),
         },
