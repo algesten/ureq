@@ -4,10 +4,22 @@
   * Bump MSRV 1.61 -> 1.63 due to rustls (#764)
   * Update deps (only patch versions in Cargo.lock) (#763)
   * Refork frewsxcv/rust-chunked-transfer to fix MIT/Apache2.0 license (#761)
-  * Fix doc Rustls does now support IP address certificates (#759)
   * Enable http-crate feature for docs (#755)
-  * Rustls dep to default to ring backend (#753)
+  * Update Rustls from 0.22 to 0.23 - this may be a breaking change if your
+    application depends on Rustls 0.22 (e.g. to provide a custom 
+    `rustls::ClientConfig` to `ureq`). See the [Rustls 0.23.0][rustls-0.23.0]
+    changelog for a list of breaking API changes (#753)
+  * Rustls dep to default to ring backend. If your project uses the
+    default `ureq` TLS config, or constructs its own `rustls::ClientConfig`
+    with `rustls::ClientConfig::builder()` you must ensure the Rustls 
+    `aws-lc-rs` feature is not activated, or set the process default 
+    cryptography provider before constructing any configs. See the Rustls
+    [CryptoProvider][CryptoProvider] docs for more information (#753)
   * Remove direct dep rustls-webpki (#752)
+  * Fix doc Rustls does now support IP address certificates (#759)(#753)
+
+[rustls-0.23.0]: https://github.com/rustls/rustls/releases/tag/v%2F0.23.0
+[CryptoProvider]: https://docs.rs/rustls/latest/rustls/crypto/struct.CryptoProvider.html#using-the-per-process-default-cryptoprovider
 
 # 2.9.7
 
