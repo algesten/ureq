@@ -40,8 +40,10 @@ impl Connector for SocksConnector {
         let proxy_addr = details.resolver.resolve(proxy.uri(), details.timeout)?;
         let target_addr = details.addr;
 
+        let timeout = details.timeout;
+
         // The async behavior is only used if we want to time cap connecting.
-        let use_sync = details.timeout.0.is_not_happening();
+        let use_sync = timeout.after.is_not_happening();
 
         let stream = if use_sync {
             connect_proxy(proxy, proxy_addr, target_addr)?
@@ -51,9 +53,9 @@ impl Connector for SocksConnector {
 
             thread::spawn(move || tx.send(connect_proxy(&proxy, proxy_addr, target_addr)));
 
-            match rx.recv_timeout(*details.timeout.0) {
+            match rx.recv_timeout(*timeout.after) {
                 Ok(v) => v?,
-                Err(RecvTimeoutError::Timeout) => return Err(Error::Timeout(details.timeout.1)),
+                Err(RecvTimeoutError::Timeout) => return Err(Error::Timeout(timeout.reason)),
                 Err(RecvTimeoutError::Disconnected) => unreachable!("mpsc sender gone"),
             }
         };

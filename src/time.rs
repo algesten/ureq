@@ -2,6 +2,8 @@ use std::cmp::Ordering;
 use std::ops::{Add, AddAssign, Deref, Sub, SubAssign};
 use std::time;
 
+use crate::TimeoutReason;
+
 /// Wrapper for [`std::time::Instant`] that provides additional time points in the past or future
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Instant {
@@ -138,6 +140,24 @@ impl Ord for Duration {
             (Duration::Exact(_), Duration::NotHappening) => Ordering::Less,
             (Duration::NotHappening, Duration::Exact(_)) => Ordering::Greater,
             (Duration::NotHappening, Duration::NotHappening) => Ordering::Equal,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NextTimeout {
+    pub after: Duration,
+    pub reason: TimeoutReason,
+}
+
+impl NextTimeout {
+    pub fn not_zero(&self) -> Option<Duration> {
+        if self.after.is_not_happening() {
+            None
+        } else if self.after.is_zero() {
+            Some(Duration::from_secs(1))
+        } else {
+            Some(self.after)
         }
     }
 }

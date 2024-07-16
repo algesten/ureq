@@ -3,8 +3,8 @@ use std::fmt;
 use std::io::{Read, Write};
 use std::sync::Arc;
 
-use crate::time::Duration;
-use crate::{transport::*, Error, TimeoutReason};
+use crate::time::NextTimeout;
+use crate::{transport::*, Error};
 use der::pem::LineEnding;
 use der::Document;
 use http::uri::Scheme;
@@ -143,11 +143,7 @@ impl Transport for NativeTlsTransport {
         &mut self.buffers
     }
 
-    fn transmit_output(
-        &mut self,
-        amount: usize,
-        timeout: (Duration, TimeoutReason),
-    ) -> Result<(), Error> {
+    fn transmit_output(&mut self, amount: usize, timeout: NextTimeout) -> Result<(), Error> {
         let stream = self.stream.handshaken()?;
         stream.get_mut().timeout = timeout;
 
@@ -157,7 +153,7 @@ impl Transport for NativeTlsTransport {
         Ok(())
     }
 
-    fn await_input(&mut self, timeout: (Duration, TimeoutReason)) -> Result<(), Error> {
+    fn await_input(&mut self, timeout: NextTimeout) -> Result<(), Error> {
         if self.buffers.can_use_input() {
             return Ok(());
         }
