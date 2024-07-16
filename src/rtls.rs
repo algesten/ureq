@@ -118,9 +118,18 @@ impl TlsConnector for Arc<rustls::ClientConfig> {
 
 pub fn default_tls_config() -> Arc<dyn TlsConnector> {
     static TLS_CONF: Lazy<Arc<dyn TlsConnector>> = Lazy::new(|| {
-        let config = rustls::ClientConfig::builder()
-            .with_root_certificates(root_certs())
-            .with_no_client_auth();
+        // `ureq` prefers to use `*ring*` by default. It unconditionally activates the Rustls
+        // feature for this backend, so we know `rustls::crypto::ring::default_provider()` is
+        // available. We use `builder_with_provider()` instead of `builder()` here to avoid the
+        // risk that the rustls features are ambiguous and no process wide default crypto provider
+        // has been set yet.
+        let config = rustls::ClientConfig::builder_with_provider(
+            rustls::crypto::ring::default_provider().into(),
+        )
+        .with_protocol_versions(&[&rustls::version::TLS12, &rustls::version::TLS13])
+        .unwrap() // Safety: the *ring* default provider always configures ciphersuites compatible w/ both TLS 1.2 & TLS 1.3
+        .with_root_certificates(root_certs())
+        .with_no_client_auth();
         Arc::new(Arc::new(config))
     });
     TLS_CONF.clone()
