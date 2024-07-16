@@ -2,9 +2,9 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::{fmt, io, time};
 
-use crate::time::Duration;
+use crate::time::{Duration, NextTimeout};
 use crate::util::IoResultExt;
-use crate::{Error, TimeoutReason};
+use crate::Error;
 
 use super::{Buffers, ConnectionDetails, Connector, LazyBuffers, Transport};
 
@@ -25,12 +25,19 @@ impl Connector for TcpConnector {
 
         trace!("Try connect TcpStream to {}", details.addr);
 
-        let stream = match TcpStream::connect_timeout(&details.addr, *details.timeout.0)
-            .normalize_would_block()
-        {
+        let timeout = details.timeout;
+
+        let maybe_stream = if let Some(when) = timeout.not_zero() {
+            TcpStream::connect_timeout(&details.addr, *when)
+        } else {
+            TcpStream::connect(details.addr)
+        }
+        .normalize_would_block();
+
+        let stream = match maybe_stream {
             Ok(v) => v,
             Err(e) if e.kind() == io::ErrorKind::TimedOut => {
-                return Err(Error::Timeout(details.timeout.1))
+                return Err(Error::Timeout(timeout.reason))
             }
             Err(e) => return Err(e.into()),
         };
@@ -69,16 +76,12 @@ impl TcpTransport {
 
 // The goal here is to only cause a syscall to set the timeout if it's necessary.
 fn maybe_update_timeout(
-    timeout: Duration,
+    timeout: NextTimeout,
     previous: &mut Option<Duration>,
     stream: &TcpStream,
     f: impl Fn(&TcpStream, Option<time::Duration>) -> io::Result<()>,
 ) -> io::Result<()> {
-    let maybe_timeout = if timeout.is_zero() || timeout.is_not_happening() {
-        None
-    } else {
-        Some(timeout)
-    };
+    let maybe_timeout = timeout.not_zero();
 
     if maybe_timeout != *previous {
         (f)(stream, maybe_timeout.map(|t| *t))?;
@@ -93,13 +96,9 @@ impl Transport for TcpTransport {
         &mut self.buffers
     }
 
-    fn transmit_output(
-        &mut self,
-        amount: usize,
-        timeout: (Duration, TimeoutReason),
-    ) -> Result<(), Error> {
+    fn transmit_output(&mut self, amount: usize, timeout: NextTimeout) -> Result<(), Error> {
         maybe_update_timeout(
-            timeout.0,
+            timeout,
             &mut self.timeout_write,
             &self.stream,
             TcpStream::set_write_timeout,
@@ -111,14 +110,14 @@ impl Transport for TcpTransport {
         Ok(())
     }
 
-    fn await_input(&mut self, timeout: (Duration, TimeoutReason)) -> Result<(), Error> {
+    fn await_input(&mut self, timeout: NextTimeout) -> Result<(), Error> {
         if self.buffers.can_use_input() {
             return Ok(());
         }
 
         // Proceed to fill the buffers from the TcpStream
         maybe_update_timeout(
-            timeout.0,
+            timeout,
             &mut self.timeout_read,
             &self.stream,
             TcpStream::set_read_timeout,

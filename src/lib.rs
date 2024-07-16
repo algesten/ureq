@@ -24,9 +24,10 @@ mod pool;
 mod proxy;
 mod request;
 mod send_body;
-mod time;
 mod unit;
 mod util;
+
+pub mod time;
 
 pub mod resolver;
 pub mod transport;

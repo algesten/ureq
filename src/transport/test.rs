@@ -6,8 +6,7 @@ use std::{fmt, io, thread};
 
 use http::Uri;
 
-use crate::error::TimeoutReason;
-use crate::time::Duration;
+use crate::time::{Duration, NextTimeout};
 use crate::Error;
 
 use super::{Buffers, ConnectionDetails, Connector, LazyBuffers, Transport};
@@ -205,19 +204,19 @@ impl Transport for TestTransport {
         &mut self.buffers
     }
 
-    fn transmit_output(&mut self, amount: usize, _timeout: Duration) -> Result<(), Error> {
+    fn transmit_output(&mut self, amount: usize, _timeout: NextTimeout) -> Result<(), Error> {
         let output = &self.buffers.output()[..amount];
-        if let Err(_) = self.tx.send(output.to_vec()) {
+        if self.tx.send(output.to_vec()).is_err() {
             self.connected = false;
         }
         Ok(())
     }
 
-    fn await_input(&mut self, timeout: Duration) -> Result<(), Error> {
+    fn await_input(&mut self, timeout: NextTimeout) -> Result<(), Error> {
         let input = self.buffers.input_mut();
-        let buf = match self.rx.recv_timeout(timeout) {
+        let buf = match self.rx.recv_timeout(timeout.after) {
             Ok(v) => v,
-            Err(RecvTimeoutError::Timeout) => return Err(Error::Timeout(TimeoutReason::Call)),
+            Err(RecvTimeoutError::Timeout) => return Err(Error::Timeout(timeout.reason)),
             Err(RecvTimeoutError::Disconnected) => {
                 self.connected = false;
                 return Ok(());
