@@ -14,6 +14,7 @@ use rustls_pki_types::{
 
 use crate::time::NextTimeout;
 use crate::tls::cert::KeyKind;
+use crate::tls::TlsProvider;
 use crate::transport::{
     Buffers, ConnectionDetails, Connector, LazyBuffers, Transport, TransportAdapter,
 };
@@ -40,6 +41,11 @@ impl Connector for RustlsConnector {
         // already, otherwise use chained transport as is.
         if details.uri.scheme() != Some(&Scheme::HTTPS) || transport.is_tls() {
             trace!("Skip");
+            return Ok(Some(transport));
+        }
+
+        if details.config.tls_config.provider != TlsProvider::RustlsWithRing {
+            debug!("Skip because config is not set to Rustls");
             return Ok(Some(transport));
         }
 
