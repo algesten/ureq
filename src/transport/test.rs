@@ -101,7 +101,7 @@ fn test_run(uri: Uri, rx: Receiver<Vec<u8>>, tx: mpsc::SyncSender<Vec<u8>>) {
         .ok();
         writer.write_all(HTTPBIN_GET.as_bytes()).ok();
         return;
-    } else if uri.contains("/put") {
+    } else if uri.contains("/put") || uri.contains("/post") {
         write!(
             &mut writer,
             "HTTP/1.1 200 OK\r\n\

@@ -74,7 +74,7 @@ mk_method!(get, GET, WithoutBody);
 mk_method!(post, POST, WithBody);
 mk_method!(put, PUT, WithBody);
 mk_method!(delete, DELETE, WithoutBody);
-mk_method!(head, HEAD, WithBody);
+mk_method!(head, HEAD, WithoutBody);
 mk_method!(options, OPTIONS, WithoutBody);
 mk_method!(connect, CONNECT, WithoutBody);
 mk_method!(patch, PATCH, WithBody);
