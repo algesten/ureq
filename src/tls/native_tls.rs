@@ -4,6 +4,7 @@ use std::io::{Read, Write};
 use std::sync::Arc;
 
 use crate::time::NextTimeout;
+use crate::tls::TlsProvider;
 use crate::{transport::*, Error};
 use der::pem::LineEnding;
 use der::Document;
@@ -32,6 +33,11 @@ impl Connector for NativeTlsConnector {
         // already, otherwise use chained transport as is.
         if details.uri.scheme() != Some(&Scheme::HTTPS) || transport.is_tls() {
             trace!("Skip");
+            return Ok(Some(transport));
+        }
+
+        if details.config.tls_config.provider != TlsProvider::NativeTls {
+            debug!("Skip because config is not set to Native TLS");
             return Ok(Some(transport));
         }
 
