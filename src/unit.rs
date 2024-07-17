@@ -1,733 +1,739 @@
-use std::fmt::{self, Display};
-use std::io::{self, Write};
-use std::ops::Range;
-use std::time;
+use core::fmt;
+use std::collections::VecDeque;
+use std::mem;
+use std::sync::Arc;
 
-use base64::{prelude::BASE64_STANDARD, Engine};
-use log::debug;
-use url::Url;
+use hoot::client::flow::state::{
+    Await100, Cleanup, Prepare, RecvBody, RecvResponse, Redirect, SendBody as FlowSendBody,
+    SendRequest,
+};
+use hoot::client::flow::{Await100Result, RecvBodyResult, RecvResponseResult, SendRequestResult};
+use hoot::BodyMode;
+use http::{HeaderMap, HeaderName, HeaderValue, Method, Request, Response, Uri, Version};
 
-#[cfg(feature = "cookies")]
-use cookie::Cookie;
+use crate::error::TimeoutReason;
+use crate::time::{Instant, NextTimeout};
+use crate::transport::Buffers;
+use crate::util::{DebugHeaders, DebugUri};
+use crate::{AgentConfig, Error, SendBody};
 
-use crate::agent::RedirectAuthHeaders;
-use crate::body::{self, BodySize, Payload, SizedReader};
-use crate::error::{Error, ErrorKind};
-use crate::header;
-use crate::header::{get_header, Header};
-use crate::proxy::Proto;
-use crate::resolve::ArcResolver;
-use crate::response::Response;
-use crate::stream::{self, connect_test, Stream};
-use crate::Agent;
-
-/// A Unit is fully-built Request, ready to execute.
-///
-/// *Internal API*
-#[derive(Clone)]
-pub(crate) struct Unit {
-    pub agent: Agent,
-    pub method: String,
-    pub url: Url,
-    is_chunked: bool,
-    headers: Vec<Header>,
-    pub deadline: Option<time::Instant>,
+pub(crate) struct Unit<B> {
+    config: Arc<AgentConfig>,
+    global_start: Instant,
+    call_timings: CallTimings,
+    state: State,
+    body: B,
+    queued_event: VecDeque<Event<'static>>,
+    redirect_count: u32,
+    prev_state: &'static str,
 }
 
-impl Unit {
-    //
+type Flow<State> = hoot::client::flow::Flow<(), State>;
 
-    pub(crate) fn new(
-        agent: &Agent,
-        method: &str,
-        url: &Url,
-        mut headers: Vec<Header>,
-        body: &SizedReader,
-        deadline: Option<time::Instant>,
-    ) -> Self {
-        //
+enum State {
+    Begin(Flow<Prepare>),
+    Prepare(Flow<Prepare>),
+    Resolve(Flow<Prepare>),
+    OpenConnection(Flow<Prepare>),
+    SendRequest(Flow<SendRequest>),
+    SendBody(Flow<FlowSendBody>),
+    Await100(Flow<Await100>),
+    RecvResponse(Flow<RecvResponse>),
+    RecvBody(Flow<RecvBody>),
+    Redirect(Flow<Redirect>),
+    Cleanup(Flow<Cleanup>),
+    Empty,
+}
 
-        let (is_transfer_encoding_set, mut is_chunked) = get_header(&headers, "transfer-encoding")
-            // if the user has set an encoding header, obey that.
-            .map(|enc| {
-                let is_transfer_encoding_set = !enc.is_empty();
-                let last_encoding = enc.split(',').last();
-                let is_chunked = last_encoding
-                    .map(|last_enc| last_enc.trim() == "chunked")
-                    .unwrap_or(false);
-                (is_transfer_encoding_set, is_chunked)
-            })
-            // otherwise, no chunking.
-            .unwrap_or((false, false));
+macro_rules! extract {
+    ($e:expr, $p:path) => {
+        match mem::replace($e, State::Empty) {
+            $p(value) => Some(value),
+            _ => None,
+        }
+    };
+}
 
-        let mut extra_headers = {
-            let mut extra = vec![];
+pub(crate) enum Event<'a> {
+    Reset { must_close: bool },
+    Prepare { uri: &'a Uri },
+    Resolve { uri: &'a Uri, timeout: NextTimeout },
+    OpenConnection { uri: &'a Uri, timeout: NextTimeout },
+    Await100 { timeout: NextTimeout },
+    Transmit { amount: usize, timeout: NextTimeout },
+    AwaitInput { timeout: NextTimeout },
+    Response { response: Response<()>, end: bool },
+    ResponseBody { amount: usize },
+}
 
-            // chunking and Content-Length headers are mutually exclusive
-            // also don't write this if the user has set it themselves
-            if !is_chunked && get_header(&headers, "content-length").is_none() {
-                // if the payload is of known size (everything beside an unsized reader), set
-                // Content-Length,
-                // otherwise, use the chunked Transfer-Encoding (only if no other Transfer-Encoding
-                // has been set
-                match body.size {
-                    BodySize::Known(size) => {
-                        extra.push(Header::new("Content-Length", &format!("{}", size)))
-                    }
-                    BodySize::Unknown => {
-                        if !is_transfer_encoding_set {
-                            extra.push(Header::new("Transfer-Encoding", "chunked"));
-                            is_chunked = true;
-                        }
-                    }
-                    BodySize::Empty => {}
+#[allow(unused)]
+pub(crate) enum Input<'a> {
+    Begin,
+    Header {
+        name: HeaderName,
+        value: HeaderValue,
+    },
+    Prepared,
+    Resolved,
+    ConnectionOpen,
+    EndAwait100,
+    Data {
+        input: &'a [u8],
+    },
+}
+
+impl<'b> Unit<SendBody<'b>> {
+    pub fn new(
+        config: Arc<AgentConfig>,
+        global_start: Instant,
+        request: Request<()>,
+        body: SendBody<'b>,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            config,
+            global_start,
+            call_timings: CallTimings::default(),
+            state: State::Begin(Flow::new(request)?),
+            body,
+            queued_event: VecDeque::new(),
+            redirect_count: 0,
+            prev_state: "",
+        })
+    }
+
+    pub fn poll_event(&mut self, now: Instant, buffers: &mut dyn Buffers) -> Result<Event, Error> {
+        let event = self.do_poll_event(now, buffers)?;
+        trace!("poll_event: {:?}", event);
+        Ok(event)
+    }
+
+    fn do_poll_event(&mut self, now: Instant, buffers: &mut dyn Buffers) -> Result<Event, Error> {
+        // Queued events go first.
+        if let Some(queued) = self.queued_event.pop_front() {
+            return Ok(queued);
+        }
+
+        let timeout = self.next_timeout(now)?;
+
+        // Events that do not borrow any state, but might proceed the FSM
+        let maybe_event = self.poll_event_static(buffers, timeout)?;
+
+        if let Some(event) = maybe_event {
+            self.poll_event_maybe_proceed_state(now);
+            return Ok(event);
+        }
+
+        // Events that borrow the state and don't proceed the FSM.
+        self.poll_event_borrow(timeout)
+    }
+
+    // These events don't borrow from the State, but they might proceed the FSM. Hence
+    // we return an Event<'static> meaning we are free the call self.poll_event_maybe_proceed_state()
+    // since self.state is not borrowed.
+    fn poll_event_static(
+        &mut self,
+        buffers: &mut dyn Buffers,
+        timeout: NextTimeout,
+    ) -> Result<Option<Event<'static>>, Error> {
+        Ok(match &mut self.state {
+            State::Begin(flow) => {
+                info!("{} {:?}", flow.method(), &DebugUri(flow.uri()));
+                Some(Event::Reset { must_close: false })
+            }
+
+            // State::Resolve (see below)
+            // State::OpenConnection (see below)
+            State::SendRequest(flow) => Some(send_request(flow, buffers.output_mut(), timeout)?),
+
+            State::SendBody(flow) => Some(send_body(flow, buffers, &mut self.body, timeout)?),
+
+            State::Await100(_) => Some(Event::Await100 { timeout }),
+
+            State::RecvResponse(_) => Some(Event::AwaitInput { timeout }),
+
+            State::RecvBody(_) => Some(Event::AwaitInput { timeout }),
+
+            State::Redirect(flow) => {
+                // Whether the previous connection must be closed.
+                let must_close = flow.must_close_connection();
+
+                let maybe_new_flow = flow.as_new_flow(self.config.redirect_auth_headers)?;
+                let status = flow.status();
+
+                if let Some(flow) = maybe_new_flow {
+                    info!(
+                        "Redirect ({}): {} {:?}",
+                        status,
+                        flow.method(),
+                        DebugUri(flow.uri())
+                    );
+
+                    // Start over the state
+                    self.set_state(State::Begin(flow));
+
+                    // Tell caller to reset state
+                    Some(Event::Reset { must_close })
+                } else {
+                    return Err(Error::RedirectFailed);
                 }
             }
 
-            let username = url.username();
-            let password = url.password().unwrap_or("");
-            if (!username.is_empty() || !password.is_empty())
-                && get_header(&headers, "authorization").is_none()
-            {
-                let encoded = BASE64_STANDARD.encode(format!("{}:{}", username, password));
-                extra.push(Header::new("Authorization", &format!("Basic {}", encoded)));
+            State::Cleanup(flow) => Some(Event::Reset {
+                must_close: flow.must_close_connection(),
+            }),
+
+            State::Empty => unreachable!("self.state should never be in State::Empty"),
+
+            _ => None,
+        })
+    }
+
+    fn poll_event_maybe_proceed_state(&mut self, now: Instant) {
+        let state = mem::replace(&mut self.state, State::Empty);
+
+        let new_state = match state {
+            // State moves on poll_output
+            State::SendRequest(flow) => {
+                if flow.can_proceed() {
+                    self.call_timings.time_send_request = Some(now);
+                    match flow.proceed().unwrap() {
+                        SendRequestResult::Await100(flow) => State::Await100(flow),
+                        SendRequestResult::SendBody(flow) => State::SendBody(flow),
+                        SendRequestResult::RecvResponse(flow) => State::RecvResponse(flow),
+                    }
+                } else {
+                    State::SendRequest(flow)
+                }
+            }
+            State::SendBody(flow) => {
+                if flow.can_proceed() || self.body.is_ended() {
+                    self.call_timings.time_send_body = Some(now);
+                    State::RecvResponse(flow.proceed().unwrap())
+                } else {
+                    State::SendBody(flow)
+                }
             }
 
-            #[cfg(feature = "cookies")]
-            extra.extend(extract_cookies(agent, url).into_iter());
+            // Special handling above.
+            State::Redirect(flow) => State::Redirect(flow),
 
-            extra
+            // State moves on handle_input()
+            State::Begin(flow) => State::Begin(flow),
+            State::Prepare(flow) => State::Prepare(flow),
+            State::Resolve(flow) => State::Resolve(flow),
+            State::OpenConnection(flow) => State::OpenConnection(flow),
+            State::Await100(flow) => State::Await100(flow),
+            State::RecvResponse(flow) => State::RecvResponse(flow),
+            State::RecvBody(flow) => State::RecvBody(flow),
+
+            State::Cleanup(flow) => State::Cleanup(flow),
+
+            State::Empty => unreachable!("self.state should never be State::Empty"),
         };
 
-        headers.append(&mut extra_headers);
+        self.set_state(new_state);
+    }
 
+    // These events borrow from the State, but they don't proceed the FSM.
+    fn poll_event_borrow(&self, timeout: NextTimeout) -> Result<Event, Error> {
+        let event = match &self.state {
+            State::Prepare(flow) => Event::Prepare { uri: flow.uri() },
+
+            State::Resolve(flow) => Event::Resolve {
+                uri: flow.uri(),
+                timeout,
+            },
+
+            State::OpenConnection(flow) => Event::OpenConnection {
+                uri: flow.uri(),
+                timeout,
+            },
+
+            _ => unreachable!("State must be covered in first or second match"),
+        };
+
+        Ok(event)
+    }
+
+    pub fn handle_input(
+        &mut self,
+        now: Instant,
+        input: Input,
+        output: &mut [u8],
+    ) -> Result<usize, Error> {
+        match input {
+            Input::Begin => {
+                let flow = extract!(&mut self.state, State::Begin)
+                    .expect("Input::Begin requires State::Begin");
+
+                self.call_timings.time_call_start = Some(now);
+                self.set_state(State::Prepare(flow));
+            }
+
+            Input::Header { name, value } => {
+                let mut flow = extract!(&mut self.state, State::Prepare)
+                    .expect("Input::Header requires State::Prepare");
+
+                flow.header(name, value)?;
+                self.set_state(State::Prepare(flow));
+            }
+
+            Input::Prepared => {
+                let flow = extract!(&mut self.state, State::Prepare)
+                    .expect("Input::Prepared requires State::Prepare");
+
+                self.call_timings.time_call_start = Some(now);
+                self.set_state(State::Resolve(flow));
+            }
+
+            Input::Resolved => {
+                let flow = extract!(&mut self.state, State::Resolve)
+                    .expect("Input::Resolved requires State::Resolve");
+
+                self.call_timings.time_resolve = Some(now);
+                self.set_state(State::OpenConnection(flow));
+            }
+
+            Input::ConnectionOpen => {
+                let flow = extract!(&mut self.state, State::OpenConnection)
+                    .expect("Input::ConnectionOpen requires State::OpenConnection");
+
+                self.call_timings.time_connect = Some(now);
+                self.set_state(State::SendRequest(flow.proceed()));
+            }
+
+            Input::EndAwait100 => self.end_await_100(now),
+
+            Input::Data { input } => match &mut self.state {
+                State::Await100(flow) => {
+                    if input.is_empty() {
+                        return Err(Error::disconnected());
+                    }
+
+                    let input_used = flow.try_read_100(input)?;
+
+                    // If we did indeed receive a 100-continue, we can't keep waiting for it,
+                    // so the state progresses.
+                    if !flow.can_keep_await_100() {
+                        self.end_await_100(now);
+                    }
+
+                    return Ok(input_used);
+                }
+
+                State::RecvResponse(flow) => {
+                    if input.is_empty() {
+                        return Err(Error::disconnected());
+                    }
+
+                    let (input_used, maybe_response) = flow.try_response(input)?;
+
+                    let Some(response) = maybe_response else {
+                        return Ok(input_used);
+                    };
+
+                    let end = if response.status().is_redirection() {
+                        self.redirect_count += 1;
+                        // If we reached max redirections set end: true to
+                        // make outer loop stop and return the body.
+                        self.redirect_count >= self.config.max_redirects
+                    } else {
+                        true
+                    };
+
+                    self.queued_event
+                        .push_back(Event::Response { response, end });
+
+                    let flow = extract!(&mut self.state, State::RecvResponse)
+                        .expect("Input::Input requires State::RecvResponse");
+
+                    let state = match flow.proceed().unwrap() {
+                        RecvResponseResult::RecvBody(flow) => State::RecvBody(flow),
+                        RecvResponseResult::Redirect(flow) => State::Redirect(flow),
+                        RecvResponseResult::Cleanup(flow) => State::Cleanup(flow),
+                    };
+
+                    self.call_timings.time_recv_response = Some(now);
+                    self.set_state(state);
+
+                    return Ok(input_used);
+                }
+
+                State::RecvBody(_) => return self.handle_input_recv_body(now, input, output),
+
+                _ => {}
+            },
+        }
+
+        Ok(0)
+    }
+
+    fn end_await_100(&mut self, now: Instant) {
+        let flow = extract!(&mut self.state, State::Await100)
+            .expect("Input::EndAwait100 requires State::Await100");
+
+        self.call_timings.time_await_100 = Some(now);
+        self.set_state(match flow.proceed() {
+            Await100Result::SendBody(flow) => State::SendBody(flow),
+            Await100Result::RecvResponse(flow) => State::RecvResponse(flow),
+        });
+    }
+
+    pub fn release_body(self) -> Unit<()> {
         Unit {
-            agent: agent.clone(),
-            method: method.to_string(),
-            url: url.clone(),
-            is_chunked,
-            headers,
-            deadline,
+            config: self.config,
+            global_start: self.global_start,
+            call_timings: self.call_timings,
+            state: self.state,
+            body: (),
+            queued_event: self.queued_event,
+            redirect_count: self.redirect_count,
+            prev_state: self.prev_state,
         }
     }
 
-    pub fn resolver(&self) -> ArcResolver {
-        self.agent.state.resolver.clone()
-    }
-
-    #[cfg(test)]
-    pub fn header(&self, name: &str) -> Option<&str> {
-        header::get_header(&self.headers, name)
-    }
-    #[cfg(test)]
-    pub fn has(&self, name: &str) -> bool {
-        header::has_header(&self.headers, name)
-    }
-    #[cfg(test)]
-    pub fn all(&self, name: &str) -> Vec<&str> {
-        header::get_all_headers(&self.headers, name)
-    }
-
-    // Returns true if this request, with the provided body, is retryable.
-    pub(crate) fn is_retryable(&self, body: &SizedReader) -> bool {
-        // Per https://tools.ietf.org/html/rfc7231#section-8.1.3
-        // these methods are idempotent.
-        let idempotent = match self.method.as_str() {
-            "DELETE" | "GET" | "HEAD" | "OPTIONS" | "PUT" | "TRACE" => true,
-            _ => false,
-        };
-        // Unsized bodies aren't retryable because we can't rewind the reader.
-        // Sized bodies are retryable only if they are zero-length because of
-        // coincidences of the current implementation - the function responsible
-        // for retries doesn't have a way to replay a Payload.
-        let retryable_body = match body.size {
-            BodySize::Unknown => false,
-            BodySize::Known(0) => true,
-            BodySize::Known(_) => false,
-            BodySize::Empty => true,
+    pub fn fake_request(&mut self) -> Result<FakeRequest<'_>, Error> {
+        let State::SendRequest(flow) = &mut self.state else {
+            unreachable!();
         };
 
-        idempotent && retryable_body
+        let headers = flow.headers_map()?;
+
+        let r = FakeRequest {
+            method: flow.method(),
+            uri: flow.uri(),
+            version: flow.version(),
+            headers,
+        };
+
+        Ok(r)
+    }
+
+    pub(crate) fn body_mode(&self) -> Option<BodyMode> {
+        let State::RecvBody(flow) = &self.state else {
+            return None;
+        };
+
+        Some(flow.body_mode())
     }
 }
 
-/// Perform a connection. Follows redirects.
-pub(crate) fn connect(
-    mut unit: Unit,
-    use_pooled: bool,
-    mut body: SizedReader,
-) -> Result<Response, Error> {
-    let mut history = vec![];
-    let mut resp = loop {
-        let resp = connect_inner(&unit, use_pooled, body, &history)?;
+pub(crate) struct FakeRequest<'a> {
+    method: &'a Method,
+    uri: &'a Uri,
+    version: Version,
+    headers: HeaderMap<HeaderValue>,
+}
 
-        // handle redirects
-        if !(300..399).contains(&resp.status()) || unit.agent.config.redirects == 0 {
-            break resp;
+// Unit<()> is for receiving the body. We have let go of the input body.
+impl Unit<()> {
+    pub fn poll_event(&mut self, now: Instant) -> Result<Event, Error> {
+        let event = self.do_poll_event(now)?;
+        trace!("poll_event (recv): {:?}", event);
+        Ok(event)
+    }
+
+    fn do_poll_event(&mut self, now: Instant) -> Result<Event, Error> {
+        // Queued events go first.
+        if let Some(queued) = self.queued_event.pop_front() {
+            return Ok(queued);
         }
-        if history.len() + 1 >= unit.agent.config.redirects as usize {
-            return Err(ErrorKind::TooManyRedirects.msg(format!(
-                "reached max redirects ({})",
-                unit.agent.config.redirects
-            )));
+
+        let timeout = self.next_timeout(now)?;
+
+        match &self.state {
+            State::RecvBody(_) => Ok(Event::AwaitInput { timeout }),
+            State::Cleanup(flow) => Ok(Event::Reset {
+                must_close: flow.must_close_connection(),
+            }),
+            State::Redirect(flow) => Ok(Event::Reset {
+                must_close: flow.must_close_connection(),
+            }),
+            _ => unreachable!(),
         }
-        // the location header
-        let location = match resp.header("location") {
-            Some(l) => l,
-            None => break resp,
-        };
+    }
 
-        let url = &unit.url;
-        let method = &unit.method;
-        // join location header to current url in case it is relative
-        let new_url = url.join(location).map_err(|e| {
-            ErrorKind::InvalidUrl
-                .msg(format!("Bad redirection: {}", location))
-                .src(e)
-        })?;
+    pub fn handle_input(
+        &mut self,
+        now: Instant,
+        input: Input,
+        output: &mut [u8],
+    ) -> Result<usize, Error> {
+        match input {
+            Input::Data { input } => self.handle_input_recv_body(now, input, output),
+            _ => unreachable!(),
+        }
+    }
+}
 
-        // perform the redirect differently depending on 3xx code.
-        let new_method = match resp.status() {
-            // this is to follow how curl does it. POST, PUT etc change
-            // to GET on a redirect.
-            301 | 302 | 303 => match &method[..] {
-                "GET" | "HEAD" => unit.method,
-                _ => "GET".into(),
-            },
-            // never change the method for 307/308
-            // only resend the request if it cannot have a body
-            // NOTE: DELETE is intentionally excluded: https://stackoverflow.com/questions/299628
-            307 | 308 if ["GET", "HEAD", "OPTIONS", "TRACE"].contains(&method.as_str()) => {
-                unit.method
+impl<B> Unit<B> {
+    fn set_state(&mut self, state: State) {
+        let new_name = state.name();
+        if new_name != self.prev_state {
+            if !self.prev_state.is_empty() {
+                trace!("{} -> {}", self.prev_state, new_name);
+            } else {
+                trace!("Start state: {}", new_name);
             }
-            _ => break resp,
+            self.prev_state = new_name;
+        }
+        self.state = state
+    }
+
+    fn global_timeout(&self) -> Instant {
+        self.config
+            .timeout_global
+            .map(|t| self.global_start + t)
+            .unwrap_or(Instant::NotHappening)
+    }
+
+    fn next_timeout(&mut self, now: Instant) -> Result<NextTimeout, Error> {
+        let (call_timeout_at, reason) = self.call_timings.next_timeout(&self.state, &self.config);
+        let call_timeout = call_timeout_at.duration_since(now);
+
+        let global_timeout_at = self.global_timeout();
+        let global_timeout = global_timeout_at.duration_since(now);
+
+        let timeout = call_timeout.min(global_timeout);
+
+        if timeout.is_zero() {
+            return Err(Error::Timeout(if global_timeout.is_zero() {
+                TimeoutReason::Global
+            } else {
+                reason
+            }));
+        }
+
+        Ok(NextTimeout {
+            after: timeout,
+            reason,
+        })
+    }
+
+    fn handle_input_recv_body(
+        &mut self,
+        now: Instant,
+        input: &[u8],
+        output: &mut [u8],
+    ) -> Result<usize, Error> {
+        let State::RecvBody(flow) = &mut self.state else {
+            unreachable!()
         };
 
-        let keep_auth_header = can_propagate_authorization_on_redirect(
-            &unit.agent.config.redirect_auth_headers,
-            url,
-            &new_url,
-        );
+        let (input_used, output_used) = flow.read(input, output)?;
 
-        debug!("redirect {} {} -> {}", resp.status(), url, new_url);
-        history.push(unit.url);
-        body = Payload::Empty.into_read();
-
-        // reuse the previous header vec on redirects.
-        let mut headers = unit.headers;
-
-        // on redirects we don't want to keep "content-length". we also might want to
-        // strip away "authorization" and "cookie" to ensure credentials are not leaked.
-        headers.retain(|h| {
-            !h.is_name("content-length")
-                && !h.is_name("cookie")
-                && (!h.is_name("authorization") || keep_auth_header)
+        self.queued_event.push_back(Event::ResponseBody {
+            amount: output_used,
         });
 
-        // recreate the unit to get a new hostname and cookies for the new host.
-        unit = Unit::new(
-            &unit.agent,
-            &new_method,
-            &new_url,
-            headers,
-            &body,
-            unit.deadline,
-        );
-    };
-    resp.history = history;
-    Ok(resp)
+        if flow.can_proceed() {
+            let flow = extract!(&mut self.state, State::RecvBody)
+                .expect("Input::Input requires State::RecvBody");
+
+            let state = match flow.proceed().unwrap() {
+                RecvBodyResult::Redirect(flow) => State::Redirect(flow),
+                RecvBodyResult::Cleanup(flow) => State::Cleanup(flow),
+            };
+
+            self.call_timings.time_recv_body = Some(now);
+            self.set_state(state);
+        }
+
+        Ok(input_used)
+    }
 }
 
-/// Perform a connection. Does not follow redirects.
-fn connect_inner(
-    unit: &Unit,
-    use_pooled: bool,
-    body: SizedReader,
-    history: &[Url],
-) -> Result<Response, Error> {
-    let host = unit
-        .url
-        .host_str()
-        // This unwrap is ok because Request::parse_url() ensure there is always a host present.
-        .unwrap();
-    let url = &unit.url;
-    let method = &unit.method;
-    // open socket
-    let (mut stream, is_recycled) = connect_socket(unit, host, use_pooled)?;
+fn send_request(
+    flow: &mut Flow<SendRequest>,
+    output: &mut [u8],
+    timeout: NextTimeout,
+) -> Result<Event<'static>, Error> {
+    let output_used = flow.write(output)?;
 
-    if is_recycled {
-        debug!("sending request (reused connection) {} {}", method, url);
+    Ok(Event::Transmit {
+        amount: output_used,
+        timeout,
+    })
+}
+
+fn send_body(
+    flow: &mut Flow<FlowSendBody>,
+    buffers: &mut dyn Buffers,
+    body: &mut SendBody,
+    timeout: NextTimeout,
+) -> Result<Event<'static>, Error> {
+    let (tmp, output) = buffers.tmp_and_output();
+
+    let input_len = tmp.len();
+
+    let overhead = flow.calculate_output_overhead(output.len())?;
+    assert!(input_len > overhead);
+    let max_input = input_len - overhead;
+
+    let output_used = if overhead == 0 {
+        // overhead == 0 means we are not doing chunked transfer. The body can be written
+        // directly to the output. This optimizes away a memcopy if we were to go via
+        // flow.write().
+        let output_used = body.read(output)?;
+
+        // Size checking is still in the flow.
+        flow.consume_direct_write(output_used)?;
+
+        output_used
     } else {
-        debug!("sending request {} {}", method, url);
-    }
+        let tmp = &mut tmp[..max_input];
+        let n = body.read(tmp)?;
 
-    let send_result = send_prelude(unit, &mut stream);
+        let (input_used, output_used) = flow.write(&tmp[..n], output)?;
 
-    if let Err(err) = send_result {
-        if is_recycled {
-            debug!("retrying request early {} {}: {}", method, url, err);
-            // we try open a new connection, this time there will be
-            // no connection in the pool. don't use it.
-            // NOTE: this recurses at most once because `use_pooled` is `false`.
-            return connect_inner(unit, false, body, history);
-        } else {
-            // not a pooled connection, propagate the error.
-            return Err(err.into());
-        }
-    }
-    let retryable = unit.is_retryable(&body);
+        // Since output is "a bit" larger than the input (compensate for chunk ovherhead),
+        // the entire input we read from the body should also be shipped to the output.
+        assert!(input_used == n);
 
-    // send the body (which can be empty now depending on redirects)
-    body::send_body(body, unit.is_chunked, &mut stream)?;
-
-    // start reading the response to process cookies and redirects.
-    // TODO: this unit.clone() bothers me. At this stage, we're not
-    // going to use the unit (much) anymore, and it should be possible
-    // to have ownership of it and pass it into the Response.
-    let result = Response::do_from_stream(stream, unit.clone());
-
-    // https://tools.ietf.org/html/rfc7230#section-6.3.1
-    // When an inbound connection is closed prematurely, a client MAY
-    // open a new connection and automatically retransmit an aborted
-    // sequence of requests if all of those requests have idempotent
-    // methods.
-    //
-    // We choose to retry only requests that used a recycled connection
-    // from the ConnectionPool, since those are most likely to have
-    // reached a server-side timeout. Note that this means we may do
-    // up to N+1 total tries, where N is max_idle_connections_per_host.
-    let resp = match result {
-        Err(err) if err.connection_closed() && retryable && is_recycled => {
-            debug!("retrying request {} {}: {}", method, url, err);
-            let empty = Payload::Empty.into_read();
-            // NOTE: this recurses at most once because `use_pooled` is `false`.
-            return connect_inner(unit, false, empty, history);
-        }
-        Err(e) => return Err(e),
-        Ok(resp) => resp,
+        output_used
     };
 
-    // squirrel away cookies
-    #[cfg(feature = "cookies")]
-    save_cookies(unit, &resp);
-
-    debug!("response {} to {} {}", resp.status(), method, url);
-
-    // release the response
-    Ok(resp)
+    Ok(Event::Transmit {
+        amount: output_used,
+        timeout,
+    })
 }
 
-#[cfg(feature = "cookies")]
-fn extract_cookies(agent: &Agent, url: &Url) -> Option<Header> {
-    let header_value = agent
-        .state
-        .cookie_tin
-        .get_request_cookies(url)
-        .iter()
-        // This guards against sending rfc non-compliant cookies, even if the user has
-        // "prepped" their local cookie store with such cookies.
-        .filter(|c| {
-            let is_ok = is_cookie_rfc_compliant(c);
-            if !is_ok {
-                debug!("do not send non compliant cookie: {:?}", c);
-            }
-            is_ok
-        })
-        .map(|c| c.to_string())
-        .collect::<Vec<_>>()
-        .join(";");
-    match header_value.as_str() {
-        "" => None,
-        val => Some(Header::new("Cookie", val)),
-    }
+#[derive(Debug, Default)]
+pub(crate) struct CallTimings {
+    pub time_call_start: Option<Instant>,
+    pub time_resolve: Option<Instant>,
+    pub time_connect: Option<Instant>,
+    pub time_send_request: Option<Instant>,
+    pub time_send_body: Option<Instant>,
+    pub time_await_100: Option<Instant>,
+    pub time_recv_response: Option<Instant>,
+    pub time_recv_body: Option<Instant>,
 }
 
-/// Connect the socket, either by using the pool or grab a new one.
-fn connect_socket(unit: &Unit, hostname: &str, use_pooled: bool) -> Result<(Stream, bool), Error> {
-    match unit.url.scheme() {
-        "http" | "https" | "test" => (),
-        scheme => return Err(ErrorKind::UnknownScheme.msg(format!("unknown scheme '{}'", scheme))),
-    };
-    if unit.url.scheme() != "https" && unit.agent.config.https_only {
-        return Err(ErrorKind::InsecureRequestHttpsOnly
-            .msg("can't perform non https request with https_only set"));
-    }
-    if use_pooled {
-        let pool = &unit.agent.state.pool;
-        let proxy = &unit.agent.config.proxy;
-        // The connection may have been closed by the server
-        // due to idle timeout while it was sitting in the pool.
-        // Loop until we find one that is still good or run out of connections.
-        while let Some(stream) = pool.try_get_connection(&unit.url, proxy.clone()) {
-            let server_closed = stream.server_closed()?;
-            if !server_closed {
-                return Ok((stream, true));
-            }
-            debug!("dropping stream from pool; closed by server: {:?}", stream);
+impl CallTimings {
+    fn next_timeout(&self, state: &State, config: &AgentConfig) -> (Instant, TimeoutReason) {
+        // self.time_xxx unwraps() below are OK. If the unwrap fails, we have a state
+        // bug where we progressed to a certain State without setting the corresponding time.
+        match state {
+            State::Begin(_) => None,
+            State::Prepare(_) => None,
+            State::Resolve(_) => config
+                .timeout_resolve
+                .map(|t| self.time_call_start.unwrap() + t)
+                .map(|t| (t, TimeoutReason::Resolver)),
+            State::OpenConnection(_) => config
+                .timeout_connect
+                .map(|t| self.time_resolve.unwrap() + t)
+                .map(|t| (t, TimeoutReason::OpenConnection)),
+            State::SendRequest(_) => config
+                .timeout_send_request
+                .map(|t| self.time_connect.unwrap() + t)
+                .map(|t| (t, TimeoutReason::SendRequest)),
+            State::SendBody(_) => config
+                .timeout_send_body
+                .map(|t| self.time_send_request.unwrap() + t)
+                .map(|t| (t, TimeoutReason::SendBody)),
+            State::Await100(_) => config
+                .timeout_await_100
+                .map(|t| self.time_send_request.unwrap() + t)
+                .map(|t| (t, TimeoutReason::Await100)),
+            State::RecvResponse(_) => config.timeout_recv_response.map(|t| {
+                // The fallback order is important. See state diagram in hoot.
+                (
+                    self.time_send_body
+                        .or(self.time_await_100)
+                        .or(self.time_send_request)
+                        .unwrap()
+                        + t,
+                    TimeoutReason::RecvResponse,
+                )
+            }),
+            State::RecvBody(_) => config
+                .timeout_recv_body
+                .map(|t| self.time_recv_response.unwrap() + t)
+                .map(|t| (t, TimeoutReason::RecvBody)),
+            State::Redirect(_) => None,
+            State::Cleanup(_) => None,
+            State::Empty => unreachable!("next_timeout should never be called for State::Empty"),
         }
+        .unwrap_or((Instant::NotHappening, TimeoutReason::Global))
     }
-    let stream = match unit.url.scheme() {
-        "http" => stream::connect_http(unit, hostname),
-        "https" => stream::connect_https(unit, hostname),
-        "test" => connect_test(unit),
-        scheme => Err(ErrorKind::UnknownScheme.msg(format!("unknown scheme {}", scheme))),
-    };
-    Ok((stream?, false))
 }
 
-fn can_propagate_authorization_on_redirect(
-    redirect_auth_headers: &RedirectAuthHeaders,
-    prev_url: &Url,
-    url: &Url,
-) -> bool {
-    fn scheme_is_https(url: &Url) -> bool {
-        url.scheme() == "https" || (cfg!(test) && url.scheme() == "test")
-    }
-
-    match redirect_auth_headers {
-        RedirectAuthHeaders::Never => false,
-        RedirectAuthHeaders::SameHost => {
-            let host = url.host_str();
-            let is_https = scheme_is_https(url);
-
-            let prev_host = prev_url.host_str();
-            let prev_is_https = scheme_is_https(prev_url);
-
-            let same_scheme_or_more_secure =
-                is_https == prev_is_https || (!prev_is_https && is_https);
-
-            host == prev_host && same_scheme_or_more_secure
+impl State {
+    fn name(&self) -> &'static str {
+        match self {
+            State::Begin(_) => "Begin",
+            State::Prepare(_) => "Prepare",
+            State::Resolve(_) => "Resolve",
+            State::OpenConnection(_) => "OpenConnection",
+            State::SendRequest(_) => "SendRequest",
+            State::SendBody(_) => "SendBody",
+            State::Await100(_) => "Await100",
+            State::RecvResponse(_) => "RecvResponse",
+            State::RecvBody(_) => "RecvBody",
+            State::Redirect(_) => "Redirect",
+            State::Cleanup(_) => "Cleanup",
+            State::Empty => "Empty (wrong!)",
         }
     }
 }
 
-/// Send request line + headers (all up until the body).
-#[allow(clippy::write_with_newline)]
-fn send_prelude(unit: &Unit, stream: &mut Stream) -> io::Result<()> {
-    // build into a buffer and send in one go.
-    let mut prelude = PreludeBuilder::new();
-
-    let path = if let Some(proxy) = &unit.agent.config.proxy {
-        // HTTP proxies require the path to be in absolute URI form
-        // https://www.rfc-editor.org/rfc/rfc7230#section-5.3.2
-        match proxy.proto {
-            Proto::HTTP => match unit.url.port() {
-                Some(port) => format!(
-                    "{}://{}:{}{}",
-                    unit.url.scheme(),
-                    unit.url.host().unwrap(),
-                    port,
-                    unit.url.path()
-                ),
-                None => format!(
-                    "{}://{}{}",
-                    unit.url.scheme(),
-                    unit.url.host().unwrap(),
-                    unit.url.path()
-                ),
-            },
-            _ => unit.url.path().into(),
-        }
-    } else {
-        unit.url.path().into()
-    };
-
-    // request line
-    prelude.write_request_line(&unit.method, &path, unit.url.query().unwrap_or_default())?;
-
-    // host header if not set by user.
-    if !header::has_header(&unit.headers, "host") {
-        let host = unit.url.host().unwrap();
-        match unit.url.port() {
-            Some(port) => {
-                let scheme_default: u16 = match unit.url.scheme() {
-                    "http" => 80,
-                    "https" => 443,
-                    _ => 0,
-                };
-                if scheme_default != 0 && scheme_default == port {
-                    prelude.write_header("Host", host)?;
-                } else {
-                    prelude.write_header("Host", format_args!("{}:{}", host, port))?;
-                }
-            }
-            None => {
-                prelude.write_header("Host", host)?;
-            }
-        }
-    }
-    if !header::has_header(&unit.headers, "user-agent") {
-        prelude.write_header("User-Agent", &unit.agent.config.user_agent)?;
-    }
-    if !header::has_header(&unit.headers, "accept") {
-        prelude.write_header("Accept", "*/*")?;
-    }
-
-    // other headers
-    for header in &unit.headers {
-        if let Some(v) = header.value() {
-            if is_header_sensitive(header) {
-                prelude.write_sensitive_header(header.name(), v)?;
-            } else {
-                prelude.write_header(header.name(), v)?;
-            }
-        }
-    }
-
-    // finish
-    prelude.finish()?;
-
-    debug!("writing prelude: {}", prelude);
-    // write all to the wire
-    stream.write_all(prelude.as_slice())?;
-
-    Ok(())
-}
-
-fn is_header_sensitive(header: &Header) -> bool {
-    header.is_name("Authorization") || header.is_name("Cookie")
-}
-
-struct PreludeBuilder {
-    prelude: Vec<u8>,
-    // Sensitive information to be omitted in debug logging
-    sensitive_spans: Vec<Range<usize>>,
-}
-
-impl PreludeBuilder {
-    fn new() -> Self {
-        PreludeBuilder {
-            prelude: Vec::with_capacity(256),
-            sensitive_spans: Vec::new(),
-        }
-    }
-
-    fn write_request_line(&mut self, method: &str, path: &str, query: &str) -> io::Result<()> {
-        write!(self.prelude, "{} {}", method, path,)?;
-        if !query.is_empty() {
-            write!(self.prelude, "?{}", query)?;
-        }
-        write!(self.prelude, " HTTP/1.1\r\n")?;
-        Ok(())
-    }
-
-    fn write_header(&mut self, name: &str, value: impl Display) -> io::Result<()> {
-        write!(self.prelude, "{}: {}\r\n", name, value)
-    }
-
-    fn write_sensitive_header(&mut self, name: &str, value: impl Display) -> io::Result<()> {
-        write!(self.prelude, "{}: ", name)?;
-        let start = self.prelude.len();
-        write!(self.prelude, "{}", value)?;
-        let end = self.prelude.len();
-        self.sensitive_spans.push(start..end);
-        write!(self.prelude, "\r\n")?;
-        Ok(())
-    }
-
-    fn finish(&mut self) -> io::Result<()> {
-        write!(self.prelude, "\r\n")
-    }
-
-    fn as_slice(&self) -> &[u8] {
-        &self.prelude
-    }
-}
-
-impl fmt::Display for PreludeBuilder {
+impl fmt::Debug for Event<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut pos = 0;
-        for span in &self.sensitive_spans {
-            write!(
-                f,
-                "{}",
-                String::from_utf8_lossy(&self.prelude[pos..span.start])
-            )?;
-            write!(f, "***")?;
-            pos = span.end;
+        match self {
+            Self::Reset { must_close } => f
+                .debug_struct("Reset")
+                .field("must_close", must_close)
+                .finish(),
+            Self::Prepare { uri } => f
+                .debug_struct("Prepare")
+                .field("uri", &DebugUri(uri))
+                .finish(),
+            Self::Resolve { uri, timeout } => f
+                .debug_struct("Resolve")
+                .field("uri", &DebugUri(uri))
+                .field("timeout", timeout)
+                .finish(),
+            Self::OpenConnection { uri, timeout } => f
+                .debug_struct("OpenConnection")
+                .field("uri", &DebugUri(uri))
+                .field("timeout", timeout)
+                .finish(),
+            Self::Await100 { timeout } => f
+                .debug_struct("Await100")
+                .field("timeout", timeout)
+                .finish(),
+            Self::Transmit { amount, timeout } => f
+                .debug_struct("Transmit")
+                .field("amount", amount)
+                .field("timeout", timeout)
+                .finish(),
+            Self::AwaitInput { timeout } => f
+                .debug_struct("AwaitInput")
+                .field("timeout", timeout)
+                .finish(),
+            Self::Response { end, .. } => f
+                .debug_struct("Response")
+                .field("response", &"Response { ... }")
+                .field("end", end)
+                .finish(),
+            Self::ResponseBody { amount } => f
+                .debug_struct("ResponseBody")
+                .field("amount", amount)
+                .finish(),
         }
-        write!(
-            f,
-            "{}",
-            String::from_utf8_lossy(&self.prelude[pos..]).trim_end()
-        )?;
-        Ok(())
     }
 }
 
-/// Investigate a response for "Set-Cookie" headers.
-#[cfg(feature = "cookies")]
-fn save_cookies(unit: &Unit, resp: &Response) {
-    //
-
-    let headers = resp.all("set-cookie");
-    // Avoid locking if there are no cookie headers
-    if headers.is_empty() {
-        return;
-    }
-    let cookies = headers.into_iter().flat_map(|header_value| {
-        debug!(
-            "received 'set-cookie: {}' from {} {}",
-            header_value, unit.method, unit.url
-        );
-        match Cookie::parse(header_value.to_string()) {
-            Err(_) => None,
-            Ok(c) => {
-                // This guards against accepting rfc non-compliant cookies from a host.
-                if is_cookie_rfc_compliant(&c) {
-                    Some(c)
-                } else {
-                    debug!("ignore incoming non compliant cookie: {:?}", c);
-                    None
-                }
-            }
-        }
-    });
-    unit.agent
-        .state
-        .cookie_tin
-        .store_response_cookies(cookies, &unit.url.clone());
-}
-
-#[cfg(feature = "cookies")]
-fn is_cookie_rfc_compliant(cookie: &Cookie) -> bool {
-    // https://tools.ietf.org/html/rfc6265#page-9
-    // set-cookie-header = "Set-Cookie:" SP set-cookie-string
-    // set-cookie-string = cookie-pair *( ";" SP cookie-av )
-    // cookie-pair       = cookie-name "=" cookie-value
-    // cookie-name       = token
-    // cookie-value      = *cookie-octet / ( DQUOTE *cookie-octet DQUOTE )
-    // cookie-octet      = %x21 / %x23-2B / %x2D-3A / %x3C-5B / %x5D-7E
-    //                       ; US-ASCII characters excluding CTLs,
-    //                       ; whitespace DQUOTE, comma, semicolon,
-    //                       ; and backslash
-    // token             = <token, defined in [RFC2616], Section 2.2>
-
-    // https://tools.ietf.org/html/rfc2616#page-17
-    // CHAR           = <any US-ASCII character (octets 0 - 127)>
-    // ...
-    //        CTL            = <any US-ASCII control character
-    //                         (octets 0 - 31) and DEL (127)>
-    // ...
-    //        token          = 1*<any CHAR except CTLs or separators>
-    //        separators     = "(" | ")" | "<" | ">" | "@"
-    //                       | "," | ";" | ":" | "\" | <">
-    //                       | "/" | "[" | "]" | "?" | "="
-    //                       | "{" | "}" | SP | HT
-
-    fn is_valid_name(b: &u8) -> bool {
-        header::is_tchar(b)
-    }
-
-    fn is_valid_value(b: &u8) -> bool {
-        b.is_ascii()
-            && !b.is_ascii_control()
-            && !b.is_ascii_whitespace()
-            && *b != b'"'
-            && *b != b','
-            && *b != b';'
-            && *b != b'\\'
-    }
-
-    let name = cookie.name().as_bytes();
-
-    let valid_name = name.iter().all(is_valid_name);
-
-    if !valid_name {
-        log::trace!("cookie name is not valid: {:?}", cookie.name());
-        return false;
-    }
-
-    let value = cookie.value().as_bytes();
-
-    let valid_value = value.iter().all(is_valid_value);
-
-    if !valid_value {
-        log::trace!("cookie value is not valid: {:?}", cookie.value());
-        return false;
-    }
-
-    true
-}
-
-#[cfg(test)]
-#[cfg(feature = "cookies")]
-mod tests {
-    use cookie::Cookie;
-    use cookie_store::CookieStore;
-
-    use super::*;
-
-    use crate::Agent;
-    ///////////////////// COOKIE TESTS //////////////////////////////
-
-    #[test]
-    fn match_cookies_returns_one_header() {
-        let agent = Agent::new();
-        let url: Url = "https://crates.io/".parse().unwrap();
-        let cookie1: Cookie = "cookie1=value1; Domain=crates.io; Path=/".parse().unwrap();
-        let cookie2: Cookie = "cookie2=value2; Domain=crates.io; Path=/".parse().unwrap();
-        agent
-            .state
-            .cookie_tin
-            .store_response_cookies(vec![cookie1, cookie2].into_iter(), &url);
-
-        // There's no guarantee to the order in which cookies are defined.
-        // Ensure that they're either in one order or the other.
-        let result = extract_cookies(&agent, &url);
-        let order1 = "cookie1=value1;cookie2=value2";
-        let order2 = "cookie2=value2;cookie1=value1";
-
-        assert!(
-            result == Some(Header::new("Cookie", order1))
-                || result == Some(Header::new("Cookie", order2))
-        );
-    }
-
-    #[test]
-    fn not_send_illegal_cookies() {
-        // This prepares a cookie store with a cookie that isn't legal
-        // according to the relevant rfcs. ureq should not send this.
-        let empty = b"";
-        let mut store = CookieStore::load_json(&empty[..]).unwrap();
-        let url = Url::parse("https://mydomain.com").unwrap();
-        let cookie = Cookie::new("borked///", "illegal<>//");
-        store.insert_raw(&cookie, &url).unwrap();
-
-        let agent = crate::builder().cookie_store(store).build();
-        let cookies = extract_cookies(&agent, &url);
-        assert_eq!(cookies, None);
-    }
-
-    #[test]
-    fn check_cookie_crate_allows_illegal() {
-        // This test is there to see whether the cookie crate enforces
-        // https://tools.ietf.org/html/rfc6265#page-9
-        // https://tools.ietf.org/html/rfc2616#page-17
-        // for cookie name or cookie value.
-        // As long as it doesn't, we do additional filtering in ureq
-        // to not let non-compliant cookies through.
-        let cookie = Cookie::parse("borked///=illegal\\,").unwrap();
-        // these should not be allowed according to the RFCs.
-        assert_eq!(cookie.name(), "borked///");
-        assert_eq!(cookie.value(), "illegal\\,");
-    }
-
-    #[test]
-    fn illegal_cookie_name() {
-        let cookie = Cookie::parse("borked/=value").unwrap();
-        assert!(!is_cookie_rfc_compliant(&cookie));
-    }
-
-    #[test]
-    fn illegal_cookie_value() {
-        let cookie = Cookie::parse("name=borked,").unwrap();
-        assert!(!is_cookie_rfc_compliant(&cookie));
-    }
-
-    #[test]
-    fn legal_cookie_name_value() {
-        let cookie = Cookie::parse("name=value").unwrap();
-        assert!(is_cookie_rfc_compliant(&cookie));
+impl<'a> fmt::Debug for FakeRequest<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Request")
+            .field("method", &self.method)
+            .field("uri", &DebugUri(self.uri))
+            .field("version", &self.version)
+            .field("headers", &DebugHeaders(&self.headers))
+            .finish()
     }
 }

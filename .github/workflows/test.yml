@@ -2,6 +2,10 @@ on: [push, pull_request]
 
 name: CI
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     name: Lint
@@ -45,7 +49,7 @@ jobs:
   build_versions:
     strategy:
       matrix:
-        rust: [stable, beta, 1.63.0]
+        rust: [stable, beta, 1.67.0]
     runs-on: "ubuntu-latest"
     steps:
       - uses: actions/checkout@v2
@@ -67,22 +71,13 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        tls:
-          - ""
-          - "tls"
-          - "native-tls"
         feature:
           - ""
-          - json
           - charset
           - cookies
           - socks-proxy
-          - native-certs
           - gzip
           - brotli
-          - http-crate
-          - http-interop
-          - http-crate http-interop
     env:
       RUST_BACKTRACE: "1"
       RUSTFLAGS: "-D dead_code -D unused-variables -D unused"
@@ -97,7 +92,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --no-default-features --features "testdeps ${{ matrix.tls }} ${{ matrix.feature }}"
+          args: --no-default-features --features "_test rustls native-roots ${{ matrix.feature }}"
 
 
   cargo-deny:
