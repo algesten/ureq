@@ -1,6 +1,6 @@
 use std::io;
 
-use crate::time::{NextTimeout, Duration};
+use crate::time::{Duration, NextTimeout};
 use crate::TimeoutReason;
 
 use super::Transport;

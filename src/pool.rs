@@ -6,7 +6,7 @@ use http::uri::{Authority, Scheme};
 use http::Uri;
 
 use crate::proxy::Proxy;
-use crate::time::{NextTimeout, Duration, Instant};
+use crate::time::{Duration, Instant, NextTimeout};
 use crate::transport::{Buffers, ConnectionDetails, Connector, Transport};
 use crate::util::DebugAuthority;
 use crate::{AgentConfig, Error};
@@ -86,11 +86,7 @@ impl Connection {
         self.transport.buffers()
     }
 
-    pub fn transmit_output(
-        &mut self,
-        amount: usize,
-        timeout: NextTimeout,
-    ) -> Result<(), Error> {
+    pub fn transmit_output(&mut self, amount: usize, timeout: NextTimeout) -> Result<(), Error> {
         self.transport.transmit_output(amount, timeout)
     }
 
