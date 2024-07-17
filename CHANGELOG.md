@@ -1,8 +1,10 @@
 # Unreleased
+
+# 2.10.1
   * default `ureq` Rustls tls config updated to avoid panic for applications
     that activate the default Rustls `aws-lc-rs` feature without setting
     a process-wide crypto provider. `ureq` will now use `*ring*` in this
-    circumstance instead of panicing.
+    circumstance instead of panicking.
 
 # 2.10.0
   * Bump MSRV 1.61 -> 1.63 due to rustls (#764)
