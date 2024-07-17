@@ -5,6 +5,16 @@ use std::net::TcpStream;
 use crate::body::{Body, BodyReader};
 use crate::util::private::Private;
 
+/// Request body for sending data via POST, PUT and PATCH.
+///
+/// Typically not indicated with dircetly since the trait [`AsSendBody`] is implemented
+/// for the majority of the types of data a user might want to send to a remote server.
+/// That means if you want to send things like `String`, `&str` or `[u8]`, they can be
+/// used directly. See documentation for [`AsSendBody`].
+///
+/// The exception is when using [`Read`] trait bodies, in which case we wrap the request
+/// body directly. See below [`SendBody::from_reader`].
+///
 pub struct SendBody<'a> {
     inner: BodyInner<'a>,
     ended: bool,
@@ -63,6 +73,54 @@ impl<'a> SendBody<'a> {
 use hoot::BodyMode;
 use http::Response;
 
+/// Trait for common types to send in POST, PUT or PATCH.
+///
+/// Sending common data types such as `String`, `&str` or `&[u8]` require no further wrapping
+/// and can be sent either by [`RequestBuilder::send()`][crate::RequestBuilder::send] or using the
+/// `http` crate [`Request`][http::Request] directly (see example below).
+///
+/// Implemented for:
+///
+/// * `&str`
+/// * `&String`
+/// * `&Vec<u8>`
+/// * `&File`
+/// * `&TcpStream`
+/// * `&[u8]`
+/// * `Response<Body>`
+/// * `String`
+/// * `Vec<u8>`
+/// * `File`
+/// * `Stdin`
+/// * `TcpStream`
+/// * `UnixStream` (not on windows)
+/// * `&[u8; N]`
+///
+/// # Example
+///
+/// These two examples are equivalent.
+///
+/// ```
+/// let data: &[u8] = b"My special request body data";
+///
+/// let response = ureq::post("https://httpbin.org/post")
+///     .send(data)
+///     .unwrap();
+/// ```
+///
+/// Using `http` crate API
+///
+/// ```
+/// use ureq::http;
+///
+/// let data: &[u8] = b"My special request body data";
+///
+/// let request = http::Request::post("https://httpbin.org/post")
+///     .body(data)
+///     .unwrap();
+///
+/// let response = ureq::run(request).unwrap();
+/// ```
 pub trait AsSendBody: Private {
     #[doc(hidden)]
     fn as_body(&mut self) -> SendBody;

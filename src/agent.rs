@@ -21,6 +21,32 @@ use crate::{WithBody, WithoutBody};
 #[cfg(feature = "_tls")]
 use crate::tls::TlsConfig;
 
+/// Agents keep state between requests.
+///
+/// By default, no state, such as cookies, is kept between requests.
+/// But by creating an agent as entry point for the request, we
+/// can keep a state.
+///
+/// ```no_run
+/// let mut agent = ureq::agent();
+///
+/// agent
+///     .post("http://example.com/post/login")
+///     .send(b"my password").unwrap();
+///
+/// let secret = agent
+///     .get("http://example.com/get/my-protected-page")
+///     .call()
+///     .unwrap()
+///     .body_mut()
+///     .read_to_string(1000)
+///     .unwrap();
+///
+///   println!("Secret is: {}", secret);
+/// ```
+///
+/// Agent uses inner `Arc`, so cloning an Agent results in an instance
+/// that shares the same underlying connection pool and other state.
 #[derive(Debug, Clone)]
 pub struct Agent {
     config: Arc<AgentConfig>,
@@ -39,12 +65,16 @@ pub struct AgentConfig {
     ///
     /// This is end-to-end, from DNS lookup to finishing reading the response body.
     /// Thus it covers all other timeouts.
+    ///
+    /// Defaults to `None`.
     pub timeout_global: Option<Duration>,
 
     /// Timeout for call-by-call when following redirects
     ///
     /// This covers a single call and the timeout is reset when
     /// ureq follows a redirections.
+    ///
+    /// Defaults to `None`.
     pub timeout_per_call: Option<Duration>,
 
     /// Max duration for doing the DNS lookup when establishing the connection
@@ -52,14 +82,20 @@ pub struct AgentConfig {
     /// Because most platforms do not have an async syscall for looking up
     /// a host name, setting this might force str0m to spawn a thread to handle
     /// the timeout.
+    ///
+    /// Defaults to `None`.
     pub timeout_resolve: Option<Duration>,
 
     /// Max duration for establishing the connection
     ///
     /// For a TLS connection this includes opening the socket and doing the TLS handshake.
+    ///
+    /// Defaults to `None`.
     pub timeout_connect: Option<Duration>,
 
     /// Max duration for sending the request, but not the request body.
+    ///
+    /// Defaults to `None`.
     pub timeout_send_request: Option<Duration>,
 
     /// Max duration for awaiting a 100-continue response.
@@ -71,12 +107,18 @@ pub struct AgentConfig {
     pub timeout_await_100: Option<Duration>,
 
     /// Max duration for sending a request body (if there is one)
+    ///
+    /// Defaults to `None`.
     pub timeout_send_body: Option<Duration>,
 
     /// Max duration for receiving the response headers, but not the body
+    ///
+    /// Defaults to `None`.
     pub timeout_recv_response: Option<Duration>,
 
     /// Max duration for receving the response body.
+    ///
+    /// Defaults to `None`.
     pub timeout_recv_body: Option<Duration>,
 
     /// Whether to limit requests (including redirects) to https only
@@ -100,6 +142,8 @@ pub struct AgentConfig {
     ///
     /// * `Never` (the default) means the authorization header is never attached to a redirected call.
     /// * `SameHost` will keep the header when the redirect is to the same host and under https.
+    ///
+    /// Defaults to `None`.
     pub redirect_auth_headers: RedirectAuthHeaders,
 
     /// Value to use for the `User-Agent` field
