@@ -6,6 +6,7 @@ use http::Uri;
 use crate::proxy::Proxy;
 use crate::resolver::Resolver;
 use crate::time::{Instant, NextTimeout};
+use crate::tls::TlsProvider;
 use crate::{AgentConfig, Error};
 
 use self::tcp::TcpConnector;
@@ -95,7 +96,7 @@ impl DefaultConnector {
             // If the config indicates we ought to use a socks proxy
             // and the feature flag isn't enabled, we should warn the user.
             #[cfg(not(feature = "socks-proxy"))]
-            WarnOnNoSocksConnector.boxed(),
+            no_proxy::WarnOnNoSocksConnector.boxed(),
             //
             // If we didn't get a socks-proxy, open a Tcp connection
             TcpConnector.boxed(),
@@ -104,9 +105,19 @@ impl DefaultConnector {
             #[cfg(feature = "rustls")]
             crate::tls::RustlsConnector::default().boxed(),
             //
+            // Panic if the config calls for rustls, the uri scheme is https and that
+            // TLS provider is not enabled by feature flags.
+            #[cfg(feature = "_tls")]
+            no_tls::WarnOnMissingTlsProvider(TlsProvider::RustlsWithRing).boxed(),
+            //
             // As a fallback if rustls isn't enabled, use native-tls
             #[cfg(feature = "native-tls")]
             crate::tls::NativeTlsConnector::default().boxed(),
+            //
+            // Panic if the config calls for native-tls, the uri scheme is https and that
+            // TLS provider is not enabled by feature flags.
+            #[cfg(feature = "_tls")]
+            no_tls::WarnOnMissingTlsProvider(TlsProvider::NativeTls).boxed(),
         ]);
 
         DefaultConnector { chain }
@@ -123,30 +134,80 @@ impl Connector for DefaultConnector {
     }
 }
 
-#[derive(Debug)]
 #[cfg(not(feature = "socks-proxy"))]
-pub(crate) struct WarnOnNoSocksConnector;
+mod no_proxy {
+    use super::{ConnectionDetails, Connector, Debug, Error, Transport};
 
-#[cfg(not(feature = "socks-proxy"))]
-impl Connector for WarnOnNoSocksConnector {
-    fn connect(
-        &self,
-        details: &ConnectionDetails,
-        chained: Option<Box<dyn Transport>>,
-    ) -> Result<Option<Box<dyn Transport>>, Error> {
-        if chained.is_none() {
-            if let Some(proxy) = &details.proxy {
-                if proxy.proto().is_socks() {
-                    if proxy.is_from_env() {
-                        warn!("Enable feature socks-proxy to use proxy configured by environment variables");
-                    } else {
-                        // If a user bothered to manually create a AgentConfig.proxy setting, and it's
-                        // not honored, assume it's a serious error.
-                        panic!("Enable feature socks-proxy to use manually configured proxy");
+    #[derive(Debug)]
+    pub(crate) struct WarnOnNoSocksConnector;
+
+    impl Connector for WarnOnNoSocksConnector {
+        fn connect(
+            &self,
+            details: &ConnectionDetails,
+            chained: Option<Box<dyn Transport>>,
+        ) -> Result<Option<Box<dyn Transport>>, Error> {
+            if chained.is_none() {
+                if let Some(proxy) = &details.proxy {
+                    if proxy.proto().is_socks() {
+                        if proxy.is_from_env() {
+                            warn!(
+                                "Enable feature socks-proxy to use proxy
+                                configured by environment variables"
+                            );
+                        } else {
+                            // If a user bothered to manually create a AgentConfig.proxy setting,
+                            // and it's not honored, assume it's a serious error.
+                            panic!(
+                                "Enable feature socks-proxy to use
+                                manually configured proxy"
+                            );
+                        }
                     }
                 }
             }
+            Ok(chained)
         }
-        Ok(chained)
+    }
+}
+
+#[cfg(feature = "_tls")]
+mod no_tls {
+    use http::uri::Scheme;
+
+    use crate::tls::TlsProvider;
+
+    use super::{ConnectionDetails, Connector, Debug, Error, Transport};
+
+    #[derive(Debug)]
+    pub(crate) struct WarnOnMissingTlsProvider(pub TlsProvider);
+
+    impl Connector for WarnOnMissingTlsProvider {
+        fn connect(
+            &self,
+            details: &ConnectionDetails,
+            chained: Option<Box<dyn Transport>>,
+        ) -> Result<Option<Box<dyn Transport>>, Error> {
+            let already_tls = chained.as_ref().map(|c| c.is_tls()).unwrap_or(false);
+
+            if already_tls {
+                return Ok(chained);
+            }
+
+            let tls_config = &details.config.tls_config;
+
+            if details.uri.scheme() != Some(&Scheme::HTTPS)
+                && tls_config.provider == self.0
+                && !self.0.is_feature_enabled()
+            {
+                panic!(
+                    "uri scheme is https, provider is {:?} but feature is not enabled: {}",
+                    self.0,
+                    self.0.feature_name()
+                );
+            }
+
+            Ok(chained)
+        }
     }
 }
