@@ -5,8 +5,6 @@ use std::sync::Arc;
 
 pub use cert::{parse_pem, Certificate, PemItem, PrivateKey};
 
-use self::cert::load_root_certs;
-
 #[cfg(feature = "rustls")]
 mod rustls;
 #[cfg(feature = "rustls")]
@@ -113,7 +111,7 @@ impl TlsConfig {
     /// system on the local host.
     pub fn with_native_roots() -> TlsConfig {
         TlsConfig {
-            root_certs: load_root_certs(),
+            root_certs: self::cert::load_native_root_certs(),
             ..Default::default()
         }
     }
