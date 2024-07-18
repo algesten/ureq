@@ -121,36 +121,40 @@ impl Proxy {
         self.proto
     }
 
-    pub(crate) fn uri(&self) -> &Uri {
+    /// The proxy uri
+    pub fn uri(&self) -> &Uri {
         &self.uri
     }
 
-    #[cfg(test)]
-    pub(crate) fn host(&self) -> &str {
+    /// The host part of the proxy uri
+    pub fn host(&self) -> &str {
         self.uri
             .authority()
             .map(|a| a.host())
             .expect("constructor to ensure there is an authority")
     }
 
-    #[cfg(test)]
-    pub(crate) fn port(&self) -> u16 {
+    /// The port of the proxy uri
+    pub fn port(&self) -> u16 {
         self.uri
             .authority()
             .and_then(|a| a.port_u16())
             .unwrap_or_else(|| self.proto.default_port())
     }
 
-    pub(crate) fn username(&self) -> Option<&str> {
+    /// The username of the proxy uri
+    pub fn username(&self) -> Option<&str> {
         self.uri.authority().and_then(|a| a.username())
     }
 
-    pub(crate) fn password(&self) -> Option<&str> {
+    /// The password of the proxy uri
+    pub fn password(&self) -> Option<&str> {
         self.uri.authority().and_then(|a| a.password())
     }
 
-    #[cfg(not(feature = "socks-proxy"))]
-    pub(crate) fn is_from_env(&self) -> bool {
+    /// Whether this proxy setting was created manually or from
+    /// environment variables.
+    pub fn is_from_env(&self) -> bool {
         self.from_env
     }
 
