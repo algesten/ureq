@@ -66,7 +66,10 @@ impl Connector for RustlsConnector {
             .expect("uri authority for tls")
             .host()
             .try_into()
-            .map_err(|_| Error::Other("rustls invalid dns name error"))?;
+            .map_err(|e| {
+                warn!("rustls invalid dns name: {}", e);
+                Error::Tls("Rustls invalid dns name error")
+            })?;
 
         let name = name_borrowed.to_owned();
 
