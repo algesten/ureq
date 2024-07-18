@@ -266,7 +266,7 @@ mod no_proxy {
             chained: Option<Box<dyn Transport>>,
         ) -> Result<Option<Box<dyn Transport>>, Error> {
             if chained.is_none() {
-                if let Some(proxy) = &details.proxy {
+                if let Some(proxy) = &details.config.proxy {
                     if proxy.proto().is_socks() {
                         if proxy.is_from_env() {
                             warn!(
