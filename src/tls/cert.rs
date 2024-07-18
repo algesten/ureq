@@ -55,7 +55,7 @@ impl<'a> Certificate<'a> {
         let item = parse_pem(pem)
             .find(|p| matches!(p, Err(_) | Ok(PemItem::Certificate(_))))
             // None means there were no matches in the PEM chain
-            .ok_or(Error::Certificate("no pem encoded cert found"))??;
+            .ok_or(Error::Tls("No pem encoded cert found"))??;
 
         let PemItem::Certificate(cert) = item else {
             unreachable!("matches! above for Certificate");
@@ -132,7 +132,7 @@ impl<'a> PrivateKey<'a> {
         let item = parse_pem(pem)
             .find(|p| matches!(p, Err(_) | Ok(PemItem::PrivateKey(_))))
             // None means there were no matches in the PEM chain
-            .ok_or(Error::Certificate("no pem encoded private key found"))??;
+            .ok_or(Error::Tls("No pem encoded private key found"))??;
 
         let PemItem::PrivateKey(key) = item else {
             unreachable!("matches! above for PrivateKey");
