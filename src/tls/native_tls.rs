@@ -14,6 +14,9 @@ use once_cell::sync::OnceCell;
 
 use super::TlsConfig;
 
+/// Wrapper for TLS using native-tls.
+///
+/// Requires feature flag **native-tls**.
 #[derive(Default)]
 pub struct NativeTlsConnector {
     connector: OnceCell<Arc<TlsConnector>>,
