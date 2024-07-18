@@ -21,7 +21,7 @@ impl Connector for SocksConnector {
         details: &ConnectionDetails,
         chained: Option<Box<dyn Transport>>,
     ) -> Result<Option<Box<dyn Transport>>, Error> {
-        let proxy = match &details.proxy {
+        let proxy = match &details.config.proxy {
             Some(v) if v.proto().is_socks() => v,
             // If there is no proxy configured, or it isn't a SOCKS proxy, use whatever is chained.
             _ => {
