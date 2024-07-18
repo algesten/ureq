@@ -261,10 +261,10 @@ pub(crate) trait UriExt {
 impl UriExt for Uri {
     fn ensure_full_url(&self) -> Result<(), Error> {
         self.scheme()
-            .ok_or_else(|| Error::BadUrl(format!("{} is missing scheme", self)))?;
+            .ok_or_else(|| Error::BadUri(format!("{} is missing scheme", self)))?;
 
         self.authority()
-            .ok_or_else(|| Error::BadUrl(format!("{} is missing host/port", self)))?;
+            .ok_or_else(|| Error::BadUri(format!("{} is missing host", self)))?;
 
         Ok(())
     }

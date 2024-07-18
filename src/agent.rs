@@ -326,7 +326,7 @@ impl Agent {
                         let value = self.jar.get_request_cookies(uri);
                         if !value.is_empty() {
                             let value = HeaderValue::from_str(&value).map_err(|_| {
-                                Error::Other("Cookie value is an invalid http-header")
+                                Error::CookieValue("Cookie value is an invalid http-header")
                             })?;
                             set_header(&mut unit, current_time(), "cookie", value);
                         }

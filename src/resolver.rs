@@ -18,7 +18,7 @@ use http::uri::{Authority, Scheme};
 use http::Uri;
 
 use crate::transport::time::NextTimeout;
-use crate::util::SchemeExt;
+use crate::util::{SchemeExt, UriExt};
 use crate::Error;
 
 /// Trait for name resolvers.
@@ -76,8 +76,11 @@ impl DefaultResolver {
 
 impl Resolver for DefaultResolver {
     fn resolve(&self, uri: &Uri, timeout: NextTimeout) -> Result<SocketAddr, Error> {
-        let scheme = uri.scheme().ok_or(Error::Other("No scheme in uri"))?;
-        let authority = uri.authority().ok_or(Error::Other("No host in uri"))?;
+        uri.ensure_full_url()?;
+
+        // unwrap is ok due to ensure_full_url() above.
+        let scheme = uri.scheme().unwrap();
+        let authority = uri.authority().unwrap();
 
         // This will be on the form "myspecialhost.org:1234". The port is mandatory.
         let addr = DefaultResolver::host_and_port(scheme, authority);
