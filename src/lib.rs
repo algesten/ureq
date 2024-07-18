@@ -28,8 +28,6 @@ mod send_body;
 mod unit;
 mod util;
 
-pub mod time;
-
 pub mod resolver;
 pub mod transport;
 

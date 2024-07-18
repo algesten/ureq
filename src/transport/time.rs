@@ -1,3 +1,5 @@
+//! Internal time wrappers
+
 use std::cmp::Ordering;
 use std::ops::{Add, AddAssign, Deref, Sub, SubAssign};
 use std::time;
@@ -7,12 +9,12 @@ use crate::TimeoutReason;
 /// Wrapper for [`std::time::Instant`] that provides additional time points in the past or future
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Instant {
-    #[allow(dead_code)]
     AlreadyHappened,
     Exact(time::Instant),
     NotHappening,
 }
 
+/// Wrapper for [`std::time::Duration`] that provides a duration to a distant future
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Duration {
     Exact(time::Duration),
@@ -144,6 +146,7 @@ impl Ord for Duration {
     }
 }
 
+/// A pair of [`Duration`] and [`TimeoutReason`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NextTimeout {
     pub after: Duration,
@@ -151,7 +154,7 @@ pub struct NextTimeout {
 }
 
 impl NextTimeout {
-    pub fn not_zero(&self) -> Option<Duration> {
+    pub(crate) fn not_zero(&self) -> Option<Duration> {
         if self.after.is_not_happening() {
             None
         } else if self.after.is_zero() {

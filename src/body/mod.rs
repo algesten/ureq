@@ -4,7 +4,7 @@ use std::io::{self, Read};
 use hoot::BodyMode;
 
 use crate::pool::Connection;
-use crate::time::Instant;
+use crate::transport::time::Instant;
 use crate::unit::Unit;
 use crate::Error;
 

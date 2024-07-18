@@ -6,7 +6,7 @@ use http::uri::{Authority, Scheme};
 use http::Uri;
 
 use crate::proxy::Proxy;
-use crate::time::{Duration, Instant, NextTimeout};
+use crate::transport::time::{Duration, Instant, NextTimeout};
 use crate::transport::{Buffers, ConnectionDetails, Connector, Transport};
 use crate::util::DebugAuthority;
 use crate::{AgentConfig, Error};
