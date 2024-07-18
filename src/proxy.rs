@@ -9,7 +9,7 @@ use crate::Error;
 /// Proxy protocol
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[non_exhaustive]
-pub enum Proto {
+pub(crate) enum Proto {
     Http,
     Https,
     Socks4,
@@ -31,7 +31,7 @@ impl Proto {
     }
 }
 
-/// Proxy server definition
+/// Proxy server settings
 #[derive(Clone, Eq, Hash, PartialEq)]
 pub struct Proxy {
     proto: Proto,
@@ -49,10 +49,11 @@ impl Proxy {
     ///
     /// ###  Protocols
     ///
-    /// * `http`: HTTP
-    /// * `socks4`: SOCKS4 (requires socks feature)
-    /// * `socks4a`: SOCKS4A (requires socks feature)
-    /// * `socks5` and `socks`: SOCKS5 (requires socks feature)
+    /// * `http`: HTTP CONNECT proxy
+    /// * `https`: HTTPS CONNECT proxy (requires a TLS provider)
+    /// * `socks4`: SOCKS4 (requires **socks-proxy** feature)
+    /// * `socks4a`: SOCKS4A (requires **socks-proxy** feature)
+    /// * `socks5` and `socks`: SOCKS5 (requires **socks-proxy** feature)
     ///
     /// # Examples proxy formats
     ///
@@ -82,6 +83,16 @@ impl Proxy {
         })
     }
 
+    /// Read proxy settings from environment variables.
+    ///
+    /// The environment variable is expected to contain a proxy URI. The following
+    /// environment variables are attempted:
+    ///
+    /// * `ALL_PROXY`
+    /// * `HTTPS_PROXY`
+    /// * `HTTP_PROXY`
+    ///
+    /// Returns `None` if no environment variable is set or the URI is invalid.
     pub fn try_from_env() -> Option<Self> {
         macro_rules! try_env {
             ($($env:literal),+) => {
@@ -106,37 +117,40 @@ impl Proxy {
         None
     }
 
-    pub fn proto(&self) -> Proto {
+    pub(crate) fn proto(&self) -> Proto {
         self.proto
     }
 
-    pub fn uri(&self) -> &Uri {
+    pub(crate) fn uri(&self) -> &Uri {
         &self.uri
     }
 
-    pub fn host(&self) -> &str {
+    #[cfg(test)]
+    pub(crate) fn host(&self) -> &str {
         self.uri
             .authority()
             .map(|a| a.host())
             .expect("constructor to ensure there is an authority")
     }
 
-    pub fn port(&self) -> u16 {
+    #[cfg(test)]
+    pub(crate) fn port(&self) -> u16 {
         self.uri
             .authority()
             .and_then(|a| a.port_u16())
             .unwrap_or_else(|| self.proto.default_port())
     }
 
-    pub fn username(&self) -> Option<&str> {
+    pub(crate) fn username(&self) -> Option<&str> {
         self.uri.authority().and_then(|a| a.username())
     }
 
-    pub fn password(&self) -> Option<&str> {
+    pub(crate) fn password(&self) -> Option<&str> {
         self.uri.authority().and_then(|a| a.password())
     }
 
-    pub fn is_from_env(&self) -> bool {
+    #[cfg(not(feature = "socks-proxy"))]
+    pub(crate) fn is_from_env(&self) -> bool {
         self.from_env
     }
 

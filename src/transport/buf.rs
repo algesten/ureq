@@ -1,17 +1,75 @@
 use crate::util::ConsumeBuf;
 
+/// Abstraction over input/output buffers.
+///
+/// In ureq, the buffers are provided by the [`Transport`](crate::transport::Transport).
 pub trait Buffers {
+    /// Read only output buffers.
     fn output(&self) -> &[u8];
+
+    /// Mut handle to output buffers to write new data. Data is always
+    /// written from `0..`, there is no expectation to retain half
+    /// used output buffers.
     fn output_mut(&mut self) -> &mut [u8];
+
+    /// Unconsumed bytes in the input buffer as read only.
+    ///
+    /// The input buffer is written to by using `input_mut` followed by]
+    /// `add_filled` to indiciate how many additional bytes were added to the
+    /// input.
+    ///
+    /// This buffer should return the total unconsumed bytes.
+    ///
+    /// Example: if the internal buffer is `input: Vec<u8>`, and we have counters for
+    /// `filled: usize` and `consumed: usize`. This returns `&input[consumed..filled]`.
     fn input(&self) -> &[u8];
+
+    /// Input buffer to write to. This can be called despite there being unconsumed bytes
+    /// left.
+    ///
+    /// Example: if the internal buffer is `input: Vec<u8>`, and we have counters for
+    /// `filled: usize` and `consumed: usize`. This returns `&mut input[filled..]`.
     fn input_mut(&mut self) -> &mut [u8];
-    fn input_and_output(&mut self) -> (&[u8], &mut [u8]);
-    fn tmp_and_output(&mut self) -> (&mut [u8], &mut [u8]);
+
+    /// Add a number of read bytes into `input_mut()`.
+    ///
+    /// Example: if the internal buffer is `input: Vec<u8>`, and we have counters for
+    /// `filled: usize` and `consumed: usize`, this increases `filled`.
     fn add_filled(&mut self, amount: usize);
+
+    /// Consume a number of bytes from `&input`.
+    ///
+    /// Example: if the internal buffer is `input: Vec<u8>`, and we have counters for
+    /// `filled: usize` and `consumed: usize`, this increases `consumed`.
     fn consume(&mut self, amount: usize);
+
+    /// Helper to access both input and output buffer at the same time (to work around the
+    /// borrow checker). This is used to handle incoming data from the remote peer for example
+    /// when getting chunked data as input and dechunking it into the output.
+    fn input_and_output(&mut self) -> (&[u8], &mut [u8]);
+
+    /// Helper to get a scratch buffer (`tmp`) and the output buffer. This is used when
+    /// sending the request body in which case we use a `Read` trait to read from the
+    /// [`SendBody`](crate::SendBody) into tmp and then write it to the output buffer.
+    fn tmp_and_output(&mut self) -> (&mut [u8], &mut [u8]);
+
+    /// Helper to determine if the `&input` already holds unconsumed data or we need to
+    /// read more input from the transport. This indicates two things:
+    ///
+    /// 1. There is unconsumed data in the input buffer
+    /// 2. The last call to consume was > 0.
+    ///
+    /// Step 2 is because the input buffer might contain half a response body, and we
+    /// cannot parse it until we got the entire buffer. In this case the transport must
+    /// read more data first.
     fn can_use_input(&self) -> bool;
 }
 
+/// Default buffer implementation.
+///
+/// The buffers are lazy such that no allocations are made until needed. That means
+/// a [`Transport`](crate::transport::Transport) implementation can freely instantiate
+/// the `LazyBuffers`.
 pub struct LazyBuffers {
     input_size: usize,
     output_size: usize,
@@ -23,10 +81,9 @@ pub struct LazyBuffers {
 }
 
 impl LazyBuffers {
-    pub fn empty() -> Self {
-        Self::new(0, 0)
-    }
-
+    /// Create a new buffer.
+    ///
+    /// The sizes provided are not allocated until we need to.
     pub fn new(input_size: usize, output_size: usize) -> Self {
         assert!(input_size > 0);
         assert!(output_size > 0);

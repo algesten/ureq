@@ -12,6 +12,12 @@ use crate::Error;
 
 use super::{ConnectionDetails, Connector, Transport};
 
+/// Connector for SOCKS proxies.
+///
+/// Requires the **socks-proxy** feature.
+///
+/// The connector looks at the proxy settings in [`AgentConfig::proxy`](crate::AgentConfig::proxy) to
+/// determine whether to attempt a proxy connection or not.
 #[derive(Default)]
 pub struct SocksConnector {}
 

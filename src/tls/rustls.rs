@@ -177,10 +177,6 @@ impl Transport for RustlsTransport {
         Ok(())
     }
 
-    fn consume_input(&mut self, amount: usize) {
-        self.buffers.consume(amount);
-    }
-
     fn is_open(&mut self) -> bool {
         self.stream.get_mut().get_mut().is_open()
     }

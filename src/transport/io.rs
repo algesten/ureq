@@ -5,6 +5,11 @@ use crate::TimeoutReason;
 
 use super::Transport;
 
+/// Helper to turn a [`Transport`] into a std::io [`Read`](io::Read) and [`Write`](io::Write).
+///
+/// This is useful when integrating with components that expect a regular `Read`/`Write`. In
+/// ureq this is used both for the [`RustlsConnector`](crate::tls::RustlsConnector) and the
+/// [`NativeTlsConnector`](crate::tls::NativeTlsConnector).
 pub struct TransportAdapter {
     pub timeout: NextTimeout,
     pub transport: Box<dyn Transport>,
@@ -39,7 +44,7 @@ impl io::Read for TransportAdapter {
 
         let max = buf.len().min(input.len());
         buf[..max].copy_from_slice(&input[..max]);
-        self.transport.consume_input(max);
+        self.transport.buffers().consume(max);
 
         Ok(max)
     }

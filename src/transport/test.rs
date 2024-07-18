@@ -229,10 +229,6 @@ impl Transport for TestTransport {
         Ok(())
     }
 
-    fn consume_input(&mut self, amount: usize) {
-        self.buffers.consume(amount);
-    }
-
     fn is_open(&mut self) -> bool {
         self.connected
     }
