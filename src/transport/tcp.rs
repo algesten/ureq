@@ -8,6 +8,7 @@ use crate::Error;
 
 use super::{Buffers, ConnectionDetails, Connector, LazyBuffers, Transport};
 
+/// Connector for regular TCP sockets.
 pub struct TcpConnector;
 
 impl Connector for TcpConnector {
@@ -128,10 +129,6 @@ impl Transport for TcpTransport {
         self.buffers.add_filled(amount);
 
         Ok(())
-    }
-
-    fn consume_input(&mut self, amount: usize) {
-        self.buffers.consume(amount);
     }
 
     fn is_open(&mut self) -> bool {

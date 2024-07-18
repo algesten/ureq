@@ -13,6 +13,7 @@ pub use http;
 pub use body::{Body, BodyReader};
 use http::Method;
 use http::{Request, Response, Uri};
+pub use proxy::Proxy;
 pub use request::RequestBuilder;
 use request::{WithBody, WithoutBody};
 pub use send_body::AsSendBody;
