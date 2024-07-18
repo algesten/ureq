@@ -12,7 +12,7 @@ use hoot::BodyMode;
 use http::{HeaderMap, HeaderName, HeaderValue, Method, Request, Response, Uri, Version};
 
 use crate::error::TimeoutReason;
-use crate::time::{Instant, NextTimeout};
+use crate::transport::time::{Instant, NextTimeout};
 use crate::transport::Buffers;
 use crate::util::{DebugHeaders, DebugUri};
 use crate::{AgentConfig, Error, SendBody};

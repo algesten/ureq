@@ -1,7 +1,7 @@
 use std::io;
 
 use crate::pool::Connection;
-use crate::time::Instant;
+use crate::transport::time::Instant;
 use crate::unit::{Event, Input, Unit};
 use crate::Error;
 

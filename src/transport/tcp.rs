@@ -2,7 +2,7 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::{fmt, io, time};
 
-use crate::time::{Duration, NextTimeout};
+use crate::transport::time::{Duration, NextTimeout};
 use crate::util::IoResultExt;
 use crate::Error;
 

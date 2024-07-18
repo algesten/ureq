@@ -11,7 +11,7 @@ use crate::pool::{Connection, ConnectionPool};
 use crate::proxy::Proxy;
 use crate::resolver::{DefaultResolver, Resolver};
 use crate::send_body::AsSendBody;
-use crate::time::{Duration, Instant};
+use crate::transport::time::{Duration, Instant};
 use crate::transport::{ConnectionDetails, Connector, DefaultConnector, NoBuffers};
 use crate::unit::{Event, Input, Unit};
 use crate::util::{DebugResponse, HeaderMapExt, UriExt};
