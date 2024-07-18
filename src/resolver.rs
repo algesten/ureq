@@ -1,3 +1,13 @@
+//! Name resolvers.
+//!
+//! _NOTE: Resolver is deep configuration of ureq and is not required for regular use._
+//!
+//! Name resolving is pluggable. The resolver's duty is to take a URI and translate it
+//! to a socket address (IP + port). This is done as a separate step in regular ureq use.
+//! The hostname is looked up and provided to the [`Connector`](crate::transport::Connector).
+//!
+//! In some situations it might be desirable to not do this lookup, or to use another system
+//! than DNS for it.
 use std::fmt::{self, Debug};
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::mpsc::{self, RecvTimeoutError};
@@ -11,15 +21,24 @@ use crate::transport::time::NextTimeout;
 use crate::util::SchemeExt;
 use crate::Error;
 
+/// Trait for name resolvers.
 pub trait Resolver: Debug + Send + Sync + 'static {
     fn resolve(&self, uri: &Uri, timeout: NextTimeout) -> Result<SocketAddr, Error>;
 }
 
+/// Default resolver implementation.
+///
+/// Uses std::net [`ToSocketAddrs`](https://doc.rust-lang.org/std/net/trait.ToSocketAddrs.html) to
+/// do the lookup. Can optionally spawn a thread to abort lookup if the relevant timeout is set.
 pub struct DefaultResolver {
     family: IpFamily,
     select: AddrSelect,
 }
 
+/// Configuration of IP family to use.
+///
+/// Used to limit the IP to either IPv4, IPv6 or any.
+// TODO(martin): make this configurable
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IpFamily {
     Any,
@@ -27,13 +46,25 @@ pub enum IpFamily {
     Ipv6Only,
 }
 
+/// Strategy for selecting a single socket address.
+///
+/// A name server lookup might result in multiple socket addresses. This can happen for
+/// multihomed servers or for crude load balancing.
+///
+/// This enumerates the implemented strategies for picking one address of all the returned ones.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum AddrSelect {
+    /// Pick first returned address.
     First,
-    // TODO(martin): implement round robin per hostname
+    // TODO(martin): implement round robin per hostname and make it configurable
 }
+
 impl DefaultResolver {
+    /// Helper to combine scheme host and port to a single string.
+    ///
+    /// This knows about the default ports for http, https and socks proxies which
+    /// can then be omitted from the `Authority`.
     pub fn host_and_port(scheme: &Scheme, authority: &Authority) -> String {
         let port = authority
             .port_u16()
