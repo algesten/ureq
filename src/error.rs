@@ -3,6 +3,7 @@ use std::{fmt, io};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum Error {
     #[error("http: {0}")]
     Http(#[from] http::Error),
@@ -80,6 +81,7 @@ impl Error {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum TimeoutReason {
     Global,
     Resolver,

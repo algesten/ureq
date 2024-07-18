@@ -8,6 +8,7 @@ use crate::Error;
 
 /// Proxy protocol
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[non_exhaustive]
 pub enum Proto {
     Http,
     Https,
