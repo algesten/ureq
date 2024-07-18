@@ -22,6 +22,9 @@ use crate::Error;
 
 use super::TlsConfig;
 
+/// Wrapper for TLS using rustls.
+///
+/// Requires feature flag **rustls**.
 #[derive(Default)]
 pub struct RustlsConnector {
     config: OnceCell<Arc<ClientConfig>>,

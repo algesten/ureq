@@ -35,11 +35,16 @@ pub enum Error {
     #[error("connection failed")]
     ConnectionFailed,
 
+    #[error("the response body is larger than request limit")]
+    BodyExceedsLimit,
+
+    #[cfg(feature = "_tls")]
     #[error("certificate: {0}")]
     Certificate(&'static str),
 
-    #[error("the response body is larger than request limit")]
-    BodyExceedsLimit,
+    #[cfg(feature = "_tls")]
+    #[error("PEM: {0:?}")]
+    Pem(rustls_pemfile::Error),
 
     #[cfg(feature = "rustls")]
     #[error("rustls: {0}")]

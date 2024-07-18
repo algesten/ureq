@@ -1,10 +1,14 @@
 use std::borrow::Cow;
 use std::fmt;
 
-use rustls_pki_types::CertificateDer;
-
 use crate::Error;
 
+/// An X509 certificate for a server or a client.
+///
+/// These are either used as trust roots, or client authentication.
+///
+/// The internal representation is DER form. The provided helpers for PEM
+/// translates to DER.
 #[derive(Clone)]
 pub struct Certificate<'a> {
     der: CertDer<'a>,
@@ -16,7 +20,8 @@ enum CertDer<'a> {
     Owned(Vec<u8>),
     // This type is here because rustls_native_certs::load_native_certs() gives us
     // CertificateDer<'static> and we don't want to cause extra allocations.
-    PkiTypes(CertificateDer<'a>),
+    #[cfg(feature = "native-roots")]
+    PkiTypes(rustls_pki_types::CertificateDer<'a>),
 }
 
 impl<'a> AsRef<[u8]> for CertDer<'a> {
@@ -24,17 +29,28 @@ impl<'a> AsRef<[u8]> for CertDer<'a> {
         match self {
             CertDer::Borrowed(v) => v,
             CertDer::Owned(v) => v,
+            #[cfg(feature = "native-roots")]
             CertDer::PkiTypes(v) => v,
         }
     }
 }
 
 impl<'a> Certificate<'a> {
+    /// Read an X509 certificate in DER form.
+    ///
+    /// Does not immediately validate whether the data provided is a valid DER formatted
+    /// X509. That validation is the responsibility of the TLS provider.
     pub fn from_der(der: &'a [u8]) -> Self {
         let der = CertDer::Borrowed(der);
         Certificate { der }
     }
 
+    /// Read an X509 certificate in PEM form.
+    ///
+    /// This is a shorthand for [`parse_pem`] followed by picking the first certificate.
+    /// Fails with an error if there is no certificate found in the PEM given.
+    ///
+    /// Translates to DER format internally.
     pub fn from_pem(pem: &'a [u8]) -> Result<Self, Error> {
         let item = parse_pem(pem)
             .find(|p| matches!(p, Err(_) | Ok(PemItem::Certificate(_))))
@@ -48,42 +64,70 @@ impl<'a> Certificate<'a> {
         Ok(cert)
     }
 
+    /// This certificate in DER (the internal) format.
     pub fn der(&self) -> &[u8] {
         self.der.as_ref()
     }
 
+    /// Clones (allocates) to produce a static copy.
     pub fn to_owned(&self) -> Certificate<'static> {
         Certificate {
             der: CertDer::Owned(self.der.as_ref().to_vec()),
         }
     }
 
-    fn from_pki_types(der: CertificateDer<'static>) -> Certificate<'static> {
+    #[cfg(feature = "native-roots")]
+    fn from_pki_types(der: rustls_pki_types::CertificateDer<'static>) -> Certificate<'static> {
         Certificate {
             der: CertDer::PkiTypes(der),
         }
     }
 }
 
+/// A private key used in client certificate auth.
+///
+/// The internal representation is DER form. The provided helpers for PEM
+/// translates to DER.
+///
+/// Deliberately not `Clone` to avoid accidental copies in memory.
 pub struct PrivateKey<'a> {
     kind: KeyKind,
     der: Cow<'a, [u8]>,
 }
 
+/// The kind of private key.
+///
+/// * For **rustls** any kind is valid.
+/// * For **native-tls** the only valid option is [`Pkcs8`](KeyKind::Pkcs8).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum KeyKind {
+    /// An RSA private key
     Pkcs1,
+    /// A PKCS#8 private key.
+    ///
+    /// Not encrypted with a passphrase.
     Pkcs8,
+    /// A Sec1 private key
     Sec1,
 }
 
 impl<'a> PrivateKey<'a> {
+    /// Read private key in DER form.
+    ///
+    /// Does not immediately validate whether the data provided is a valid DER.
+    /// That validation is the responsibility of the TLS provider.
     pub fn from_der(kind: KeyKind, der: &'a [u8]) -> Self {
         let der = Cow::Borrowed(der);
         PrivateKey { kind, der }
     }
 
+    /// Read a private key in PEM form.
+    ///
+    /// This is a shorthand for [`parse_pem`] followed by picking the first found key.
+    /// Fails with an error if there are no keys found in the PEM given.
+    ///
+    /// Translates to DER format internally.
     pub fn from_pem(pem: &'a [u8]) -> Result<Self, Error> {
         let item = parse_pem(pem)
             .find(|p| matches!(p, Err(_) | Ok(PemItem::PrivateKey(_))))
@@ -97,14 +141,17 @@ impl<'a> PrivateKey<'a> {
         Ok(key)
     }
 
+    /// The key kind
     pub fn kind(&self) -> KeyKind {
         self.kind
     }
 
+    /// This private key in DER (the internal) format.
     pub fn der(&self) -> &[u8] {
         &self.der
     }
 
+    /// Clones (allocates) to produce a static copy.
     pub fn to_owned(&self) -> PrivateKey<'static> {
         PrivateKey {
             kind: self.kind,
@@ -113,14 +160,22 @@ impl<'a> PrivateKey<'a> {
     }
 }
 
-#[non_exhaustive]
-pub enum PemItem<'a> {
-    Certificate(Certificate<'a>),
-    PrivateKey(PrivateKey<'a>),
-}
-
+/// Parser of PEM data.
+///
+/// The data may contain one or many PEM items. The iterator produces the recognized PEM
+/// items and skip others.
 pub fn parse_pem(pem: &[u8]) -> impl Iterator<Item = Result<PemItem, Error>> + '_ {
     PemIter(pem)
+}
+
+/// Kinds of PEM data found by [`parse_pem`]
+#[non_exhaustive]
+pub enum PemItem<'a> {
+    /// An X509 certificate
+    Certificate(Certificate<'a>),
+
+    /// A private key
+    PrivateKey(PrivateKey<'a>),
 }
 
 struct PemIter<'a>(&'a [u8]);
@@ -164,15 +219,19 @@ impl<'a> Iterator for PemIter<'a> {
                 Ok(None) => return None,
 
                 Err(e) => {
-                    warn!("bad pem encoded cert: {:?}", e);
-                    return Some(Err(Error::Certificate("bad pem encoded cert")));
+                    return Some(Err(Error::Pem(e)));
                 }
             }
         }
     }
 }
 
-pub fn load_root_certs() -> Vec<Certificate<'static>> {
+/// Load the root certificates from the system.
+///
+/// Used by [`TlsConfig::with_native_roots()`](super::TlsConfig::with_native_roots()). Exposed
+/// as a helper for bespoke TLS implementations.
+#[cfg(feature = "native-roots")]
+pub fn load_native_root_certs() -> Vec<Certificate<'static>> {
     trace!("Try load root certs");
     let certs = match rustls_native_certs::load_native_certs() {
         Ok(v) => v,
