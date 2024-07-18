@@ -1,3 +1,26 @@
+//! HTTP/1.1 data transport.
+//!
+//! _NOTE: Transport is deep configuration of ureq and is not required for regular use._
+//!
+//! ureq provides a pluggable transport layer making it possible to write bespoke
+//! transports using the HTTP/1.1 protocol from point A to B. The
+//! [`Agent::new()`](crate::Agent::new) constructor takes an implementation
+//! of the [`Connector`] trait which is used for all connections made using that
+//! agent.
+//!
+//! The [DefaultConnector] covers the regular needs for HTTP/1.1:
+//!
+//! * TCP Sockets
+//! * SOCKS-proxy sockets
+//! * HTTPS/TLS using rustls (feature flag **rustls**)
+//! * HTTPS/TLS using native-tls (feature flag **native-tls** + [config](TlsProvider::NativeTls))
+//!
+//! The [`Connector`] trait anticipates a chain of connectors that each decide
+//! whether to help perform the connection or not. It is for instance possible to make a
+//! connector handling other schemes than `http`/`https` without affecting "regular" connections
+//! using these schemes. See [`ChainedConnector`] for a helper connector that aids setting
+//! up a chain of concrete connectors.
+
 use std::fmt::Debug;
 use std::net::SocketAddr;
 
@@ -9,7 +32,7 @@ use crate::time::{Instant, NextTimeout};
 use crate::tls::TlsProvider;
 use crate::{AgentConfig, Error};
 
-use self::tcp::TcpConnector;
+pub use self::tcp::TcpConnector;
 
 mod buf;
 pub(crate) use buf::NoBuffers;
@@ -31,7 +54,22 @@ mod socks;
 #[cfg(feature = "socks-proxy")]
 pub use self::socks::SocksConnector;
 
+/// Trait for components providing some aspect of connecting.
+///
+/// A connector instance is reused to produce multiple [`Transport`] instances (where `Transport`
+/// instance would typically be a socket connection).
+///
+/// A connector can be part of a chain of connectors. The [`DefaultConnector`] provides a chain that
+/// first tries to make a concrete socket connection (using [`TcpConnector`]) and then pass the
+/// resulting [`Transport`] to a TLS wrapping connector
+/// (see [`RustlsConnector`](crate::tls::RustlsConnector)). This makes it possible combine connectors
+/// in new ways. A user of ureq could implement bespoke connector (such as SCTP) and still use
+/// the `RustlsConnector` to wrap the underlying transport in TLS.
+///
+/// The built-in connectors provide SOCKS, TCP sockets and TLS wrapping.
 pub trait Connector: Debug + Send + Sync + 'static {
+    /// Helper to quickly box a transport.
+    #[doc(hidden)]
     fn boxed(self) -> Box<dyn Connector>
     where
         Self: Sized,
@@ -39,6 +77,17 @@ pub trait Connector: Debug + Send + Sync + 'static {
         Box::new(self)
     }
 
+    /// Try to use this connector
+    ///
+    /// * The [`ConnectionDetails`] parameter encapsulates config and the specific details of
+    ///   the connection being made currently (such as the [`Uri`]).
+    /// * The `chained` parameter is used for connector chains and contains the [`Transport`]
+    ///   instantiated one of the previous connectors in the chain. All `Connector` instances
+    ///   can decide whether they want to pass this `Transport` along as is, wrap it in something
+    ///   like TLS or even ignore it to provide some other connection instead.
+    ///
+    /// Return the `Transport` as produced by this connector, which could be just
+    /// the incoming `chained` argument.
     fn connect(
         &self,
         details: &ConnectionDetails,
@@ -46,19 +95,59 @@ pub trait Connector: Debug + Send + Sync + 'static {
     ) -> Result<Option<Box<dyn Transport>>, Error>;
 }
 
+/// The parameters needed to create a [`Transport`].
 pub struct ConnectionDetails<'a> {
+    /// Full uri that is being requested.
     pub uri: &'a Uri,
+
+    /// A resolved IP address for the uri being requested. See [`Resolver`].
     pub addr: SocketAddr,
+
+    /// Proxy configuration
     pub proxy: &'a Option<Proxy>,
-    pub resolver: &'a dyn Resolver,
+
+    /// The Agent configuration.
     pub config: &'a AgentConfig,
+
+    /// The resolver configured on [`Agent`](crate::Agent).
+    ///
+    /// Typically the IP address of the host in the uri is already resolved to the `addr`
+    /// property. However there might be cases where additional DNS lookups need to be
+    /// made in the connector itself, such as resolving a proxy server.
+    pub resolver: &'a dyn Resolver,
 
     pub now: Instant,
     // TODO(martin): Make mechanism to lower duration for each step in the connector chain.
     pub timeout: NextTimeout,
 }
 
+/// Transport of HTTP/1.1 as created by a [`Connector`].
+///
+/// In ureq, [`Transport`] and [`Buffers`] go hand in hand. The rest of ureq tries to minimize
+/// the allocations, and the transport is responsible for providing the buffers required
+/// to perform the request. Unless the transport requires special buffer handling, the
+/// [`LazyBuffers`] implementation can be used.
+///
+/// For sending data, the order of calls are:
+///
+/// 1. [`Transport::buffers()`] to obtain the buffers.
+/// 2. [`Buffers::output_mut()`], [`Buffers::input_and_output`] or [`Buffers::tmp_and_output`]
+///    depending where in the lifce cycle of the request ureq is.
+/// 3. [`Transport::transmit_output()`] to ask the transport to send/flush the `amount` of
+///    buffers used in 2.
+///
+/// For receiving data, the order of calls are:
+///
+/// 1. [`Transport::await_input()`]
+/// 2. The transport impl itself uses [`Buffers::input_mut()`] to fill a number
+///    of bytes from the underlying transport.
+/// 3. [`Transport::consume_input()`] to tell the transport how many bytes
+///    of the buffer was used. This can be proxied to [`Buffers::consume()`]. It's
+///    important to retain the unconsumed bytes for the next call to `await_input()`.
+///    This is handled by [`LazyBuffers`].
+///
 pub trait Transport: Debug + Send + Sync {
+    /// Provide buffers for the request.
     fn buffers(&mut self) -> &mut dyn Buffers;
     fn transmit_output(&mut self, amount: usize, timeout: NextTimeout) -> Result<(), Error>;
     fn await_input(&mut self, timeout: NextTimeout) -> Result<(), Error>;
