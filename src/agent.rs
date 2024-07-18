@@ -52,7 +52,6 @@ pub struct Agent {
     config: Arc<AgentConfig>,
     pool: Arc<ConnectionPool>,
     resolver: Arc<dyn Resolver>,
-    proxy: Option<Proxy>,
 
     #[cfg(feature = "cookies")]
     jar: Arc<crate::cookies::SharedCookieJar>,
@@ -185,6 +184,12 @@ pub struct AgentConfig {
     /// This config is generic for all TLS connectors.
     #[cfg(feature = "_tls")]
     pub tls_config: TlsConfig,
+
+    /// Proxy configuration.
+    ///
+    /// Picked up from environment when using [`AgentConfig::default()`] or
+    /// [`Agent::new_with_defaults()`].
+    pub proxy: Option<Proxy>,
 }
 
 impl Default for AgentConfig {
@@ -212,24 +217,20 @@ impl Default for AgentConfig {
 
             #[cfg(feature = "_tls")]
             tls_config: TlsConfig::with_native_roots(),
+
+            proxy: Proxy::try_from_env(),
         }
     }
 }
 
 impl Agent {
-    pub fn new(
-        config: AgentConfig,
-        connector: impl Connector,
-        resolver: impl Resolver,
-        proxy: Option<Proxy>,
-    ) -> Self {
+    pub fn new(config: AgentConfig, connector: impl Connector, resolver: impl Resolver) -> Self {
         let pool = Arc::new(ConnectionPool::new(connector, &config));
 
         Agent {
             config: Arc::new(config),
             pool,
             resolver: Arc::new(resolver),
-            proxy,
 
             #[cfg(feature = "cookies")]
             jar: Arc::new(crate::cookies::SharedCookieJar::new()),
@@ -241,7 +242,6 @@ impl Agent {
             AgentConfig::default(),
             DefaultConnector::new(),
             DefaultResolver::default(),
-            Proxy::try_from_env(),
         )
     }
 
@@ -384,7 +384,6 @@ impl Agent {
                     let details = ConnectionDetails {
                         uri,
                         addr,
-                        proxy: &self.proxy,
                         resolver: &*self.resolver,
                         config: &self.config,
                         now: current_time(),

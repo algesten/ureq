@@ -26,7 +26,6 @@ use std::net::SocketAddr;
 
 use http::Uri;
 
-use crate::proxy::Proxy;
 use crate::resolver::Resolver;
 use crate::time::{Instant, NextTimeout};
 use crate::tls::TlsProvider;
@@ -102,9 +101,6 @@ pub struct ConnectionDetails<'a> {
 
     /// A resolved IP address for the uri being requested. See [`Resolver`].
     pub addr: SocketAddr,
-
-    /// Proxy configuration
-    pub proxy: &'a Option<Proxy>,
 
     /// The Agent configuration.
     pub config: &'a AgentConfig,

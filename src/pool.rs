@@ -25,7 +25,7 @@ impl ConnectionPool {
     }
 
     pub fn connect(&self, details: &ConnectionDetails) -> Result<Connection, Error> {
-        let key = PoolKey::new(details.uri, details.proxy);
+        let key = PoolKey::new(details.uri, &details.config.proxy);
 
         {
             let mut pool = self.pool.lock().unwrap();
