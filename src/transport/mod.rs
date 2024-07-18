@@ -136,37 +136,68 @@ pub struct ConnectionDetails<'a> {
 ///
 /// 1. [`Transport::await_input()`]
 /// 2. The transport impl itself uses [`Buffers::input_mut()`] to fill a number
-///    of bytes from the underlying transport.
-/// 3. [`Transport::consume_input()`] to tell the transport how many bytes
-///    of the buffer was used. This can be proxied to [`Buffers::consume()`]. It's
-///    important to retain the unconsumed bytes for the next call to `await_input()`.
-///    This is handled by [`LazyBuffers`].
+///    of bytes from the underlying transport and use [`Buffers::add_filled`] to
+///    tell the buffer how much been filled.
+/// 3. [`Transport::buffers()`] to obtain the buffers
+/// 4. [`Buffers::input()`] followed by [`Buffers::consume()`]. It's important to retain the
+///    unconsumed bytes for the next call to `await_input()`. This is handled by [`LazyBuffers`].
 ///
 pub trait Transport: Debug + Send + Sync {
-    /// Provide buffers for the request.
+    /// Provide buffers for this transport.
     fn buffers(&mut self) -> &mut dyn Buffers;
+
+    /// Transmit `amount` of the output buffer. ureq will always transmit the entirety
+    /// of the data written to the output buffer. It is expected that the transport will
+    /// transmit the entire requested `amount`.
+    ///
+    /// The timeout should be used to abort the transmission if the amount can't be written in time.
+    /// If that happens the transport must return an [`Error::Timeout`] instance.
     fn transmit_output(&mut self, amount: usize, timeout: NextTimeout) -> Result<(), Error>;
+
+    /// Await input from the transport. The transport should internally use
+    /// [`Buffers::input_mut()`] followed by [`Buffers::add_filled()`] to
+    /// store the incoming data.
     fn await_input(&mut self, timeout: NextTimeout) -> Result<(), Error>;
-    fn consume_input(&mut self, amount: usize);
+
+    /// Tell whether this transport is still functional. This must provide an accurate answer
+    /// for connection pooling to work.
     fn is_open(&mut self) -> bool;
+
+    /// Whether the transport is TLS.
+    ///
+    /// Defaults to `false`, override in TLS transports.
     fn is_tls(&self) -> bool {
         false
     }
 }
 
+/// Default connector providing TCP sockets, TLS and SOCKS proxy.
+///
+/// This connector is a [`ChainedConnector`] with the following chain:
+///
+/// 1. [`SocksConnector`] to handle proxy settings if set.
+/// 2. [`TcpConnector`] to open a socket directly if a proxy is not used.
+/// 3. [`RustlsConnector`](crate::tls::RustlsConnector) which wraps the
+///    connection from 1 or 2 in TLS if the scheme is `https` and the
+///    [`TlsConfig`](crate::tls::TlsConfig) indicate we are using **rustls**.
+///    This is the default TLS provider.
+/// 4. [`NativeTlsConnector`](crate::tls::NativeTlsConnector) which wraps
+///    the connection from 1 or 2 in TLS if the scheme is `https` and
+///    [`TlsConfig`](crate::tls::TlsConfig) indicate we are using **native-tls**.
+///
 #[derive(Debug)]
 pub struct DefaultConnector {
     chain: ChainedConnector,
 }
 
-impl Default for DefaultConnector {
-    fn default() -> Self {
-        Self::new()
+impl DefaultConnector {
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 
-impl DefaultConnector {
-    pub fn new() -> Self {
+impl Default for DefaultConnector {
+    fn default() -> Self {
         let chain = ChainedConnector::new([
             //
             // When enabled, all tests are connected to a dummy server and will not

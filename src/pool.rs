@@ -95,7 +95,7 @@ impl Connection {
     }
 
     pub fn consume_input(&mut self, amount: usize) {
-        self.transport.consume_input(amount)
+        self.transport.buffers().consume(amount)
     }
 
     pub fn close(self) {

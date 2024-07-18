@@ -237,10 +237,10 @@ impl Agent {
         }
     }
 
-    pub(crate) fn new_with_defaults() -> Self {
+    pub fn new_with_defaults() -> Self {
         Agent::new(
             AgentConfig::default(),
-            DefaultConnector::new(),
+            DefaultConnector::default(),
             DefaultResolver::default(),
         )
     }
