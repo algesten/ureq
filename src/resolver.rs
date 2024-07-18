@@ -28,6 +28,7 @@ pub enum IpFamily {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AddrSelect {
     First,
     // TODO(martin): implement round robin per hostname
