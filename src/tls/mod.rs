@@ -23,6 +23,7 @@ pub use self::native_tls::NativeTlsConnector;
 /// to compile and "just work" straight out of the box without installing additional
 /// development dependencies.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum TlsProvider {
     /// [Rustls](https://crates.io/crates/rustls) with [Ring](https://crates.io/crates/ring) as
     /// cryptographic backend.
@@ -30,15 +31,36 @@ pub enum TlsProvider {
     /// Requires the feature flag **rustls**.
     ///
     /// This is the default.
-    #[cfg(feature = "rustls")]
     RustlsWithRing,
 
     /// [Native-TLS](https://crates.io/crates/native-tls) for cases where it's important to
     /// use the TLS libraries installed on the host running ureq.
     ///
-    /// Requires the feature flag **native-tls**.
-    #[cfg(feature = "native-tls")]
+    /// Requires the feature flag **native-tls** and that using an [`Agent`](crate::Agent) with
+    /// this config option set in the [`TlsConfig`].
+    ///
+    /// The setting is never picked up automatically.
     NativeTls,
+}
+
+impl TlsProvider {
+    pub(crate) fn is_feature_enabled(&self) -> bool {
+        match self {
+            TlsProvider::RustlsWithRing => {
+                cfg!(feature = "rustls")
+            }
+            TlsProvider::NativeTls => {
+                cfg!(feature = "native-tls")
+            }
+        }
+    }
+
+    pub(crate) fn feature_name(&self) -> &'static str {
+        match self {
+            TlsProvider::RustlsWithRing => "rustls",
+            TlsProvider::NativeTls => "native-tls",
+        }
+    }
 }
 
 /// Configuration of TLS.
