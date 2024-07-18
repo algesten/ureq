@@ -27,11 +27,11 @@ use std::net::SocketAddr;
 use http::Uri;
 
 use crate::resolver::Resolver;
-use crate::time::{Instant, NextTimeout};
 use crate::tls::TlsProvider;
 use crate::{AgentConfig, Error};
 
 pub use self::tcp::TcpConnector;
+use self::time::{Instant, NextTimeout};
 
 mod buf;
 pub(crate) use buf::NoBuffers;
@@ -52,6 +52,8 @@ mod test;
 mod socks;
 #[cfg(feature = "socks-proxy")]
 pub use self::socks::SocksConnector;
+
+pub mod time;
 
 /// Trait for components providing some aspect of connecting.
 ///

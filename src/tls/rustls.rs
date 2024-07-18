@@ -12,9 +12,9 @@ use rustls_pki_types::{
     ServerName,
 };
 
-use crate::time::NextTimeout;
 use crate::tls::cert::KeyKind;
 use crate::tls::TlsProvider;
+use crate::transport::time::NextTimeout;
 use crate::transport::{
     Buffers, ConnectionDetails, Connector, LazyBuffers, Transport, TransportAdapter,
 };

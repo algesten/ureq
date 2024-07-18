@@ -6,7 +6,7 @@ use std::{fmt, io, thread};
 
 use http::Uri;
 
-use crate::time::{Duration, NextTimeout};
+use crate::transport::time::{Duration, NextTimeout};
 use crate::Error;
 
 use super::{Buffers, ConnectionDetails, Connector, LazyBuffers, Transport};

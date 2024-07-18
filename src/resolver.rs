@@ -7,7 +7,7 @@ use std::vec::IntoIter;
 use http::uri::{Authority, Scheme};
 use http::Uri;
 
-use crate::time::NextTimeout;
+use crate::transport::time::NextTimeout;
 use crate::util::SchemeExt;
 use crate::Error;
 

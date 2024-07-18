@@ -6,7 +6,7 @@ use http::{HeaderName, HeaderValue, Method, Request, Response, Uri, Version};
 
 use crate::body::Body;
 use crate::send_body::AsSendBody;
-use crate::time::Instant;
+use crate::transport::time::Instant;
 use crate::util::private::Private;
 use crate::{Agent, Error, SendBody};
 
