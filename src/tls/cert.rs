@@ -71,6 +71,7 @@ pub struct PrivateKey<'a> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum KeyKind {
     Pkcs1,
     Pkcs8,
@@ -112,6 +113,7 @@ impl<'a> PrivateKey<'a> {
     }
 }
 
+#[non_exhaustive]
 pub enum PemItem<'a> {
     Certificate(Certificate<'a>),
     PrivateKey(PrivateKey<'a>),
