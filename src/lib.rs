@@ -140,6 +140,34 @@ pub(crate) mod test {
     }
 
     #[test]
+    #[cfg(feature = "native-tls")]
+    fn connect_https_google_native_tls() {
+        init_test_log();
+        use crate::tls::{TlsConfig, TlsProvider};
+
+        let agent: Agent = AgentConfig {
+            tls_config: TlsConfig {
+                provider: TlsProvider::NativeTls,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+        .into();
+
+        let resp = agent.get("https://www.google.com/").call().unwrap();
+
+        assert_eq!(
+            "text/html;charset=ISO-8859-1",
+            resp.headers()
+                .get("content-type")
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .replace("; ", ";")
+        );
+        assert_eq!(resp.body().mime_type(), Some("text/html"));
+    }
+    #[test]
     fn simple_put_content_len() {
         init_test_log();
         let mut resp = put("http://httpbin.org/put").send(&[0_u8; 100]).unwrap();
@@ -158,22 +186,6 @@ pub(crate) mod test {
         let s = resp.body_mut().read_to_string(1000).unwrap();
         println!("{}", s);
     }
-
-    // #[test]
-    // #[cfg(feature = "native-tls")]
-    // fn connect_https_google_native_tls() {
-    //     use std::sync::Arc;
-
-    //     let tls_config = native_tls::TlsConnector::new().unwrap();
-    //     let agent = builder().tls_connector(Arc::new(tls_config)).build();
-
-    //     let resp = agent.get("https://www.google.com/").call().unwrap();
-    //     assert_eq!(
-    //         "text/html;charset=ISO-8859-1",
-    //         resp.header("content-type").unwrap().replace("; ", ";")
-    //     );
-    //     assert_eq!("text/html", resp.content_type());
-    // }
 
     #[test]
     fn connect_https_invalid_name() {
