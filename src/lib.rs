@@ -115,7 +115,16 @@ pub(crate) mod test {
     #[cfg(feature = "rustls")]
     fn connect_https_google_rustls() {
         init_test_log();
-        let agent = Agent::new_with_defaults();
+        use crate::tls::{TlsConfig, TlsProvider};
+
+        let agent: Agent = AgentConfig {
+            tls_config: TlsConfig {
+                provider: TlsProvider::RustlsWithRing,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+        .into();
 
         let resp = agent.get("https://www.google.com/").call().unwrap();
         assert_eq!(
