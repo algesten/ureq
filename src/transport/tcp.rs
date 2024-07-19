@@ -8,8 +8,9 @@ use crate::Error;
 
 use super::{Buffers, ConnectionDetails, Connector, LazyBuffers, Transport};
 
+#[derive(Default)]
 /// Connector for regular TCP sockets.
-pub struct TcpConnector;
+pub struct TcpConnector(());
 
 impl Connector for TcpConnector {
     fn connect(
