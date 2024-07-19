@@ -27,6 +27,12 @@ use crate::tls::TlsConfig;
 /// ```
 #[derive(Clone)]
 pub struct AgentConfig {
+    /// Whether to treat 4xx and 5xx HTTP status codes as
+    /// [`Err(Error::StatusCode))`](crate::Error::StatusCode).
+    ///
+    /// Defaults to `true`.
+    pub http_status_as_error: bool,
+
     /// Whether to limit requests (including redirects) to https only
     ///
     /// Defaults to `false`.

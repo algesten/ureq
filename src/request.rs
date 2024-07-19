@@ -129,7 +129,7 @@ impl RequestBuilder<WithBody> {
     /// Send body data and blocks the caller until we receive response.
     ///
     /// ```
-    /// let resp = ureq::post("http://httpbin.org/put")
+    /// let resp = ureq::post("http://httpbin.org/post")
     ///     .send(&[0_u8; 1000]).unwrap();
     /// ```
     pub fn send(self, data: impl AsSendBody) -> Result<Response<Body>, Error> {
