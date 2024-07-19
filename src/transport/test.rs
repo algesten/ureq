@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 use std::cell::RefCell;
 use std::io::Write;
 use std::io::{BufRead, BufReader};
@@ -15,7 +17,7 @@ use super::{Buffers, ConnectionDetails, Connector, LazyBuffers, Transport};
 #[derive(Default)]
 pub(crate) struct TestConnector;
 
-thread_local!(static HANDLERS: RefCell<Vec<TestHandler>> = RefCell::new(Vec::new()));
+thread_local!(static HANDLERS: RefCell<Vec<TestHandler>> = const { RefCell::new(Vec::new()) });
 
 impl Connector for TestConnector {
     fn connect(
@@ -37,7 +39,7 @@ impl Connector for TestConnector {
         let (tx1, rx1) = mpsc::sync_channel(10);
         let (tx2, rx2) = mpsc::sync_channel(10);
 
-        let mut handlers = HANDLERS.with_borrow(|h| h.clone());
+        let mut handlers = HANDLERS.with(|h| (*h).borrow().clone());
         setup_default_handlers(&mut handlers);
 
         thread::spawn(|| test_run(uri, rx1, tx2, handlers));
@@ -63,6 +65,30 @@ impl TestHandler {
             handler: Arc::new(handler),
         }
     }
+}
+
+pub fn set_handler(pattern: &'static str, status: u16, headers: &[(&str, &str)], body: &[u8]) {
+    // Convert headers to a big string
+    let mut headers_s = String::new();
+    for (k, v) in headers {
+        headers_s.push_str(&format!("{}: {}\r\n", k, v));
+    }
+
+    // Convert body to an owned vec
+    let body = body.to_vec();
+
+    let handler = TestHandler::new(pattern, move |_uri, _req, w| {
+        write!(
+            w,
+            "HTTP/1.1 {} OK\r\n\
+            {}\
+            \r\n",
+            status, headers_s
+        )?;
+        w.write_all(&body)
+    });
+
+    HANDLERS.with(|h| (*h).borrow_mut().push(handler));
 }
 
 #[derive(Clone)]
@@ -93,7 +119,7 @@ fn test_run(
 
     let req = loop {
         let input = reader.fill_buf().expect("test fill_buf");
-        let maybe = hoot::parser::try_parse_request::<100>(&input).expect("test parse request");
+        let maybe = hoot::parser::try_parse_request::<100>(input).expect("test parse request");
         if let Some((amount, req)) = maybe {
             reader.consume(amount);
             break req;

@@ -146,6 +146,12 @@ impl Ord for Duration {
     }
 }
 
+impl From<std::time::Duration> for Duration {
+    fn from(value: std::time::Duration) -> Self {
+        Self::Exact(value)
+    }
+}
+
 /// A pair of [`Duration`] and [`TimeoutReason`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NextTimeout {
