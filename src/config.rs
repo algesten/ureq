@@ -27,6 +27,48 @@ use crate::tls::TlsConfig;
 /// ```
 #[derive(Clone)]
 pub struct AgentConfig {
+    /// Whether to limit requests (including redirects) to https only
+    ///
+    /// Defaults to `false`.
+    pub https_only: bool,
+
+    /// Config for TLS.
+    ///
+    /// This config is generic for all TLS connectors.
+    #[cfg(feature = "_tls")]
+    pub tls_config: TlsConfig,
+
+    /// Proxy configuration.
+    ///
+    /// Picked up from environment when using [`AgentConfig::default()`] or
+    /// [`Agent::new_with_defaults()`].
+    pub proxy: Option<Proxy>,
+
+    /// Disable Nagle's algorithm
+    ///
+    /// Set TCP_NODELAY. It's up to the transport whether this flag is honored.
+    ///
+    /// Defaults to `true`.
+    pub no_delay: bool,
+
+    /// The max number of redirects to follow before giving up
+    ///
+    /// Defaults to 10
+    pub max_redirects: u32,
+
+    /// How to handle `Authorization` headers when following redirects
+    ///
+    /// * `Never` (the default) means the authorization header is never attached to a redirected call.
+    /// * `SameHost` will keep the header when the redirect is to the same host and under https.
+    ///
+    /// Defaults to `None`.
+    pub redirect_auth_headers: RedirectAuthHeaders,
+
+    /// Value to use for the `User-Agent` field
+    ///
+    /// Defaults to `ureq <version>`
+    pub user_agent: String,
+
     /// Timeout for the entire call
     ///
     /// This is end-to-end, from DNS lookup to finishing reading the response body.
@@ -87,36 +129,6 @@ pub struct AgentConfig {
     /// Defaults to `None`.
     pub timeout_recv_body: Option<Duration>,
 
-    /// Whether to limit requests (including redirects) to https only
-    ///
-    /// Defaults to `false`.
-    pub https_only: bool,
-
-    /// Disable Nagle's algorithm
-    ///
-    /// Set TCP_NODELAY. It's up to the transport whether this flag is honored.
-    ///
-    /// Defaults to `true`.
-    pub no_delay: bool,
-
-    /// The max number of redirects to follow before giving up
-    ///
-    /// Defaults to 10
-    pub max_redirects: u32,
-
-    /// How to handle `Authorization` headers when following redirects
-    ///
-    /// * `Never` (the default) means the authorization header is never attached to a redirected call.
-    /// * `SameHost` will keep the header when the redirect is to the same host and under https.
-    ///
-    /// Defaults to `None`.
-    pub redirect_auth_headers: RedirectAuthHeaders,
-
-    /// Value to use for the `User-Agent` field
-    ///
-    /// Defaults to `ureq <version>`
-    pub user_agent: String,
-
     /// Default size of the input buffer
     ///
     /// The default connectors use this setting.
@@ -146,18 +158,6 @@ pub struct AgentConfig {
     /// Defaults to 15 seconds
     pub max_idle_age: Duration,
 
-    /// Config for TLS.
-    ///
-    /// This config is generic for all TLS connectors.
-    #[cfg(feature = "_tls")]
-    pub tls_config: TlsConfig,
-
-    /// Proxy configuration.
-    ///
-    /// Picked up from environment when using [`AgentConfig::default()`] or
-    /// [`Agent::new_with_defaults()`].
-    pub proxy: Option<Proxy>,
-
     // This is here to force users of ureq to use the ..Default::default() pattern
     // as part of creating `AgentConfig`. That way we can introduce new settings without
     // it becoming a breaking changes.
@@ -174,6 +174,15 @@ mod private {
 impl Default for AgentConfig {
     fn default() -> Self {
         Self {
+            http_status_as_error: true,
+            https_only: false,
+            #[cfg(feature = "_tls")]
+            tls_config: TlsConfig::with_native_roots(),
+            proxy: Proxy::try_from_env(),
+            no_delay: true,
+            max_redirects: 10,
+            redirect_auth_headers: RedirectAuthHeaders::Never,
+            user_agent: "ureq".to_string(), // TODO(martin): add version
             timeout_global: None,
             timeout_per_call: None,
             timeout_resolve: None,
@@ -183,21 +192,11 @@ impl Default for AgentConfig {
             timeout_send_body: None,
             timeout_recv_response: None,
             timeout_recv_body: None,
-            https_only: false,
-            no_delay: true,
-            max_redirects: 10,
-            redirect_auth_headers: RedirectAuthHeaders::Never,
-            user_agent: "ureq".to_string(), // TODO(martin): add version
             input_buffer_size: 128 * 1024,
             output_buffer_size: 128 * 1024,
             max_idle_connections: 10,
             max_idle_connections_per_host: 3,
             max_idle_age: Duration::from_secs(15),
-
-            #[cfg(feature = "_tls")]
-            tls_config: TlsConfig::with_native_roots(),
-
-            proxy: Proxy::try_from_env(),
 
             _must_use_default: private::Private,
         }
