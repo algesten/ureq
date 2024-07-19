@@ -6,6 +6,13 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum Error {
+    /// When [`AgentConfig::http_status_as_error`](crate::AgentConfig::http_status_as_error) is true,
+    /// 4xx and 5xx response status codes are translated to this error.
+    ///
+    /// This is the default behavior.
+    #[error("http status: {0}")]
+    StatusCode(u16),
+
     /// Errors arising from the http-crate.
     ///
     /// These errors happen for things like invalid characters in header names.
@@ -199,7 +206,30 @@ impl fmt::Display for TimeoutReason {
 
 #[cfg(test)]
 mod test {
+    use crate::transport::set_handler;
+
     use super::*;
+
+    #[test]
+    fn status_code_error_redirect() {
+        set_handler(
+            "/redirect_a",
+            302,
+            &[("Location", "http://example.edu/redirect_b")],
+            &[],
+        );
+        set_handler(
+            "/redirect_b",
+            302,
+            &[("Location", "http://example.com/status/500")],
+            &[],
+        );
+        set_handler("/status/500", 500, &[], &[]);
+        let err = crate::get("http://example.org/redirect_a")
+            .call()
+            .unwrap_err();
+        println!("{:?}", err);
+    }
 
     #[test]
     fn ensure_error_size() {
