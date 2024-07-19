@@ -110,10 +110,7 @@ impl TlsConfig {
     /// Creates a new TlsConfig by loading the root certificates installed by the
     /// system on the local host.
     pub fn with_native_roots() -> TlsConfig {
-        TlsConfig {
-            root_certs: self::cert::load_native_root_certs(),
-            ..Default::default()
-        }
+        TlsConfig::default()
     }
 }
 
@@ -122,6 +119,9 @@ impl Default for TlsConfig {
         Self {
             provider: TlsProvider::default(),
             client_cert: None,
+            #[cfg(feature = "native-roots")]
+            root_certs: self::cert::load_native_root_certs(),
+            #[cfg(not(feature = "native-roots"))]
             root_certs: vec![],
             use_sni: true,
             disable_verification: false,

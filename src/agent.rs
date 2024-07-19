@@ -54,7 +54,26 @@ pub struct Agent {
 }
 
 impl Agent {
-    pub fn new(config: AgentConfig, connector: impl Connector, resolver: impl Resolver) -> Self {
+    pub fn new_with_defaults() -> Self {
+        Self::with_parts(
+            AgentConfig::default(),
+            DefaultConnector::default(),
+            DefaultResolver::default(),
+        )
+    }
+
+    pub fn new_with_config(config: AgentConfig) -> Self {
+        Self::with_parts(
+            config,
+            DefaultConnector::default(),
+            DefaultResolver::default(),
+        )
+    }
+    pub fn with_parts(
+        config: AgentConfig,
+        connector: impl Connector,
+        resolver: impl Resolver,
+    ) -> Self {
         let pool = Arc::new(ConnectionPool::new(connector, &config));
 
         Agent {
@@ -65,14 +84,6 @@ impl Agent {
             #[cfg(feature = "cookies")]
             jar: Arc::new(crate::cookies::SharedCookieJar::new()),
         }
-    }
-
-    pub fn new_with_defaults() -> Self {
-        Agent::new(
-            AgentConfig::default(),
-            DefaultConnector::default(),
-            DefaultResolver::default(),
-        )
     }
 
     /// Access the cookie jar.
@@ -345,3 +356,9 @@ mk_method!(
     (patch, PATCH, WithBody),
     (trace, TRACE, WithoutBody)
 );
+
+impl From<AgentConfig> for Agent {
+    fn from(value: AgentConfig) -> Self {
+        Agent::new_with_config(value)
+    }
+}

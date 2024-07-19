@@ -206,7 +206,7 @@ impl Default for DefaultConnector {
             //
             // When enabled, all tests are connected to a dummy server and will not
             // make requests to the internet.
-            #[cfg(any(test, feature = "_test"))]
+            #[cfg(feature = "_test")]
             test::TestConnector.boxed(),
             //
             // If we are using socks-proxy, that takes precedence over TcpConnector.
