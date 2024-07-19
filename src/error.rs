@@ -125,6 +125,11 @@ pub enum Error {
     #[cfg(feature = "charset")]
     #[error("unknown character set: {0}")]
     UnknownCharset(String),
+
+    /// The setting [`AgentConfig::https_only`](crate::AgentConfig::https_only) is true and
+    /// the URI is not https.
+    #[error("agent is configured for https only: {0}")]
+    AgentRequireHttpsOnly(String),
 }
 
 impl Error {
