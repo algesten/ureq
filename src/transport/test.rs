@@ -1,10 +1,11 @@
+use std::cell::RefCell;
 use std::io::Write;
 use std::io::{BufRead, BufReader};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::{fmt, io, thread};
 
-use http::Uri;
+use http::{Request, Uri};
 
 use crate::transport::time::{Duration, NextTimeout};
 use crate::Error;
@@ -13,6 +14,8 @@ use super::{Buffers, ConnectionDetails, Connector, LazyBuffers, Transport};
 
 #[derive(Default)]
 pub(crate) struct TestConnector;
+
+thread_local!(static HANDLERS: RefCell<Vec<TestHandler>> = RefCell::new(Vec::new()));
 
 impl Connector for TestConnector {
     fn connect(
@@ -34,7 +37,10 @@ impl Connector for TestConnector {
         let (tx1, rx1) = mpsc::sync_channel(10);
         let (tx2, rx2) = mpsc::sync_channel(10);
 
-        thread::spawn(|| test_run(uri, rx1, tx2));
+        let mut handlers = HANDLERS.with_borrow(|h| h.clone());
+        setup_default_handlers(&mut handlers);
+
+        thread::spawn(|| test_run(uri, rx1, tx2, handlers));
 
         let transport = TestTransport {
             buffers,
@@ -47,87 +53,159 @@ impl Connector for TestConnector {
     }
 }
 
-fn test_run(uri: Uri, rx: Receiver<Vec<u8>>, tx: mpsc::SyncSender<Vec<u8>>) {
+impl TestHandler {
+    fn new(
+        pattern: &'static str,
+        handler: impl Fn(Uri, Request<()>, &mut dyn Write) -> io::Result<()> + Send + Sync + 'static,
+    ) -> Self {
+        TestHandler {
+            pattern,
+            handler: Arc::new(handler),
+        }
+    }
+}
+
+#[derive(Clone)]
+struct TestHandler {
+    pattern: &'static str,
+    handler: Arc<dyn Fn(Uri, Request<()>, &mut dyn Write) -> io::Result<()> + Sync + Send>,
+}
+
+// test::set_handler("/redirect_a", |unit| {
+//     assert_eq!(unit.method, "GET");
+//     test::make_response(
+//         302,
+//         "Go here",
+//         vec!["Location: test://example.edu/redirect_b"],
+//         vec![],
+//     )
+// });
+
+fn test_run(
+    uri: Uri,
+    rx: Receiver<Vec<u8>>,
+    tx: mpsc::SyncSender<Vec<u8>>,
+    handlers: Vec<TestHandler>,
+) {
     let mut reader = BufReader::new(RxRead(rx));
     let mut writer = TxWrite(tx);
-    let uri = uri.to_string();
+    let uri_s = uri.to_string();
 
-    println!("{}", uri);
+    let req = loop {
+        let input = reader.fill_buf().expect("test fill_buf");
+        let maybe = hoot::parser::try_parse_request::<100>(&input).expect("test parse request");
+        if let Some((amount, req)) = maybe {
+            reader.consume(amount);
+            break req;
+        } else {
+            continue;
+        }
+    };
 
-    let mut lines: Vec<String> = Vec::new();
-    loop {
-        let mut s = String::new();
-        match reader.read_line(&mut s) {
-            Ok(_) => {
-                if s.trim().is_empty() {
-                    break;
-                }
-                lines.push(s.trim().to_string());
-            }
-            Err(_) => panic!("test request disconnected"),
+    for handler in handlers {
+        if uri_s.contains(handler.pattern) {
+            (handler.handler)(uri, req, &mut writer).expect("test handler to not fail");
+            return;
         }
     }
 
-    if uri.contains("www.google.com") {
-        write!(
-            &mut writer,
-            "HTTP/1.1 200 OK\r\n\
-            Content-Type: text/html;charset=ISO-8859-1\r\n\
-            \r\n\
-            ureq test server here"
-        )
-        .ok();
-        return;
-    } else if uri.contains("/bytes/100") {
-        write!(
-            &mut writer,
-            "HTTP/1.1 200 OK\r\n\
-            Content-Type: application/octet-stream\r\n\
-            Content-Length: 100\r\n\
-            \r\n"
-        )
-        .ok();
-        write!(&mut writer, "{}", "1".repeat(100)).ok();
-        return;
-    } else if uri.contains("/get") {
-        write!(
-            &mut writer,
-            "HTTP/1.1 200 OK\r\n\
-            Content-Type: application/json\r\n\
-            Content-Length: {}\r\n\
-            \r\n",
-            HTTPBIN_GET.as_bytes().len()
-        )
-        .ok();
-        writer.write_all(HTTPBIN_GET.as_bytes()).ok();
-        return;
-    } else if uri.contains("/put") || uri.contains("/post") {
-        write!(
-            &mut writer,
-            "HTTP/1.1 200 OK\r\n\
-            Content-Type: application/json\r\n\
-            Content-Length: {}\r\n\
-            \r\n",
-            HTTPBIN_PUT.as_bytes().len()
-        )
-        .ok();
-        writer.write_all(HTTPBIN_PUT.as_bytes()).ok();
-        return;
-    } else if uri.contains("/robots.txt") {
-        write!(
-            &mut writer,
-            "HTTP/1.1 200 OK\r\n\
-            Content-Type: text/plain\r\n\
-            Content-Length: 30\r\n\
-            \r\n\
-            User-agent: *\n\
-            Disallow: /deny\n"
-        )
-        .ok();
-        return;
+    panic!("test server unhandled url: {}", uri);
+}
+
+fn setup_default_handlers(handlers: &mut Vec<TestHandler>) {
+    fn maybe_add(handler: TestHandler, handlers: &mut Vec<TestHandler>) {
+        let already_declared = handlers.iter().any(|h| h.pattern == handler.pattern);
+        if !already_declared {
+            handlers.push(handler);
+        }
     }
 
-    panic!("test server unhandled url: {}", uri);
+    maybe_add(
+        TestHandler::new("www.google.com", |_uri, _req, w| {
+            write!(
+                w,
+                "HTTP/1.1 200 OK\r\n\
+                Content-Type: text/html;charset=ISO-8859-1\r\n\
+                \r\n\
+                ureq test server here"
+            )
+        }),
+        handlers,
+    );
+
+    maybe_add(
+        TestHandler::new("/bytes/100", |_uri, _req, w| {
+            write!(
+                w,
+                "HTTP/1.1 200 OK\r\n\
+                Content-Type: application/octet-stream\r\n\
+                Content-Length: 100\r\n\
+                \r\n"
+            )?;
+            write!(w, "{}", "1".repeat(100))
+        }),
+        handlers,
+    );
+
+    maybe_add(
+        TestHandler::new("/get", |_uri, _req, w| {
+            write!(
+                w,
+                "HTTP/1.1 200 OK\r\n\
+                Content-Type: application/json\r\n\
+                Content-Length: {}\r\n\
+                \r\n",
+                HTTPBIN_GET.as_bytes().len()
+            )?;
+            w.write_all(HTTPBIN_GET.as_bytes())
+        }),
+        handlers,
+    );
+
+    maybe_add(
+        TestHandler::new("/put", |_uri, _req, w| {
+            write!(
+                w,
+                "HTTP/1.1 200 OK\r\n\
+                Content-Type: application/json\r\n\
+                Content-Length: {}\r\n\
+                \r\n",
+                HTTPBIN_PUT.as_bytes().len()
+            )?;
+            w.write_all(HTTPBIN_PUT.as_bytes())
+        }),
+        handlers,
+    );
+
+    maybe_add(
+        TestHandler::new("/post", |_uri, _req, w| {
+            write!(
+                w,
+                "HTTP/1.1 200 OK\r\n\
+                    Content-Type: application/json\r\n\
+                    Content-Length: {}\r\n\
+                    \r\n",
+                HTTPBIN_PUT.as_bytes().len()
+            )?;
+            w.write_all(HTTPBIN_PUT.as_bytes())
+        }),
+        handlers,
+    );
+
+    maybe_add(
+        TestHandler::new("/robots.txt", |_uri, _req, w| {
+            write!(
+                w,
+                "HTTP/1.1 200 OK\r\n\
+                Content-Type: text/plain\r\n\
+                Content-Length: 30\r\n\
+                \r\n\
+                User-agent: *\n\
+                Disallow: /deny\n"
+            )
+        }),
+        handlers,
+    );
 }
 
 const HTTPBIN_GET: &str = r#"
