@@ -292,6 +292,12 @@ impl Agent {
         let response = response.expect("above loop to exit when there is a response");
         let connection = connection.expect("connection to be open");
         let unit = unit.release_body();
+        let status = response.status();
+        let is_err = status.is_client_error() || status.is_server_error();
+
+        if self.config.http_status_as_error && is_err {
+            return Err(Error::StatusCode(status.as_u16()));
+        }
 
         let (parts, _) = response.into_parts();
         let info = ResponseInfo::new(&parts.headers, recv_body_mode);
