@@ -11,6 +11,7 @@ use std::convert::TryFrom;
 pub use http;
 
 pub use body::{Body, BodyReader};
+pub use config::AgentConfig;
 use http::Method;
 use http::{Request, Response, Uri};
 pub use proxy::Proxy;
@@ -20,6 +21,7 @@ pub use send_body::AsSendBody;
 
 mod agent;
 mod body;
+mod config;
 mod error;
 mod pool;
 mod proxy;
@@ -39,7 +41,7 @@ mod cookies;
 #[cfg(feature = "cookies")]
 pub use cookies::{Cookie, CookieJar};
 
-pub use agent::{Agent, AgentConfig};
+pub use agent::Agent;
 pub use error::{Error, TimeoutReason};
 pub use send_body::SendBody;
 

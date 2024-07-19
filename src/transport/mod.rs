@@ -45,8 +45,10 @@ pub use io::TransportAdapter;
 mod chain;
 pub use chain::ChainedConnector;
 
-#[cfg(feature = "_test")]
+#[cfg(any(test, feature = "_test"))]
 mod test;
+#[cfg(any(test, feature = "_test"))]
+pub use test::set_handler;
 
 #[cfg(feature = "socks-proxy")]
 mod socks;
@@ -204,7 +206,7 @@ impl Default for DefaultConnector {
             //
             // When enabled, all tests are connected to a dummy server and will not
             // make requests to the internet.
-            #[cfg(feature = "_test")]
+            #[cfg(any(test, feature = "_test"))]
             test::TestConnector.boxed(),
             //
             // If we are using socks-proxy, that takes precedence over TcpConnector.
@@ -217,7 +219,7 @@ impl Default for DefaultConnector {
             no_proxy::WarnOnNoSocksConnector.boxed(),
             //
             // If we didn't get a socks-proxy, open a Tcp connection
-            TcpConnector.boxed(),
+            TcpConnector::default().boxed(),
             //
             // If rustls is enabled, prefer that
             #[cfg(feature = "rustls")]

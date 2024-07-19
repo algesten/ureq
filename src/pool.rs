@@ -173,7 +173,7 @@ impl Pool {
             lru: VecDeque::new(),
             max_idle_connections: config.max_idle_connections,
             max_idle_connections_per_host: config.max_idle_connections_per_host,
-            max_idle_age: config.max_idle_age,
+            max_idle_age: config.max_idle_age.into(),
         }
     }
 
