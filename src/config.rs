@@ -183,7 +183,7 @@ impl Default for AgentConfig {
             http_status_as_error: true,
             https_only: false,
             #[cfg(feature = "_tls")]
-            tls_config: TlsConfig::with_native_roots(),
+            tls_config: TlsConfig::default(),
             proxy: Proxy::try_from_env(),
             no_delay: true,
             max_redirects: 10,
