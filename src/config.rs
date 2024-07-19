@@ -17,8 +17,10 @@ use crate::tls::TlsConfig;
 ///
 /// ```
 /// use ureq::AgentConfig;
+/// use std::time::Duration;
 ///
 /// let config = AgentConfig {
+///     timeout_global: Some(Duration::from_secs(10)),
 ///     https_only: true,
 ///     ..Default::default()
 /// };
