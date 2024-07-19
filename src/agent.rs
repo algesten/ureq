@@ -1,4 +1,5 @@
 use std::convert::TryFrom;
+use std::fmt;
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -59,7 +60,21 @@ pub struct Agent {
 }
 
 /// Config as built by AgentBuilder and then static for the lifetime of the Agent.
-#[derive(Debug, Clone)]
+///
+/// When creating config instances, the `..Default::default()` pattern must be used.
+/// See example below.
+///
+/// # Example
+///
+/// ```
+/// use ureq::AgentConfig;
+///
+/// let config = AgentConfig {
+///     https_only: true,
+///     ..Default::default()
+/// };
+/// ```
+#[derive(Clone)]
 pub struct AgentConfig {
     /// Timeout for the entire call
     ///
@@ -191,6 +206,18 @@ pub struct AgentConfig {
     /// Picked up from environment when using [`AgentConfig::default()`] or
     /// [`Agent::new_with_defaults()`].
     pub proxy: Option<Proxy>,
+
+    // This is here to force users of ureq to use the ..Default::default() pattern
+    // as part of creating `AgentConfig`. That way we can introduce new settings without
+    // it becoming a breaking changes.
+    #[doc(hidden)]
+    pub _must_use_default: private::Private,
+}
+
+// Deliberately not publicly visible.
+mod private {
+    #[derive(Debug, Clone)]
+    pub struct Private;
 }
 
 impl Default for AgentConfig {
@@ -220,6 +247,8 @@ impl Default for AgentConfig {
             tls_config: TlsConfig::with_native_roots(),
 
             proxy: Proxy::try_from_env(),
+
+            _must_use_default: private::Private,
         }
     }
 }
@@ -320,10 +349,8 @@ impl Agent {
                 }
 
                 Event::Prepare { uri } => {
-                    if self.config.https_only {
-                        if uri.scheme() != Some(&Scheme::HTTPS) {
-                            return Err(Error::AgentRequireHttpsOnly(uri.to_string()));
-                        }
+                    if self.config.https_only && uri.scheme() != Some(&Scheme::HTTPS) {
+                        return Err(Error::AgentRequireHttpsOnly(uri.to_string()));
                     }
 
                     #[cfg(not(feature = "cookies"))]
@@ -512,3 +539,34 @@ mk_method!(
     (patch, PATCH, WithBody),
     (trace, TRACE, WithoutBody)
 );
+
+impl fmt::Debug for AgentConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AgentConfig")
+            .field("timeout_global", &self.timeout_global)
+            .field("timeout_per_call", &self.timeout_per_call)
+            .field("timeout_resolve", &self.timeout_resolve)
+            .field("timeout_connect", &self.timeout_connect)
+            .field("timeout_send_request", &self.timeout_send_request)
+            .field("timeout_await_100", &self.timeout_await_100)
+            .field("timeout_send_body", &self.timeout_send_body)
+            .field("timeout_recv_response", &self.timeout_recv_response)
+            .field("timeout_recv_body", &self.timeout_recv_body)
+            .field("https_only", &self.https_only)
+            .field("no_delay", &self.no_delay)
+            .field("max_redirects", &self.max_redirects)
+            .field("redirect_auth_headers", &self.redirect_auth_headers)
+            .field("user_agent", &self.user_agent)
+            .field("input_buffer_size", &self.input_buffer_size)
+            .field("output_buffer_size", &self.output_buffer_size)
+            .field("max_idle_connections", &self.max_idle_connections)
+            .field(
+                "max_idle_connections_per_host",
+                &self.max_idle_connections_per_host,
+            )
+            .field("max_idle_age", &self.max_idle_age)
+            .field("tls_config", &self.tls_config)
+            .field("proxy", &self.proxy)
+            .finish()
+    }
+}
