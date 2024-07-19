@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use hoot::client::flow::RedirectAuthHeaders;
 use hoot::BodyMode;
+use http::uri::Scheme;
 use http::{HeaderName, HeaderValue, Method, Request, Response, Uri};
 
 use crate::body::{Body, ResponseInfo};
@@ -319,6 +320,12 @@ impl Agent {
                 }
 
                 Event::Prepare { uri } => {
+                    if self.config.https_only {
+                        if uri.scheme() != Some(&Scheme::HTTPS) {
+                            return Err(Error::AgentRequireHttpsOnly(uri.to_string()));
+                        }
+                    }
+
                     #[cfg(not(feature = "cookies"))]
                     let _ = uri;
                     #[cfg(feature = "cookies")]
@@ -351,8 +358,6 @@ impl Agent {
                     }
 
                     if let Some(send_body_mode) = send_body_mode {
-                        println!("{:?}", send_body_mode);
-
                         match send_body_mode {
                             BodyMode::LengthDelimited(v) => {
                                 let value = HeaderValue::from(v);
