@@ -266,7 +266,7 @@ checksum = "d231dfb89cfffdbc30e7fc41579ed6066ad03abda9e567ccafae602b97ec5024"
 [[package]]
 name = "hoot"
 version = "0.2.0"
-source = "git+https://github.com/algesten/hoot?rev=89aa3e8#89aa3e83610ad00d589079bff910a67a4db53f5f"
+source = "git+https://github.com/algesten/hoot?rev=f69d7ab#f69d7ab98ae9dedb1e6f8dca8706d28274a2fe07"
 dependencies = [
  "http",
  "httparse",

@@ -39,7 +39,7 @@ _test = []
 
 [dependencies]
 base64 = "0.22.1"
-hoot = { git = "https://github.com/algesten/hoot", rev = "89aa3e8" }
+hoot = { git = "https://github.com/algesten/hoot", rev = "f69d7ab" }
 http = "1.1.0"
 log = "0.4.22"
 thiserror = "1.0.61"
