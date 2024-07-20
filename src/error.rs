@@ -137,6 +137,13 @@ pub enum Error {
     /// the URI is not https.
     #[error("agent is configured for https only: {0}")]
     AgentRequireHttpsOnly(String),
+
+    /// hoot made no progress and there is no more input to read.
+    ///
+    /// We should never see this value.
+    #[doc(hidden)]
+    #[error("body data reading stalled")]
+    BodyStalled,
 }
 
 impl Error {
@@ -228,14 +235,13 @@ mod test {
         let err = crate::get("http://example.org/redirect_a")
             .call()
             .unwrap_err();
-        println!("{:?}", err);
+        assert!(matches!(err, Error::StatusCode(500)));
     }
 
     #[test]
     fn ensure_error_size() {
         // This is platform dependent, so we can't be too strict or precise.
         let size = std::mem::size_of::<Error>();
-        println!("Error size: {}", size);
         assert!(size < 100); // 40 on Macbook M1
     }
 }
