@@ -9,7 +9,7 @@
 //! In some situations it might be desirable to not do this lookup, or to use another system
 //! than DNS for it.
 use std::fmt::{self, Debug};
-use std::net::{SocketAddr, ToSocketAddrs};
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, ToSocketAddrs};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::thread::{self};
 use std::vec::IntoIter;
@@ -81,6 +81,13 @@ impl Resolver for DefaultResolver {
         // unwrap is ok due to ensure_full_url() above.
         let scheme = uri.scheme().unwrap();
         let authority = uri.authority().unwrap();
+
+        if cfg!(feature = "_test") {
+            return Ok(SocketAddr::V4(SocketAddrV4::new(
+                Ipv4Addr::new(10, 0, 0, 1),
+                authority.port_u16().unwrap_or(scheme.default_port()),
+            )));
+        }
 
         // This will be on the form "myspecialhost.org:1234". The port is mandatory.
         let addr = DefaultResolver::host_and_port(scheme, authority);
