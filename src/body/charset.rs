@@ -62,8 +62,10 @@ impl<R: io::Read> io::Read for CharCodec<R> {
             tmp2
         };
 
+        if self.buf.free_mut().len() < 4 {
+            self.buf.add_space(1024);
+        }
         let output = self.buf.free_mut();
-        assert!(output.len() > 4); // invariant required by decode_to_utf8
 
         if let Some(dec) = &mut self.dec {
             let (_, input_used, output_used, _had_errors) =
