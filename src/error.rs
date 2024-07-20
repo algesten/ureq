@@ -61,8 +61,8 @@ pub enum Error {
     ConnectionFailed,
 
     /// A send body (Such as `&str`) is larger than the `content-length` header.
-    #[error("the response body is larger than request limit")]
-    BodyExceedsLimit,
+    #[error("the response body is larger than request limit: {0}")]
+    BodyExceedsLimit(u64),
 
     /// Some error with TLS.
     #[cfg(feature = "_tls")]
