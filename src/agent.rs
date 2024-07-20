@@ -209,6 +209,13 @@ impl Agent {
                         }
                     }
 
+                    if !self.config.user_agent.is_empty() {
+                        // unwrap is ok because a user might override the agent, and if they
+                        // set bad values, it's not really a big problem.
+                        let value = HeaderValue::try_from(&self.config.user_agent).unwrap();
+                        set_header(&mut unit, current_time(), "user-agent", value);
+                    }
+
                     unit.handle_input(current_time(), Input::Prepared, &mut [])?;
                 }
 
