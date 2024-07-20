@@ -47,7 +47,7 @@ pub struct AgentConfig {
     /// Proxy configuration.
     ///
     /// Picked up from environment when using [`AgentConfig::default()`] or
-    /// [`Agent::new_with_defaults()`].
+    /// [`Agent::new_with_defaults()`][crate::Agent::new_with_defaults].
     pub proxy: Option<Proxy>,
 
     /// Disable Nagle's algorithm

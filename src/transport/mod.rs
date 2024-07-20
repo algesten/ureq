@@ -4,7 +4,7 @@
 //!
 //! ureq provides a pluggable transport layer making it possible to write bespoke
 //! transports using the HTTP/1.1 protocol from point A to B. The
-//! [`Agent::new()`](crate::Agent::new) constructor takes an implementation
+//! [`Agent::with_parts()`](crate::Agent::with_parts) constructor takes an implementation
 //! of the [`Connector`] trait which is used for all connections made using that
 //! agent.
 //!
