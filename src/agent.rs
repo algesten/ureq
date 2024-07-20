@@ -340,6 +340,7 @@ macro_rules! mk_method {
         impl Agent {
             $(
                 #[doc = concat!("Make a ", stringify!($m), " request using this agent.")]
+                #[must_use]
                 pub fn $f<T>(&self, uri: T) -> RequestBuilder<$b>
                 where
                     Uri: TryFrom<T>,

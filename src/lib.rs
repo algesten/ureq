@@ -61,6 +61,7 @@ pub fn agent() -> Agent {
 macro_rules! mk_method {
     ($f:tt, $m:tt, $b:ty) => {
         #[doc = concat!("Make a ", stringify!($m), " request.\n\nRun on a use-once [`Agent`].")]
+        #[must_use]
         pub fn $f<T>(uri: T) -> RequestBuilder<$b>
         where
             Uri: TryFrom<T>,

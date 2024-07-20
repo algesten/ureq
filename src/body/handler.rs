@@ -57,8 +57,10 @@ impl UnitHandler {
                 Event::Reset { must_close } => {
                     if let Some(connection) = self.connection.take() {
                         if must_close {
+                            trace!("Must close");
                             connection.close()
                         } else {
+                            trace!("Attempt reuse");
                             connection.reuse(now)
                         }
                     }

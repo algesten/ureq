@@ -286,7 +286,7 @@ impl fmt::Debug for PoolKey {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "_test"))]
 mod test {
     use super::*;
 
