@@ -285,7 +285,10 @@ fn split_content_type(content_type: &str) -> (Option<String>, Option<String>) {
 /// ```
 pub struct BodyReader<'a> {
     reader: CharsetDecoder<ContentDecoder<LimitReader<UnitHandlerRef<'a>>>>,
-    body_mode: BodyMode,
+    // If this reader is used as SendBody for another request, this
+    // body mode can indiciate the content-length. Gzip, charset etc
+    // would mean input is not same as output.
+    outgoing_body_mode: BodyMode,
 }
 
 impl<'a> BodyReader<'a> {
@@ -296,20 +299,22 @@ impl<'a> BodyReader<'a> {
     ) -> BodyReader<'a> {
         // This is outgoing body_mode in case we are using the BodyReader as a send body
         // in a proxy situation.
-        let mut body_mode = incoming_body_mode;
+        let mut outgoing_body_mode = incoming_body_mode;
 
         let reader = match info.content_encoding {
             ContentEncoding::None | ContentEncoding::Unknown => ContentDecoder::PassThrough(reader),
             #[cfg(feature = "gzip")]
             ContentEncoding::Gzip => {
-                body_mode = BodyMode::Chunked;
+                debug!("Decoding gzip");
+                outgoing_body_mode = BodyMode::Chunked;
                 ContentDecoder::Gzip(Box::new(gzip::GzipDecoder::new(reader)))
             }
             #[cfg(not(feature = "gzip"))]
             ContentEncoding::Gzip => ContentDecoder::PassThrough(reader),
             #[cfg(feature = "brotli")]
             ContentEncoding::Brotli => {
-                body_mode = BodyMode::Chunked;
+                debug!("Decoding brotli");
+                outgoing_body_mode = BodyMode::Chunked;
                 ContentDecoder::Brotli(Box::new(brotli::BrotliDecoder::new(reader)))
             }
             #[cfg(not(feature = "brotli"))]
@@ -320,14 +325,17 @@ impl<'a> BodyReader<'a> {
             reader,
             info.mime_type.as_deref(),
             info.charset.as_deref(),
-            &mut body_mode,
+            &mut outgoing_body_mode,
         );
 
-        BodyReader { body_mode, reader }
+        BodyReader {
+            outgoing_body_mode,
+            reader,
+        }
     }
 
     pub(crate) fn body_mode(&self) -> BodyMode {
-        self.body_mode
+        self.outgoing_body_mode
     }
 }
 
@@ -356,6 +364,7 @@ fn charset_decoder<R: Read>(
             // Do nothing
             CharsetDecoder::PassThrough(reader)
         } else {
+            debug!("Decoding charset {}", from.name());
             *body_mode = BodyMode::Chunked;
             CharsetDecoder::Decoder(self::charset::CharCodec::new(reader, from, UTF_8))
         }
