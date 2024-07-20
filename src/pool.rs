@@ -52,6 +52,12 @@ impl ConnectionPool {
 
         Ok(conn)
     }
+
+    #[cfg(test)]
+    pub fn pool_count(&self) -> usize {
+        let lock = self.pool.lock().unwrap();
+        lock.lru.len()
+    }
 }
 
 pub(crate) struct Connection {
