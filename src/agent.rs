@@ -369,3 +369,10 @@ impl From<AgentConfig> for Agent {
         Agent::new_with_config(value)
     }
 }
+
+#[cfg(test)]
+impl crate::Agent {
+    pub fn pool_count(&self) -> usize {
+        self.pool.pool_count()
+    }
+}
