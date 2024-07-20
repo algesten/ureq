@@ -110,6 +110,14 @@ impl Connection {
     }
 
     pub fn reuse(mut self, now: Instant) {
+        if !self.transport.is_open() {
+            // The purpose of probing is that is_open() for tcp connector attempts
+            // to read some more bytes. If that succeeds, the connection is considered
+            // _NOT_ open, since that means we either failed to read the previous
+            // body to end, or the server sent bogus data after the body. Either
+            // is a condition where we mustn't reuse the connection.
+            return;
+        }
         self.last_use = now;
 
         let Some(arc) = self.pool.upgrade() else {
