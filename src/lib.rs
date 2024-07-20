@@ -154,7 +154,7 @@ pub(crate) mod test {
         }
         .into();
 
-        let resp = agent.get("https://www.google.com/").call().unwrap();
+        let mut resp = agent.get("https://www.google.com/").call().unwrap();
 
         assert_eq!(
             "text/html;charset=ISO-8859-1",
@@ -166,13 +166,14 @@ pub(crate) mod test {
                 .replace("; ", ";")
         );
         assert_eq!(resp.body().mime_type(), Some("text/html"));
+        resp.body_mut().read_to_string(100_000).unwrap();
     }
+
     #[test]
     fn simple_put_content_len() {
         init_test_log();
         let mut resp = put("http://httpbin.org/put").send(&[0_u8; 100]).unwrap();
-        let s = resp.body_mut().read_to_string(1000).unwrap();
-        println!("{}", s);
+        resp.body_mut().read_to_string(1000).unwrap();
     }
 
     #[test]
@@ -183,8 +184,7 @@ pub(crate) mod test {
             .header("transfer-encoding", "chunked")
             .send(&[0_u8; 100])
             .unwrap();
-        let s = resp.body_mut().read_to_string(1000).unwrap();
-        println!("{}", s);
+        resp.body_mut().read_to_string(1000).unwrap();
     }
 
     #[test]

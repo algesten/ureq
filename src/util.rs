@@ -90,7 +90,18 @@ impl ConsumeBuf {
     }
 
     pub fn resize(&mut self, size: usize) {
+        if size > 100 * 1024 * 1024 {
+            panic!("ConsumeBuf grown to unreasonable size (>100MB)");
+        }
         self.buf.resize(size, 0);
+    }
+
+    pub fn add_space(&mut self, size: usize) {
+        if size == 0 {
+            return;
+        }
+        let wanted = self.buf.len() + size;
+        self.resize(wanted);
     }
 
     pub fn free_mut(&mut self) -> &mut [u8] {
