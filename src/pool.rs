@@ -271,3 +271,14 @@ impl fmt::Debug for PoolKey {
             .finish()
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn poolkey_new() {
+        // Test that PoolKey::new() does not panic on unrecognized schemes.
+        PoolKey::new(&Uri::from_static("zzz://example.com"), &None);
+    }
+}
