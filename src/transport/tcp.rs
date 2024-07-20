@@ -148,7 +148,10 @@ fn probe_tcp_stream(stream: &mut TcpStream) -> Result<bool, Error> {
             // bytes, and therefore reading would block
         }
         // Any bytes read means the server sent some garbage we didn't ask for
-        Ok(_) => return Ok(false),
+        Ok(_) => {
+            info!("Unexpected bytes from server. Closing connection");
+            return Ok(false);
+        }
         // Errors such as closed connection
         Err(_) => return Ok(false),
     };
