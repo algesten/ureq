@@ -97,16 +97,6 @@ struct TestHandler {
     handler: Arc<dyn Fn(Uri, Request<()>, &mut dyn Write) -> io::Result<()> + Sync + Send>,
 }
 
-// test::set_handler("/redirect_a", |unit| {
-//     assert_eq!(unit.method, "GET");
-//     test::make_response(
-//         302,
-//         "Go here",
-//         vec!["Location: test://example.edu/redirect_b"],
-//         vec![],
-//     )
-// });
-
 fn test_run(
     uri: Uri,
     rx: Receiver<Vec<u8>>,
@@ -322,6 +312,7 @@ impl Transport for TestTransport {
             Ok(v) => v,
             Err(RecvTimeoutError::Timeout) => return Err(Error::Timeout(timeout.reason)),
             Err(RecvTimeoutError::Disconnected) => {
+                trace!("Test server disconnected");
                 self.connected = false;
                 return Ok(());
             }

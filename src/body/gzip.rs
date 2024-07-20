@@ -26,7 +26,7 @@ mod test {
     // decoder reads the exact amount from a chunked stream, not past the 0. This
     // happens because gzip has built-in knowledge of the length to read.
     #[test]
-    fn test_gz_internal_length() {
+    fn gz_internal_length() {
         init_test_log();
 
         let gz_body = vec![
