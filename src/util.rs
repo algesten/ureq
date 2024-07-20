@@ -96,6 +96,7 @@ impl ConsumeBuf {
         self.buf.resize(size, 0);
     }
 
+    #[cfg(feature = "charset")]
     pub fn add_space(&mut self, size: usize) {
         if size == 0 {
             return;
