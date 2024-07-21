@@ -73,3 +73,9 @@ cc = "1.0.106"
 [dev-dependencies]
 # Needed for MSRV 1.67 (0.11 requires 1.71)
 env_logger = "=0.10.2"
+auto-args = "0.3.0"
+
+
+[[example]]
+name = "cureq"
+required-features = ["rustls", "native-roots", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset"]
