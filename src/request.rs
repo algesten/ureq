@@ -104,7 +104,7 @@ impl RequestBuilder<WithoutBody> {
     /// It sends neither `Content-Length` nor `Transfer-Encoding`.
     ///
     /// ```
-    /// let resp = ureq::get("http://httpbin.org/get")
+    /// let res = ureq::get("http://httpbin.org/get")
     ///     .call().unwrap();
     /// ```
     pub fn call(self) -> Result<Response<Body>, Error> {
@@ -129,7 +129,7 @@ impl RequestBuilder<WithBody> {
     /// Send body data and blocks the caller until we receive response.
     ///
     /// ```
-    /// let resp = ureq::post("http://httpbin.org/post")
+    /// let res = ureq::post("http://httpbin.org/post")
     ///     .send(&[0_u8; 1000]).unwrap();
     /// ```
     pub fn send(self, data: impl AsSendBody) -> Result<Response<Body>, Error> {

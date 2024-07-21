@@ -99,17 +99,17 @@ pub(crate) mod test {
         init_test_log();
         let agent = Agent::new_with_defaults();
 
-        let resp = agent.get("http://www.google.com/").call().unwrap();
+        let res = agent.get("http://www.google.com/").call().unwrap();
         assert_eq!(
             "text/html;charset=ISO-8859-1",
-            resp.headers()
+            res.headers()
                 .get("content-type")
                 .unwrap()
                 .to_str()
                 .unwrap()
                 .replace("; ", ";")
         );
-        assert_eq!(resp.body().mime_type(), Some("text/html"));
+        assert_eq!(res.body().mime_type(), Some("text/html"));
     }
 
     #[test]
@@ -127,17 +127,17 @@ pub(crate) mod test {
         }
         .into();
 
-        let resp = agent.get("https://www.google.com/").call().unwrap();
+        let res = agent.get("https://www.google.com/").call().unwrap();
         assert_eq!(
             "text/html;charset=ISO-8859-1",
-            resp.headers()
+            res.headers()
                 .get("content-type")
                 .unwrap()
                 .to_str()
                 .unwrap()
                 .replace("; ", ";")
         );
-        assert_eq!(resp.body().mime_type(), Some("text/html"));
+        assert_eq!(res.body().mime_type(), Some("text/html"));
     }
 
     #[test]
@@ -155,37 +155,37 @@ pub(crate) mod test {
         }
         .into();
 
-        let mut resp = agent.get("https://www.google.com/").call().unwrap();
+        let mut res = agent.get("https://www.google.com/").call().unwrap();
 
         assert_eq!(
             "text/html;charset=ISO-8859-1",
-            resp.headers()
+            res.headers()
                 .get("content-type")
                 .unwrap()
                 .to_str()
                 .unwrap()
                 .replace("; ", ";")
         );
-        assert_eq!(resp.body().mime_type(), Some("text/html"));
-        resp.body_mut().read_to_string(100_000).unwrap();
+        assert_eq!(res.body().mime_type(), Some("text/html"));
+        res.body_mut().read_to_string(100_000).unwrap();
     }
 
     #[test]
     fn simple_put_content_len() {
         init_test_log();
-        let mut resp = put("http://httpbin.org/put").send(&[0_u8; 100]).unwrap();
-        resp.body_mut().read_to_string(1000).unwrap();
+        let mut res = put("http://httpbin.org/put").send(&[0_u8; 100]).unwrap();
+        res.body_mut().read_to_string(1000).unwrap();
     }
 
     #[test]
     fn simple_put_chunked() {
         init_test_log();
-        let mut resp = put("http://httpbin.org/put")
+        let mut res = put("http://httpbin.org/put")
             // override default behavior
             .header("transfer-encoding", "chunked")
             .send(&[0_u8; 100])
             .unwrap();
-        resp.body_mut().read_to_string(1000).unwrap();
+        res.body_mut().read_to_string(1000).unwrap();
     }
 
     #[test]
