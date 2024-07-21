@@ -436,3 +436,34 @@ impl From<&str> for ContentEncoding {
         }
     }
 }
+
+#[cfg(all(test, feature = "_test"))]
+mod test {
+    use crate::test::init_test_log;
+    use crate::transport::set_handler;
+
+    #[test]
+    fn content_type_without_charset() {
+        init_test_log();
+        set_handler("/get", 200, &[("content-type", "application/json")], b"{}");
+
+        let res = crate::get("https://my.test/get").call().unwrap();
+        assert_eq!(res.body().mime_type(), Some("application/json"));
+        assert!(res.body().charset().is_none());
+    }
+
+    #[test]
+    fn content_type_with_charset() {
+        init_test_log();
+        set_handler(
+            "/get",
+            200,
+            &[("content-type", "application/json; charset=iso-8859-4")],
+            b"{}",
+        );
+
+        let res = crate::get("https://my.test/get").call().unwrap();
+        assert_eq!(res.body().mime_type(), Some("application/json"));
+        assert_eq!(res.body().charset(), Some("iso-8859-4"));
+    }
+}
