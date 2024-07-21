@@ -326,6 +326,13 @@ impl<'b> Unit<SendBody<'b>> {
                         return Err(Error::disconnected());
                     }
 
+                    if input.len() > self.config.max_response_header_size {
+                        return Err(Error::LargeResponseHeader(
+                            input.len(),
+                            self.config.max_response_header_size,
+                        ));
+                    }
+
                     let (input_used, maybe_response) = flow.try_response(input)?;
 
                     let Some(response) = maybe_response else {

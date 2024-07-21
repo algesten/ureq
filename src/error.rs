@@ -138,6 +138,11 @@ pub enum Error {
     #[error("agent is configured for https only: {0}")]
     AgentRequireHttpsOnly(String),
 
+    /// The response header, from status up until body, is too big.
+    ///
+    #[error("response header is too big: {0} > {1}")]
+    LargeResponseHeader(usize, usize),
+
     /// hoot made no progress and there is no more input to read.
     ///
     /// We should never see this value.
