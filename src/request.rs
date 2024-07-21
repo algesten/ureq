@@ -159,3 +159,16 @@ impl<MethodLimit> DerefMut for RequestBuilder<MethodLimit> {
 }
 
 // TODO(martin): implement reasonable Debug
+
+#[cfg(test)]
+mod test {
+
+    use super::*;
+
+    #[test]
+    fn disallow_empty_host() {
+        let err = crate::get("file:///some/path").call().unwrap_err();
+        assert_eq!(err.to_string(), "http: invalid format");
+        assert!(matches!(err, Error::Http(_)));
+    }
+}

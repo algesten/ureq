@@ -323,6 +323,7 @@ impl Agent {
         let response = Response::from_parts(parts, recv_body);
 
         info!("{:?}", DebugResponse(&response));
+        trace!("Receive body mode is: {:?}", recv_body_mode);
 
         Ok(response)
     }
