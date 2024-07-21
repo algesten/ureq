@@ -439,8 +439,11 @@ impl From<&str> for ContentEncoding {
 
 #[cfg(all(test, feature = "_test"))]
 mod test {
+    use std::iter;
+
     use crate::test::init_test_log;
     use crate::transport::set_handler;
+    use crate::Error;
 
     #[test]
     fn content_type_without_charset() {
@@ -488,5 +491,22 @@ mod test {
         let mut res = crate::get("https://my.test/get").call().unwrap();
         let b = res.body_mut().read_to_string(1000).unwrap();
         assert_eq!(b, "hello world!!!");
+    }
+
+    #[test]
+    fn large_response_header() {
+        init_test_log();
+        set_handler(
+            "/get",
+            200,
+            &[(
+                "content-type",
+                &iter::repeat('b').take(32 * 1024).collect::<String>(),
+            )],
+            b"{}",
+        );
+
+        let err = crate::get("https://my.test/get").call().unwrap_err();
+        assert!(matches!(err, Error::LargeResponseHeader(32801, 32768)));
     }
 }
