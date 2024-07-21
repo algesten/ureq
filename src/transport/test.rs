@@ -222,6 +222,21 @@ fn setup_default_handlers(handlers: &mut Vec<TestHandler>) {
         }),
         handlers,
     );
+
+    #[cfg(feature = "charset")]
+    {
+        let (cow, _, _) =
+            encoding_rs::WINDOWS_1252.encode("HTTP/1.1 302 Déplacé Temporairement\r\n\r\n");
+        let bytes = cow.to_vec();
+
+        maybe_add(
+            TestHandler::new("/non-ascii-reason", move |_uri, _req, w| {
+                w.write_all(&bytes)?;
+                Ok(())
+            }),
+            handlers,
+        );
+    }
 }
 
 const HTTPBIN_GET: &str = r#"
