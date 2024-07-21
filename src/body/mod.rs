@@ -29,15 +29,15 @@ mod brotli;
 ///
 /// ```
 /// use std::io::Read;
-/// let mut resp = ureq::get("http://httpbin.org/bytes/100")
+/// let mut res = ureq::get("http://httpbin.org/bytes/100")
 ///     .call().unwrap();
 ///
-/// assert!(resp.headers().contains_key("Content-Length"));
-/// let len: usize = resp.headers().get("Content-Length")
+/// assert!(res.headers().contains_key("Content-Length"));
+/// let len: usize = res.headers().get("Content-Length")
 ///     .unwrap().to_str().unwrap().parse().unwrap();
 ///
 /// let mut bytes: Vec<u8> = Vec::with_capacity(len);
-/// resp.body_mut().as_reader(10_000_000)
+/// res.body_mut().as_reader(10_000_000)
 ///     .read_to_end(&mut bytes).unwrap();
 ///
 /// assert_eq!(bytes.len(), len);
@@ -80,10 +80,10 @@ impl Body {
     /// # Example
     ///
     /// ```
-    /// let resp = ureq::get("https://www.google.com/")
+    /// let res = ureq::get("https://www.google.com/")
     ///     .call().unwrap();
     ///
-    /// assert_eq!(resp.body().mime_type(), Some("text/html"));
+    /// assert_eq!(res.body().mime_type(), Some("text/html"));
     /// ```
     pub fn mime_type(&self) -> Option<&str> {
         self.info.mime_type.as_deref()
@@ -100,10 +100,10 @@ impl Body {
     /// # Example
     ///
     /// ```
-    /// let resp = ureq::get("https://www.google.com/")
+    /// let res = ureq::get("https://www.google.com/")
     ///     .call().unwrap();
     ///
-    /// assert_eq!(resp.body().charset(), Some("ISO-8859-1"));
+    /// assert_eq!(res.body().charset(), Some("ISO-8859-1"));
     /// ```
     pub fn charset(&self) -> Option<&str> {
         self.info.charset.as_deref()
@@ -116,11 +116,11 @@ impl Body {
     /// ```
     /// use std::io::Read;
     ///
-    /// let mut resp = ureq::get("http://httpbin.org/bytes/100")
+    /// let mut res = ureq::get("http://httpbin.org/bytes/100")
     ///     .call().unwrap();
     ///
     /// let mut bytes: Vec<u8> = Vec::with_capacity(1000);
-    /// resp.body_mut().as_reader(1000)
+    /// res.body_mut().as_reader(1000)
     ///     .read_to_end(&mut bytes).unwrap();
     /// ```
     pub fn as_reader(&mut self, limit: u64) -> BodyReader {
@@ -139,10 +139,10 @@ impl Body {
     /// ```
     /// use std::io::Read;
     ///
-    /// let resp = ureq::get("http://httpbin.org/bytes/100")
+    /// let res = ureq::get("http://httpbin.org/bytes/100")
     ///     .call().unwrap();
     ///
-    /// let (_, body) = resp.into_parts();
+    /// let (_, body) = res.into_parts();
     ///
     /// let mut bytes: Vec<u8> = Vec::with_capacity(1000);
     /// body.into_reader(1000)
@@ -164,10 +164,10 @@ impl Body {
     /// Fails if the requested data is not a string.
     ///
     /// ```
-    /// let mut resp = ureq::get("http://httpbin.org/robots.txt")
+    /// let mut res = ureq::get("http://httpbin.org/robots.txt")
     ///     .call().unwrap();
     ///
-    /// let s = resp.body_mut().read_to_string(1000).unwrap();
+    /// let s = res.body_mut().read_to_string(1000).unwrap();
     /// assert_eq!(s, "User-agent: *\nDisallow: /deny\n");
     /// ```
     pub fn read_to_string(&mut self, limit: usize) -> Result<String, Error> {
@@ -180,10 +180,10 @@ impl Body {
     /// Read the response to a vec.
     ///
     /// ```
-    /// let mut resp = ureq::get("http://httpbin.org/bytes/100")
+    /// let mut res = ureq::get("http://httpbin.org/bytes/100")
     ///     .call().unwrap();
     ///
-    /// let bytes = resp.body_mut().read_to_vec(1000).unwrap();
+    /// let bytes = res.body_mut().read_to_vec(1000).unwrap();
     /// assert_eq!(bytes.len(), 100);
     /// ```
     pub fn read_to_vec(&mut self, limit: usize) -> Result<Vec<u8>, Error> {
@@ -270,15 +270,15 @@ fn split_content_type(content_type: &str) -> (Option<String>, Option<String>) {
 ///
 /// ```
 /// use std::io::Read;
-/// let mut resp = ureq::get("http://httpbin.org/bytes/100")
+/// let mut res = ureq::get("http://httpbin.org/bytes/100")
 ///     .call().unwrap();
 ///
-/// assert!(resp.headers().contains_key("Content-Length"));
-/// let len: usize = resp.headers().get("Content-Length")
+/// assert!(res.headers().contains_key("Content-Length"));
+/// let len: usize = res.headers().get("Content-Length")
 ///     .unwrap().to_str().unwrap().parse().unwrap();
 ///
 /// let mut bytes: Vec<u8> = Vec::with_capacity(len);
-/// resp.body_mut().as_reader(10_000_000)
+/// res.body_mut().as_reader(10_000_000)
 ///     .read_to_end(&mut bytes).unwrap();
 ///
 /// assert_eq!(bytes.len(), len);
