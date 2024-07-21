@@ -57,8 +57,8 @@ mod test {
             &gz_body,
         );
 
-        let mut resp = agent.get("https://example.test/gz_body").call().unwrap();
-        resp.body_mut().read_to_string(1000).unwrap();
+        let mut res = agent.get("https://example.test/gz_body").call().unwrap();
+        res.body_mut().read_to_string(1000).unwrap();
 
         assert_eq!(agent.pool_count(), 1);
     }
