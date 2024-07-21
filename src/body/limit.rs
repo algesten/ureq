@@ -34,3 +34,21 @@ impl<R: io::Read> io::Read for LimitReader<R> {
         Ok(n)
     }
 }
+
+#[cfg(all(test, feature = "_test"))]
+mod test {
+    use std::io;
+
+    use crate::test::init_test_log;
+    use crate::transport::set_handler;
+
+    #[test]
+    fn short_read() {
+        init_test_log();
+        set_handler("/get", 200, &[("content-length", "10")], b"hello");
+        let mut res = crate::get("https://my.test/get").call().unwrap();
+        let err = res.body_mut().read_to_string(1000).unwrap_err();
+        let ioe = err.into_io();
+        assert_eq!(ioe.kind(), io::ErrorKind::UnexpectedEof);
+    }
+}

@@ -39,75 +39,66 @@ impl UnitHandler {
     }
 
     fn do_read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
-        let mut attempts = 0;
-
-        let amount = loop {
-            attempts += 1;
-
-            let now = (self.current_time)();
-
-            let Some(connection) = &mut self.connection else {
-                return Ok(0);
-            };
-
-            let event = self.unit.poll_event((self.current_time)())?;
-
-            let timeout = match event {
-                Event::AwaitInput { timeout } => timeout,
-                Event::Reset { must_close } => {
-                    if let Some(connection) = self.connection.take() {
-                        if must_close {
-                            trace!("Must close");
-                            connection.close()
-                        } else {
-                            trace!("Attempt reuse");
-                            connection.reuse(now)
-                        }
-                    }
-                    return Ok(0);
-                }
-                _ => unreachable!("Expected event AwaitInput"),
-            };
-
-            let size_before = connection.buffers().input().len();
-            connection.await_input(timeout)?;
-            let input = connection.buffers().input();
-            let size_after = input.len();
-
-            // Did calling await_input result in anymore input in the buffer?
-            let made_progress = size_after > size_before;
-
-            let max = size_after.min(buf.len());
-            let input = &input[..max];
-
-            let input_used =
-                self.unit
-                    .handle_input((self.current_time)(), Input::Data { input }, buf)?;
-            connection.consume_input(input_used);
-
-            let event = self.unit.poll_event((self.current_time)())?;
-
-            let Event::ResponseBody { amount } = event else {
-                unreachable!("Expected event ResponseBody");
-            };
-
-            if amount == 0 {
-                // unit.handle_input did not manage to process more body data. This
-                // might mean we need to fill the input more via connection.await_input().
-                // However if we didn't manage to read any bytes last time, the entire
-                // chain is stalled.
-                if attempts < 3 || made_progress {
-                    continue;
-                } else {
-                    return Err(Error::BodyStalled);
-                }
-            }
-
-            break amount;
+        let Some(connection) = &mut self.connection else {
+            return Ok(0);
         };
 
-        Ok(amount)
+        // Can we use content that is already buffered?
+        if connection.buffers().can_use_input() {
+            let amount = ship_input(connection, &mut self.unit, &self.current_time, buf)?;
+
+            // The body parser might not get enough input to make progress (such as when
+            // reading a chunked body and not getting the entire chunk length). In such
+            // case we fall through to a regular read.
+            if amount > 0 {
+                return Ok(amount);
+            }
+        }
+
+        // Each read to the underlying buffers needs to be kept in sync with the
+        // unit state. The first poll should be event AwaitInput or Reset.
+        let event = self.unit.poll_event((self.current_time)())?;
+
+        let timeout = match event {
+            Event::AwaitInput { timeout } => timeout,
+            Event::Reset { must_close } => {
+                if let Some(connection) = self.connection.take() {
+                    if must_close {
+                        trace!("Must close");
+                        connection.close()
+                    } else {
+                        trace!("Attempt reuse");
+                        connection.reuse((self.current_time)())
+                    }
+                }
+                return Ok(0);
+            }
+            _ => unreachable!("Expected event AwaitInput or Reset"),
+        };
+
+        connection.await_input(timeout)?;
+
+        ship_input(connection, &mut self.unit, &self.current_time, buf)
     }
+}
+
+fn ship_input(
+    connection: &mut Connection,
+    unit: &mut Unit<()>,
+    current_time: &(dyn Fn() -> Instant + Send + Sync),
+    buf: &mut [u8],
+) -> Result<usize, Error> {
+    let input = connection.buffers().input();
+    let input_used = unit.handle_input((current_time)(), Input::Data { input }, buf)?;
+    connection.consume_input(input_used);
+
+    let event = unit.poll_event((current_time)())?;
+
+    let Event::ResponseBody { amount } = event else {
+        unreachable!("Expected event ResponseBody");
+    };
+
+    Ok(amount)
 }
 
 impl<'a> io::Read for UnitHandlerRef<'a> {

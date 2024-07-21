@@ -314,7 +314,10 @@ impl Transport for TestTransport {
             Err(RecvTimeoutError::Disconnected) => {
                 trace!("Test server disconnected");
                 self.connected = false;
-                return Ok(());
+                return Err(Error::Io(io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    "test server disconnected",
+                )));
             }
         };
         assert!(input.len() >= buf.len());
