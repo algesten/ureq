@@ -125,7 +125,7 @@ impl<R> fmt::Debug for CharCodec<R> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "_test"))]
 mod test {
     use super::*;
 
@@ -133,5 +133,25 @@ mod test {
     fn create_encodings() {
         assert!(Encoding::for_label(b"utf8").is_some());
         assert_eq!(Encoding::for_label(b"utf8"), Encoding::for_label(b"utf-8"));
+    }
+
+    #[test]
+    #[cfg(feature = "charset")]
+    fn non_ascii_reason() {
+        use crate::test::init_test_log;
+        use crate::{Agent, AgentConfig};
+
+        init_test_log();
+        let agent: Agent = AgentConfig {
+            max_redirects: 0,
+            ..Default::default()
+        }
+        .into();
+
+        let res = agent
+            .get("https://my.test/non-ascii-reason")
+            .call()
+            .unwrap();
+        assert_eq!(res.status(), 302);
     }
 }
