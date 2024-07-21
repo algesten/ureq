@@ -466,4 +466,27 @@ mod test {
         assert_eq!(res.body().mime_type(), Some("application/json"));
         assert_eq!(res.body().charset(), Some("iso-8859-4"));
     }
+
+    #[test]
+    fn chunked_transfer() {
+        init_test_log();
+
+        let s = "3\r\n\
+            hel\r\n\
+            b\r\n\
+            lo world!!!\r\n\
+            0\r\n\
+            \r\n";
+
+        set_handler(
+            "/get",
+            200,
+            &[("transfer-encoding", "chunked")],
+            s.as_bytes(),
+        );
+
+        let mut res = crate::get("https://my.test/get").call().unwrap();
+        let b = res.body_mut().read_to_string(1000).unwrap();
+        assert_eq!(b, "hello world!!!");
+    }
 }
