@@ -32,7 +32,7 @@ pub enum Error {
 
     /// Error in io such as the TCP socket.
     #[error("io: {0}")]
-    Io(#[from] io::Error),
+    Io(io::Error),
 
     /// Error raised if the request hits any configured timeout.
     ///
@@ -208,6 +208,21 @@ impl fmt::Display for TimeoutReason {
             TimeoutReason::RecvBody => "receive body",
         };
         write!(f, "{}", r)
+    }
+}
+
+impl From<io::Error> for Error {
+    fn from(e: io::Error) -> Self {
+        let is_wrapped_ureq_error = e.get_ref().map(|x| x.is::<Error>()).unwrap_or(false);
+
+        if is_wrapped_ureq_error {
+            // unwraps are ok, see above.
+            let boxed = e.into_inner().unwrap();
+            let ureq = boxed.downcast::<Error>().unwrap();
+            *ureq
+        } else {
+            Error::Io(e)
+        }
     }
 }
 
