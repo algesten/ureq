@@ -24,7 +24,7 @@ struct Opt {
 fn main() {
     let opt = Opt::from_args();
     if let Err(e) = run(&opt) {
-        eprintln!("{}: {}", opt.url, e);
+        eprintln!("{} - {}", e, opt.url);
         process::exit(1);
     }
 }
