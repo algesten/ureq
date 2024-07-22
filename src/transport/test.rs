@@ -321,7 +321,7 @@ impl Transport for TestTransport {
         Ok(())
     }
 
-    fn await_input(&mut self, timeout: NextTimeout) -> Result<(), Error> {
+    fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
         let input = self.buffers.input_mut();
         let buf = match self.rx.recv_timeout(timeout.after) {
             Ok(v) => v,
@@ -339,7 +339,7 @@ impl Transport for TestTransport {
         let max = input.len().min(buf.len());
         input[..max].copy_from_slice(&buf[..]);
         self.buffers.add_filled(max);
-        Ok(())
+        Ok(max > 0)
     }
 
     fn is_open(&mut self) -> bool {

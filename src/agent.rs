@@ -292,14 +292,23 @@ impl Agent {
                         }
                     }
 
-                    // Read more input
-                    connection.await_input(timeout)?;
-                    let (input, output) = connection.buffers().input_and_output();
+                    loop {
+                        // Read more input
+                        let made_progress = connection.await_input(timeout)?;
+                        let (input, output) = connection.buffers().input_and_output();
 
-                    let input_used =
-                        unit.handle_input(current_time(), Input::Data { input }, output)?;
+                        let input_used =
+                            unit.handle_input(current_time(), Input::Data { input }, output)?;
+                        connection.consume_input(input_used);
 
-                    connection.consume_input(input_used);
+                        if input_used > 0 {
+                            break;
+                        } else if made_progress {
+                            continue;
+                        } else {
+                            return Err(Error::BodyStalled);
+                        }
+                    }
                 }
 
                 Event::Response { response: r, end } => {

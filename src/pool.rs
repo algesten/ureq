@@ -96,7 +96,7 @@ impl Connection {
         self.transport.transmit_output(amount, timeout)
     }
 
-    pub fn await_input(&mut self, timeout: NextTimeout) -> Result<(), Error> {
+    pub fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
         self.transport.await_input(timeout)
     }
 

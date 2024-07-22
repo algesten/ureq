@@ -166,9 +166,9 @@ impl Transport for RustlsTransport {
         Ok(())
     }
 
-    fn await_input(&mut self, timeout: NextTimeout) -> Result<(), Error> {
+    fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
         if self.buffers.can_use_input() {
-            return Ok(());
+            return Ok(true);
         }
 
         self.stream.get_mut().timeout = timeout;
@@ -177,7 +177,7 @@ impl Transport for RustlsTransport {
         let amount = self.stream.read(input)?;
         self.buffers.add_filled(amount);
 
-        Ok(())
+        Ok(amount > 0)
     }
 
     fn is_open(&mut self) -> bool {
