@@ -22,6 +22,7 @@ struct Opt {
 }
 
 fn main() {
+    env_logger::init();
     let opt = Opt::from_args();
     if let Err(e) = run(&opt) {
         eprintln!("{} - {}", e, opt.url);
