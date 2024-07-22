@@ -161,7 +161,7 @@ pub trait Transport: Debug + Send + Sync {
     /// Await input from the transport. The transport should internally use
     /// [`Buffers::input_mut()`] followed by [`Buffers::add_filled()`] to
     /// store the incoming data.
-    fn await_input(&mut self, timeout: NextTimeout) -> Result<(), Error>;
+    fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error>;
 
     /// Tell whether this transport is still functional. This must provide an accurate answer
     /// for connection pooling to work.
