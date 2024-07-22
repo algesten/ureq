@@ -276,6 +276,23 @@ impl Agent {
 
                 Event::AwaitInput { timeout } => {
                     let connection = connection.as_mut().expect("connection for AwaitInput");
+
+                    let has_buffered_input = connection.buffers().can_use_input();
+
+                    if has_buffered_input {
+                        // Try use buffered input
+                        let (input, output) = connection.buffers().input_and_output();
+                        let input_used =
+                            unit.handle_input(current_time(), Input::Data { input }, output)?;
+
+                        // If we don't use buffered input, we need to read more.
+                        if input_used > 0 {
+                            connection.consume_input(input_used);
+                            continue;
+                        }
+                    }
+
+                    // Read more input
                     connection.await_input(timeout)?;
                     let (input, output) = connection.buffers().input_and_output();
 
