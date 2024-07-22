@@ -162,9 +162,9 @@ impl Transport for NativeTlsTransport {
         Ok(())
     }
 
-    fn await_input(&mut self, timeout: NextTimeout) -> Result<(), Error> {
+    fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
         if self.buffers.can_use_input() {
-            return Ok(());
+            return Ok(true);
         }
 
         let stream = self.stream.handshaken()?;
@@ -174,7 +174,7 @@ impl Transport for NativeTlsTransport {
         let amount = stream.read(input)?;
         self.buffers.add_filled(amount);
 
-        Ok(())
+        Ok(amount > 0)
     }
 
     fn is_open(&mut self) -> bool {

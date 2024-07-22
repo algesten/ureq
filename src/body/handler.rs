@@ -81,9 +81,22 @@ impl UnitHandler {
             }
         }
 
-        connection.await_input(timeout)?;
+        loop {
+            let made_progress = connection.await_input(timeout)?;
 
-        ship_input(connection, &mut self.unit, &self.current_time, buf)
+            let amount = ship_input(connection, &mut self.unit, &self.current_time, buf)?;
+            if amount > 0 {
+                return Ok(amount);
+            } else if made_progress {
+                // The await_input() made progress, but handled amount is 0. This
+                // can for instance happen if we read some data, but not enough for
+                // decoding any gzip.
+                continue;
+            } else {
+                // This is an edge case we don't want to see.
+                return Err(Error::BodyStalled);
+            }
+        }
     }
 }
 
