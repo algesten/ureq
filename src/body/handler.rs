@@ -43,17 +43,7 @@ impl UnitHandler {
             return Ok(0);
         };
 
-        // Can we use content that is already buffered?
-        if connection.buffers().can_use_input() {
-            let amount = ship_input(connection, &mut self.unit, &self.current_time, buf)?;
-
-            // The body parser might not get enough input to make progress (such as when
-            // reading a chunked body and not getting the entire chunk length). In such
-            // case we fall through to a regular read.
-            if amount > 0 {
-                return Ok(amount);
-            }
-        }
+        let has_buffered_input = connection.buffers().can_use_input();
 
         // Each read to the underlying buffers needs to be kept in sync with the
         // unit state. The first poll should be event AwaitInput or Reset.
@@ -66,6 +56,9 @@ impl UnitHandler {
                     if must_close {
                         trace!("Must close");
                         connection.close()
+                    } else if has_buffered_input {
+                        debug!("Close due to excess body data");
+                        connection.close()
                     } else {
                         trace!("Attempt reuse");
                         connection.reuse((self.current_time)())
@@ -75,6 +68,18 @@ impl UnitHandler {
             }
             _ => unreachable!("Expected event AwaitInput or Reset"),
         };
+
+        // Can we use content that is already buffered?
+        if has_buffered_input {
+            let amount = ship_input(connection, &mut self.unit, &self.current_time, buf)?;
+
+            // The body parser might not get enough input to make progress (such as when
+            // reading a chunked body and not getting the entire chunk length). In such
+            // case we fall through to a regular read.
+            if amount > 0 {
+                return Ok(amount);
+            }
+        }
 
         connection.await_input(timeout)?;
 
