@@ -1,4 +1,4 @@
-use std::io::{stdout, BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader};
 use std::process;
 use std::time::Duration;
 
@@ -52,20 +52,12 @@ fn run(opt: &Opt) -> Result<(), ureq::Error> {
     let reader = BufReader::new(res.body_mut().as_reader(MAX_BODY_SIZE));
     let mut lines = reader.lines();
 
-    let mut has_lf = false;
-
     while let Some(r) = lines.next() {
         let line = match r {
             Ok(v) => v,
             Err(e) => return Err(e.into()),
         };
-        let bytes = line.as_bytes();
-        has_lf = bytes.is_empty() || bytes[bytes.len() - 1] == b'\n';
-        stdout().write_all(line.as_bytes())?;
-    }
-
-    if !has_lf {
-        println!();
+        println!("{}", line);
     }
 
     Ok(())
