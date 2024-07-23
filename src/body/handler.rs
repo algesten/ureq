@@ -43,45 +43,45 @@ impl UnitHandler {
             return Ok(0);
         };
 
-        let has_buffered_input = connection.buffers().can_use_input();
-
-        // Each read to the underlying buffers needs to be kept in sync with the
-        // unit state. The first poll should be event AwaitInput or Reset.
-        let event = self.unit.poll_event((self.current_time)())?;
-
-        let timeout = match event {
-            Event::AwaitInput { timeout } => timeout,
-            Event::Reset { must_close } => {
-                if let Some(connection) = self.connection.take() {
-                    if must_close {
-                        trace!("Must close");
-                        connection.close()
-                    } else if has_buffered_input {
-                        debug!("Close due to excess body data");
-                        connection.close()
-                    } else {
-                        trace!("Attempt reuse");
-                        connection.reuse((self.current_time)())
-                    }
-                }
-                return Ok(0);
-            }
-            _ => unreachable!("Expected event AwaitInput or Reset"),
-        };
-
-        // Can we use content that is already buffered?
-        if has_buffered_input {
-            let amount = ship_input(connection, &mut self.unit, &self.current_time, buf)?;
-
-            // The body parser might not get enough input to make progress (such as when
-            // reading a chunked body and not getting the entire chunk length). In such
-            // case we fall through to a regular read.
-            if amount > 0 {
-                return Ok(amount);
-            }
-        }
-
         loop {
+            let has_buffered_input = connection.buffers().can_use_input();
+
+            // Each read to the underlying buffers needs to be kept in sync with the
+            // unit state. The first poll should be event AwaitInput or Reset.
+            let event = self.unit.poll_event((self.current_time)())?;
+
+            let timeout = match event {
+                Event::AwaitInput { timeout } => timeout,
+                Event::Reset { must_close } => {
+                    if let Some(connection) = self.connection.take() {
+                        if must_close {
+                            trace!("Must close");
+                            connection.close()
+                        } else if has_buffered_input {
+                            debug!("Close due to excess body data");
+                            connection.close()
+                        } else {
+                            trace!("Attempt reuse");
+                            connection.reuse((self.current_time)())
+                        }
+                    }
+                    return Ok(0);
+                }
+                _ => unreachable!("Expected event AwaitInput or Reset"),
+            };
+
+            // Can we use content that is already buffered?
+            if has_buffered_input {
+                let amount = ship_input(connection, &mut self.unit, &self.current_time, buf)?;
+
+                // The body parser might not get enough input to make progress (such as when
+                // reading a chunked body and not getting the entire chunk length). In such
+                // case we fall through to a regular read.
+                if amount > 0 {
+                    return Ok(amount);
+                }
+            }
+
             let made_progress = connection.await_input(timeout)?;
 
             let amount = ship_input(connection, &mut self.unit, &self.current_time, buf)?;
