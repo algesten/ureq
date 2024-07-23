@@ -420,7 +420,7 @@ mod testserver;
 
 #[cfg(feature = "http-interop")]
 // 0.2 version dependency (deprecated)
-mod http_interop;
+pub mod http_interop;
 
 #[cfg(feature = "http-crate")]
 // 1.0 version dependency.
