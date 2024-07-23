@@ -139,7 +139,7 @@ pub struct AgentConfig {
     ///
     /// From the status, including all headers up until the body.
     ///
-    /// Defaults to `32KB`.
+    /// Defaults to `64KB`.
     pub max_response_header_size: usize,
 
     /// Default size of the input buffer
@@ -205,7 +205,7 @@ impl Default for AgentConfig {
             timeout_send_body: None,
             timeout_recv_response: None,
             timeout_recv_body: None,
-            max_response_header_size: 32 * 1024,
+            max_response_header_size: 64 * 1024,
             input_buffer_size: 128 * 1024,
             output_buffer_size: 128 * 1024,
             max_idle_connections: 10,
