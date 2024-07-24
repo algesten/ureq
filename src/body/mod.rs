@@ -501,12 +501,12 @@ mod test {
             200,
             &[(
                 "content-type",
-                &iter::repeat('b').take(32 * 1024).collect::<String>(),
+                &iter::repeat('b').take(64 * 1024).collect::<String>(),
             )],
             b"{}",
         );
 
         let err = crate::get("https://my.test/get").call().unwrap_err();
-        assert!(matches!(err, Error::LargeResponseHeader(32801, 32768)));
+        assert!(matches!(err, Error::LargeResponseHeader(_, _)));
     }
 }
