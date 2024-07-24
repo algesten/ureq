@@ -39,19 +39,20 @@ impl AuthorityExt for Authority {
 }
 
 pub(crate) trait SchemeExt {
-    fn default_port(&self) -> u16;
+    fn default_port(&self) -> Option<u16>;
 }
 
 impl SchemeExt for Scheme {
-    fn default_port(&self) -> u16 {
+    fn default_port(&self) -> Option<u16> {
         if *self == Scheme::HTTPS {
-            443
+            Some(443)
         } else if *self == Scheme::HTTP {
-            80
+            Some(80)
         } else if let Ok(proxy) = Proto::try_from(self.as_str()) {
-            proxy.default_port()
+            Some(proxy.default_port())
         } else {
-            panic!("Unknown scheme: {}", self);
+            info!("Unknown scheme: {}", self);
+            None
         }
     }
 }
@@ -264,16 +265,21 @@ impl<'a> fmt::Debug for DebugAuthority<'a> {
 }
 
 pub(crate) trait UriExt {
-    fn ensure_full_url(&self) -> Result<(), Error>;
+    fn ensure_valid_url(&self) -> Result<(), Error>;
 
     #[cfg(feature = "_url")]
     fn try_into_url(&self) -> Result<url::Url, Error>;
 }
 
 impl UriExt for Uri {
-    fn ensure_full_url(&self) -> Result<(), Error> {
-        self.scheme()
+    fn ensure_valid_url(&self) -> Result<(), Error> {
+        let scheme = self
+            .scheme()
             .ok_or_else(|| Error::BadUri(format!("{} is missing scheme", self)))?;
+
+        scheme
+            .default_port()
+            .ok_or_else(|| Error::BadUri(format!("unknown scheme: {}", scheme)))?;
 
         self.authority()
             .ok_or_else(|| Error::BadUri(format!("{} is missing host", self)))?;
@@ -283,7 +289,7 @@ impl UriExt for Uri {
 
     #[cfg(feature = "_url")]
     fn try_into_url(&self) -> Result<url::Url, Error> {
-        self.ensure_full_url()?;
+        self.ensure_valid_url()?;
         let uri = self.to_string();
 
         // If ensure_full_url() works, we expect to be able to parse it to a url

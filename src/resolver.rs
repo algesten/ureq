@@ -65,18 +65,16 @@ impl DefaultResolver {
     ///
     /// This knows about the default ports for http, https and socks proxies which
     /// can then be omitted from the `Authority`.
-    pub fn host_and_port(scheme: &Scheme, authority: &Authority) -> String {
-        let port = authority
-            .port_u16()
-            .unwrap_or_else(|| scheme.default_port());
+    pub fn host_and_port(scheme: &Scheme, authority: &Authority) -> Option<String> {
+        let port = authority.port_u16().or_else(|| scheme.default_port())?;
 
-        format!("{}:{}", authority.host(), port)
+        Some(format!("{}:{}", authority.host(), port))
     }
 }
 
 impl Resolver for DefaultResolver {
     fn resolve(&self, uri: &Uri, timeout: NextTimeout) -> Result<SocketAddr, Error> {
-        uri.ensure_full_url()?;
+        uri.ensure_valid_url()?;
 
         // unwrap is ok due to ensure_full_url() above.
         let scheme = uri.scheme().unwrap();
@@ -85,12 +83,17 @@ impl Resolver for DefaultResolver {
         if cfg!(feature = "_test") {
             return Ok(SocketAddr::V4(SocketAddrV4::new(
                 Ipv4Addr::new(10, 0, 0, 1),
-                authority.port_u16().unwrap_or(scheme.default_port()),
+                authority
+                    .port_u16()
+                    .or_else(|| scheme.default_port())
+                    // unwrap is ok because ensure_valid_url() above.
+                    .unwrap(),
             )));
         }
 
         // This will be on the form "myspecialhost.org:1234". The port is mandatory.
-        let addr = DefaultResolver::host_and_port(scheme, authority);
+        // unwrap is ok because ensure_valid_url() above.
+        let addr = DefaultResolver::host_and_port(scheme, authority).unwrap();
 
         // Determine if we want to use the async behavior.
         let use_sync = timeout.after.is_not_happening();
@@ -168,5 +171,28 @@ impl Default for DefaultResolver {
             family: IpFamily::Any,
             select: AddrSelect::First,
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::transport::time::Duration;
+
+    use super::*;
+
+    #[test]
+    fn unknown_scheme() {
+        let uri: Uri = "foo://some:42/123".parse().unwrap();
+        let err = DefaultResolver::default()
+            .resolve(
+                &uri,
+                NextTimeout {
+                    after: Duration::NotHappening,
+                    reason: crate::TimeoutReason::Global,
+                },
+            )
+            .unwrap_err();
+        assert!(matches!(err, Error::BadUri(_)));
+        assert_eq!(err.to_string(), "bad uri: unknown scheme: foo");
     }
 }

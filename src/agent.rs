@@ -222,7 +222,7 @@ impl Agent {
                 Event::Resolve { uri, timeout } => {
                     // Before resolving the URI we need to ensure it is a full URI. We
                     // cannot make requests with partial uri like "/path".
-                    uri.ensure_full_url()?;
+                    uri.ensure_valid_url()?;
 
                     addr = Some(self.resolver.resolve(uri, timeout)?);
                     unit.handle_input(current_time(), Input::Resolved, &mut [])?;
