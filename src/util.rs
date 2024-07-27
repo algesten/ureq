@@ -179,7 +179,7 @@ const NON_SENSITIVE_HEADERS: &[&str] = &[
     "date",
     "connection",
     "server",
-    "agent",
+    "user-agent",
 ];
 
 impl<'a> fmt::Debug for DebugHeaders<'a> {
