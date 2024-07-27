@@ -122,11 +122,14 @@ impl Agent {
         body: SendBody,
         current_time: impl Fn() -> Instant + Send + Sync + 'static,
     ) -> Result<Response<Body>, Error> {
-        let send_body_mode = if request.headers().has_send_body_mode() {
+        let headers = request.headers();
+        let send_body_mode = if headers.has_send_body_mode() {
             None
         } else {
             Some(body.body_mode())
         };
+        let has_header_accept_enc = headers.has_accept_encoding();
+        let has_header_ua = headers.has_user_agent();
 
         let mut unit = Unit::new(self.config.clone(), current_time(), request, body)?;
 
@@ -192,7 +195,9 @@ impl Agent {
                         });
                         // unwrap is ok because above ACCEPTS will produce a valid value
                         let value = HeaderValue::from_str(&ACCEPTS).unwrap();
-                        set_header(&mut unit, current_time(), "accept-encoding", value);
+                        if !has_header_accept_enc {
+                            set_header(&mut unit, current_time(), "accept-encoding", value);
+                        }
                     }
 
                     if let Some(send_body_mode) = send_body_mode {
@@ -209,7 +214,7 @@ impl Agent {
                         }
                     }
 
-                    if !self.config.user_agent.is_empty() {
+                    if !has_header_ua && !self.config.user_agent.is_empty() {
                         // unwrap is ok because a user might override the agent, and if they
                         // set bad values, it's not really a big problem.
                         let value = HeaderValue::try_from(&self.config.user_agent).unwrap();

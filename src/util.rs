@@ -303,7 +303,8 @@ pub(crate) trait HeaderMapExt {
     fn get_str(&self, k: &str) -> Option<&str>;
     fn is_chunked(&self) -> bool;
     fn content_length(&self) -> Option<u64>;
-
+    fn has_accept_encoding(&self) -> bool;
+    fn has_user_agent(&self) -> bool;
     fn has_send_body_mode(&self) -> bool {
         self.is_chunked() || self.content_length().is_some()
     }
@@ -324,5 +325,13 @@ impl HeaderMapExt for HeaderMap {
         let h = self.get_str("content-length")?;
         let len: u64 = h.parse().ok()?;
         Some(len)
+    }
+
+    fn has_accept_encoding(&self) -> bool {
+        self.contains_key("accept-encoding")
+    }
+
+    fn has_user_agent(&self) -> bool {
+        self.contains_key("user-agent")
     }
 }
