@@ -13,7 +13,7 @@
 //! * TCP Sockets
 //! * SOCKS-proxy sockets
 //! * HTTPS/TLS using rustls (feature flag **rustls**)
-//! * HTTPS/TLS using native-tls (feature flag **native-tls** + [config](TlsProvider::NativeTls))
+//! * HTTPS/TLS using native-tls (feature flag **native-tls** + [config](crate::tls::TlsProvider::NativeTls))
 //!
 //! The [`Connector`] trait anticipates a chain of connectors that each decide
 //! whether to help perform the connection or not. It is for instance possible to make a
@@ -27,7 +27,6 @@ use std::net::SocketAddr;
 use http::Uri;
 
 use crate::resolver::Resolver;
-use crate::tls::TlsProvider;
 use crate::{AgentConfig, Error};
 
 pub use self::tcp::TcpConnector;
@@ -228,7 +227,7 @@ impl Default for DefaultConnector {
             // Panic if the config calls for rustls, the uri scheme is https and that
             // TLS provider is not enabled by feature flags.
             #[cfg(feature = "_tls")]
-            no_tls::WarnOnMissingTlsProvider(TlsProvider::RustlsWithRing).boxed(),
+            no_tls::WarnOnMissingTlsProvider(crate::tls::TlsProvider::RustlsWithRing).boxed(),
             //
             // As a fallback if rustls isn't enabled, use native-tls
             #[cfg(feature = "native-tls")]
@@ -237,7 +236,7 @@ impl Default for DefaultConnector {
             // Panic if the config calls for native-tls, the uri scheme is https and that
             // TLS provider is not enabled by feature flags.
             #[cfg(feature = "_tls")]
-            no_tls::WarnOnMissingTlsProvider(TlsProvider::NativeTls).boxed(),
+            no_tls::WarnOnMissingTlsProvider(crate::tls::TlsProvider::NativeTls).boxed(),
         ]);
 
         DefaultConnector { chain }
