@@ -54,6 +54,7 @@ impl<'a> Cookie<'a> {
         Ok(Cookie(CookieInner::Owned(cookie)))
     }
 
+    /// The cookie's name.
     pub fn name(&self) -> &str {
         match &self.0 {
             CookieInner::Borrowed(v) => v.name(),
@@ -61,6 +62,7 @@ impl<'a> Cookie<'a> {
         }
     }
 
+    /// The cookie's value.
     pub fn value(&self) -> &str {
         match &self.0 {
             CookieInner::Borrowed(v) => v.value(),

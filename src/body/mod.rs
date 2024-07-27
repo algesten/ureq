@@ -113,6 +113,8 @@ impl Body {
 
     /// Handle this body as a shared `impl Read` of the body.
     ///
+    /// This is the same as `Body::as_reader_with_config(u64::MAX, false)`.
+    ///
     /// # Example
     ///
     /// ```
@@ -129,6 +131,13 @@ impl Body {
         self.as_reader_with_config(u64::MAX, false)
     }
 
+    /// Handle this body as a shared `impl Read` of the body with config.
+    ///
+    /// * `limit` controls how many bytes we should read before throwing an error. This is used
+    ///   to ensure RAM isn't exhausted by a server sending a very large response body.
+    /// * `lossy_utf8` set to `true` means that broken utf-8 characters are replaced by a
+    ///    question mark `?` (not utf-8 replacement char). This happens after charset conversion
+    ///    regardless of whether the **charset** feature is enabled or not.
     pub fn as_reader_with_config(&mut self, limit: u64, lossy_utf8: bool) -> BodyReader {
         BodyReader::new(
             LimitReader::new(UnitHandlerRef::Shared(&mut self.unit_handler), limit),
@@ -159,6 +168,13 @@ impl Body {
         self.into_reader_with_config(u64::MAX, false)
     }
 
+    /// Turn this response into an owned `impl Read` of the body with config.
+    ///
+    /// * `limit` controls how many bytes we should read before throwing an error. This is used
+    ///   to ensure RAM isn't exhausted by a server sending a very large response body.
+    /// * `lossy_utf8` set to `true` means that broken utf-8 characters are replaced by a
+    ///    question mark `?` (not utf-8 replacement char). This happens after charset conversion
+    ///    regardless of whether the **charset** feature is enabled or not.
     pub fn into_reader_with_config(self, limit: u64, lossy_utf8: bool) -> BodyReader<'static> {
         BodyReader::new(
             LimitReader::new(UnitHandlerRef::Owned(self.unit_handler), limit),
