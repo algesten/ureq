@@ -1,5 +1,5 @@
 use core::fmt;
-use std::io::{self, Read};
+use std::io::{self, BufReader, Read};
 
 use hoot::BodyMode;
 
@@ -10,9 +10,11 @@ use crate::Error;
 
 use self::handler::{UnitHandler, UnitHandlerRef};
 use self::limit::LimitReader;
+use self::lossy::LossyUtf8Reader;
 
 mod handler;
 mod limit;
+mod lossy;
 
 #[cfg(feature = "charset")]
 mod charset;
@@ -37,7 +39,7 @@ mod brotli;
 ///     .unwrap().to_str().unwrap().parse().unwrap();
 ///
 /// let mut bytes: Vec<u8> = Vec::with_capacity(len);
-/// res.body_mut().as_reader(10_000_000)
+/// res.body_mut().as_reader()
 ///     .read_to_end(&mut bytes).unwrap();
 ///
 /// assert_eq!(bytes.len(), len);
@@ -120,10 +122,14 @@ impl Body {
     ///     .call().unwrap();
     ///
     /// let mut bytes: Vec<u8> = Vec::with_capacity(1000);
-    /// res.body_mut().as_reader(1000)
+    /// res.body_mut().as_reader()
     ///     .read_to_end(&mut bytes).unwrap();
     /// ```
-    pub fn as_reader(&mut self, limit: u64) -> BodyReader {
+    pub fn as_reader(&mut self) -> BodyReader {
+        self.as_reader_with_config(u64::MAX, false)
+    }
+
+    pub fn as_reader_with_config(&mut self, limit: u64, lossy_utf8: bool) -> BodyReader {
         BodyReader::new(
             LimitReader::new(UnitHandlerRef::Shared(&mut self.unit_handler), limit),
             &self.info,
@@ -131,6 +137,7 @@ impl Body {
             // much of the incoming body is going to be used. Thus the only reasonable
             // BodyMode for a AsSendBody made from this BodyReader is Chunked.
             BodyMode::Chunked,
+            lossy_utf8,
         )
     }
 
@@ -145,10 +152,14 @@ impl Body {
     /// let (_, body) = res.into_parts();
     ///
     /// let mut bytes: Vec<u8> = Vec::with_capacity(1000);
-    /// body.into_reader(1000)
+    /// body.into_reader()
     ///     .read_to_end(&mut bytes).unwrap();
     /// ```
-    pub fn into_reader(self, limit: u64) -> BodyReader<'static> {
+    pub fn into_reader(self) -> BodyReader<'static> {
+        self.into_reader_with_config(u64::MAX, false)
+    }
+
+    pub fn into_reader_with_config(self, limit: u64, lossy_utf8: bool) -> BodyReader<'static> {
         BodyReader::new(
             LimitReader::new(UnitHandlerRef::Owned(self.unit_handler), limit),
             &self.info,
@@ -156,6 +167,7 @@ impl Body {
             // will read the entire incoming body. Thus if we use the BodyReader
             // for AsSendBody, we can use the incoming body mode to signal outgoing.
             self.info.body_mode,
+            lossy_utf8,
         )
     }
 
@@ -167,12 +179,12 @@ impl Body {
     /// let mut res = ureq::get("http://httpbin.org/robots.txt")
     ///     .call().unwrap();
     ///
-    /// let s = res.body_mut().read_to_string(1000).unwrap();
+    /// let s = res.body_mut().read_to_string(1000, false).unwrap();
     /// assert_eq!(s, "User-agent: *\nDisallow: /deny\n");
     /// ```
-    pub fn read_to_string(&mut self, limit: usize) -> Result<String, Error> {
+    pub fn read_to_string(&mut self, limit: usize, lossy_utf8: bool) -> Result<String, Error> {
+        let mut reader = BufReader::new(self.as_reader_with_config(limit as u64, lossy_utf8));
         let mut buf = String::new();
-        let mut reader = self.as_reader(limit as u64);
         reader.read_to_string(&mut buf)?;
         Ok(buf)
     }
@@ -188,7 +200,7 @@ impl Body {
     /// ```
     pub fn read_to_vec(&mut self, limit: usize) -> Result<Vec<u8>, Error> {
         let mut buf = Vec::new();
-        let mut reader = self.as_reader(limit as u64);
+        let mut reader = self.as_reader_with_config(limit as u64, false);
         reader.read_to_end(&mut buf)?;
         Ok(buf)
     }
@@ -222,6 +234,14 @@ impl ResponseInfo {
             charset,
             body_mode,
         }
+    }
+
+    /// Whether the mime type indicats text.
+    fn is_text(&self) -> bool {
+        self.mime_type
+            .as_deref()
+            .map(|s| s.starts_with("text/"))
+            .unwrap_or(false)
     }
 }
 
@@ -278,13 +298,13 @@ fn split_content_type(content_type: &str) -> (Option<String>, Option<String>) {
 ///     .unwrap().to_str().unwrap().parse().unwrap();
 ///
 /// let mut bytes: Vec<u8> = Vec::with_capacity(len);
-/// res.body_mut().as_reader(10_000_000)
+/// res.body_mut().as_reader()
 ///     .read_to_end(&mut bytes).unwrap();
 ///
 /// assert_eq!(bytes.len(), len);
 /// ```
 pub struct BodyReader<'a> {
-    reader: CharsetDecoder<ContentDecoder<LimitReader<UnitHandlerRef<'a>>>>,
+    reader: MaybeLossyDecoder<CharsetDecoder<ContentDecoder<LimitReader<UnitHandlerRef<'a>>>>>,
     // If this reader is used as SendBody for another request, this
     // body mode can indiciate the content-length. Gzip, charset etc
     // would mean input is not same as output.
@@ -296,6 +316,7 @@ impl<'a> BodyReader<'a> {
         reader: LimitReader<UnitHandlerRef<'a>>,
         info: &ResponseInfo,
         incoming_body_mode: BodyMode,
+        lossy_utf8: bool,
     ) -> BodyReader<'a> {
         // This is outgoing body_mode in case we are using the BodyReader as a send body
         // in a proxy situation.
@@ -321,12 +342,22 @@ impl<'a> BodyReader<'a> {
             ContentEncoding::Brotli => ContentDecoder::PassThrough(reader),
         };
 
-        let reader = charset_decoder(
-            reader,
-            info.mime_type.as_deref(),
-            info.charset.as_deref(),
-            &mut outgoing_body_mode,
-        );
+        let reader = if info.is_text() {
+            charset_decoder(
+                reader,
+                info.mime_type.as_deref(),
+                info.charset.as_deref(),
+                &mut outgoing_body_mode,
+            )
+        } else {
+            CharsetDecoder::PassThrough(reader)
+        };
+
+        let reader = if info.is_text() && lossy_utf8 {
+            MaybeLossyDecoder::Lossy(LossyUtf8Reader::new(reader))
+        } else {
+            MaybeLossyDecoder::PassThrough(reader)
+        };
 
         BodyReader {
             outgoing_body_mode,
@@ -346,12 +377,6 @@ fn charset_decoder<R: Read>(
     charset: Option<&str>,
     body_mode: &mut BodyMode,
 ) -> CharsetDecoder<R> {
-    let is_text = mime_type.map(|m| m.starts_with("text/")).unwrap_or(false);
-
-    if !is_text {
-        return CharsetDecoder::PassThrough(reader);
-    }
-
     #[cfg(feature = "charset")]
     {
         use encoding_rs::{Encoding, UTF_8};
@@ -373,6 +398,20 @@ fn charset_decoder<R: Read>(
     #[cfg(not(feature = "charset"))]
     {
         CharsetDecoder::PassThrough(reader)
+    }
+}
+
+enum MaybeLossyDecoder<R> {
+    Lossy(LossyUtf8Reader<R>),
+    PassThrough(R),
+}
+
+impl<R: io::Read> io::Read for MaybeLossyDecoder<R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        match self {
+            MaybeLossyDecoder::Lossy(r) => r.read(buf),
+            MaybeLossyDecoder::PassThrough(r) => r.read(buf),
+        }
     }
 }
 
@@ -489,7 +528,7 @@ mod test {
         );
 
         let mut res = crate::get("https://my.test/get").call().unwrap();
-        let b = res.body_mut().read_to_string(1000).unwrap();
+        let b = res.body_mut().read_to_string(1000, false).unwrap();
         assert_eq!(b, "hello world!!!");
     }
 

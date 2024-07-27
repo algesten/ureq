@@ -49,7 +49,7 @@ fn run(opt: &Opt) -> Result<(), ureq::Error> {
 
     const MAX_BODY_SIZE: u64 = 5 * 1024 * 1024;
 
-    let reader = BufReader::new(res.body_mut().as_reader(MAX_BODY_SIZE));
+    let reader = BufReader::new(res.body_mut().as_reader_with_config(MAX_BODY_SIZE, true));
     let mut lines = reader.lines();
 
     while let Some(r) = lines.next() {

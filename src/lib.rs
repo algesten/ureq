@@ -167,14 +167,14 @@ pub(crate) mod test {
                 .replace("; ", ";")
         );
         assert_eq!(res.body().mime_type(), Some("text/html"));
-        res.body_mut().read_to_string(100_000).unwrap();
+        res.body_mut().read_to_string(100_000, true).unwrap();
     }
 
     #[test]
     fn simple_put_content_len() {
         init_test_log();
         let mut res = put("http://httpbin.org/put").send(&[0_u8; 100]).unwrap();
-        res.body_mut().read_to_string(1000).unwrap();
+        res.body_mut().read_to_string(1000, true).unwrap();
     }
 
     #[test]
@@ -185,7 +185,7 @@ pub(crate) mod test {
             .header("transfer-encoding", "chunked")
             .send(&[0_u8; 100])
             .unwrap();
-        res.body_mut().read_to_string(1000).unwrap();
+        res.body_mut().read_to_string(1000, true).unwrap();
     }
 
     #[test]
@@ -225,17 +225,17 @@ pub(crate) mod test {
 
         // Response<BodyReader<'a>>
         let mut response = post("https://yaz").send(&data).unwrap();
-        let shared_reader = response.body_mut().as_reader(1000);
+        let shared_reader = response.body_mut().as_reader();
         is_send(shared_reader);
-        let shared_reader = response.body_mut().as_reader(1000);
+        let shared_reader = response.body_mut().as_reader();
         is_sync(shared_reader);
 
         // Response<BodyReader<'static>>
         let response = post("https://yaz").send(&data).unwrap();
-        let owned_reader = response.into_parts().1.into_reader(1000);
+        let owned_reader = response.into_parts().1.into_reader();
         is_send(owned_reader);
         let response = post("https://yaz").send(&data).unwrap();
-        let owned_reader = response.into_parts().1.into_reader(1000);
+        let owned_reader = response.into_parts().1.into_reader();
         is_sync(owned_reader);
     }
 }

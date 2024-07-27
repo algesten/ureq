@@ -1,7 +1,6 @@
 use core::fmt;
 use std::convert::TryFrom;
 use std::io::{self, ErrorKind};
-use std::ops::Deref;
 
 use http::uri::{Authority, Scheme};
 use http::{HeaderMap, Response, Uri};
@@ -97,7 +96,6 @@ impl ConsumeBuf {
         self.buf.resize(size, 0);
     }
 
-    #[cfg(feature = "charset")]
     pub fn add_space(&mut self, size: usize) {
         if size == 0 {
             return;
@@ -120,6 +118,10 @@ impl ConsumeBuf {
         &self.buf[self.consumed..self.filled]
     }
 
+    pub fn unconsumed_mut(&mut self) -> &mut [u8] {
+        &mut self.buf[self.consumed..self.filled]
+    }
+
     pub fn consume(&mut self, amount: usize) {
         self.consumed += amount;
         assert!(self.consumed <= self.filled);
@@ -133,19 +135,11 @@ impl ConsumeBuf {
         if self.consumed == self.filled {
             self.consumed = 0;
             self.filled = 0;
-        } else if self.filled > self.buf.len() {
+        } else if self.filled > self.buf.len() / 2 {
             self.buf.copy_within(self.consumed..self.filled, 0);
             self.filled -= self.consumed;
             self.consumed = 0;
         }
-    }
-}
-
-impl Deref for ConsumeBuf {
-    type Target = [u8];
-
-    fn deref(&self) -> &Self::Target {
-        self.unconsumed()
     }
 }
 

@@ -104,7 +104,7 @@ impl LazyBuffers {
         if self.output.len() < self.output_size {
             self.output.resize(self.output_size, 0);
         }
-        if self.input.len() < self.input_size {
+        if self.input.unconsumed().len() < self.input_size {
             self.input.resize(self.input_size);
         }
     }
@@ -147,7 +147,7 @@ impl Buffers for LazyBuffers {
             // started sending a ton of data before we asked for it.
             // It's a pathological situation that we don't need to make work well.
             let needed = MIN_TMP_SIZE - tmp_available;
-            self.input.resize(self.input.len() + needed);
+            self.input.resize(self.input.unconsumed().len() + needed);
         }
 
         (self.input.free_mut(), &mut self.output)
@@ -163,7 +163,7 @@ impl Buffers for LazyBuffers {
     }
 
     fn can_use_input(&self) -> bool {
-        !self.input.is_empty() && self.progress
+        !self.input.unconsumed().is_empty() && self.progress
     }
 }
 
