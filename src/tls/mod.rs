@@ -1,8 +1,8 @@
 //! TLS for handling `https`.
 
-mod cert;
 use std::sync::Arc;
 
+mod cert;
 pub use cert::{parse_pem, Certificate, PemItem, PrivateKey};
 
 #[cfg(feature = "rustls")]

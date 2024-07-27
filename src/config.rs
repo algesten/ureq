@@ -219,8 +219,9 @@ impl Default for AgentConfig {
 
 impl fmt::Debug for AgentConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("AgentConfig")
-            .field("timeout_global", &self.timeout_global)
+        let mut dbg = f.debug_struct("AgentConfig");
+
+        dbg.field("timeout_global", &self.timeout_global)
             .field("timeout_per_call", &self.timeout_per_call)
             .field("timeout_resolve", &self.timeout_resolve)
             .field("timeout_connect", &self.timeout_connect)
@@ -242,8 +243,13 @@ impl fmt::Debug for AgentConfig {
                 &self.max_idle_connections_per_host,
             )
             .field("max_idle_age", &self.max_idle_age)
-            .field("tls_config", &self.tls_config)
-            .field("proxy", &self.proxy)
-            .finish()
+            .field("proxy", &self.proxy);
+
+        #[cfg(feature = "_tls")]
+        {
+            dbg.field("tls_config", &self.tls_config);
+        }
+
+        dbg.finish()
     }
 }
