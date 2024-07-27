@@ -128,6 +128,7 @@ impl Agent {
         } else {
             Some(body.body_mode())
         };
+        #[cfg(any(feature = "gzip", feature = "brotli"))]
         let has_header_accept_enc = headers.has_accept_encoding();
         let has_header_ua = headers.has_user_agent();
 
