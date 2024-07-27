@@ -54,6 +54,7 @@ pub struct Agent {
 }
 
 impl Agent {
+    /// Creates an agent with defaults.
     pub fn new_with_defaults() -> Self {
         Self::with_parts(
             AgentConfig::default(),
@@ -62,6 +63,7 @@ impl Agent {
         )
     }
 
+    /// Creates an agent with config.
     pub fn new_with_config(config: AgentConfig) -> Self {
         Self::with_parts(
             config,
@@ -69,6 +71,10 @@ impl Agent {
             DefaultResolver::default(),
         )
     }
+
+    /// Creates an agent with a bespoke transport and resolver.
+    ///
+    /// _This is low level API that isn't for regular use of ureq._
     pub fn with_parts(
         config: AgentConfig,
         connector: impl Connector,
@@ -108,6 +114,7 @@ impl Agent {
         self.jar.lock()
     }
 
+    /// Run a [`http::Request<impl AsSendBody>`].
     pub fn run(&self, request: Request<impl AsSendBody>) -> Result<Response<Body>, Error> {
         let (parts, mut body) = request.into_parts();
         let body = body.as_body();

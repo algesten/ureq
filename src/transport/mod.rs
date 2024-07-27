@@ -115,7 +115,10 @@ pub struct ConnectionDetails<'a> {
     /// made in the connector itself, such as resolving a proxy server.
     pub resolver: &'a dyn Resolver,
 
+    /// Current time.
     pub now: Instant,
+
+    /// The next timeout for making the connection.
     // TODO(martin): Make mechanism to lower duration for each step in the connector chain.
     pub timeout: NextTimeout,
 }
@@ -194,6 +197,7 @@ pub struct DefaultConnector {
 }
 
 impl DefaultConnector {
+    /// Creates a default connector.
     pub fn new() -> Self {
         Self::default()
     }

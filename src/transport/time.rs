@@ -9,25 +9,32 @@ use crate::TimeoutReason;
 /// Wrapper for [`std::time::Instant`] that provides additional time points in the past or future
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Instant {
+    /// A time in the past that already happened.
     AlreadyHappened,
+    /// An exact instant.
     Exact(time::Instant),
+    /// A time in the future that will never happen.
     NotHappening,
 }
 
 /// Wrapper for [`std::time::Duration`] that provides a duration to a distant future
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Duration {
+    /// An exact duration.
     Exact(time::Duration),
+    /// A duration so long it will never happen.
     NotHappening,
 }
 
 impl Duration {
     const ZERO: Duration = Duration::Exact(time::Duration::ZERO);
 
+    /// Creates a duration from seconds.
     pub fn from_secs(secs: u64) -> Duration {
         Duration::Exact(time::Duration::from_secs(secs))
     }
 
+    /// Tells if this duration will ever happen.
     pub fn is_not_happening(&self) -> bool {
         *self == Duration::NotHappening
     }
@@ -48,6 +55,7 @@ impl Deref for Duration {
 }
 
 impl Instant {
+    /// Current time.
     pub fn now() -> Self {
         Instant::Exact(time::Instant::now())
     }
@@ -155,7 +163,9 @@ impl From<std::time::Duration> for Duration {
 /// A pair of [`Duration`] and [`TimeoutReason`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NextTimeout {
+    /// Duration until next timeout.
     pub after: Duration,
+    /// The name of the next timeout.s
     pub reason: TimeoutReason,
 }
 

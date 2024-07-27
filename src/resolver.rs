@@ -23,6 +23,9 @@ use crate::Error;
 
 /// Trait for name resolvers.
 pub trait Resolver: Debug + Send + Sync + 'static {
+    /// Resolve the URI to a socket address.
+    ///
+    /// The implementation should resolve within the given _timeout_.
     fn resolve(&self, uri: &Uri, timeout: NextTimeout) -> Result<SocketAddr, Error>;
 }
 
@@ -41,8 +44,11 @@ pub struct DefaultResolver {
 // TODO(martin): make this configurable
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IpFamily {
+    /// Both Ipv4 and Ipv6
     Any,
+    /// Just Ipv4
     Ipv4Only,
+    /// Just Ipv6
     Ipv6Only,
 }
 
@@ -135,6 +141,7 @@ fn resolve_async(addr: String, timeout: NextTimeout) -> Result<IntoIter<SocketAd
 }
 
 impl IpFamily {
+    /// Filter the socket addresses to the family of IP.
     pub fn keep_wanted<'a>(
         &'a self,
         iter: impl Iterator<Item = SocketAddr> + 'a,
@@ -152,6 +159,7 @@ impl IpFamily {
 }
 
 impl AddrSelect {
+    /// Using this select strategy, choose a `SocketAddr`.
     pub fn choose(&self, mut iter: impl Iterator<Item = SocketAddr>) -> Option<SocketAddr> {
         match self {
             AddrSelect::First => iter.next(),
