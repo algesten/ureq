@@ -35,7 +35,7 @@ use crate::{WithBody, WithoutBody};
 ///     .call()
 ///     .unwrap()
 ///     .body_mut()
-///     .read_to_string(1000)
+///     .read_to_string(1000, false)
 ///     .unwrap();
 ///
 ///   println!("Secret is: {}", secret);

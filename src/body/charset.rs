@@ -36,12 +36,12 @@ where
 
 impl<R: io::Read> io::Read for CharCodec<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        if self.reached_end && self.buf.is_empty() {
+        if self.reached_end && self.buf.unconsumed().is_empty() {
             return Ok(0);
         }
 
         let input = 'read: {
-            if self.buf.len() > MAX_OUTPUT / 4 {
+            if self.buf.unconsumed().len() > MAX_OUTPUT / 4 {
                 // Do not keep filling if we have unused output.
                 break 'read self.reader.buffer();
             }
