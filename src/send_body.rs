@@ -21,14 +21,17 @@ pub struct SendBody<'a> {
 }
 
 impl<'a> SendBody<'a> {
+    /// Creates an empty body.
     pub fn none() -> SendBody<'static> {
         BodyInner::None.into()
     }
 
+    /// Creates a body from a shared [`Read`] impl.
     pub fn from_reader(reader: &'a mut dyn Read) -> SendBody<'a> {
         BodyInner::Reader(reader).into()
     }
 
+    /// Creates a body from an owned [`Read]` impl.
     pub fn from_owned_reader<R>(reader: R) -> SendBody<'static>
     where
         R: Read + Send + Sync + 'static,
