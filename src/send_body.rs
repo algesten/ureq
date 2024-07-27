@@ -218,14 +218,14 @@ impl<'a> From<BodyInner<'a>> for SendBody<'a> {
 impl Private for Body {}
 impl AsSendBody for Body {
     fn as_body(&mut self) -> SendBody {
-        BodyInner::Body(self.as_reader(u64::MAX)).into()
+        BodyInner::Body(self.as_reader()).into()
     }
 }
 
 impl Private for Response<Body> {}
 impl AsSendBody for Response<Body> {
     fn as_body(&mut self) -> SendBody {
-        BodyInner::Body(self.body_mut().as_reader(u64::MAX)).into()
+        BodyInner::Body(self.body_mut().as_reader()).into()
     }
 }
 
