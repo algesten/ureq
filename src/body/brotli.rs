@@ -2,6 +2,8 @@ use std::io;
 
 use brotli_decompressor::Decompressor;
 
+use crate::Error;
+
 pub(crate) struct BrotliDecoder<R: io::Read>(Decompressor<R>);
 
 impl<R: io::Read> BrotliDecoder<R> {
@@ -12,6 +14,8 @@ impl<R: io::Read> BrotliDecoder<R> {
 
 impl<R: io::Read> io::Read for BrotliDecoder<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.0.read(buf)
+        self.0
+            .read(buf)
+            .map_err(|e| Error::Decompress("brotli", e).into_io())
     }
 }

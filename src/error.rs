@@ -143,6 +143,11 @@ pub enum Error {
     #[error("response header is too big: {0} > {1}")]
     LargeResponseHeader(usize, usize),
 
+    /// Body decompression failed (gzip or brotli).
+    #[error("{0} decompression failed: {1}")]
+    #[cfg(any(feature = "gzip", feature = "brotli"))]
+    Decompress(&'static str, io::Error),
+
     /// hoot made no progress and there is no more input to read.
     ///
     /// We should never see this value.
