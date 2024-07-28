@@ -48,7 +48,7 @@ mod test {
         init_test_log();
         set_handler("/get", 200, &[("content-length", "10")], b"hello");
         let mut res = crate::get("https://my.test/get").call().unwrap();
-        let err = res.body_mut().read_to_string(1000, false).unwrap_err();
+        let err = res.body_mut().read_to_string().unwrap_err();
         let ioe = err.into_io();
         assert_eq!(ioe.kind(), io::ErrorKind::UnexpectedEof);
     }
@@ -58,7 +58,12 @@ mod test {
         init_test_log();
         set_handler("/get", 200, &[("content-length", "5")], b"hello");
         let mut res = crate::get("https://my.test/get").call().unwrap();
-        let err = res.body_mut().read_to_string(3, false).unwrap_err();
+        let err = res
+            .body_mut()
+            .read_to_string_with_config()
+            .limit(3)
+            .read()
+            .unwrap_err();
         println!("{:?}", err);
         assert!(matches!(err, Error::BodyExceedsLimit(3)));
     }
