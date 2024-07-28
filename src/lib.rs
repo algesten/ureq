@@ -51,7 +51,7 @@
 //!
 //! For more involved tasks, you'll want to create an [Agent]. An Agent
 //! holds a connection pool for reuse, and a cookie store if you use the
-//! "cookies" feature. An Agent can be cheaply cloned due to internal
+//! **cookies** feature. An Agent can be cheaply cloned due to internal
 //! [Arc](std::sync::Arc) and all clones of an Agent share state among each other. Creating
 //! an Agent also allows setting options like the TLS configuration.
 //!
@@ -75,6 +75,35 @@
 //!     .send("some body data")?
 //!     .body_mut()
 //!     .read_to_string()?;
+//! # Ok::<_, ureq::Error>(())
+//! ```
+//!
+//! Ureq supports sending and receiving json, if you enable the **json** feature:
+//!
+//! ```no_run
+//! # #[cfg(feature = "json")]
+//! # {
+//! use serde::{Serialize, Deserialize};
+//! 
+//! #[derive(Serialize)]
+//! struct MySendBody {
+//!    thing: String,
+//! }
+//!
+//! #[derive(Deserialize)]
+//! struct MyRecvBody {
+//!    other: String,
+//! }
+//!
+//! let send_body = MySendBody { thing: "yo".to_string() };
+//!
+//! // Requires the `json` feature enabled.
+//! let recv_body = ureq::post("http://example.com/post/ingest")
+//!     .header("X-My-Header", "Secret")
+//!     .send_json(&send_body)?
+//!     .body_mut()
+//!     .read_json::<MyRecvBody>()?;
+//! # }
 //! # Ok::<_, ureq::Error>(())
 //! ```
 

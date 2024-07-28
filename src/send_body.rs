@@ -39,6 +39,16 @@ impl<'a> SendBody<'a> {
         BodyInner::OwnedReader(Box::new(reader)).into()
     }
 
+    /// Creates a body to send as JSON from any [`Serialize`](serde::ser::Serialize) value.
+    #[cfg(feature = "json")]
+    pub fn from_json<R>(value: &R) -> Result<SendBody<'static>, crate::Error>
+    where
+        R: serde::ser::Serialize,
+    {
+        let json = serde_json::to_vec_pretty(value)?;
+        Ok(Self::from_owned_reader(io::Cursor::new(json)))
+    }
+
     pub(crate) fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let n = match &mut self.inner {
             BodyInner::None => {

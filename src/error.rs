@@ -148,6 +148,11 @@ pub enum Error {
     #[cfg(any(feature = "gzip", feature = "brotli"))]
     Decompress(&'static str, io::Error),
 
+    /// Serde JSON error.
+    #[cfg(feature = "json")]
+    #[error("json: {0}")]
+    Json(#[from] serde_json::Error),
+
     /// hoot made no progress and there is no more input to read.
     ///
     /// We should never see this value.

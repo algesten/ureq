@@ -218,6 +218,41 @@ impl Body {
         let handler = UnitHandlerRef::Shared(&mut self.unit_handler);
         BodyReaderConfig::new(handler, self.info.clone())
     }
+
+    /// Read the response from JSON.
+    ///
+    /// * Response is limited to 10MB.
+    ///
+    /// The returned value is something that derives [`Deserialize`](serde::Deserialize).
+    /// You might need to be explicit with which type you want. See example below.
+    ///
+    /// ```
+    /// use serde::Deserialize;
+    ///
+    /// #[derive(Deserialize)]
+    /// struct BodyType {
+    ///   slideshow: BodyTypeInner,
+    /// }
+    ///
+    /// #[derive(Deserialize)]
+    /// struct BodyTypeInner {
+    ///   author: String,
+    /// }
+    ///
+    /// let body = ureq::get("https://httpbin.org/json")
+    ///     .call()?
+    ///     .body_mut()
+    ///     .read_json::<BodyType>()?;
+    ///
+    /// assert_eq!(body.slideshow.author, "Yours Truly");
+    /// # Ok::<_, ureq::Error>(())
+    /// ```
+    #[cfg(feature = "json")]
+    pub fn read_json<T: serde::de::DeserializeOwned>(&mut self) -> Result<T, Error> {
+        let reader = self.as_reader_with_config().limit(MAX_BODY_SIZE).build();
+        let value: T = serde_json::from_reader(reader)?;
+        Ok(value)
+    }
 }
 
 pub struct ToReader;
