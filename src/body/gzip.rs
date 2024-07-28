@@ -2,6 +2,8 @@ use std::io;
 
 use flate2::read::MultiGzDecoder;
 
+use crate::Error;
+
 pub(crate) struct GzipDecoder<R>(MultiGzDecoder<R>);
 
 impl<R: io::Read> GzipDecoder<R> {
@@ -12,7 +14,9 @@ impl<R: io::Read> GzipDecoder<R> {
 
 impl<R: io::Read> io::Read for GzipDecoder<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.0.read(buf)
+        self.0
+            .read(buf)
+            .map_err(|e| Error::Decompress("gzip", e).into_io())
     }
 }
 
