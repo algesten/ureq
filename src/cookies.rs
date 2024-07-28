@@ -33,8 +33,9 @@ pub struct CookieJar<'a>(MutexGuard<'a, CookieStore>);
 /// use ureq::http::Uri;
 ///
 /// let uri = Uri::from_static("https://my.server.com");
-/// let cookie = Cookie::parse("name=value", &uri).unwrap();
+/// let cookie = Cookie::parse("name=value", &uri)?;
 /// assert_eq!(cookie.to_string(), "name=value");
+/// # Ok::<_, ureq::Error>(())
 /// ```
 pub struct Cookie<'a>(CookieInner<'a>);
 

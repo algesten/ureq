@@ -11,6 +11,9 @@ use crate::util::private::Private;
 use crate::{Agent, Error, SendBody};
 
 /// Transparent wrapper around [`http::request::Builder`].
+///
+/// The purpose is to provide the [`.call()`][RequestBuilder::call] and [`.send()`][RequestBuilder::send]
+/// functions to make a simpler API for sending requests.
 #[derive(Debug)]
 pub struct RequestBuilder<B> {
     agent: Agent,
@@ -105,7 +108,8 @@ impl RequestBuilder<WithoutBody> {
     ///
     /// ```
     /// let res = ureq::get("http://httpbin.org/get")
-    ///     .call().unwrap();
+    ///     .call()?;
+    /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn call(self) -> Result<Response<Body>, Error> {
         let request = self.builder.body(())?;
@@ -130,7 +134,8 @@ impl RequestBuilder<WithBody> {
     ///
     /// ```
     /// let res = ureq::post("http://httpbin.org/post")
-    ///     .send(&[0_u8; 1000]).unwrap();
+    ///     .send(&[0_u8; 1000])?;
+    /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn send(self, data: impl AsSendBody) -> Result<Response<Body>, Error> {
         let request = self.builder.body(())?;
@@ -140,8 +145,27 @@ impl RequestBuilder<WithBody> {
 
     /// Send body data as JSON.
     ///
+    /// Requires the **json** feature.
+    ///
     /// The data typically derives [`Serialize`](serde::Serialize) and is converted
     /// to a string before sending (does allocate).
+    ///
+    /// ```
+    /// use serde::Serialize;
+    ///
+    /// #[derive(Serialize)]
+    /// struct MyData {
+    ///     thing: String,
+    /// }
+    ///
+    /// let body = MyData {
+    ///     thing: "yo".to_string(),
+    /// };
+    ///
+    /// let res = ureq::post("http://httpbin.org/post")
+    ///     .send_json(&body)?;
+    /// # Ok::<_, ureq::Error>(())
+    /// ```
     #[cfg(feature = "json")]
     pub fn send_json(self, data: impl serde::ser::Serialize) -> Result<Response<Body>, Error> {
         let request = self.builder.body(())?;
