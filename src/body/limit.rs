@@ -60,9 +60,9 @@ mod test {
         let mut res = crate::get("https://my.test/get").call().unwrap();
         let err = res
             .body_mut()
-            .read_to_string_with_config()
+            .with_config()
             .limit(3)
-            .read()
+            .read_to_string()
             .unwrap_err();
         println!("{:?}", err);
         assert!(matches!(err, Error::BodyExceedsLimit(3)));
