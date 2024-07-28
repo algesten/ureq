@@ -151,6 +151,19 @@ fn setup_default_handlers(handlers: &mut Vec<TestHandler>) {
     );
 
     maybe_add(
+        TestHandler::new("example.com", |_uri, _req, w| {
+            write!(
+                w,
+                "HTTP/1.1 200 OK\r\n\
+                Content-Type: text/html;charset=UTF-8\r\n\
+                \r\n\
+                ureq test server here"
+            )
+        }),
+        handlers,
+    );
+
+    maybe_add(
         TestHandler::new("/bytes/100", |_uri, _req, w| {
             write!(
                 w,
