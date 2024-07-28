@@ -51,9 +51,9 @@ fn run(opt: &Opt) -> Result<(), ureq::Error> {
 
     let reader = BufReader::new(
         res.body_mut()
-            .as_reader_with_config()
+            .with_config()
             .limit(MAX_BODY_SIZE)
-            .build(),
+            .into_reader(),
     );
     let mut lines = reader.lines();
 
