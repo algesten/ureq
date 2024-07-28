@@ -55,7 +55,8 @@
 //! [Arc](std::sync::Arc) and all clones of an Agent share state among each other. Creating
 //! an Agent also allows setting options like the TLS configuration.
 //!
-//! ```no_run
+//! ```rust
+//! # fn no_run() {
 //! use ureq::{Agent, AgentConfig};
 //! use std::time::Duration;
 //!
@@ -75,14 +76,15 @@
 //!     .send("some body data")?
 //!     .body_mut()
 //!     .read_to_string()?;
+//! # }
 //! # Ok::<_, ureq::Error>(())
 //! ```
 //!
 //! Ureq supports sending and receiving json, if you enable the **json** feature:
 //!
-//! ```no_run
+//! ```rust
 //! # #[cfg(feature = "json")]
-//! # {
+//! # fn no_run() {
 //! use serde::{Serialize, Deserialize};
 //!
 //! #[derive(Serialize)]
@@ -103,6 +105,30 @@
 //!     .send_json(&send_body)?
 //!     .body_mut()
 //!     .read_json::<MyRecvBody>()?;
+//! # }
+//! # Ok::<_, ureq::Error>(())
+//! ```
+//!
+//! ## Error handling
+//!
+//! ureq returns errors via `Result<T, ureq::Error>`. That includes I/O errors,
+//! protocol errors. By default, also HTTP status code errors (when the
+//! server responded 4xx or 5xx) results in `Error`.
+//!
+//! This behavior can be turned off via [`AgentConfig::http_status_as_error`].
+//!
+//! ```rust
+//! use ureq::Error;
+//!
+//! # fn no_run() {
+//! match ureq::get("http://mypage.example.com/").call() {
+//!     Ok(response) => { /* it worked */},
+//!     Err(Error::StatusCode(code)) => {
+//!         /* the server returned an unexpected status
+//!            code (such as 400, 500 etc) */
+//!     }
+//!     Err(_) => { /* some kind of io/transport/etc error */ }
+//! }
 //! # }
 //! # Ok::<_, ureq::Error>(())
 //! ```
