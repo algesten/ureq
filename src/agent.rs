@@ -16,6 +16,7 @@ use {
     crate::cookies::{CookieStoreGuard, CookieTin},
     cookie_store::CookieStore,
 };
+use crate::header::Header;
 
 /// Strategy for keeping `authorization` headers during redirects.
 ///
@@ -78,6 +79,7 @@ pub(crate) struct AgentConfig {
     pub redirects: u32,
     pub redirect_auth_headers: RedirectAuthHeaders,
     pub user_agent: String,
+    pub headers: Vec<Header>,
     pub tls_config: TlsConfig,
 }
 
@@ -262,6 +264,7 @@ impl AgentBuilder {
                 redirects: 5,
                 redirect_auth_headers: RedirectAuthHeaders::Never,
                 user_agent: format!("ureq/{}", env!("CARGO_PKG_VERSION")),
+                headers: Vec::new(),
                 tls_config: TlsConfig(crate::default_tls_config()),
             },
             #[cfg(feature = "proxy-from-env")]
@@ -584,6 +587,38 @@ impl AgentBuilder {
     /// ```
     pub fn user_agent(mut self, user_agent: &str) -> Self {
         self.config.user_agent = user_agent.into();
+        self
+    }
+
+    /// List of default headers to use when making a request.
+    ///
+    /// This can be overriden on a per-request basis
+    ///
+    /// ```no_run
+    /// # #[cfg(feature = "json")]
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// # ureq::is_test(true);
+    /// let agent = ureq::builder()
+    ///     .headers(vec![("Foo", "Bar")])
+    ///     .build();
+    ///
+    /// // Uses agent's header
+    /// let result: serde_json::Value =
+    ///     agent.get("http://httpbin.org/headers").call()?.into_json()?;
+    /// assert_eq!(&result["headers"]["Foo"], "Bar");
+    ///
+    /// // Overrides user-agent set on the agent
+    /// let result: serde_json::Value = agent.get("http://httpbin.org/headers")
+    ///     .set("Foo", "Baz")
+    ///     .call()?.into_json()?;
+    /// assert_eq!(&result["headers"]["Foo"], "Baz");
+    /// # Ok(())
+    /// # }
+    /// # #[cfg(not(feature = "json"))]
+    /// # fn main() {}
+    /// ```
+    pub fn headers(mut self, headers: Vec<(&str, &str)>) -> Self {
+        self.config.headers = headers.iter().map(|(name, value)| Header::new(name, value)).collect();
         self
     }
 
