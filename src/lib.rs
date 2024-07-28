@@ -115,7 +115,7 @@ use std::convert::TryFrom;
 /// Re-exported http-crate.
 pub use http;
 
-pub use body::{Body, BodyReader, BodyReaderConfig};
+pub use body::{Body, BodyReader, BodyWithConfig};
 pub use config::AgentConfig;
 use http::Method;
 use http::{Request, Response, Uri};

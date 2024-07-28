@@ -1,6 +1,5 @@
 use core::fmt;
 use std::io::{self, Read};
-use std::marker::PhantomData;
 use std::sync::Arc;
 
 use hoot::BodyMode;
@@ -125,7 +124,7 @@ impl Body {
     /// mut reference to the `Body`, and then use `as_reader()`. It is also possible to
     /// get a non-shared, owned reader via [`Body::into_reader()`].
     ///
-    /// * Reader is not limited. To set a limit use [`Body::as_reader_with_config()`].
+    /// * Reader is not limited. To set a limit use [`Body::with_config()`].
     ///
     /// # Example
     ///
@@ -141,13 +140,7 @@ impl Body {
     /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn as_reader(&mut self) -> BodyReader {
-        self.as_reader_with_config().limit(u64::MAX).build()
-    }
-
-    /// Handle this body as a shared `impl Read` of the body with config.
-    pub fn as_reader_with_config(&mut self) -> BodyReaderConfig<ToReader> {
-        let handler = UnitHandlerRef::Shared(&mut self.unit_handler);
-        BodyReaderConfig::new(handler, self.info.clone())
+        self.with_config().limit(u64::MAX).into_reader()
     }
 
     /// Turn this response into an owned `impl Read` of the body.
@@ -157,7 +150,7 @@ impl Body {
     /// variant consumes the body and turns it into a reader with lifetime `'static`.
     /// The reader can for instance be sent to another thread.
     ///
-    /// * Reader is not limited. To set a limit use [`Body::into_reader_with_config()`].
+    /// * Reader is not limited. To set a limit use [`Body::into_with_config()`].
     ///
     /// ```
     /// use std::io::Read;
@@ -173,13 +166,7 @@ impl Body {
     /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn into_reader(self) -> BodyReader<'static> {
-        self.into_reader_with_config().limit(u64::MAX).build()
-    }
-
-    /// Turn this response into an owned `impl Read` of the body with config.
-    pub fn into_reader_with_config(self) -> BodyReaderConfig<'static, ToReader> {
-        let handler = UnitHandlerRef::Owned(self.unit_handler);
-        BodyReaderConfig::new(handler, self.info.clone())
+        self.into_with_config().limit(u64::MAX).into_reader()
     }
 
     /// Read the response as a string.
@@ -187,7 +174,7 @@ impl Body {
     /// * Response is limited to 10MB
     /// * Replaces incorrect utf-8 chars to `?`
     ///
-    /// To change these defaults use [`Body::read_to_string_with_config()`].
+    /// To change these defaults use [`Body::with_config()`].
     ///
     /// ```
     /// let mut res = ureq::get("http://httpbin.org/robots.txt")
@@ -198,23 +185,17 @@ impl Body {
     /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn read_to_string(&mut self) -> Result<String, Error> {
-        self.read_to_string_with_config()
+        self.with_config()
             .limit(MAX_BODY_SIZE)
             .lossy_utf8(true)
-            .read()
-    }
-
-    /// Read the response as a string with config.
-    pub fn read_to_string_with_config(&mut self) -> BodyReaderConfig<ToString> {
-        let handler = UnitHandlerRef::Shared(&mut self.unit_handler);
-        BodyReaderConfig::new(handler, self.info.clone())
+            .read_to_string()
     }
 
     /// Read the response to a vec.
     ///
     /// * Response is limited to 10MB.
     ///
-    /// To change this default use [`Body::read_to_vec_with_config()`].
+    /// To change this default use [`Body::with_config()`].
     /// ```
     /// let mut res = ureq::get("http://httpbin.org/bytes/100")
     ///     .call()?;
@@ -224,16 +205,10 @@ impl Body {
     /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn read_to_vec(&mut self) -> Result<Vec<u8>, Error> {
-        self.read_to_vec_with_config()
+        self.with_config()
             //
             .limit(MAX_BODY_SIZE)
-            .read()
-    }
-
-    /// Read the response to a vec with config.
-    pub fn read_to_vec_with_config(&mut self) -> BodyReaderConfig<ToVec> {
-        let handler = UnitHandlerRef::Shared(&mut self.unit_handler);
-        BodyReaderConfig::new(handler, self.info.clone())
+            .read_to_vec()
     }
 
     /// Read the response from JSON.
@@ -268,41 +243,79 @@ impl Body {
     /// ```
     #[cfg(feature = "json")]
     pub fn read_json<T: serde::de::DeserializeOwned>(&mut self) -> Result<T, Error> {
-        let reader = self.as_reader_with_config().limit(MAX_BODY_SIZE).build();
+        let reader = self.with_config().limit(MAX_BODY_SIZE).into_reader();
         let value: T = serde_json::from_reader(reader)?;
         Ok(value)
     }
-}
 
-pub struct ToReader;
-pub struct ToString;
-pub struct ToVec;
+    /// Read the body data with configuration.
+    ///
+    /// This borrows the body which gives easier use with [`http::Response::body_mut()`].
+    /// To get a non-borrowed reader use [`Body::into_with_config()`].
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let reader = ureq::get("http://httpbin.org/bytes/100")
+    ///     .call()?
+    ///     .body_mut()
+    ///     .with_config()
+    ///     // Reader will only read 50 bytes
+    ///     .limit(50)
+    ///     .into_reader();
+    /// # Ok::<_, ureq::Error>(())
+    /// ```
+    pub fn with_config(&mut self) -> BodyWithConfig {
+        let handler = UnitHandlerRef::Shared(&mut self.unit_handler);
+        BodyWithConfig::new(handler, self.info.clone())
+    }
+
+    /// Consume self and read the body with configuration.
+    ///
+    /// This consumes self and returns a reader with `'static` lifetime.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// // Get the body out of http::Response
+    /// let (_, body) = ureq::get("http://httpbin.org/bytes/100")
+    ///     .call()?
+    ///     .into_parts();
+    ///
+    /// let reader = body
+    ///     .into_with_config()
+    ///     // Reader will only read 50 bytes
+    ///     .limit(50)
+    ///     .into_reader();
+    /// # Ok::<_, ureq::Error>(())
+    /// ```
+    pub fn into_with_config(self) -> BodyWithConfig<'static> {
+        let handler = UnitHandlerRef::Owned(self.unit_handler);
+        BodyWithConfig::new(handler, self.info.clone())
+    }
+}
 
 /// Configuration of how to read the body.
 ///
 /// Obtained via one of:
 ///
-/// * [Body::as_reader_with_config()]
-/// * [Body::into_reader_with_config()]
-/// * [Body::read_to_string_with_config()]
-/// * [Body::read_to_vec_with_config()]
+/// * [Body::with_config()]
+/// * [Body::into_with_config()]
 ///
-pub struct BodyReaderConfig<'a, Mode> {
+pub struct BodyWithConfig<'a> {
     handler: UnitHandlerRef<'a>,
     info: Arc<ResponseInfo>,
     limit: u64,
     lossy_utf8: bool,
-    _ph: PhantomData<Mode>,
 }
 
-impl<'a, Mode> BodyReaderConfig<'a, Mode> {
+impl<'a> BodyWithConfig<'a> {
     fn new(handler: UnitHandlerRef<'a>, info: Arc<ResponseInfo>) -> Self {
-        BodyReaderConfig {
+        BodyWithConfig {
             handler,
             info,
             limit: u64::MAX,
             lossy_utf8: false,
-            _ph: PhantomData,
         }
     }
 
@@ -333,32 +346,34 @@ impl<'a, Mode> BodyReaderConfig<'a, Mode> {
             self.lossy_utf8,
         )
     }
-}
 
-impl<'a> BodyReaderConfig<'a, ToReader> {
-    /// Creates the reader.
-    pub fn build(self) -> BodyReader<'a> {
+    /// Creates a reader.
+    pub fn into_reader(self) -> BodyReader<'a> {
         self.do_build()
     }
-}
 
-impl<'a> BodyReaderConfig<'a, ToString> {
-    /// Read the string.
-    pub fn read(self) -> Result<String, Error> {
+    /// Read into string.
+    pub fn read_to_string(self) -> Result<String, Error> {
         let mut reader = self.do_build();
         let mut buf = String::new();
         reader.read_to_string(&mut buf)?;
         Ok(buf)
     }
-}
 
-impl<'a> BodyReaderConfig<'a, ToVec> {
-    /// Read the vector.
-    pub fn read(self) -> Result<Vec<u8>, Error> {
+    /// Read into vector.
+    pub fn read_to_vec(self) -> Result<Vec<u8>, Error> {
         let mut reader = self.do_build();
         let mut buf = Vec::new();
         reader.read_to_end(&mut buf)?;
         Ok(buf)
+    }
+
+    /// Read JSON body.
+    #[cfg(feature = "json")]
+    pub fn read_json<T: serde::de::DeserializeOwned>(self) -> Result<T, Error> {
+        let reader = self.do_build();
+        let value: T = serde_json::from_reader(reader)?;
+        Ok(value)
     }
 }
 
