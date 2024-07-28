@@ -36,7 +36,7 @@
 //! [blocking]: #blocking-io-for-simplicity
 //! [changelog]: https://github.com/algesten/ureq/blob/main/CHANGELOG.md
 //!
-//! ## Usage
+//! # Usage
 //!
 //! In its simplest form, ureq looks like this:
 //!
@@ -78,6 +78,8 @@
 //!     .read_to_string()?;
 //! # Ok(())}
 //! ```
+//!
+//! ## JSON
 //!
 //! Ureq supports sending and receiving json, if you enable the **json** feature:
 //!
@@ -129,6 +131,33 @@
 //! }
 //! # Ok(())}
 //! ```
+//!
+//! # Features
+//!
+//! To enable a minimal dependency tree, some features are off by default.
+//! You can control them when including ureq as a dependency.
+//!
+//! `ureq = { version = "3", features = ["socks-proxy", "charset"] }`
+//!
+//! The default enabled features are: **rustls**, **native-roots**, **gzip** and **json**.
+//!
+//! * **rustls** enabled the rustls TLS implementation. This is the defeault for the the crate level
+//!   convenience calls (`ureq::get` etc).
+//! * **native-tls** enables the native tls backend for TLS. Due to the risk of diamond dependencies
+//!   accidentally switching on an unwanted TLS implementation, `native-tls` is never picked up as
+//!   a default or used by the crate level convenience calls (`ureq::get` etc) – it must be configured
+//!   on the agent.
+//! * **native-roots** makes the TLS implementations use the OS' trust store (see TLS doc below).
+//! * **socks-proxy** enables proxy config using the `socks4://`, `socks4a://`, `socks5://`
+//!    and `socks://` (equal to `socks5://`) prefix.
+//! * **cookies** enables cookies.
+//! * **gzip** enables requests of gzip-compressed responses and decompresses them.
+//! * **brotli** enables requests brotli-compressed responses and decompresses them.
+//! * **charset** enables interpreting the charset part of the Content-Type header
+//!    (e.g.  `Content-Type: text/plain; charset=iso-8859-1`). Without this, the
+//!    library defaults to Rust's built in `utf-8`.
+//! * **json** enables JSON sending and receiving via serde_json.
+//!
 
 #[macro_use]
 extern crate log;
