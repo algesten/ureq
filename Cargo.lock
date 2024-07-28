@@ -899,6 +899,8 @@ dependencies = [
  "rustls-native-certs",
  "rustls-pemfile",
  "rustls-pki-types",
+ "serde",
+ "serde_json",
  "smallvec",
  "socks",
  "thiserror",

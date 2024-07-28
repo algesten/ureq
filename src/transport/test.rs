@@ -237,6 +237,21 @@ fn setup_default_handlers(handlers: &mut Vec<TestHandler>) {
         handlers,
     );
 
+    maybe_add(
+        TestHandler::new("/json", |_uri, _req, w| {
+            write!(
+                w,
+                "HTTP/1.1 200 OK\r\n\
+                Content-Type: application/json\r\n\
+                Content-Length: {}\r\n\
+                \r\n",
+                HTTPBIN_JSON.as_bytes().len()
+            )?;
+            w.write_all(HTTPBIN_JSON.as_bytes())
+        }),
+        handlers,
+    );
+
     #[cfg(feature = "charset")]
     {
         let (cow, _, _) =
@@ -283,6 +298,29 @@ const HTTPBIN_PUT: &str = r#"
   "json": null,
   "origin": "1.2.3.4",
   "url": "http://httpbin.org/put"
+}"#;
+
+const HTTPBIN_JSON: &str = r#"
+{
+  "slideshow": {
+    "author": "Yours Truly",
+    "date": "date of publication",
+    "slides": [
+      {
+        "title": "Wake up to WonderWidgets!",
+        "type": "all"
+      },
+      {
+        "items": [
+          "Why <em>WonderWidgets</em> are great",
+          "Who <em>buys</em> WonderWidgets"
+        ],
+        "title": "Overview",
+        "type": "all"
+      }
+    ],
+    "title": "Sample Slide Show"
+  }
 }"#;
 
 struct RxRead(Receiver<Vec<u8>>);

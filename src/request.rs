@@ -137,6 +137,17 @@ impl RequestBuilder<WithBody> {
         let mut data_ref = data;
         do_call(self.agent, request, data_ref.as_body())
     }
+
+    /// Send body data as JSON.
+    ///
+    /// The data typically derives [`Serialize`](serde::Serialize) and is converted
+    /// to a string before sending (does allocate).
+    #[cfg(feature = "json")]
+    pub fn send_json(self, data: impl serde::ser::Serialize) -> Result<Response<Body>, Error> {
+        let request = self.builder.body(())?;
+        let body = SendBody::from_json(&data)?;
+        do_call(self.agent, request, body)
+    }
 }
 
 fn do_call(agent: Agent, request: Request<()>, body: SendBody) -> Result<Response<Body>, Error> {
