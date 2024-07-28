@@ -117,8 +117,8 @@ use http::Response;
 /// let data: &[u8] = b"My special request body data";
 ///
 /// let response = ureq::post("https://httpbin.org/post")
-///     .send(data)
-///     .unwrap();
+///     .send(data)?;
+/// # Ok::<_, ureq::Error>(())
 /// ```
 ///
 /// Using `http` crate API
@@ -129,10 +129,10 @@ use http::Response;
 /// let data: &[u8] = b"My special request body data";
 ///
 /// let request = http::Request::post("https://httpbin.org/post")
-///     .body(data)
-///     .unwrap();
+///     .body(data)?;
 ///
-/// let response = ureq::run(request).unwrap();
+/// let response = ureq::run(request)?;
+/// # Ok::<_, ureq::Error>(())
 /// ```
 pub trait AsSendBody: Private {
     #[doc(hidden)]

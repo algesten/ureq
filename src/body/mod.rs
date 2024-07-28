@@ -37,7 +37,7 @@ const MAX_BODY_SIZE: u64 = 10 * 1024 * 1024;
 /// ```
 /// use std::io::Read;
 /// let mut res = ureq::get("http://httpbin.org/bytes/100")
-///     .call().unwrap();
+///     .call()?;
 ///
 /// assert!(res.headers().contains_key("Content-Length"));
 /// let len: usize = res.headers().get("Content-Length")
@@ -45,9 +45,10 @@ const MAX_BODY_SIZE: u64 = 10 * 1024 * 1024;
 ///
 /// let mut bytes: Vec<u8> = Vec::with_capacity(len);
 /// res.body_mut().as_reader()
-///     .read_to_end(&mut bytes).unwrap();
+///     .read_to_end(&mut bytes)?;
 ///
 /// assert_eq!(bytes.len(), len);
+/// # Ok::<_, ureq::Error>(())
 /// ```
 
 pub struct Body {
@@ -88,9 +89,10 @@ impl Body {
     ///
     /// ```
     /// let res = ureq::get("https://www.google.com/")
-    ///     .call().unwrap();
+    ///     .call()?;
     ///
     /// assert_eq!(res.body().mime_type(), Some("text/html"));
+    /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn mime_type(&self) -> Option<&str> {
         self.info.mime_type.as_deref()
@@ -108,9 +110,10 @@ impl Body {
     ///
     /// ```
     /// let res = ureq::get("https://www.google.com/")
-    ///     .call().unwrap();
+    ///     .call()?;
     ///
     /// assert_eq!(res.body().charset(), Some("ISO-8859-1"));
+    /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn charset(&self) -> Option<&str> {
         self.info.charset.as_deref()
@@ -118,8 +121,11 @@ impl Body {
 
     /// Handle this body as a shared `impl Read` of the body.
     ///
-    /// * Reader is not limited. To set a limit use
-    ///   [`as_reader_with_config()`][Self::as_reader_with_config].
+    /// This is the regular API which goes via [`http::Response::body_mut()`] to get a
+    /// mut reference to the `Body`, and then use `as_reader()`. It is also possible to
+    /// get a non-shared, owned reader via [`Body::into_reader()`].
+    ///
+    /// * Reader is not limited. To set a limit use [`Body::as_reader_with_config()`].
     ///
     /// # Example
     ///
@@ -127,11 +133,12 @@ impl Body {
     /// use std::io::Read;
     ///
     /// let mut res = ureq::get("http://httpbin.org/bytes/100")
-    ///     .call().unwrap();
+    ///     .call()?;
     ///
     /// let mut bytes: Vec<u8> = Vec::with_capacity(1000);
     /// res.body_mut().as_reader()
-    ///     .read_to_end(&mut bytes).unwrap();
+    ///     .read_to_end(&mut bytes)?;
+    /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn as_reader(&mut self) -> BodyReader {
         self.as_reader_with_config().limit(u64::MAX).build()
@@ -145,20 +152,25 @@ impl Body {
 
     /// Turn this response into an owned `impl Read` of the body.
     ///
-    /// * Reader is not limited. To set a limit use
-    ///   [`into_reader_with_config()`][Self::into_reader_with_config].
+    /// Sometimes it might be useful to disconnect the body reader from the body.
+    /// The reader returned by [`Body::as_reader()`] borrows the body, while this
+    /// variant consumes the body and turns it into a reader with lifetime `'static`.
+    /// The reader can for instance be sent to another thread.
+    ///
+    /// * Reader is not limited. To set a limit use [`Body::into_reader_with_config()`].
     ///
     /// ```
     /// use std::io::Read;
     ///
     /// let res = ureq::get("http://httpbin.org/bytes/100")
-    ///     .call().unwrap();
+    ///     .call()?;
     ///
     /// let (_, body) = res.into_parts();
     ///
     /// let mut bytes: Vec<u8> = Vec::with_capacity(1000);
     /// body.into_reader()
-    ///     .read_to_end(&mut bytes).unwrap();
+    ///     .read_to_end(&mut bytes)?;
+    /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn into_reader(self) -> BodyReader<'static> {
         self.into_reader_with_config().limit(u64::MAX).build()
@@ -175,12 +187,15 @@ impl Body {
     /// * Response is limited to 10MB
     /// * Replaces incorrect utf-8 chars to `?`
     ///
+    /// To change these defaults use [`Body::read_to_string_with_config()`].
+    ///
     /// ```
     /// let mut res = ureq::get("http://httpbin.org/robots.txt")
-    ///     .call().unwrap();
+    ///     .call()?;
     ///
-    /// let s = res.body_mut().read_to_string().unwrap();
+    /// let s = res.body_mut().read_to_string()?;
     /// assert_eq!(s, "User-agent: *\nDisallow: /deny\n");
+    /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn read_to_string(&mut self) -> Result<String, Error> {
         self.read_to_string_with_config()
@@ -199,12 +214,14 @@ impl Body {
     ///
     /// * Response is limited to 10MB.
     ///
+    /// To change this default use [`Body::read_to_vec_with_config()`].
     /// ```
     /// let mut res = ureq::get("http://httpbin.org/bytes/100")
-    ///     .call().unwrap();
+    ///     .call()?;
     ///
-    /// let bytes = res.body_mut().read_to_vec().unwrap();
+    /// let bytes = res.body_mut().read_to_vec()?;
     /// assert_eq!(bytes.len(), 100);
+    /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn read_to_vec(&mut self) -> Result<Vec<u8>, Error> {
         self.read_to_vec_with_config()
@@ -222,6 +239,8 @@ impl Body {
     /// Read the response from JSON.
     ///
     /// * Response is limited to 10MB.
+    ///
+    /// To change this default use [`Body::as_reader()`] and deserialize JSON manually.
     ///
     /// The returned value is something that derives [`Deserialize`](serde::Deserialize).
     /// You might need to be explicit with which type you want. See example below.
@@ -428,7 +447,7 @@ fn split_content_type(content_type: &str) -> (Option<String>, Option<String>) {
 /// ```
 /// use std::io::Read;
 /// let mut res = ureq::get("http://httpbin.org/bytes/100")
-///     .call().unwrap();
+///     .call()?;
 ///
 /// assert!(res.headers().contains_key("Content-Length"));
 /// let len: usize = res.headers().get("Content-Length")
@@ -436,9 +455,10 @@ fn split_content_type(content_type: &str) -> (Option<String>, Option<String>) {
 ///
 /// let mut bytes: Vec<u8> = Vec::with_capacity(len);
 /// res.body_mut().as_reader()
-///     .read_to_end(&mut bytes).unwrap();
+///     .read_to_end(&mut bytes)?;
 ///
 /// assert_eq!(bytes.len(), len);
+/// # Ok::<_, ureq::Error>(())
 /// ```
 pub struct BodyReader<'a> {
     reader: MaybeLossyDecoder<CharsetDecoder<ContentDecoder<LimitReader<UnitHandlerRef<'a>>>>>,
