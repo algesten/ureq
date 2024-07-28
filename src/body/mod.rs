@@ -140,7 +140,7 @@ impl Body {
     /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn as_reader(&mut self) -> BodyReader {
-        self.with_config().limit(u64::MAX).into_reader()
+        self.with_config().into_reader()
     }
 
     /// Turn this response into an owned `impl Read` of the body.
@@ -166,7 +166,7 @@ impl Body {
     /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn into_reader(self) -> BodyReader<'static> {
-        self.into_with_config().limit(u64::MAX).into_reader()
+        self.into_with_config().into_reader()
     }
 
     /// Read the response as a string.
@@ -323,6 +323,8 @@ impl<'a> BodyWithConfig<'a> {
     ///
     /// Controls how many bytes we should read before throwing an error. This is used
     /// to ensure RAM isn't exhausted by a server sending a very large response body.
+    ///
+    /// The default limit is `u64::MAX` (unlimited).
     pub fn limit(mut self, value: u64) -> Self {
         self.limit = value;
         self
@@ -333,6 +335,8 @@ impl<'a> BodyWithConfig<'a> {
     /// `true` means that broken utf-8 characters are replaced by a question mark `?`
     /// (not utf-8 replacement char). This happens after charset conversion regardless of
     /// whether the **charset** feature is enabled or not.
+    ///
+    /// The default is `false`.
     pub fn lossy_utf8(mut self, value: bool) -> Self {
         self.lossy_utf8 = value;
         self
