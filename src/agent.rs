@@ -28,17 +28,16 @@ use crate::{WithBody, WithoutBody};
 ///
 /// agent
 ///     .post("http://example.com/post/login")
-///     .send(b"my password").unwrap();
+///     .send(b"my password")?;
 ///
 /// let secret = agent
 ///     .get("http://example.com/get/my-protected-page")
-///     .call()
-///     .unwrap()
+///     .call()?
 ///     .body_mut()
-///     .read_to_string()
-///     .unwrap();
+///     .read_to_string()?;
 ///
 ///   println!("Secret is: {}", secret);
+/// # Ok::<_, ureq::Error>(())
 /// ```
 ///
 /// Agent uses inner `Arc`, so cloning an Agent results in an instance
@@ -103,11 +102,12 @@ impl Agent {
     /// let agent = ureq::agent();
     ///
     /// // Cookies set by www.google.com are stored in agent.
-    /// agent.get("https://www.google.com/").call().unwrap();
+    /// agent.get("https://www.google.com/").call()?;
     ///
     /// // Saves (persistent) cookies
-    /// let mut file = File::create("cookies.json").unwrap();
-    /// agent.cookie_jar().save_json(&mut file).unwrap();
+    /// let mut file = File::create("cookies.json")?;
+    /// agent.cookie_jar().save_json(&mut file)?;
+    /// # Ok::<_, ureq::Error>(())
     /// ```
     #[cfg(feature = "cookies")]
     pub fn cookie_jar(&self) -> crate::cookies::CookieJar<'_> {

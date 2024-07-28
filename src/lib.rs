@@ -84,7 +84,7 @@
 //! # #[cfg(feature = "json")]
 //! # {
 //! use serde::{Serialize, Deserialize};
-//! 
+//!
 //! #[derive(Serialize)]
 //! struct MySendBody {
 //!    thing: String,
@@ -156,7 +156,7 @@ pub fn run(request: Request<impl AsSendBody>) -> Result<Response<Body>, Error> {
     agent.run(request)
 }
 
-/// A new agent with default configuration
+/// A new [Agent] with default configuration
 ///
 /// Agents are used to hold configuration and keep state between requests.
 pub fn agent() -> Agent {
