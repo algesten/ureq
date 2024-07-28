@@ -158,7 +158,160 @@
 //!    library defaults to Rust's built in `utf-8`.
 //! * **json** enables JSON sending and receiving via serde_json.
 //!
-
+//! # JSON
+//!
+//! By enabling the **json** feature, the library supports serde json.
+//!
+//! This is enabled by default.
+//!
+//! * [`request.send_json()`][RequestBuilder::send_json()] send body as json.
+//! * [`body.read_json()`][Body::read_json()] transform response to json.
+//!
+//! # Sending body data
+//!
+//! HTTP/1.1 has two ways of transfering body data. Either of a known size with
+//! the `Content-Length` HTTP header, or unknown size with the
+//! `Transfer-Encoding: chunked` header. ureq supports both and will use the
+//! appropriate method depending on which body is being sent.
+//!
+//! ureq has a [`AsSendBody`] trait that is implemented for many well known types
+//! of data that we might want to send. The request body can thus be anything
+//! from a `String` to a `File`, see below.
+//!
+//! ## Content-Length
+//!
+//! The library will send a `Content-Length` header on requests with bodies of
+//! known size, in other words, if the body to send is one of:
+//!
+//! * `&[u8]`
+//! * `&[u8; N]`
+//! * `&str`
+//! * `String`
+//! * `&String`
+//! * `Vec<u8>`
+//! * `&Vec<u8>)`
+//! * [`SendBody::from_json()`] (implicitly via [`RequestBuilder::send_json()`])
+//!
+//! ## Transfer-Encoding: chunked
+//!
+//! ureq will send a `Transfer-Encoding: chunked` header on requests where the body
+//! is of unknown size. The body is automatically converted to an [`std::io::Read`]
+//! when the type is one of:
+//!
+//! * `File`
+//! * `&File`
+//! * `TcpStream`
+//! * `&TcpStream`
+//! * `Stdin`
+//! * `UnixStream` (not on windows)
+//!
+//! ### From readers
+//!
+//! The chunked method also applies for bodies constructed via:
+//!
+//! * [`SendBody::from_reader()`]
+//! * [`SendBody::from_owned_reader()`]
+//!
+//! ## Proxying a response body
+//!
+//! As a special case, when ureq sends a [`Body`] from a previous http call, the
+//! use of `Content-Length` or `chunked` depends on situation. For input such as
+//! gzip decoding (**gzip** feature) or charset transformation (**charset** feature),
+//! the output body might not match the input, which means ureq is forced to use
+//! the `chunked` method.
+//!
+//! * `Response<Body>`
+//!
+//! ## Overriding
+//!
+//! If you set your own Content-Length or Transfer-Encoding header before
+//! sending the body, ureq will respect that header by not overriding it,
+//! and by encoding the body or not, as indicated by the headers you set.
+//!
+//! ```
+//! let resp = ureq::put("https://httpbin.org/put")
+//!     .header("Transfer-Encoding", "chunked")
+//!     .send("Hello world")?;
+//! # Ok::<_, ureq::Error>(())
+//! ```
+//!
+//! # Character encoding
+//!
+//! By enabling the **charset** feature, the library supports sending/receiving other
+//! character sets than `utf-8`.
+//!
+//! For [`Body::read_to_string()`] we read the header like:
+//!
+//! `Content-Type: text/plain; charset=iso-8859-1`
+//!
+//! and if it contains a charset specification, we try to decode the body using that
+//! encoding. In the absence of, or failing to interpret the charset, we fall back on `utf-8`.
+//!
+//! Similarly when using [`request.send()`][RequestBuilder::send()] with a text body,
+//! we first check if the user has set a `; charset=<whatwg charset>` and attempt
+//! to encode the request body using that.
+//!
+//! ## Lossy utf-8
+//!
+//! When reading text bodies (with a `Content-Type` starting `text/` as in `text/plain`,
+//! `text/html`, etc), ureq can ensure the body is possible to read as a `String` also if
+//! it contains characters that are not valid for utf-8. Invalid characters are replaced
+//! with a question mark `?` (NOT the utf-8 replacement character).
+//!
+//! For [`Body::read_to_string()`] this is turned on by default, but it can be disabled
+//! and conversely for [`Body::as_reader()`] it is not enabled, but can be.
+//!
+//! To precisely configure the behavior use [`Body::with_config()`].
+//!
+//! # Proxying
+//!
+//! ureq supports two kinds of proxies,  [`HTTP`] ([`CONNECT`]), [`SOCKS4`]/[`SOCKS5`],
+//! the former is always available while the latter must be enabled using the feature
+//! **socks-proxy**.
+//!
+//! Proxies settings are configured on an [Agent]. All request sent through the agent will be proxied.
+//!
+//! [`HTTP`]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Proxy_servers_and_tunneling#http_tunneling
+//! [`CONNECT`]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods/CONNECT
+//! [`SOCKS4`]: https://en.wikipedia.org/wiki/SOCKS#SOCKS4
+//! [`SOCKS5`]: https://en.wikipedia.org/wiki/SOCKS#SOCKS5
+//!
+//! ## Example using HTTP
+//!
+//! ```rust
+//! use ureq::{Agent, AgentConfig, Proxy};
+//! # fn no_run() -> std::result::Result<(), ureq::Error> {
+//! // Configure an http connect proxy.
+//! let proxy = Proxy::new("http://user:password@cool.proxy:9090")?;
+//! let agent: Agent = AgentConfig {
+//!     proxy: Some(proxy),
+//!     ..Default::default()
+//! }.into();
+//!
+//! // This is proxied.
+//! let resp = agent.get("http://cool.server").call()?;
+//! # Ok(())}
+//! # fn main() {}
+//! ```
+//!
+//! ## Example using SOCKS5
+//!
+//! ```rust
+//! use ureq::{Agent, AgentConfig, Proxy};
+//! # #[cfg(feature = "socks-proxy")]
+//! # fn no_run() -> std::result::Result<(), ureq::Error> {
+//! // Configure a SOCKS proxy.
+//! let proxy = Proxy::new("socks5://user:password@cool.proxy:9090")?;
+//! let agent: Agent = AgentConfig {
+//!     proxy: Some(proxy),
+//!     ..Default::default()
+//! }.into();
+//!
+//! // This is proxied.
+//! let resp = agent.get("http://cool.server").call()?;
+//! # Ok(())}
+//! ```
+//!
 #[macro_use]
 extern crate log;
 
@@ -397,5 +550,7 @@ pub(crate) mod test {
     }
 }
 
-// TODO(martin): JSON send/receive bodies
+// TODO(martin): send body content type sniffing
 // TODO(martin): retry idemptotent methods
+// TODO(martin): CONNECT proxy
+// TODO(martin): send body charset encoding

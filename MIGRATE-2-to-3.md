@@ -7,3 +7,6 @@
 * into_string() -> read_to_string()
 * native-certs renamed to native-roots
 * native-roots works for both rustls and native-tls
+* lossy utf-8 always enabled also when not charset feature
+* agent builder
+
