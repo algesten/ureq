@@ -1,7 +1,82 @@
-//! ureq lib
 #![forbid(unsafe_code)]
 #![warn(clippy::all)]
 #![deny(missing_docs)]
+//!<div align="center">
+//!  <!-- Version -->
+//!  <a href="https://crates.io/crates/ureq">
+//!    <img src="https://img.shields.io/crates/v/ureq.svg?style=flat-square"
+//!    alt="Crates.io version" />
+//!  </a>
+//!  <!-- Docs -->
+//!  <a href="https://docs.rs/ureq">
+//!    <img src="https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square"
+//!      alt="docs.rs docs" />
+//!  </a>
+//!  <!-- Downloads -->
+//!  <a href="https://crates.io/crates/ureq">
+//!    <img src="https://img.shields.io/crates/d/ureq.svg?style=flat-square"
+//!      alt="Crates.io downloads" />
+//!  </a>
+//!</div>
+//!
+//! A simple, safe HTTP client.
+//!
+//! Ureq's first priority is being easy for you to use. It's great for
+//! anyone who wants a low-overhead HTTP client that just gets the job done. Works
+//! very well with HTTP APIs. Its features include cookies, JSON, HTTP proxies,
+//! HTTPS, interoperability with the `http` crate, and charset decoding.
+//!
+//! Ureq is in pure Rust for safety and ease of understanding. It avoids using
+//! `unsafe` directly. It [uses blocking I/O][blocking] instead of async I/O, because that keeps
+//! the API simple and keeps dependencies to a minimum. For TLS, ureq uses
+//! [rustls or native-tls](#https--tls--ssl).
+//!
+//! See the [changelog] for details of recent releases.
+//!
+//! [blocking]: #blocking-io-for-simplicity
+//! [changelog]: https://github.com/algesten/ureq/blob/main/CHANGELOG.md
+//!
+//! ## Usage
+//!
+//! In its simplest form, ureq looks like this:
+//!
+//! ```rust
+//! let body: String = ureq::get("http://example.com")
+//!     .header("Example-Header", "header value")
+//!     .call()?
+//!     .body_mut()
+//!     .read_to_string()?;
+//! # Ok::<(), ureq::Error>(())
+//! ```
+//!
+//! For more involved tasks, you'll want to create an [Agent]. An Agent
+//! holds a connection pool for reuse, and a cookie store if you use the
+//! "cookies" feature. An Agent can be cheaply cloned due to internal
+//! [Arc](std::sync::Arc) and all clones of an Agent share state among each other. Creating
+//! an Agent also allows setting options like the TLS configuration.
+//!
+//! ```no_run
+//! use ureq::{Agent, AgentConfig};
+//! use std::time::Duration;
+//!
+//! let agent: Agent = AgentConfig {
+//!     timeout_global: Some(Duration::from_secs(5)),
+//!     ..Default::default()
+//! }.into();
+//!
+//! let body: String = agent.get("http://example.com/page")
+//!     .call()?
+//!     .body_mut()
+//!     .read_to_string()?;
+//!
+//! // Reuses the connection from previous request.
+//! let response: String = agent.put("http://example.com/upload")
+//!     .header("Authorization", "example-token")
+//!     .send("some body data")?
+//!     .body_mut()
+//!     .read_to_string()?;
+//! # Ok::<_, ureq::Error>(())
+//! ```
 
 #[macro_use]
 extern crate log;
@@ -240,3 +315,6 @@ pub(crate) mod test {
         is_sync(owned_reader);
     }
 }
+
+// TODO(martin): JSON send/receive bodies
+// TODO(martin): retry idemptotent methods
