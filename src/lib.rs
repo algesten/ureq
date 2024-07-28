@@ -56,7 +56,7 @@
 //! an Agent also allows setting options like the TLS configuration.
 //!
 //! ```rust
-//! # fn no_run() {
+//! # fn no_run() -> Result<(), ureq::Error> {
 //! use ureq::{Agent, AgentConfig};
 //! use std::time::Duration;
 //!
@@ -76,15 +76,14 @@
 //!     .send("some body data")?
 //!     .body_mut()
 //!     .read_to_string()?;
-//! # }
-//! # Ok::<_, ureq::Error>(())
+//! # Ok(())}
 //! ```
 //!
 //! Ureq supports sending and receiving json, if you enable the **json** feature:
 //!
 //! ```rust
 //! # #[cfg(feature = "json")]
-//! # fn no_run() {
+//! # fn no_run() -> Result<(), ureq::Error> {
 //! use serde::{Serialize, Deserialize};
 //!
 //! #[derive(Serialize)]
@@ -105,8 +104,7 @@
 //!     .send_json(&send_body)?
 //!     .body_mut()
 //!     .read_json::<MyRecvBody>()?;
-//! # }
-//! # Ok::<_, ureq::Error>(())
+//! # Ok(())}
 //! ```
 //!
 //! ## Error handling
@@ -120,7 +118,7 @@
 //! ```rust
 //! use ureq::Error;
 //!
-//! # fn no_run() {
+//! # fn no_run() -> Result<(), ureq::Error> {
 //! match ureq::get("http://mypage.example.com/").call() {
 //!     Ok(response) => { /* it worked */},
 //!     Err(Error::StatusCode(code)) => {
@@ -129,8 +127,7 @@
 //!     }
 //!     Err(_) => { /* some kind of io/transport/etc error */ }
 //! }
-//! # }
-//! # Ok::<_, ureq::Error>(())
+//! # Ok(())}
 //! ```
 
 #[macro_use]
