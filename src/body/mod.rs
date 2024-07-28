@@ -1,5 +1,7 @@
 use core::fmt;
-use std::io::{self, BufReader, Read};
+use std::io::{self, Read};
+use std::marker::PhantomData;
+use std::sync::Arc;
 
 use hoot::BodyMode;
 
@@ -25,6 +27,9 @@ mod gzip;
 #[cfg(feature = "brotli")]
 mod brotli;
 
+/// Default max body size for read_to_string() and read_to_vec().
+const MAX_BODY_SIZE: u64 = 10 * 1024 * 1024;
+
 /// A response body returned as [`http::Response<Body>`].
 ///
 /// # Example
@@ -46,7 +51,7 @@ mod brotli;
 /// ```
 
 pub struct Body {
-    info: ResponseInfo,
+    info: Arc<ResponseInfo>,
     unit_handler: UnitHandler,
 }
 
@@ -66,7 +71,7 @@ impl Body {
         current_time: impl Fn() -> Instant + Send + Sync + 'static,
     ) -> Self {
         Body {
-            info,
+            info: Arc::new(info),
             unit_handler: UnitHandler::new(unit, connection, current_time),
         }
     }
@@ -113,7 +118,8 @@ impl Body {
 
     /// Handle this body as a shared `impl Read` of the body.
     ///
-    /// This is the same as `Body::as_reader_with_config(u64::MAX, false)`.
+    /// * Reader is not limited. To set a limit use
+    ///   [`as_reader_with_config()`][Self::as_reader_with_config].
     ///
     /// # Example
     ///
@@ -128,29 +134,19 @@ impl Body {
     ///     .read_to_end(&mut bytes).unwrap();
     /// ```
     pub fn as_reader(&mut self) -> BodyReader {
-        self.as_reader_with_config(u64::MAX, false)
+        self.as_reader_with_config().limit(u64::MAX).build()
     }
 
     /// Handle this body as a shared `impl Read` of the body with config.
-    ///
-    /// * `limit` controls how many bytes we should read before throwing an error. This is used
-    ///   to ensure RAM isn't exhausted by a server sending a very large response body.
-    /// * `lossy_utf8` set to `true` means that broken utf-8 characters are replaced by a
-    ///    question mark `?` (not utf-8 replacement char). This happens after charset conversion
-    ///    regardless of whether the **charset** feature is enabled or not.
-    pub fn as_reader_with_config(&mut self, limit: u64, lossy_utf8: bool) -> BodyReader {
-        BodyReader::new(
-            LimitReader::new(UnitHandlerRef::Shared(&mut self.unit_handler), limit),
-            &self.info,
-            // With a shared reader that can be called multiple times, we don't know how
-            // much of the incoming body is going to be used. Thus the only reasonable
-            // BodyMode for a AsSendBody made from this BodyReader is Chunked.
-            BodyMode::Chunked,
-            lossy_utf8,
-        )
+    pub fn as_reader_with_config(&mut self) -> BodyReaderConfig<ToReader> {
+        let handler = UnitHandlerRef::Shared(&mut self.unit_handler);
+        BodyReaderConfig::new(handler, self.info.clone())
     }
 
     /// Turn this response into an owned `impl Read` of the body.
+    ///
+    /// * Reader is not limited. To set a limit use
+    ///   [`into_reader_with_config()`][Self::into_reader_with_config].
     ///
     /// ```
     /// use std::io::Read;
@@ -165,58 +161,148 @@ impl Body {
     ///     .read_to_end(&mut bytes).unwrap();
     /// ```
     pub fn into_reader(self) -> BodyReader<'static> {
-        self.into_reader_with_config(u64::MAX, false)
+        self.into_reader_with_config().limit(u64::MAX).build()
     }
 
     /// Turn this response into an owned `impl Read` of the body with config.
-    ///
-    /// * `limit` controls how many bytes we should read before throwing an error. This is used
-    ///   to ensure RAM isn't exhausted by a server sending a very large response body.
-    /// * `lossy_utf8` set to `true` means that broken utf-8 characters are replaced by a
-    ///    question mark `?` (not utf-8 replacement char). This happens after charset conversion
-    ///    regardless of whether the **charset** feature is enabled or not.
-    pub fn into_reader_with_config(self, limit: u64, lossy_utf8: bool) -> BodyReader<'static> {
-        BodyReader::new(
-            LimitReader::new(UnitHandlerRef::Owned(self.unit_handler), limit),
-            &self.info,
-            // Since we are consuming self, we are guaranteed that the reader
-            // will read the entire incoming body. Thus if we use the BodyReader
-            // for AsSendBody, we can use the incoming body mode to signal outgoing.
-            self.info.body_mode,
-            lossy_utf8,
-        )
+    pub fn into_reader_with_config(self) -> BodyReaderConfig<'static, ToReader> {
+        let handler = UnitHandlerRef::Owned(self.unit_handler);
+        BodyReaderConfig::new(handler, self.info.clone())
     }
 
     /// Read the response as a string.
     ///
-    /// Fails if the requested data is not a string.
+    /// * Response is limited to 10MB
+    /// * Replaces incorrect utf-8 chars to `?`
     ///
     /// ```
     /// let mut res = ureq::get("http://httpbin.org/robots.txt")
     ///     .call().unwrap();
     ///
-    /// let s = res.body_mut().read_to_string(1000, false).unwrap();
+    /// let s = res.body_mut().read_to_string().unwrap();
     /// assert_eq!(s, "User-agent: *\nDisallow: /deny\n");
     /// ```
-    pub fn read_to_string(&mut self, limit: usize, lossy_utf8: bool) -> Result<String, Error> {
-        let mut reader = BufReader::new(self.as_reader_with_config(limit as u64, lossy_utf8));
-        let mut buf = String::new();
-        reader.read_to_string(&mut buf)?;
-        Ok(buf)
+    pub fn read_to_string(&mut self) -> Result<String, Error> {
+        self.read_to_string_with_config()
+            .limit(MAX_BODY_SIZE)
+            .lossy_utf8(true)
+            .read()
+    }
+
+    /// Read the response as a string with config.
+    pub fn read_to_string_with_config(&mut self) -> BodyReaderConfig<ToString> {
+        let handler = UnitHandlerRef::Shared(&mut self.unit_handler);
+        BodyReaderConfig::new(handler, self.info.clone())
     }
 
     /// Read the response to a vec.
+    ///
+    /// * Response is limited to 10MB.
     ///
     /// ```
     /// let mut res = ureq::get("http://httpbin.org/bytes/100")
     ///     .call().unwrap();
     ///
-    /// let bytes = res.body_mut().read_to_vec(1000).unwrap();
+    /// let bytes = res.body_mut().read_to_vec().unwrap();
     /// assert_eq!(bytes.len(), 100);
     /// ```
-    pub fn read_to_vec(&mut self, limit: usize) -> Result<Vec<u8>, Error> {
+    pub fn read_to_vec(&mut self) -> Result<Vec<u8>, Error> {
+        self.read_to_vec_with_config()
+            //
+            .limit(MAX_BODY_SIZE)
+            .read()
+    }
+
+    /// Read the response to a vec with config.
+    pub fn read_to_vec_with_config(&mut self) -> BodyReaderConfig<ToVec> {
+        let handler = UnitHandlerRef::Shared(&mut self.unit_handler);
+        BodyReaderConfig::new(handler, self.info.clone())
+    }
+}
+
+pub struct ToReader;
+pub struct ToString;
+pub struct ToVec;
+
+/// Configuration of how to read the body.
+///
+/// Obtained via one of:
+///
+/// * [Body::as_reader_with_config()]
+/// * [Body::into_reader_with_config()]
+/// * [Body::read_to_string_with_config()]
+/// * [Body::read_to_vec_with_config()]
+///
+pub struct BodyReaderConfig<'a, Mode> {
+    handler: UnitHandlerRef<'a>,
+    info: Arc<ResponseInfo>,
+    limit: u64,
+    lossy_utf8: bool,
+    _ph: PhantomData<Mode>,
+}
+
+impl<'a, Mode> BodyReaderConfig<'a, Mode> {
+    fn new(handler: UnitHandlerRef<'a>, info: Arc<ResponseInfo>) -> Self {
+        BodyReaderConfig {
+            handler,
+            info,
+            limit: u64::MAX,
+            lossy_utf8: false,
+            _ph: PhantomData,
+        }
+    }
+
+    /// Limit the response body.
+    ///
+    /// Controls how many bytes we should read before throwing an error. This is used
+    /// to ensure RAM isn't exhausted by a server sending a very large response body.
+    pub fn limit(mut self, value: u64) -> Self {
+        self.limit = value;
+        self
+    }
+
+    /// Replace invalid utf-8 chars.
+    ///
+    /// `true` means that broken utf-8 characters are replaced by a question mark `?`
+    /// (not utf-8 replacement char). This happens after charset conversion regardless of
+    /// whether the **charset** feature is enabled or not.
+    pub fn lossy_utf8(mut self, value: bool) -> Self {
+        self.lossy_utf8 = value;
+        self
+    }
+
+    fn do_build(self) -> BodyReader<'a> {
+        BodyReader::new(
+            LimitReader::new(self.handler, self.limit),
+            &self.info,
+            self.info.body_mode,
+            self.lossy_utf8,
+        )
+    }
+}
+
+impl<'a> BodyReaderConfig<'a, ToReader> {
+    /// Creates the reader.
+    pub fn build(self) -> BodyReader<'a> {
+        self.do_build()
+    }
+}
+
+impl<'a> BodyReaderConfig<'a, ToString> {
+    /// Read the string.
+    pub fn read(self) -> Result<String, Error> {
+        let mut reader = self.do_build();
+        let mut buf = String::new();
+        reader.read_to_string(&mut buf)?;
+        Ok(buf)
+    }
+}
+
+impl<'a> BodyReaderConfig<'a, ToVec> {
+    /// Read the vector.
+    pub fn read(self) -> Result<Vec<u8>, Error> {
+        let mut reader = self.do_build();
         let mut buf = Vec::new();
-        let mut reader = self.as_reader_with_config(limit as u64, false);
         reader.read_to_end(&mut buf)?;
         Ok(buf)
     }
@@ -544,7 +630,7 @@ mod test {
         );
 
         let mut res = crate::get("https://my.test/get").call().unwrap();
-        let b = res.body_mut().read_to_string(1000, false).unwrap();
+        let b = res.body_mut().read_to_string().unwrap();
         assert_eq!(b, "hello world!!!");
     }
 

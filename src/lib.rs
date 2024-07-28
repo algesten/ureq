@@ -11,7 +11,7 @@ use std::convert::TryFrom;
 /// Re-exported http-crate.
 pub use http;
 
-pub use body::{Body, BodyReader};
+pub use body::{Body, BodyReader, BodyReaderConfig};
 pub use config::AgentConfig;
 use http::Method;
 use http::{Request, Response, Uri};
@@ -168,14 +168,14 @@ pub(crate) mod test {
                 .replace("; ", ";")
         );
         assert_eq!(res.body().mime_type(), Some("text/html"));
-        res.body_mut().read_to_string(100_000, true).unwrap();
+        res.body_mut().read_to_string().unwrap();
     }
 
     #[test]
     fn simple_put_content_len() {
         init_test_log();
         let mut res = put("http://httpbin.org/put").send(&[0_u8; 100]).unwrap();
-        res.body_mut().read_to_string(1000, true).unwrap();
+        res.body_mut().read_to_string().unwrap();
     }
 
     #[test]
@@ -186,7 +186,7 @@ pub(crate) mod test {
             .header("transfer-encoding", "chunked")
             .send(&[0_u8; 100])
             .unwrap();
-        res.body_mut().read_to_string(1000, true).unwrap();
+        res.body_mut().read_to_string().unwrap();
     }
 
     #[test]

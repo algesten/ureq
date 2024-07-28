@@ -62,7 +62,7 @@ mod test {
         );
 
         let mut res = agent.get("https://example.test/gz_body").call().unwrap();
-        res.body_mut().read_to_string(1000, false).unwrap();
+        res.body_mut().read_to_string().unwrap();
 
         assert_eq!(agent.pool_count(), 1);
     }
