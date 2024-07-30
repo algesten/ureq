@@ -72,6 +72,10 @@ impl DeadlineStream {
     pub(crate) fn inner_mut(&mut self) -> &mut Stream {
         &mut self.stream
     }
+
+    pub(crate) fn into_inner(self) -> Stream {
+        self.stream
+    }
 }
 
 impl From<DeadlineStream> for Stream {
@@ -455,8 +459,9 @@ pub(crate) fn connect_host(
             let s = stream.try_clone()?;
             let pool_key = PoolKey::from_parts(unit.url.scheme(), hostname, port);
             let pool_returner = PoolReturner::new(&unit.agent, pool_key);
-            let s = Stream::new(s, remote_addr, pool_returner);
-            let response = Response::do_from_stream(s, unit.clone())?;
+            let stream = Stream::new(s, remote_addr, pool_returner);
+            let stream = DeadlineStream::new(stream, unit.deadline);
+            let response = Response::do_from_stream(stream, unit)?;
             Proxy::verify_response(&response)?;
         }
     }

@@ -501,3 +501,13 @@ mod tests {
         assert!(size < 500); // 344 on Macbook M1
     }
 }
+
+pub(crate) fn error_get_root_source<'a>(
+    err: &'a (dyn std::error::Error + 'static),
+) -> &'a (dyn std::error::Error + 'static) {
+    if let Some(err) = err.source() {
+        error_get_root_source(err) as &(dyn std::error::Error + 'static)
+    } else {
+        err as &(dyn std::error::Error + 'static)
+    }
+}
