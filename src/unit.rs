@@ -328,10 +328,20 @@ fn extract_cookies(agent: &Agent, url: &Url) -> Option<Header> {
         // "prepped" their local cookie store with such cookies.
         .filter(|c| {
             let is_ok = is_cookie_rfc_compliant(c);
-            if !is_ok {
-                debug!("do not send non compliant cookie: {:?}", c);
+            match (is_ok, agent.config.strict_mode) {
+                (true, _) => true,
+                (false, true) => {
+                    debug!("do not send non compliant cookie: {:?}", c);
+                    false
+                }
+                (false, false) => {
+                    debug!(
+                        "cookie is non-compliant, but strict mode is off so sending anyway: {:?}",
+                        c
+                    );
+                    true
+                }
             }
-            is_ok
         })
         .map(|c| c.to_string())
         .collect::<Vec<_>>()
@@ -576,9 +586,15 @@ fn save_cookies(unit: &Unit, resp: &Response) {
                 // This guards against accepting rfc non-compliant cookies from a host.
                 if is_cookie_rfc_compliant(&c) {
                     Some(c)
-                } else {
+                } else if unit.agent.config.strict_mode {
                     debug!("ignore incoming non compliant cookie: {:?}", c);
                     None
+                } else {
+                    debug!(
+                        "accepting incoming non compliant cookie because strict mode is off: {:?}",
+                        c
+                    );
+                    Some(c)
                 }
             }
         }
