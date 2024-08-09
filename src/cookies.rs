@@ -154,11 +154,17 @@ impl SharedCookieJar {
     }
 
     pub(crate) fn get_request_cookies(&self, uri: &Uri) -> String {
-        let url = uri.try_into_url().expect("uri to convert to url");
+        let mut cookies = String::new();
+
+        let url = match uri.try_into_url() {
+            Ok(v) => v,
+            Err(e) => {
+                debug!("Bad url for cookie: {:?}", e);
+                return cookies;
+            }
+        };
 
         let store = self.inner.lock().unwrap();
-
-        let mut cookies = String::new();
 
         for c in store.matches(&url) {
             if !is_cookie_rfc_compliant(c) {
