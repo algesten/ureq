@@ -130,6 +130,23 @@ impl RequestBuilder<WithBody> {
         }
     }
 
+    /// Set the content-type header.
+    ///
+    /// ```
+    /// let res = ureq::post("http://httpbin.org/post")
+    ///     .content_type("text/html; charset=utf-8")
+    ///     .send("<html><body>åäö</body></html>")?;
+    /// # Ok::<_, ureq::Error>(())
+    /// ```
+    pub fn content_type<V>(mut self, content_type: V) -> Self
+    where
+        HeaderValue: TryFrom<V>,
+        <HeaderValue as TryFrom<V>>::Error: Into<http::Error>,
+    {
+        self.builder = self.builder.header("content-type", content_type);
+        self
+    }
+
     /// Send body data and blocks the caller until we receive response.
     ///
     /// ```
