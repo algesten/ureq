@@ -76,9 +76,11 @@ impl UnitHandler {
 
                 // The body parser might not get enough input to make progress (such as when
                 // reading a chunked body and not getting the entire chunk length). In such
-                // case we fall through to a regular read.
+                // case we repeat to a regular read.
                 if amount > 0 {
                     return Ok(amount);
+                } else {
+                    continue;
                 }
             }
 
