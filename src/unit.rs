@@ -49,7 +49,10 @@ macro_rules! extract {
     ($e:expr, $p:path) => {
         match mem::replace($e, State::Empty) {
             $p(value) => Some(value),
-            _ => None,
+            x @ _ => {
+                error!("Incorrect state: {}", x.name());
+                None
+            }
         }
     };
 }
