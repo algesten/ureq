@@ -167,6 +167,8 @@ impl Agent {
                         }
                     }
 
+                    recv_body_mode = BodyMode::NoBody;
+
                     unit.handle_input(current_time(), Input::Begin, &mut [])?;
                 }
 
