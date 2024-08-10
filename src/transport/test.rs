@@ -7,7 +7,7 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::{fmt, io, thread};
 
-use http::{Request, Uri};
+use http::{Method, Request, Uri};
 
 use crate::transport::time::{Duration, NextTimeout};
 use crate::Error;
@@ -178,7 +178,7 @@ fn setup_default_handlers(handlers: &mut Vec<TestHandler>) {
     );
 
     maybe_add(
-        TestHandler::new("/get", |_uri, _req, w| {
+        TestHandler::new("/get", |_uri, req, w| {
             write!(
                 w,
                 "HTTP/1.1 200 OK\r\n\
@@ -187,7 +187,24 @@ fn setup_default_handlers(handlers: &mut Vec<TestHandler>) {
                 \r\n",
                 HTTPBIN_GET.as_bytes().len()
             )?;
-            w.write_all(HTTPBIN_GET.as_bytes())
+            if req.method() != Method::HEAD {
+                w.write_all(HTTPBIN_GET.as_bytes())?;
+            }
+            Ok(())
+        }),
+        handlers,
+    );
+
+    maybe_add(
+        TestHandler::new("/head", |_uri, _req, w| {
+            write!(
+                w,
+                "HTTP/1.1 200 OK\r\n\
+                Content-Type: application/json\r\n\
+                Content-Length: {}\r\n\
+                \r\n",
+                HTTPBIN_GET.as_bytes().len()
+            )
         }),
         handlers,
     );
