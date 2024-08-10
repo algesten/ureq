@@ -12,7 +12,7 @@ use cookie::Cookie;
 
 use crate::agent::RedirectAuthHeaders;
 use crate::body::{self, BodySize, Payload, SizedReader};
-use crate::error::{Error, ErrorKind};
+use crate::error::{error_get_root_source, Error, ErrorKind};
 use crate::header;
 use crate::header::{get_header, Header};
 use crate::proxy::Proto;
@@ -261,6 +261,13 @@ fn connect_inner(
         debug!("sending request {} {}", method, url);
     }
 
+    let mut expect_100_continue = false;
+    for header in &unit.headers {
+        if header.name() == "Expect" && header.value() == Some("100-continue") {
+            expect_100_continue = true;
+        }
+    }
+
     let send_result = send_prelude(unit, &mut stream);
 
     if let Err(err) = send_result {
@@ -277,14 +284,82 @@ fn connect_inner(
     }
     let retryable = unit.is_retryable(&body);
 
+    let mut stream = stream::DeadlineStream::new(stream, unit.deadline);
+
+    if expect_100_continue {
+        // Set lower timeout on reading status+headers.
+        // We do this in case we make a request to a server without "Expect: 100-continue", then we
+        // should continue sending the body instead of waiting for a "100 Continue" response.
+        let now = time::Instant::now();
+        let timeout = std::time::Duration::from_secs(1);
+        let deadline = match now.checked_add(timeout) {
+            Some(dl) => Some(dl),
+            None => {
+                return Err(Error::new(
+                    ErrorKind::Io,
+                    Some("Request deadline overflowed".to_string()),
+                ))
+            }
+        };
+        stream = stream::DeadlineStream::new(stream.into_inner(), deadline);
+
+        match Response::read_response_head(&mut stream, unit) {
+            Ok(mut response) => {
+                match response.status() {
+                    100 => debug!("Got 100-continue, proceeding with body"),
+                    200 => {
+                        // TODO: How should we handle this case?
+                        debug!("Got 200 OK on an expect 100-continue response, never got the chance to send the request body");
+                        response.take_body(stream, unit)?;
+                        return Ok(response);
+                    }
+                    417 => {
+                        debug!("Got 417, trying again but without expect");
+                        response.take_body(stream, unit)?;
+                        let mut unit_without_expect = unit.clone();
+                        for (idx, header) in unit.headers.iter().enumerate() {
+                            if header.name() == "Expect" {
+                                unit_without_expect.headers.remove(idx);
+                                break;
+                            }
+                        }
+                        return connect_inner(&unit_without_expect, use_pooled, body, history);
+                    }
+                    _ => {
+                        debug!("Didn't get 100-continue, reading body");
+                        response.take_body(stream, unit)?;
+                        return Err(Error::Status(response.status(), response));
+                    }
+                }
+            }
+            Err(crate::Error::Transport(err)) => {
+                // We need to fetch the root error here, because it is not guaranteed that the
+                // error itself has kind TimedOut even if the root cause was TimedOut (to preserve
+                // the stack-trace).
+                // See rejected GitHub PR #744.
+                let root_err = error_get_root_source(&err);
+                if let Some(io_err) = root_err.downcast_ref::<std::io::Error>() {
+                    if io_err.kind() == std::io::ErrorKind::TimedOut {
+                        debug!("Got timeout on reading response status+header for 'Expect: 100-continue' request, sending body even if we didn't get a '100 Continue' response");
+                    } else {
+                        return Err(crate::Error::Transport(err));
+                    }
+                } else {
+                    return Err(crate::Error::Transport(err));
+                }
+            }
+            Err(err) => return Err(err),
+        }
+
+        // reset DeadlineStream to be for complete request/response
+        stream = stream::DeadlineStream::new(stream.into_inner(), unit.deadline);
+    }
+
     // send the body (which can be empty now depending on redirects)
-    body::send_body(body, unit.is_chunked, &mut stream)?;
+    body::send_body(body, unit.is_chunked, stream.inner_mut())?;
 
     // start reading the response to process cookies and redirects.
-    // TODO: this unit.clone() bothers me. At this stage, we're not
-    // going to use the unit (much) anymore, and it should be possible
-    // to have ownership of it and pass it into the Response.
-    let result = Response::do_from_stream(stream, unit.clone());
+    let result = Response::do_from_stream(stream, unit);
 
     // https://tools.ietf.org/html/rfc7230#section-6.3.1
     // When an inbound connection is closed prematurely, a client MAY
