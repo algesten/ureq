@@ -499,6 +499,13 @@ pub(crate) mod test {
     }
 
     #[test]
+    fn simple_head() {
+        init_test_log();
+        let mut res = head("http://httpbin.org/get").call().unwrap();
+        res.body_mut().read_to_string().unwrap();
+    }
+
+    #[test]
     fn connect_https_invalid_name() {
         let result = get("https://example.com{REQUEST_URI}/").call();
         let err = result.unwrap_err();
