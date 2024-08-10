@@ -400,7 +400,7 @@ pub(crate) mod test {
     use super::*;
 
     pub fn init_test_log() {
-        static INIT_LOG: Lazy<()> = Lazy::new(|| env_logger::init());
+        static INIT_LOG: Lazy<()> = Lazy::new(env_logger::init);
         *INIT_LOG
     }
 

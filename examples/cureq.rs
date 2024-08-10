@@ -55,9 +55,9 @@ fn run(opt: &Opt) -> Result<(), ureq::Error> {
             .limit(MAX_BODY_SIZE)
             .into_reader(),
     );
-    let mut lines = reader.lines();
+    let lines = reader.lines();
 
-    while let Some(r) = lines.next() {
+    for r in lines {
         let line = match r {
             Ok(v) => v,
             Err(e) => return Err(e.into()),
