@@ -17,19 +17,20 @@ pub use self::native_tls::NativeTlsConnector;
 
 /// Setting for which TLS provider to use.
 ///
-/// Defaults to [`RustlsWithRing`][Self::RustlsWithRing] because this has the highest chance
+/// Defaults to [`Rustls`][Self::Rustls] because this has the highest chance
 /// to compile and "just work" straight out of the box without installing additional
 /// development dependencies.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum TlsProvider {
-    /// [Rustls](https://crates.io/crates/rustls) with [Ring](https://crates.io/crates/ring) as
-    /// cryptographic backend.
+    /// [Rustls](https://crates.io/crates/rustls) with the
+    /// [process-wide default cryptographic backend](https://docs.rs/rustls/latest/rustls/crypto/struct.CryptoProvider.html#method.install_default),
+    /// or [Ring](https://crates.io/crates/ring) if no process-wide default is set.
     ///
     /// Requires the feature flag **rustls**.
     ///
     /// This is the default.
-    RustlsWithRing,
+    Rustls,
 
     /// [Native-TLS](https://crates.io/crates/native-tls) for cases where it's important to
     /// use the TLS libraries installed on the host running ureq.
@@ -44,7 +45,7 @@ pub enum TlsProvider {
 impl TlsProvider {
     pub(crate) fn is_feature_enabled(&self) -> bool {
         match self {
-            TlsProvider::RustlsWithRing => {
+            TlsProvider::Rustls => {
                 cfg!(feature = "rustls")
             }
             TlsProvider::NativeTls => {
@@ -55,7 +56,7 @@ impl TlsProvider {
 
     pub(crate) fn feature_name(&self) -> &'static str {
         match self {
-            TlsProvider::RustlsWithRing => "rustls",
+            TlsProvider::Rustls => "rustls",
             TlsProvider::NativeTls => "native-tls",
         }
     }
@@ -69,7 +70,7 @@ impl TlsProvider {
 pub struct TlsConfig {
     /// The provider to use.
     ///
-    /// Defaults to [`TlsProvider::RustlsWithRing`].
+    /// Defaults to [`TlsProvider::Rustls`].
     pub provider: TlsProvider,
 
     /// Client certificate chains with corresponding private keys.
@@ -132,6 +133,6 @@ impl Default for TlsConfig {
 
 impl Default for TlsProvider {
     fn default() -> Self {
-        Self::RustlsWithRing
+        Self::Rustls
     }
 }
