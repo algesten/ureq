@@ -80,9 +80,8 @@ pub struct TlsConfig {
 
     /// The set of trusted root certificates to use to validate server certificates.
     ///
-    /// Defaults to empty, but see [`TlsConfig::with_native_roots()`] for a constructor
-    /// that uses the roots native to the host.
-    pub root_certs: Vec<Certificate<'static>>,
+    /// Defaults to `PlatformVerifier` to use the platform default root certs.
+    pub root_certs: RootCerts,
 
     /// Whether to send SNI (Server Name Indication) to the remote server.
     ///
@@ -99,31 +98,33 @@ pub struct TlsConfig {
     pub disable_verification: bool,
 }
 
-#[cfg(not(feature = "native-roots"))]
-impl TlsConfig {
-    pub fn with_native_roots() -> TlsConfig {
-        panic!("TlsConfig::with_native_roots() requires feature: native-roots");
-    }
-}
+/// Configuration setting for root certs.
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub enum RootCerts {
+    /// Use these specific certificates as root certs.
+    SpecificCerts(Vec<Certificate<'static>>),
 
-#[cfg(feature = "native-roots")]
-impl TlsConfig {
-    /// Creates a new TlsConfig by loading the root certificates installed by the
-    /// system on the local host.
-    pub fn with_native_roots() -> TlsConfig {
-        TlsConfig::default()
-    }
+    /// Use the platform's verifier.
+    ///
+    /// * For **rustls**, this uses the `rustls-platform-verifier` crate.
+    /// * For **native-tls**, this uses the roots that native-tls loads by default.
+    PlatformVerifier,
+
+    /// Use Mozilla's root certificates instead of the platform.
+    ///
+    /// This is useful when you can't trust the system roots, such as in
+    /// environments where TLS is intercepted and decrypted by a proxy (MITM attack).
+    WebPki,
 }
 
 impl Default for TlsConfig {
     fn default() -> Self {
+        let provider = TlsProvider::default();
         Self {
-            provider: TlsProvider::default(),
+            provider,
             client_cert: None,
-            #[cfg(feature = "native-roots")]
-            root_certs: self::cert::load_native_root_certs(),
-            #[cfg(not(feature = "native-roots"))]
-            root_certs: vec![],
+            root_certs: RootCerts::PlatformVerifier,
             use_sni: true,
             disable_verification: false,
         }

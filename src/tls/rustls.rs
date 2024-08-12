@@ -7,17 +7,14 @@ use http::uri::Scheme;
 use once_cell::sync::OnceCell;
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::{ClientConfig, ClientConnection, RootCertStore, StreamOwned, ALL_VERSIONS};
-use rustls_pki_types::{
-    CertificateDer, PrivateKeyDer, PrivatePkcs1KeyDer, PrivatePkcs8KeyDer, PrivateSec1KeyDer,
-    ServerName,
-};
+use rustls_pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs1KeyDer, PrivatePkcs8KeyDer};
+use rustls_pki_types::{PrivateSec1KeyDer, ServerName};
 
 use crate::tls::cert::KeyKind;
-use crate::tls::TlsProvider;
+use crate::tls::{RootCerts, TlsProvider};
 use crate::transport::time::NextTimeout;
-use crate::transport::{
-    Buffers, ConnectionDetails, Connector, LazyBuffers, Transport, TransportAdapter,
-};
+use crate::transport::{Buffers, ConnectionDetails, Connector, LazyBuffers};
+use crate::transport::{Transport, TransportAdapter};
 use crate::Error;
 
 use super::TlsConfig;
@@ -99,7 +96,7 @@ fn build_config(tls_config: &TlsConfig) -> Arc<ClientConfig> {
         .cloned()
         .unwrap_or(Arc::new(rustls::crypto::ring::default_provider()));
 
-    let builder = ClientConfig::builder_with_provider(provider)
+    let builder = ClientConfig::builder_with_provider(provider.clone())
         .with_protocol_versions(ALL_VERSIONS)
         .expect("all TLS versions");
 
@@ -109,15 +106,29 @@ fn build_config(tls_config: &TlsConfig) -> Arc<ClientConfig> {
             .dangerous()
             .with_custom_certificate_verifier(Arc::new(DisabledVerifier))
     } else {
-        let root_certs = tls_config
-            .root_certs
-            .iter()
-            .map(|c| CertificateDer::from(c.der()));
-        let mut root_store = RootCertStore::empty();
-        let (added, ignored) = root_store.add_parsable_certificates(root_certs);
-        debug!("Added {} and ignored {} root certs", added, ignored);
+        match &tls_config.root_certs {
+            RootCerts::SpecificCerts(certs) => {
+                let root_certs = certs.iter().map(|c| CertificateDer::from(c.der()));
 
-        builder.with_root_certificates(root_store)
+                let mut root_store = RootCertStore::empty();
+                let (added, ignored) = root_store.add_parsable_certificates(root_certs);
+                debug!("Added {} and ignored {} root certs", added, ignored);
+
+                builder.with_root_certificates(root_store)
+            }
+            RootCerts::PlatformVerifier => builder
+                // This actually not dangerous. The rustls_platform_verifier is safe.
+                .dangerous()
+                .with_custom_certificate_verifier(Arc::new(
+                    rustls_platform_verifier::Verifier::new().with_provider(provider),
+                )),
+            RootCerts::WebPki => {
+                let root_store = RootCertStore {
+                    roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
+                };
+                builder.with_root_certificates(root_store)
+            }
+        }
     };
 
     let mut config = if let Some((certs, key)) = &tls_config.client_cert {

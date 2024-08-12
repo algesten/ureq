@@ -3,13 +3,14 @@ use std::fmt;
 use std::io::{Read, Write};
 use std::sync::Arc;
 
-use crate::tls::TlsProvider;
+use crate::tls::{RootCerts, TlsProvider};
 use crate::transport::time::NextTimeout;
 use crate::{transport::*, Error};
 use der::pem::LineEnding;
 use der::Document;
 use http::uri::Scheme;
-use native_tls::{Certificate, HandshakeError, Identity, TlsConnector, TlsStream};
+use native_tls::{Certificate, HandshakeError, Identity, TlsConnector};
+use native_tls::{TlsConnectorBuilder, TlsStream};
 use once_cell::sync::OnceCell;
 
 use super::TlsConfig;
@@ -92,23 +93,25 @@ fn build_connector(tls_config: &TlsConfig) -> Result<Arc<TlsConnector>, Error> {
         builder.danger_accept_invalid_certs(true);
         builder.danger_accept_invalid_hostnames(true);
     } else {
-        let mut added = 0;
-        let mut ignored = 0;
-        for cert in &tls_config.root_certs {
-            let c = match Certificate::from_der(cert.der()) {
-                Ok(v) => v,
-                Err(e) => {
-                    // Invalid/expired/broken root certs are expected
-                    // in a native root store.
-                    trace!("Ignore invalid root cert: {}", e);
-                    ignored += 1;
-                    continue;
-                }
-            };
-            builder.add_root_certificate(c);
-            added += 1;
+        match &tls_config.root_certs {
+            RootCerts::SpecificCerts(certs) => {
+                // Only use the specific roots.
+                builder.disable_built_in_roots(true);
+                add_valid_der(certs.iter().map(|c| c.der()), &mut builder);
+            }
+            RootCerts::PlatformVerifier => {
+                // We only use the built-in roots.
+                builder.disable_built_in_roots(false);
+            }
+            RootCerts::WebPki => {
+                // Only use the specific roots.
+                builder.disable_built_in_roots(true);
+                let certs = webpki_root_certs::TLS_SERVER_ROOT_CERTS
+                    .iter()
+                    .map(|c| c.as_ref());
+                add_valid_der(certs, &mut builder);
+            }
         }
-        debug!("Added {} and ignored {} root certs", added, ignored);
     }
 
     if let Some((certs, key)) = &tls_config.client_cert {
@@ -134,6 +137,29 @@ fn build_connector(tls_config: &TlsConfig) -> Result<Arc<TlsConnector>, Error> {
     let conn = builder.build()?;
 
     Ok(Arc::new(conn))
+}
+
+fn add_valid_der<'a, C>(certs: C, builder: &mut TlsConnectorBuilder)
+where
+    C: Iterator<Item = &'a [u8]>,
+{
+    let mut added = 0;
+    let mut ignored = 0;
+    for der in certs {
+        let c = match Certificate::from_der(der) {
+            Ok(v) => v,
+            Err(e) => {
+                // Invalid/expired/broken root certs are expected
+                // in a native root store.
+                trace!("Ignore invalid root cert: {}", e);
+                ignored += 1;
+                continue;
+            }
+        };
+        builder.add_root_certificate(c);
+        added += 1;
+    }
+    debug!("Added {} and ignored {} root certs", added, ignored);
 }
 
 fn pemify(der: &[u8], label: &'static str) -> Result<String, Error> {

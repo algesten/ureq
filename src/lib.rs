@@ -139,7 +139,7 @@
 //!
 //! `ureq = { version = "3", features = ["socks-proxy", "charset"] }`
 //!
-//! The default enabled features are: **rustls**, **native-roots**, **gzip** and **json**.
+//! The default enabled features are: **rustls**, **gzip** and **json**.
 //!
 //! * **rustls** enabled the rustls TLS implementation. This is the defeault for the the crate level
 //!   convenience calls (`ureq::get` etc).
@@ -147,7 +147,6 @@
 //!   accidentally switching on an unwanted TLS implementation, `native-tls` is never picked up as
 //!   a default or used by the crate level convenience calls (`ureq::get` etc) – it must be configured
 //!   on the agent.
-//! * **native-roots** makes the TLS implementations use the OS' trust store (see TLS doc below).
 //! * **socks-proxy** enables proxy config using the `socks4://`, `socks4a://`, `socks5://`
 //!    and `socks://` (equal to `socks5://`) prefix.
 //! * **cookies** enables cookies.
@@ -481,6 +480,46 @@ pub(crate) mod test {
     }
 
     #[test]
+    #[cfg(feature = "rustls")]
+    fn connect_https_google_rustls_webpki() {
+        init_test_log();
+
+        use crate::tls::{RootCerts, TlsConfig, TlsProvider};
+
+        let agent: Agent = AgentConfig {
+            tls_config: TlsConfig {
+                provider: TlsProvider::RustlsWithRing,
+                root_certs: RootCerts::WebPki,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+        .into();
+
+        agent.get("https://www.google.com/").call().unwrap();
+    }
+
+    #[test]
+    #[cfg(feature = "native-tls")]
+    fn connect_https_google_native_tls_webpki() {
+        init_test_log();
+
+        use crate::tls::{RootCerts, TlsConfig, TlsProvider};
+
+        let agent: Agent = AgentConfig {
+            tls_config: TlsConfig {
+                provider: TlsProvider::NativeTls,
+                root_certs: RootCerts::WebPki,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+        .into();
+
+        agent.get("https://www.google.com/").call().unwrap();
+    }
+
+    #[test]
     fn simple_put_content_len() {
         init_test_log();
         let mut res = put("http://httpbin.org/put").send(&[0_u8; 100]).unwrap();
@@ -557,7 +596,4 @@ pub(crate) mod test {
     }
 }
 
-// TODO(martin): send body content type sniffing
-// TODO(martin): retry idemptotent methods
 // TODO(martin): CONNECT proxy
-// TODO(martin): send body charset encoding
