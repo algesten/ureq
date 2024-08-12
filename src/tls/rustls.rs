@@ -47,7 +47,7 @@ impl Connector for RustlsConnector {
             return Ok(Some(transport));
         }
 
-        if details.config.tls_config.provider != TlsProvider::RustlsWithRing {
+        if details.config.tls_config.provider != TlsProvider::Rustls {
             debug!("Skip because config is not set to Rustls");
             return Ok(Some(transport));
         }
@@ -95,7 +95,8 @@ impl Connector for RustlsConnector {
 fn build_config(tls_config: &TlsConfig) -> Arc<ClientConfig> {
     // Improve chances of ureq working out-of-the-box by not requiring the user
     // to select a default crypto provider.
-    let provider = Arc::new(rustls::crypto::ring::default_provider());
+    let provider = rustls::crypto::CryptoProvider::get_default().cloned()
+        .unwrap_or(Arc::new(rustls::crypto::ring::default_provider()));
 
     let builder = ClientConfig::builder_with_provider(provider)
         .with_protocol_versions(ALL_VERSIONS)

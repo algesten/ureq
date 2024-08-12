@@ -231,7 +231,7 @@ impl Default for DefaultConnector {
             // Panic if the config calls for rustls, the uri scheme is https and that
             // TLS provider is not enabled by feature flags.
             #[cfg(feature = "_tls")]
-            no_tls::WarnOnMissingTlsProvider(crate::tls::TlsProvider::RustlsWithRing).boxed(),
+            no_tls::WarnOnMissingTlsProvider(crate::tls::TlsProvider::Rustls).boxed(),
             //
             // As a fallback if rustls isn't enabled, use native-tls
             #[cfg(feature = "native-tls")]
