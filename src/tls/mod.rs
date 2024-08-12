@@ -109,6 +109,12 @@ pub enum RootCerts {
     /// * For **rustls**, this uses the `rustls-platform-verifier` crate.
     /// * For **native-tls**, this uses the roots that native-tls loads by default.
     PlatformVerifier,
+
+    /// Use Mozilla's root certificates instead of the platform.
+    ///
+    /// This is useful when you can't trust the system roots, such as in
+    /// environments where TLS is intercepted and decrypted by a proxy (MITM attack).
+    WebPki,
 }
 
 impl Default for TlsConfig {

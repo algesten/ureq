@@ -7,17 +7,14 @@ use http::uri::Scheme;
 use once_cell::sync::OnceCell;
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::{ClientConfig, ClientConnection, RootCertStore, StreamOwned, ALL_VERSIONS};
-use rustls_pki_types::{
-    CertificateDer, PrivateKeyDer, PrivatePkcs1KeyDer, PrivatePkcs8KeyDer, PrivateSec1KeyDer,
-    ServerName,
-};
+use rustls_pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs1KeyDer, PrivatePkcs8KeyDer};
+use rustls_pki_types::{PrivateSec1KeyDer, ServerName};
 
 use crate::tls::cert::KeyKind;
 use crate::tls::{RootCerts, TlsProvider};
 use crate::transport::time::NextTimeout;
-use crate::transport::{
-    Buffers, ConnectionDetails, Connector, LazyBuffers, Transport, TransportAdapter,
-};
+use crate::transport::{Buffers, ConnectionDetails, Connector, LazyBuffers};
+use crate::transport::{Transport, TransportAdapter};
 use crate::Error;
 
 use super::TlsConfig;
@@ -123,6 +120,12 @@ fn build_config(tls_config: &TlsConfig) -> Arc<ClientConfig> {
                 .with_custom_certificate_verifier(Arc::new(
                     rustls_platform_verifier::Verifier::new().with_provider(provider),
                 )),
+            RootCerts::WebPki => {
+                let root_store = RootCertStore {
+                    roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
+                };
+                builder.with_root_certificates(root_store)
+            }
         }
     };
 
