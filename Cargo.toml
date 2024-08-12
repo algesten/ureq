@@ -19,13 +19,12 @@ exclude = ["/cargo_deny.sh", "/deny.toml", "/test.sh"]
 rust-version = "1.67"
 
 [package.metadata.docs.rs]
-features = ["rustls", "native-roots", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset", "json"]
+features = ["rustls", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset", "json"]
 
 [features]
-default = ["rustls", "native-roots", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset", "json"]
-rustls = ["dep:rustls", "_tls"]
+default = ["rustls", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset", "json"]
+rustls = ["dep:rustls", "_tls", "dep:rustls-platform-verifier"]
 native-tls = ["dep:native-tls", "dep:der", "_tls"]
-native-roots = ["dep:rustls-native-certs"]
 socks-proxy = ["dep:socks"]
 cookies = ["dep:cookie_store", "_url"]
 gzip = ["dep:flate2"]
@@ -52,7 +51,7 @@ utf-8 = "0.7.6"
 # These are used regardless of TLS implementation.
 rustls-pemfile = { version = "2.1.2", optional = true, default-features = false, features = ["std"] }
 rustls-pki-types = { version = "1.7.0", optional = true, default-features = false, features = ["std"] }
-rustls-native-certs = { version = "0.7.1", optional = true, default-features = false }
+rustls-platform-verifier = { version = "0.3.3", optional = true, default-features = false }
 
 # ring has a higher chance of compiling cleanly without additional developer environment
 rustls = { version = "0.23.11", optional = true, default-features = false, features = ["ring", "logging", "std", "tls12"] }
@@ -85,4 +84,4 @@ serde = { version = "1.0.204", features = ["std", "derive"] }
 
 [[example]]
 name = "cureq"
-required-features = ["rustls", "native-roots", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset"]
+required-features = ["rustls", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset"]

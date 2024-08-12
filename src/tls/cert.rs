@@ -18,10 +18,6 @@ pub struct Certificate<'a> {
 enum CertDer<'a> {
     Borrowed(&'a [u8]),
     Owned(Vec<u8>),
-    // This type is here because rustls_native_certs::load_native_certs() gives us
-    // CertificateDer<'static> and we don't want to cause extra allocations.
-    #[cfg(feature = "native-roots")]
-    PkiTypes(rustls_pki_types::CertificateDer<'a>),
 }
 
 impl<'a> AsRef<[u8]> for CertDer<'a> {
@@ -29,8 +25,6 @@ impl<'a> AsRef<[u8]> for CertDer<'a> {
         match self {
             CertDer::Borrowed(v) => v,
             CertDer::Owned(v) => v,
-            #[cfg(feature = "native-roots")]
-            CertDer::PkiTypes(v) => v,
         }
     }
 }
@@ -73,13 +67,6 @@ impl<'a> Certificate<'a> {
     pub fn to_owned(&self) -> Certificate<'static> {
         Certificate {
             der: CertDer::Owned(self.der.as_ref().to_vec()),
-        }
-    }
-
-    #[cfg(feature = "native-roots")]
-    fn from_pki_types(der: rustls_pki_types::CertificateDer<'static>) -> Certificate<'static> {
-        Certificate {
-            der: CertDer::PkiTypes(der),
         }
     }
 }
@@ -224,25 +211,6 @@ impl<'a> Iterator for PemIter<'a> {
             }
         }
     }
-}
-
-/// Load the root certificates from the system.
-///
-/// Used by [`TlsConfig::with_native_roots()`](super::TlsConfig::with_native_roots()). Exposed
-/// as a helper for bespoke TLS implementations.
-#[cfg(feature = "native-roots")]
-pub fn load_native_root_certs() -> Vec<Certificate<'static>> {
-    trace!("Try load root certs");
-    let certs = match rustls_native_certs::load_native_certs() {
-        Ok(v) => v,
-        Err(e) => panic!("Failed to load root certs: {}", e),
-    };
-
-    let ret: Vec<_> = certs.into_iter().map(Certificate::from_pki_types).collect();
-
-    debug!("Loaded {} root certs", ret.len());
-
-    ret
 }
 
 impl<'a> From<Certificate<'a>> for PemItem<'a> {
