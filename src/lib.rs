@@ -488,7 +488,7 @@ pub(crate) mod test {
 
         let agent: Agent = AgentConfig {
             tls_config: TlsConfig {
-                provider: TlsProvider::RustlsWithRing,
+                provider: TlsProvider::Rustls,
                 root_certs: RootCerts::WebPki,
                 ..Default::default()
             },
