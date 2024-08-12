@@ -141,7 +141,10 @@ impl Agent {
 
         let mut unit = Unit::new(self.config.clone(), current_time(), request, body)?;
 
+        // For CONNECT proxy, this is the address of the proxy server, for
+        // all other cases it's the address of the URL being requested.
         let mut addr = None;
+
         let mut connection: Option<Connection> = None;
         let mut response;
         let mut no_buffers = NoBuffers;
@@ -235,11 +238,16 @@ impl Agent {
                 }
 
                 Event::Resolve { uri, timeout } => {
+                    // If we're using a CONNECT proxy, we need to resolve that hostname.
+                    let maybe_connect_uri = self.config.connect_proxy_uri();
+
+                    let effective_uri = maybe_connect_uri.unwrap_or(uri);
+
                     // Before resolving the URI we need to ensure it is a full URI. We
                     // cannot make requests with partial uri like "/path".
-                    uri.ensure_valid_url()?;
+                    effective_uri.ensure_valid_url()?;
 
-                    addr = Some(self.resolver.resolve(uri, timeout)?);
+                    addr = Some(self.resolver.resolve(effective_uri, timeout)?);
                     unit.handle_input(current_time(), Input::Resolved, &mut [])?;
                 }
 

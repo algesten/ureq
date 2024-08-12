@@ -36,6 +36,11 @@ impl TransportAdapter {
     pub fn get_mut(&mut self) -> &mut dyn Transport {
         &mut *self.transport
     }
+
+    /// Turn the adapter back into the wrapped transport
+    pub fn into_inner(self) -> Box<dyn Transport> {
+        self.transport
+    }
 }
 
 impl io::Read for TransportAdapter {

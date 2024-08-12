@@ -153,6 +153,10 @@ pub enum Error {
     #[error("json: {0}")]
     Json(#[from] serde_json::Error),
 
+    /// Attempt to connect to a CONNECT proxy failed.
+    #[error("CONNECT proxy failed: {0}")]
+    ConnectProxyFailed(String),
+
     /// hoot made no progress and there is no more input to read.
     ///
     /// We should never see this value.

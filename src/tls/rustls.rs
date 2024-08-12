@@ -3,7 +3,6 @@ use std::fmt;
 use std::io::{Read, Write};
 use std::sync::Arc;
 
-use http::uri::Scheme;
 use once_cell::sync::OnceCell;
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::{ClientConfig, ClientConnection, RootCertStore, StreamOwned, ALL_VERSIONS};
@@ -39,7 +38,7 @@ impl Connector for RustlsConnector {
 
         // Only add TLS if we are connecting via HTTPS and the transport isn't TLS
         // already, otherwise use chained transport as is.
-        if details.uri.scheme() != Some(&Scheme::HTTPS) || transport.is_tls() {
+        if !details.needs_tls() || transport.is_tls() {
             trace!("Skip");
             return Ok(Some(transport));
         }

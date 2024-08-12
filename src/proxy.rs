@@ -1,9 +1,14 @@
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
+use hoot::parser::try_parse_response;
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
+use std::io::Write;
 
-use http::Uri;
+use http::{StatusCode, Uri};
 
-use crate::util::{AuthorityExt, DebugUri};
+use crate::transport::{ConnectionDetails, Connector, Transport, TransportAdapter};
+use crate::util::{AuthorityExt, DebugUri, SchemeExt, UriExt};
 use crate::Error;
 
 /// Proxy protocol
@@ -28,6 +33,10 @@ impl Proto {
 
     pub fn is_socks(&self) -> bool {
         matches!(self, Self::Socks4 | Self::Socks4A | Self::Socks5)
+    }
+
+    pub(crate) fn is_connect(&self) -> bool {
+        matches!(self, Self::Http | Self::Https)
     }
 }
 
@@ -157,46 +166,90 @@ impl Proxy {
     pub fn is_from_env(&self) -> bool {
         self.from_env
     }
+}
 
-    //     pub(crate) fn connect<S: AsRef<str>>(&self, host: S, port: u16, user_agent: &str) -> String {
-    //         let authorization = if self.use_authorization() {
-    //             let creds = BASE64_STANDARD.encode(format!(
-    //                 "{}:{}",
-    //                 self.username.clone().unwrap_or_default(),
-    //                 self.password.clone().unwrap_or_default()
-    //             ));
+/// Connector for CONNECT proxy settings.
+///
+/// This operates on the previous chained transport typically a TcpConnector optionally
+/// wrapped in TLS.
+pub struct ConnectProxyConnector;
 
-    //             match self.proto {
-    //                 Proto::HTTP => format!("Proxy-Authorization: basic {}\r\n", creds),
-    //                 _ => String::new(),
-    //             }
-    //         } else {
-    //             String::new()
-    //         };
+impl Connector for ConnectProxyConnector {
+    fn connect(
+        &self,
+        details: &ConnectionDetails,
+        chained: Option<Box<dyn Transport>>,
+    ) -> Result<Option<Box<dyn Transport>>, Error> {
+        let Some(transport) = chained else {
+            return Ok(None);
+        };
 
-    //         format!(
-    //             "CONNECT {}:{} HTTP/1.1\r\n\
-    // Host: {}:{}\r\n\
-    // User-Agent: {}\r\n\
-    // Proxy-Connection: Keep-Alive\r\n\
-    // {}\
-    // \r\n",
-    //             host.as_ref(),
-    //             port,
-    //             host.as_ref(),
-    //             port,
-    //             user_agent,
-    //             authorization
-    //         )
-    //     }
+        let is_connect_proxy = details.config.connect_proxy_uri().is_some();
 
-    // pub(crate) fn verify_response(response: &Response) -> Result<(), Error> {
-    //     match response.status() {
-    //         200 => Ok(()),
-    //         401 | 407 => Err(ErrorKind::ProxyUnauthorized.new()),
-    //         _ => Err(ErrorKind::ProxyConnect.new()),
-    //     }
-    // }
+        if is_connect_proxy {
+            // unwrap is ok because connect_proxy_uri() above checks it.
+            let proxy = details.config.proxy.as_ref().unwrap();
+
+            let mut w = TransportAdapter::new(transport);
+
+            let uri = &details.uri;
+            uri.ensure_valid_url()?;
+
+            // All these unwrap() are ok because ensure_valid_uri() above checks them.
+            let host = uri.host().unwrap();
+            let port = uri
+                .port_u16()
+                .unwrap_or(uri.scheme().unwrap().default_port().unwrap());
+
+            write!(w, "CONNECT {}:{} HTTP/1.1\r\n", host, port)?;
+            write!(w, "Host: {}:{}\r\n", host, port)?;
+            write!(w, "User-Agent: {}\r\n", details.config.user_agent)?;
+            write!(w, "Proxy-Connection: Keep-Alive\r\n")?;
+
+            let use_creds = proxy.username().is_some() || proxy.password().is_some();
+
+            if use_creds {
+                let user = proxy.username().unwrap_or_default();
+                let pass = proxy.password().unwrap_or_default();
+                let creds = BASE64_STANDARD.encode(format!("{}:{}", user, pass));
+                write!(w, "Proxy-Authorization: basic {}\r\n", creds)?;
+            }
+
+            write!(w, "\r\n")?;
+            w.flush()?;
+
+            let mut transport = w.into_inner();
+
+            let response = loop {
+                let made_progress = transport.await_input(details.timeout)?;
+                let buffers = transport.buffers();
+                let input = buffers.input();
+                let Some((used_input, response)) = try_parse_response::<20>(input)? else {
+                    if !made_progress {
+                        let reason = "proxy server did not respond".to_string();
+                        return Err(Error::ConnectProxyFailed(reason));
+                    }
+                    continue;
+                };
+                buffers.consume(used_input);
+                break response;
+            };
+
+            match response.status() {
+                StatusCode::OK => {
+                    trace!("CONNECT proxy connected");
+                }
+                x => {
+                    let reason = format!("proxy server responded {}/{}", x.as_u16(), x.as_str());
+                    return Err(Error::ConnectProxyFailed(reason));
+                }
+            }
+
+            Ok(Some(transport))
+        } else {
+            Ok(Some(transport))
+        }
+    }
 }
 
 impl TryFrom<&str> for Proto {
@@ -222,6 +275,12 @@ impl fmt::Debug for Proxy {
             .field("uri", &DebugUri(&self.uri))
             .field("from_env", &self.from_env)
             .finish()
+    }
+}
+
+impl fmt::Debug for ConnectProxyConnector {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ProxyConnector").finish()
     }
 }
 
