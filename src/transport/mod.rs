@@ -24,8 +24,10 @@
 use std::fmt::Debug;
 use std::net::SocketAddr;
 
+use http::uri::Scheme;
 use http::Uri;
 
+use crate::proxy::Proto;
 use crate::resolver::Resolver;
 use crate::{AgentConfig, Error};
 
@@ -53,6 +55,8 @@ pub use test::set_handler;
 mod socks;
 #[cfg(feature = "socks-proxy")]
 pub use self::socks::SocksConnector;
+
+pub use crate::proxy::ConnectProxyConnector;
 
 pub mod time;
 
@@ -103,6 +107,8 @@ pub struct ConnectionDetails<'a> {
     pub uri: &'a Uri,
 
     /// A resolved IP address for the uri being requested. See [`Resolver`].
+    ///
+    /// For CONNECT proxy, this is the address of the proxy server.
     pub addr: SocketAddr,
 
     /// The Agent configuration.
@@ -112,7 +118,7 @@ pub struct ConnectionDetails<'a> {
     ///
     /// Typically the IP address of the host in the uri is already resolved to the `addr`
     /// property. However there might be cases where additional DNS lookups need to be
-    /// made in the connector itself, such as resolving a proxy server.
+    /// made in the connector itself, such as resolving a SOCKS proxy server.
     pub resolver: &'a dyn Resolver,
 
     /// Current time.
@@ -121,6 +127,22 @@ pub struct ConnectionDetails<'a> {
     /// The next timeout for making the connection.
     // TODO(martin): Make mechanism to lower duration for each step in the connector chain.
     pub timeout: NextTimeout,
+}
+
+impl<'a> ConnectionDetails<'a> {
+    /// Tell if the requested socket need TLS wrapping.
+    ///
+    /// This is (obviously) true for URLs starting `https`, but
+    /// also in the case of using a CONNECT proxy over https.
+    pub fn needs_tls(&self) -> bool {
+        if let Some(p) = &self.config.proxy {
+            if p.proto() == Proto::Https {
+                return true;
+            }
+        }
+
+        self.uri.scheme() == Some(&Scheme::HTTPS)
+    }
 }
 
 /// Transport of HTTP/1.1 as created by a [`Connector`].
@@ -241,6 +263,9 @@ impl Default for DefaultConnector {
             // TLS provider is not enabled by feature flags.
             #[cfg(feature = "_tls")]
             no_tls::WarnOnMissingTlsProvider(crate::tls::TlsProvider::NativeTls).boxed(),
+            //
+            // Do the final CONNECT proxy on top of the connection if indicated by config.
+            ConnectProxyConnector.boxed(),
         ]);
 
         DefaultConnector { chain }
@@ -296,8 +321,6 @@ mod no_proxy {
 
 #[cfg(feature = "_tls")]
 mod no_tls {
-    use http::uri::Scheme;
-
     use crate::tls::TlsProvider;
 
     use super::{ConnectionDetails, Connector, Debug, Error, Transport};
@@ -319,9 +342,7 @@ mod no_tls {
 
             let tls_config = &details.config.tls_config;
 
-            if details.uri.scheme() != Some(&Scheme::HTTPS)
-                && tls_config.provider == self.0
-                && !self.0.is_feature_enabled()
+            if details.needs_tls() && tls_config.provider == self.0 && !self.0.is_feature_enabled()
             {
                 panic!(
                     "uri scheme is https, provider is {:?} but feature is not enabled: {}",

@@ -2,6 +2,7 @@ use std::fmt;
 use std::time::Duration;
 
 use hoot::client::flow::RedirectAuthHeaders;
+use http::Uri;
 
 use crate::Proxy;
 
@@ -182,6 +183,18 @@ pub struct AgentConfig {
 mod private {
     #[derive(Debug, Clone)]
     pub struct Private;
+}
+
+impl AgentConfig {
+    pub(crate) fn connect_proxy_uri(&self) -> Option<&Uri> {
+        let proxy = self.proxy.as_ref()?;
+
+        if !proxy.proto().is_connect() {
+            return None;
+        }
+
+        Some(proxy.uri())
+    }
 }
 
 impl Default for AgentConfig {

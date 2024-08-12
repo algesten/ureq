@@ -8,7 +8,6 @@ use crate::transport::time::NextTimeout;
 use crate::{transport::*, Error};
 use der::pem::LineEnding;
 use der::Document;
-use http::uri::Scheme;
 use native_tls::{Certificate, HandshakeError, Identity, TlsConnector};
 use native_tls::{TlsConnectorBuilder, TlsStream};
 use once_cell::sync::OnceCell;
@@ -35,7 +34,7 @@ impl Connector for NativeTlsConnector {
 
         // Only add TLS if we are connecting via HTTPS and the transport isn't TLS
         // already, otherwise use chained transport as is.
-        if details.uri.scheme() != Some(&Scheme::HTTPS) || transport.is_tls() {
+        if !details.needs_tls() || transport.is_tls() {
             trace!("Skip");
             return Ok(Some(transport));
         }

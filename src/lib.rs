@@ -595,5 +595,3 @@ pub(crate) mod test {
         is_sync(owned_reader);
     }
 }
-
-// TODO(martin): CONNECT proxy
