@@ -480,6 +480,46 @@ pub(crate) mod test {
     }
 
     #[test]
+    #[cfg(feature = "rustls")]
+    fn connect_https_google_rustls_webpki() {
+        init_test_log();
+
+        use crate::tls::{RootCerts, TlsConfig, TlsProvider};
+
+        let agent: Agent = AgentConfig {
+            tls_config: TlsConfig {
+                provider: TlsProvider::RustlsWithRing,
+                root_certs: RootCerts::WebPki,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+        .into();
+
+        agent.get("https://www.google.com/").call().unwrap();
+    }
+
+    #[test]
+    #[cfg(feature = "native-tls")]
+    fn connect_https_google_native_tls_webpki() {
+        init_test_log();
+
+        use crate::tls::{RootCerts, TlsConfig, TlsProvider};
+
+        let agent: Agent = AgentConfig {
+            tls_config: TlsConfig {
+                provider: TlsProvider::NativeTls,
+                root_certs: RootCerts::WebPki,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+        .into();
+
+        agent.get("https://www.google.com/").call().unwrap();
+    }
+
+    #[test]
     fn simple_put_content_len() {
         init_test_log();
         let mut res = put("http://httpbin.org/put").send(&[0_u8; 100]).unwrap();
