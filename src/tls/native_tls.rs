@@ -3,7 +3,7 @@ use std::fmt;
 use std::io::{Read, Write};
 use std::sync::Arc;
 
-use crate::tls::TlsProvider;
+use crate::tls::{RootCerts, TlsProvider};
 use crate::transport::time::NextTimeout;
 use crate::{transport::*, Error};
 use der::pem::LineEnding;
@@ -92,23 +92,33 @@ fn build_connector(tls_config: &TlsConfig) -> Result<Arc<TlsConnector>, Error> {
         builder.danger_accept_invalid_certs(true);
         builder.danger_accept_invalid_hostnames(true);
     } else {
-        let mut added = 0;
-        let mut ignored = 0;
-        for cert in &tls_config.root_certs {
-            let c = match Certificate::from_der(cert.der()) {
-                Ok(v) => v,
-                Err(e) => {
-                    // Invalid/expired/broken root certs are expected
-                    // in a native root store.
-                    trace!("Ignore invalid root cert: {}", e);
-                    ignored += 1;
-                    continue;
+        match &tls_config.root_certs {
+            RootCerts::SpecificCerts(certs) => {
+                // Only use the specific roots.
+                builder.disable_built_in_roots(true);
+                let mut added = 0;
+                let mut ignored = 0;
+                for cert in certs {
+                    let c = match Certificate::from_der(cert.der()) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            // Invalid/expired/broken root certs are expected
+                            // in a native root store.
+                            trace!("Ignore invalid root cert: {}", e);
+                            ignored += 1;
+                            continue;
+                        }
+                    };
+                    builder.add_root_certificate(c);
+                    added += 1;
                 }
-            };
-            builder.add_root_certificate(c);
-            added += 1;
+                debug!("Added {} and ignored {} root certs", added, ignored);
+            }
+            RootCerts::PlatformVerifier => {
+                // We only use the built-in roots.
+                builder.disable_built_in_roots(false);
+            }
         }
-        debug!("Added {} and ignored {} root certs", added, ignored);
     }
 
     if let Some((certs, key)) = &tls_config.client_cert {
