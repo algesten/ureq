@@ -95,7 +95,8 @@ impl Connector for RustlsConnector {
 fn build_config(tls_config: &TlsConfig) -> Arc<ClientConfig> {
     // Improve chances of ureq working out-of-the-box by not requiring the user
     // to select a default crypto provider.
-    let provider = rustls::crypto::CryptoProvider::get_default().cloned()
+    let provider = rustls::crypto::CryptoProvider::get_default()
+        .cloned()
         .unwrap_or(Arc::new(rustls::crypto::ring::default_provider()));
 
     let builder = ClientConfig::builder_with_provider(provider)
