@@ -20,9 +20,11 @@ pub struct RequestBuilder<B> {
     _ph: PhantomData<B>,
 }
 
+#[derive(Debug)]
 pub struct WithoutBody(());
 impl Private for WithoutBody {}
 
+#[derive(Debug)]
 pub struct WithBody(());
 impl Private for WithBody {}
 
