@@ -4,6 +4,7 @@ use std::time::Duration;
 use hoot::client::flow::RedirectAuthHeaders;
 use http::Uri;
 
+use crate::middleware::MiddlewareChain;
 use crate::Proxy;
 
 #[cfg(feature = "_tls")]
@@ -172,6 +173,11 @@ pub struct AgentConfig {
     /// Defaults to 15 seconds
     pub max_idle_age: Duration,
 
+    /// Middleware used for this agent.
+    ///
+    /// Defaults to no middleware.
+    pub middleware: MiddlewareChain,
+
     // This is here to force users of ureq to use the ..Default::default() pattern
     // as part of creating `AgentConfig`. That way we can introduce new settings without
     // it becoming a breaking changes.
@@ -224,6 +230,7 @@ impl Default for AgentConfig {
             max_idle_connections: 10,
             max_idle_connections_per_host: 3,
             max_idle_age: Duration::from_secs(15),
+            middleware: MiddlewareChain::default(),
 
             _must_use_default: private::Private,
         }

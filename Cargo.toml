@@ -19,7 +19,7 @@ exclude = ["/cargo_deny.sh", "/deny.toml", "/test.sh"]
 rust-version = "1.67"
 
 [package.metadata.docs.rs]
-features = ["rustls", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset", "json"]
+features = ["rustls", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset", "json", "_test"]
 
 [features]
 default = ["rustls", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset", "json"]

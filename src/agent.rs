@@ -7,6 +7,7 @@ use http::uri::Scheme;
 use http::{HeaderName, HeaderValue, Method, Request, Response, Uri};
 
 use crate::body::{Body, ResponseInfo};
+use crate::middleware::MiddlewareNext;
 use crate::pool::{Connection, ConnectionPool};
 use crate::resolver::{DefaultResolver, Resolver};
 use crate::send_body::AsSendBody;
@@ -120,15 +121,29 @@ impl Agent {
         let body = body.as_body();
         let request = Request::from_parts(parts, ());
 
-        self.do_run(request, body, Instant::now)
+        self.do_run(request, body)
+    }
+
+    pub(crate) fn run_middleware(
+        &self,
+        request: Request<()>,
+        body: SendBody,
+    ) -> Result<Response<Body>, Error> {
+        let (parts, _) = request.into_parts();
+        let request = http::Request::from_parts(parts, body);
+
+        let next = MiddlewareNext::new(self);
+        next.handle(request)
     }
 
     pub(crate) fn do_run(
         &self,
         request: Request<()>,
         body: SendBody,
-        current_time: impl Fn() -> Instant + Send + Sync + 'static,
     ) -> Result<Response<Body>, Error> {
+        // TODO(martin): use this in tests to try timeouts etc.
+        let current_time = Instant::now;
+
         let headers = request.headers();
         let send_body_mode = if headers.has_send_body_mode() {
             None
@@ -375,6 +390,10 @@ impl Agent {
         trace!("Receive body mode is: {:?}", recv_body_mode);
 
         Ok(response)
+    }
+
+    pub(crate) fn config(&self) -> &AgentConfig {
+        &self.config
     }
 }
 

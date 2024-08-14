@@ -339,6 +339,7 @@ mod send_body;
 mod unit;
 mod util;
 
+pub mod middleware;
 pub mod resolver;
 pub mod transport;
 
@@ -596,5 +597,4 @@ pub(crate) mod test {
     }
 }
 
-// TODO(martin): middleware
 // TODO(martin): config for ipv4/ipv6
