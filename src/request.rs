@@ -6,7 +6,6 @@ use http::{HeaderName, HeaderValue, Method, Request, Response, Uri, Version};
 
 use crate::body::Body;
 use crate::send_body::AsSendBody;
-use crate::transport::time::Instant;
 use crate::util::private::Private;
 use crate::{Agent, Error, SendBody};
 
@@ -192,7 +191,7 @@ impl RequestBuilder<WithBody> {
 }
 
 fn do_call(agent: Agent, request: Request<()>, body: SendBody) -> Result<Response<Body>, Error> {
-    let response = agent.do_run(request, body, Instant::now)?;
+    let response = agent.run_middleware(request, body)?;
     Ok(response)
 }
 
