@@ -1,4 +1,5 @@
 use std::convert::TryFrom;
+use std::fmt;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 
@@ -13,7 +14,6 @@ use crate::{Agent, Error, SendBody};
 ///
 /// The purpose is to provide the [`.call()`][RequestBuilder::call] and [`.send()`][RequestBuilder::send]
 /// functions to make a simpler API for sending requests.
-#[derive(Debug)]
 pub struct RequestBuilder<B> {
     agent: Agent,
     builder: http::request::Builder,
@@ -211,7 +211,25 @@ impl<MethodLimit> DerefMut for RequestBuilder<MethodLimit> {
     }
 }
 
-// TODO(martin): implement reasonable Debug
+impl fmt::Debug for RequestBuilder<WithoutBody> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RequestBuilder<WithoutBody>")
+            // unwraps are OK because we can't be in this state without having method+uri
+            .field("method", &self.builder.method_ref().unwrap())
+            .field("uri", &self.builder.uri_ref().unwrap())
+            .finish()
+    }
+}
+
+impl fmt::Debug for RequestBuilder<WithBody> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RequestBuilder<WithBody>")
+            // unwraps are OK because we can't be in this state without having method+uri
+            .field("method", &self.builder.method_ref().unwrap())
+            .field("uri", &self.builder.uri_ref().unwrap())
+            .finish()
+    }
+}
 
 #[cfg(test)]
 mod test {
@@ -223,5 +241,23 @@ mod test {
         let err = crate::get("file:///some/path").call().unwrap_err();
         assert_eq!(err.to_string(), "http: invalid format");
         assert!(matches!(err, Error::Http(_)));
+    }
+
+    #[test]
+    fn debug_print_without_body() {
+        let call = crate::get("https://foo/bar");
+        assert_eq!(
+            format!("{:?}", call),
+            "RequestBuilder<WithoutBody> { method: GET, uri: https://foo/bar }"
+        );
+    }
+
+    #[test]
+    fn debug_print_with_body() {
+        let call = crate::post("https://foo/bar");
+        assert_eq!(
+            format!("{:?}", call),
+            "RequestBuilder<WithBody> { method: POST, uri: https://foo/bar }"
+        );
     }
 }
