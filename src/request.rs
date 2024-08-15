@@ -8,7 +8,7 @@ use http::{HeaderName, HeaderValue, Method, Request, Response, Uri, Version};
 use crate::body::Body;
 use crate::send_body::AsSendBody;
 use crate::util::private::Private;
-use crate::{Agent, Error, SendBody};
+use crate::{Agent, Error, SendBody, Timeouts};
 
 /// Transparent wrapper around [`http::request::Builder`].
 ///
@@ -87,6 +87,52 @@ impl<Any> RequestBuilder<Any> {
     pub fn version(mut self, version: Version) -> Self {
         self.builder = self.builder.version(version);
         self
+    }
+
+    /// Override agent timeouts on the request level.
+    ///
+    /// The agent setting is copied and modified on request level.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use ureq::{Agent, AgentConfig, Timeouts};
+    /// use std::time::Duration;
+    ///
+    /// let agent: Agent = AgentConfig {
+    ///     timeouts: Timeouts {
+    ///         global: Some(Duration::from_secs(10)),
+    ///        ..Default::default()
+    ///     },
+    ///     ..Default::default()
+    /// }.into();
+    ///
+    /// let mut builder = agent.get("https://httpbin.org/get");
+    ///
+    /// // This clones the timeouts from agent level to request level.
+    /// let timeouts = builder.timeouts();
+    ///
+    /// assert_eq!(timeouts.global, Some(Duration::from_secs(10)));
+    ///
+    /// // Override the global timeout on the request level.
+    /// timeouts.global = Some(Duration::from_secs(3));
+    ///
+    /// // Make the request
+    /// let response = builder.call()?;
+    /// # Ok::<_, ureq::Error>(())
+    /// ```
+    pub fn timeouts(&mut self) -> &mut Timeouts {
+        let exts = self
+            .builder
+            .extensions_mut()
+            .expect("builder without errors");
+
+        if exts.get::<Timeouts>().is_none() {
+            exts.insert(self.agent.config().timeouts);
+        }
+
+        // unwrap is ok because of above logic
+        exts.get_mut().unwrap()
     }
 }
 
