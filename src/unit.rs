@@ -492,7 +492,8 @@ impl<B> Unit<B> {
 
     fn global_timeout(&self) -> Instant {
         self.config
-            .timeout_global
+            .timeouts
+            .global
             .map(|t| self.global_start + t.into())
             .unwrap_or(Instant::NotHappening)
     }
@@ -629,26 +630,31 @@ impl CallTimings {
             State::Begin(_) => None,
             State::Prepare(_) => None,
             State::Resolve(_) => config
-                .timeout_resolve
+                .timeouts
+                .resolve
                 .map(|t| self.time_call_start.unwrap() + t.into())
                 .map(|t| (t, TimeoutReason::Resolver)),
             State::OpenConnection(_) => config
-                .timeout_connect
+                .timeouts
+                .connect
                 .map(|t| self.time_resolve.unwrap() + t.into())
                 .map(|t| (t, TimeoutReason::OpenConnection)),
             State::SendRequest(_) => config
-                .timeout_send_request
+                .timeouts
+                .send_request
                 .map(|t| self.time_connect.unwrap() + t.into())
                 .map(|t| (t, TimeoutReason::SendRequest)),
             State::SendBody(_) => config
-                .timeout_send_body
+                .timeouts
+                .send_body
                 .map(|t| self.time_send_request.unwrap() + t.into())
                 .map(|t| (t, TimeoutReason::SendBody)),
             State::Await100(_) => config
-                .timeout_await_100
+                .timeouts
+                .await_100
                 .map(|t| self.time_send_request.unwrap() + t.into())
                 .map(|t| (t, TimeoutReason::Await100)),
-            State::RecvResponse(_) => config.timeout_recv_response.map(|t| {
+            State::RecvResponse(_) => config.timeouts.recv_response.map(|t| {
                 // The fallback order is important. See state diagram in hoot.
                 (
                     self.time_send_body
@@ -660,7 +666,8 @@ impl CallTimings {
                 )
             }),
             State::RecvBody(_) => config
-                .timeout_recv_body
+                .timeouts
+                .recv_body
                 .map(|t| self.time_recv_response.unwrap() + t.into())
                 .map(|t| (t, TimeoutReason::RecvBody)),
             State::Redirect(_) => None,

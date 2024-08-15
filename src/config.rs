@@ -19,11 +19,14 @@ use crate::tls::TlsConfig;
 /// # Example
 ///
 /// ```
-/// use ureq::AgentConfig;
+/// use ureq::{AgentConfig, Timeouts};
 /// use std::time::Duration;
 ///
 /// let config = AgentConfig {
-///     timeout_global: Some(Duration::from_secs(10)),
+///     timeouts: Timeouts {
+///         global: Some(Duration::from_secs(10)),
+///         ..Default::default()
+///     },
 ///     https_only: true,
 ///     ..Default::default()
 /// };
@@ -85,65 +88,10 @@ pub struct AgentConfig {
     /// Defaults to `ureq <version>`
     pub user_agent: String,
 
-    /// Timeout for the entire call
+    /// The timeout settings on agent level.
     ///
-    /// This is end-to-end, from DNS lookup to finishing reading the response body.
-    /// Thus it covers all other timeouts.
-    ///
-    /// Defaults to `None`.
-    pub timeout_global: Option<Duration>,
-
-    /// Timeout for call-by-call when following redirects
-    ///
-    /// This covers a single call and the timeout is reset when
-    /// ureq follows a redirections.
-    ///
-    /// Defaults to `None`.
-    pub timeout_per_call: Option<Duration>,
-
-    /// Max duration for doing the DNS lookup when establishing the connection
-    ///
-    /// Because most platforms do not have an async syscall for looking up
-    /// a host name, setting this might force str0m to spawn a thread to handle
-    /// the timeout.
-    ///
-    /// Defaults to `None`.
-    pub timeout_resolve: Option<Duration>,
-
-    /// Max duration for establishing the connection
-    ///
-    /// For a TLS connection this includes opening the socket and doing the TLS handshake.
-    ///
-    /// Defaults to `None`.
-    pub timeout_connect: Option<Duration>,
-
-    /// Max duration for sending the request, but not the request body.
-    ///
-    /// Defaults to `None`.
-    pub timeout_send_request: Option<Duration>,
-
-    /// Max duration for awaiting a 100-continue response.
-    ///
-    /// Only used if there is a request body and we sent the `Expect: 100-continue`
-    /// header to indicate we want the server to respond with 100.
-    ///
-    /// This defaults to 1 second.
-    pub timeout_await_100: Option<Duration>,
-
-    /// Max duration for sending a request body (if there is one)
-    ///
-    /// Defaults to `None`.
-    pub timeout_send_body: Option<Duration>,
-
-    /// Max duration for receiving the response headers, but not the body
-    ///
-    /// Defaults to `None`.
-    pub timeout_recv_response: Option<Duration>,
-
-    /// Max duration for receving the response body.
-    ///
-    /// Defaults to `None`.
-    pub timeout_recv_body: Option<Duration>,
+    /// This can be overridden per request.
+    pub timeouts: Timeouts,
 
     /// Max size of the HTTP response header.
     ///
@@ -193,6 +141,78 @@ pub struct AgentConfig {
     pub _must_use_default: private::Private,
 }
 
+/// Request timeout configuration.
+///
+/// This can be configured both on Agent level as well as per request.
+#[derive(Clone)]
+pub struct Timeouts {
+    /// Timeout for the entire call
+    ///
+    /// This is end-to-end, from DNS lookup to finishing reading the response body.
+    /// Thus it covers all other timeouts.
+    ///
+    /// Defaults to `None`.
+    pub global: Option<Duration>,
+
+    /// Timeout for call-by-call when following redirects
+    ///
+    /// This covers a single call and the timeout is reset when
+    /// ureq follows a redirections.
+    ///
+    /// Defaults to `None`.
+    pub per_call: Option<Duration>,
+
+    /// Max duration for doing the DNS lookup when establishing the connection
+    ///
+    /// Because most platforms do not have an async syscall for looking up
+    /// a host name, setting this might force str0m to spawn a thread to handle
+    /// the timeout.
+    ///
+    /// Defaults to `None`.
+    pub resolve: Option<Duration>,
+
+    /// Max duration for establishing the connection
+    ///
+    /// For a TLS connection this includes opening the socket and doing the TLS handshake.
+    ///
+    /// Defaults to `None`.
+    pub connect: Option<Duration>,
+
+    /// Max duration for sending the request, but not the request body.
+    ///
+    /// Defaults to `None`.
+    pub send_request: Option<Duration>,
+
+    /// Max duration for awaiting a 100-continue response.
+    ///
+    /// Only used if there is a request body and we sent the `Expect: 100-continue`
+    /// header to indicate we want the server to respond with 100.
+    ///
+    /// This defaults to 1 second.
+    pub await_100: Option<Duration>,
+
+    /// Max duration for sending a request body (if there is one)
+    ///
+    /// Defaults to `None`.
+    pub send_body: Option<Duration>,
+
+    /// Max duration for receiving the response headers, but not the body
+    ///
+    /// Defaults to `None`.
+    pub recv_response: Option<Duration>,
+
+    /// Max duration for receving the response body.
+    ///
+    /// Defaults to `None`.
+    pub recv_body: Option<Duration>,
+
+    // This is here to force users of ureq to use the ..Default::default() pattern
+    // as part of creating `AgentConfig`. That way we can introduce new settings without
+    // it becoming a breaking changes.
+    #[doc(hidden)]
+    pub _must_use_default: private::Private,
+}
+
 // Deliberately not publicly visible.
 mod private {
     #[derive(Debug, Clone)]
@@ -224,15 +244,7 @@ impl Default for AgentConfig {
             max_redirects: 10,
             redirect_auth_headers: RedirectAuthHeaders::Never,
             user_agent: "ureq".to_string(), // TODO(martin): add version
-            timeout_global: None,
-            timeout_per_call: None,
-            timeout_resolve: None,
-            timeout_connect: None,
-            timeout_send_request: None,
-            timeout_await_100: Some(Duration::from_secs(1)),
-            timeout_send_body: None,
-            timeout_recv_response: None,
-            timeout_recv_body: None,
+            timeouts: Timeouts::default(),
             max_response_header_size: 64 * 1024,
             input_buffer_size: 128 * 1024,
             output_buffer_size: 128 * 1024,
@@ -246,19 +258,29 @@ impl Default for AgentConfig {
     }
 }
 
+impl Default for Timeouts {
+    fn default() -> Self {
+        Self {
+            global: None,
+            per_call: None,
+            resolve: None,
+            connect: None,
+            send_request: None,
+            await_100: Some(Duration::from_secs(1)),
+            send_body: None,
+            recv_response: None,
+            recv_body: None,
+
+            _must_use_default: private::Private,
+        }
+    }
+}
+
 impl fmt::Debug for AgentConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut dbg = f.debug_struct("AgentConfig");
 
-        dbg.field("timeout_global", &self.timeout_global)
-            .field("timeout_per_call", &self.timeout_per_call)
-            .field("timeout_resolve", &self.timeout_resolve)
-            .field("timeout_connect", &self.timeout_connect)
-            .field("timeout_send_request", &self.timeout_send_request)
-            .field("timeout_await_100", &self.timeout_await_100)
-            .field("timeout_send_body", &self.timeout_send_body)
-            .field("timeout_recv_response", &self.timeout_recv_response)
-            .field("timeout_recv_body", &self.timeout_recv_body)
+        dbg.field("timeouts", &self.timeouts)
             .field("https_only", &self.https_only)
             .field("no_delay", &self.no_delay)
             .field("max_redirects", &self.max_redirects)
@@ -280,5 +302,21 @@ impl fmt::Debug for AgentConfig {
         }
 
         dbg.finish()
+    }
+}
+
+impl fmt::Debug for Timeouts {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Timeouts")
+            .field("global", &self.global)
+            .field("per_call", &self.per_call)
+            .field("resolve", &self.resolve)
+            .field("connect", &self.connect)
+            .field("send_request", &self.send_request)
+            .field("await_100", &self.await_100)
+            .field("send_body", &self.send_body)
+            .field("recv_response", &self.recv_response)
+            .field("recv_body", &self.recv_body)
+            .finish()
     }
 }
