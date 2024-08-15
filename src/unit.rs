@@ -15,10 +15,11 @@ use crate::error::TimeoutReason;
 use crate::transport::time::{Instant, NextTimeout};
 use crate::transport::Buffers;
 use crate::util::{DebugHeaders, DebugUri};
-use crate::{AgentConfig, Error, SendBody};
+use crate::{AgentConfig, Error, SendBody, Timeouts};
 
 pub(crate) struct Unit<B> {
     config: Arc<AgentConfig>,
+    timeouts: Timeouts,
     global_start: Instant,
     call_timings: CallTimings,
     state: State,
@@ -88,12 +89,14 @@ pub(crate) enum Input<'a> {
 impl<'b> Unit<SendBody<'b>> {
     pub fn new(
         config: Arc<AgentConfig>,
+        timeouts: Timeouts,
         global_start: Instant,
         request: Request<()>,
         body: SendBody<'b>,
     ) -> Result<Self, Error> {
         Ok(Self {
             config,
+            timeouts,
             global_start,
             call_timings: CallTimings::default(),
             state: State::Begin(Flow::new(request)?),
@@ -392,6 +395,7 @@ impl<'b> Unit<SendBody<'b>> {
     pub fn release_body(self) -> Unit<()> {
         Unit {
             config: self.config,
+            timeouts: self.timeouts,
             global_start: self.global_start,
             call_timings: self.call_timings,
             state: self.state,
@@ -491,15 +495,14 @@ impl<B> Unit<B> {
     }
 
     fn global_timeout(&self) -> Instant {
-        self.config
-            .timeouts
+        self.timeouts
             .global
             .map(|t| self.global_start + t.into())
             .unwrap_or(Instant::NotHappening)
     }
 
     fn next_timeout(&mut self, now: Instant) -> Result<NextTimeout, Error> {
-        let (call_timeout_at, reason) = self.call_timings.next_timeout(&self.state, &self.config);
+        let (call_timeout_at, reason) = self.call_timings.next_timeout(&self.state, &self.timeouts);
         let call_timeout = call_timeout_at.duration_since(now);
 
         let global_timeout_at = self.global_timeout();
@@ -623,38 +626,33 @@ pub(crate) struct CallTimings {
 }
 
 impl CallTimings {
-    fn next_timeout(&self, state: &State, config: &AgentConfig) -> (Instant, TimeoutReason) {
+    fn next_timeout(&self, state: &State, timeouts: &Timeouts) -> (Instant, TimeoutReason) {
         // self.time_xxx unwraps() below are OK. If the unwrap fails, we have a state
         // bug where we progressed to a certain State without setting the corresponding time.
         match state {
             State::Begin(_) => None,
             State::Prepare(_) => None,
-            State::Resolve(_) => config
-                .timeouts
+            State::Resolve(_) => timeouts
                 .resolve
                 .map(|t| self.time_call_start.unwrap() + t.into())
                 .map(|t| (t, TimeoutReason::Resolver)),
-            State::OpenConnection(_) => config
-                .timeouts
+            State::OpenConnection(_) => timeouts
                 .connect
                 .map(|t| self.time_resolve.unwrap() + t.into())
                 .map(|t| (t, TimeoutReason::OpenConnection)),
-            State::SendRequest(_) => config
-                .timeouts
+            State::SendRequest(_) => timeouts
                 .send_request
                 .map(|t| self.time_connect.unwrap() + t.into())
                 .map(|t| (t, TimeoutReason::SendRequest)),
-            State::SendBody(_) => config
-                .timeouts
+            State::SendBody(_) => timeouts
                 .send_body
                 .map(|t| self.time_send_request.unwrap() + t.into())
                 .map(|t| (t, TimeoutReason::SendBody)),
-            State::Await100(_) => config
-                .timeouts
+            State::Await100(_) => timeouts
                 .await_100
                 .map(|t| self.time_send_request.unwrap() + t.into())
                 .map(|t| (t, TimeoutReason::Await100)),
-            State::RecvResponse(_) => config.timeouts.recv_response.map(|t| {
+            State::RecvResponse(_) => timeouts.recv_response.map(|t| {
                 // The fallback order is important. See state diagram in hoot.
                 (
                     self.time_send_body
@@ -665,8 +663,7 @@ impl CallTimings {
                     TimeoutReason::RecvResponse,
                 )
             }),
-            State::RecvBody(_) => config
-                .timeouts
+            State::RecvBody(_) => timeouts
                 .recv_body
                 .map(|t| self.time_recv_response.unwrap() + t.into())
                 .map(|t| (t, TimeoutReason::RecvBody)),

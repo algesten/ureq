@@ -144,7 +144,7 @@ pub struct AgentConfig {
 /// Request timeout configuration.
 ///
 /// This can be configured both on Agent level as well as per request.
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct Timeouts {
     /// Timeout for the entire call
     ///
@@ -215,7 +215,7 @@ pub struct Timeouts {
 
 // Deliberately not publicly visible.
 mod private {
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Copy)]
     pub struct Private;
 }
 

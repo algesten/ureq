@@ -15,7 +15,7 @@ use crate::transport::time::Instant;
 use crate::transport::{ConnectionDetails, Connector, DefaultConnector, NoBuffers};
 use crate::unit::{Event, Input, Unit};
 use crate::util::{DebugResponse, HeaderMapExt, UriExt};
-use crate::{AgentConfig, Error, RequestBuilder, SendBody};
+use crate::{AgentConfig, Error, RequestBuilder, SendBody, Timeouts};
 use crate::{WithBody, WithoutBody};
 
 /// Agents keep state between requests.
@@ -154,7 +154,13 @@ impl Agent {
         let has_header_accept_enc = headers.has_accept_encoding();
         let has_header_ua = headers.has_user_agent();
 
-        let mut unit = Unit::new(self.config.clone(), current_time(), request, body)?;
+        // Timeouts on the request level overrides the agent level.
+        let timeouts = *request
+            .extensions()
+            .get::<Timeouts>()
+            .unwrap_or(&self.config().timeouts);
+
+        let mut unit = Unit::new(self.config.clone(), timeouts, current_time(), request, body)?;
 
         // For CONNECT proxy, this is the address of the proxy server, for
         // all other cases it's the address of the URL being requested.
