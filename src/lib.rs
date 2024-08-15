@@ -57,11 +57,14 @@
 //!
 //! ```rust
 //! # fn no_run() -> Result<(), ureq::Error> {
-//! use ureq::{Agent, AgentConfig};
+//! use ureq::{Agent, AgentConfig, Timeouts};
 //! use std::time::Duration;
 //!
 //! let agent: Agent = AgentConfig {
-//!     timeout_global: Some(Duration::from_secs(5)),
+//!     timeouts: Timeouts {
+//!         global: Some(Duration::from_secs(5)),
+//!         ..Default::default()
+//!     },
 //!     ..Default::default()
 //! }.into();
 //!
@@ -320,7 +323,7 @@ use std::convert::TryFrom;
 pub use http;
 
 pub use body::{Body, BodyReader, BodyWithConfig};
-pub use config::AgentConfig;
+pub use config::{AgentConfig, Timeouts};
 use http::Method;
 use http::{Request, Response, Uri};
 pub use proxy::Proxy;

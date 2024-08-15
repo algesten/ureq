@@ -63,11 +63,14 @@ holds a connection pool for reuse, and a cookie store if you use the
 an Agent also allows setting options like the TLS configuration.
 
 ```rust
-use ureq::{Agent, AgentConfig};
+use ureq::{Agent, AgentConfig, Timeouts};
 use std::time::Duration;
 
 let agent: Agent = AgentConfig {
-    timeout_global: Some(Duration::from_secs(5)),
+    timeouts: Timeouts {
+        global: Some(Duration::from_secs(5)),
+        ..Default::default()
+    },
     ..Default::default()
 }.into();
 
