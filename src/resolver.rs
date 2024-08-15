@@ -19,14 +19,19 @@ use http::Uri;
 
 use crate::transport::time::NextTimeout;
 use crate::util::{SchemeExt, UriExt};
-use crate::Error;
+use crate::{AgentConfig, Error};
 
 /// Trait for name resolvers.
 pub trait Resolver: Debug + Send + Sync + 'static {
     /// Resolve the URI to a socket address.
     ///
     /// The implementation should resolve within the given _timeout_.
-    fn resolve(&self, uri: &Uri, timeout: NextTimeout) -> Result<SocketAddr, Error>;
+    fn resolve(
+        &self,
+        uri: &Uri,
+        config: &AgentConfig,
+        timeout: NextTimeout,
+    ) -> Result<SocketAddr, Error>;
 }
 
 /// Default resolver implementation.
@@ -34,7 +39,6 @@ pub trait Resolver: Debug + Send + Sync + 'static {
 /// Uses std::net [`ToSocketAddrs`](https://doc.rust-lang.org/std/net/trait.ToSocketAddrs.html) to
 /// do the lookup. Can optionally spawn a thread to abort lookup if the relevant timeout is set.
 pub struct DefaultResolver {
-    family: IpFamily,
     select: AddrSelect,
 }
 
@@ -79,7 +83,12 @@ impl DefaultResolver {
 }
 
 impl Resolver for DefaultResolver {
-    fn resolve(&self, uri: &Uri, timeout: NextTimeout) -> Result<SocketAddr, Error> {
+    fn resolve(
+        &self,
+        uri: &Uri,
+        config: &AgentConfig,
+        timeout: NextTimeout,
+    ) -> Result<SocketAddr, Error> {
         uri.ensure_valid_url()?;
 
         // unwrap is ok due to ensure_full_url() above.
@@ -113,7 +122,7 @@ impl Resolver for DefaultResolver {
             resolve_async(addr, timeout)?
         };
 
-        let wanted = self.family.keep_wanted(iter);
+        let wanted = config.ip_family.keep_wanted(iter);
         let maybe_addr = self.select.choose(wanted);
 
         debug!("Resolved: {:?}", maybe_addr);
@@ -176,7 +185,6 @@ impl fmt::Debug for DefaultResolver {
 impl Default for DefaultResolver {
     fn default() -> Self {
         Self {
-            family: IpFamily::Any,
             select: AddrSelect::First,
         }
     }
@@ -191,9 +199,11 @@ mod test {
     #[test]
     fn unknown_scheme() {
         let uri: Uri = "foo://some:42/123".parse().unwrap();
+        let config = AgentConfig::default();
         let err = DefaultResolver::default()
             .resolve(
                 &uri,
+                &config,
                 NextTimeout {
                     after: Duration::NotHappening,
                     reason: crate::TimeoutReason::Global,
