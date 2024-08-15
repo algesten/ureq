@@ -5,6 +5,7 @@ use hoot::client::flow::RedirectAuthHeaders;
 use http::Uri;
 
 use crate::middleware::MiddlewareChain;
+use crate::resolver::IpFamily;
 use crate::Proxy;
 
 #[cfg(feature = "_tls")]
@@ -39,6 +40,13 @@ pub struct AgentConfig {
     ///
     /// Defaults to `false`.
     pub https_only: bool,
+
+    /// Configuration of IPv4/IPv6.
+    ///
+    /// This affects the resolver.
+    ///
+    /// Defaults to `IpFamily::Any`.
+    pub ip_family: IpFamily,
 
     /// Config for TLS.
     ///
@@ -208,6 +216,7 @@ impl Default for AgentConfig {
         Self {
             http_status_as_error: true,
             https_only: false,
+            ip_family: IpFamily::Any,
             #[cfg(feature = "_tls")]
             tls_config: TlsConfig::default(),
             proxy: Proxy::try_from_env(),

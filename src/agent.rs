@@ -262,7 +262,10 @@ impl Agent {
                     // cannot make requests with partial uri like "/path".
                     effective_uri.ensure_valid_url()?;
 
-                    addr = Some(self.resolver.resolve(effective_uri, timeout)?);
+                    addr = Some(
+                        self.resolver
+                            .resolve(effective_uri, &self.config, timeout)?,
+                    );
                     unit.handle_input(current_time(), Input::Resolved, &mut [])?;
                 }
 

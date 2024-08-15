@@ -596,5 +596,3 @@ pub(crate) mod test {
         is_sync(owned_reader);
     }
 }
-
-// TODO(martin): config for ipv4/ipv6

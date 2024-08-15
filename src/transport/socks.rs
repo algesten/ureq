@@ -43,7 +43,9 @@ impl Connector for SocksConnector {
 
         trace!("Try connect SOCKS {} -> {}", proxy.uri(), details.addr);
 
-        let proxy_addr = details.resolver.resolve(proxy.uri(), details.timeout)?;
+        let proxy_addr = details
+            .resolver
+            .resolve(proxy.uri(), details.config, details.timeout)?;
         let target_addr = details.addr;
 
         let timeout = details.timeout;
