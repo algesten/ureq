@@ -1,10 +1,7 @@
 [package]
 name = "ureq"
 version = "3.0.0-beta1"
-authors = [
-    "Martin Algesten <martin@algesten.se>",
-    "Jacob Hoffman-Andrews <ureq@hoffman-andrews.com>",
-]
+authors = ["Martin Algesten <martin@algesten.se>", "Jacob Hoffman-Andrews <ureq@hoffman-andrews.com>"]
 description = "Simple, safe HTTP client"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/algesten/ureq"
@@ -39,7 +36,7 @@ _test = []
 
 [dependencies]
 base64 = "0.22.1"
-hoot = { git = "https://github.com/algesten/hoot", rev = "f997661" }
+hoot = "0.2.1"
 # hoot = { path = "../hoot/hoot" }
 http = "1.1.0"
 log = "0.4.22"
