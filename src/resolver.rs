@@ -39,7 +39,7 @@ pub trait Resolver: Debug + Send + Sync + 'static {
 /// Uses std::net [`ToSocketAddrs`](https://doc.rust-lang.org/std/net/trait.ToSocketAddrs.html) to
 /// do the lookup. Can optionally spawn a thread to abort lookup if the relevant timeout is set.
 pub struct DefaultResolver {
-    select: AddrSelect,
+    _private: (),
 }
 
 /// Configuration of IP family to use.
@@ -54,20 +54,6 @@ pub enum IpFamily {
     Ipv4Only,
     /// Just Ipv6
     Ipv6Only,
-}
-
-/// Strategy for selecting a single socket address.
-///
-/// A name server lookup might result in multiple socket addresses. This can happen for
-/// multihomed servers or for crude load balancing.
-///
-/// This enumerates the implemented strategies for picking one address of all the returned ones.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum AddrSelect {
-    /// Pick first returned address.
-    First,
-    // TODO(martin): implement round robin per hostname and make it configurable
 }
 
 impl DefaultResolver {
@@ -122,8 +108,8 @@ impl Resolver for DefaultResolver {
             resolve_async(addr, timeout)?
         };
 
-        let wanted = config.ip_family.keep_wanted(iter);
-        let maybe_addr = self.select.choose(wanted);
+        let mut wanted = config.ip_family.keep_wanted(iter);
+        let maybe_addr = wanted.next();
 
         debug!("Resolved: {:?}", maybe_addr);
 
@@ -167,15 +153,6 @@ impl IpFamily {
     }
 }
 
-impl AddrSelect {
-    /// Using this select strategy, choose a `SocketAddr`.
-    pub fn choose(&self, mut iter: impl Iterator<Item = SocketAddr>) -> Option<SocketAddr> {
-        match self {
-            AddrSelect::First => iter.next(),
-        }
-    }
-}
-
 impl fmt::Debug for DefaultResolver {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("DefaultResolver").finish()
@@ -184,9 +161,7 @@ impl fmt::Debug for DefaultResolver {
 
 impl Default for DefaultResolver {
     fn default() -> Self {
-        Self {
-            select: AddrSelect::First,
-        }
+        Self { _private: () }
     }
 }
 
