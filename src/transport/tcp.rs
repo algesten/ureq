@@ -1,10 +1,11 @@
 use std::io::{Read, Write};
-use std::net::TcpStream;
+use std::net::{SocketAddr, TcpStream};
 use std::{fmt, io, time};
 
+use crate::resolver::ResolvedSocketAddrs;
 use crate::transport::time::{Duration, NextTimeout};
 use crate::util::IoResultExt;
-use crate::Error;
+use crate::{AgentConfig, Error};
 
 use super::{Buffers, ConnectionDetails, Connector, LazyBuffers, Transport};
 
@@ -25,37 +26,71 @@ impl Connector for TcpConnector {
             return Ok(chained);
         }
 
-        trace!("Try connect TcpStream to {}", details.addr);
-
-        let timeout = details.timeout;
-
-        let maybe_stream = if let Some(when) = timeout.not_zero() {
-            TcpStream::connect_timeout(&details.addr, *when)
-        } else {
-            TcpStream::connect(details.addr)
-        }
-        .normalize_would_block();
-
-        let stream = match maybe_stream {
-            Ok(v) => v,
-            Err(e) if e.kind() == io::ErrorKind::TimedOut => {
-                return Err(Error::Timeout(timeout.reason))
-            }
-            Err(e) => return Err(e.into()),
-        };
-
-        if details.config.no_delay {
-            stream.set_nodelay(true)?;
-        }
-
         let config = &details.config;
+        let stream = try_connect(&details.addrs, details.timeout, config)?;
+
         let buffers = LazyBuffers::new(config.input_buffer_size, config.output_buffer_size);
         let transport = TcpTransport::new(stream, buffers);
 
-        debug!("Connected TcpStream to {}", details.addr);
-
         Ok(Some(Box::new(transport)))
     }
+}
+
+fn try_connect(
+    addrs: &ResolvedSocketAddrs,
+    timeout: NextTimeout,
+    config: &AgentConfig,
+) -> Result<TcpStream, Error> {
+    for addr in addrs {
+        match try_connect_single(*addr, timeout, config) {
+            // First that connects
+            Ok(v) => return Ok(v),
+            // Intercept ConnectionRefused to try next addrs
+            Err(Error::Io(e)) if e.kind() == io::ErrorKind::ConnectionRefused => {
+                trace!("{} connection refused", addr);
+                continue;
+            }
+            // Other errors bail
+            Err(e) => return Err(e),
+        }
+    }
+
+    debug!("Failed to connect to any resolved address");
+    Err(Error::Io(io::Error::new(
+        io::ErrorKind::ConnectionRefused,
+        "Connection refused",
+    )))
+}
+
+fn try_connect_single(
+    addr: SocketAddr,
+    timeout: NextTimeout,
+    config: &AgentConfig,
+) -> Result<TcpStream, Error> {
+    trace!("Try connect TcpStream to {}", addr);
+
+    let maybe_stream = if let Some(when) = timeout.not_zero() {
+        TcpStream::connect_timeout(&addr, *when)
+    } else {
+        TcpStream::connect(addr)
+    }
+    .normalize_would_block();
+
+    let stream = match maybe_stream {
+        Ok(v) => v,
+        Err(e) if e.kind() == io::ErrorKind::TimedOut => {
+            return Err(Error::Timeout(timeout.reason))
+        }
+        Err(e) => return Err(e.into()),
+    };
+
+    if config.no_delay {
+        stream.set_nodelay(true)?;
+    }
+
+    debug!("Connected TcpStream to {}", addr);
+
+    Ok(stream)
 }
 
 pub struct TcpTransport {

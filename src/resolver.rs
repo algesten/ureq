@@ -16,6 +16,7 @@ use std::vec::IntoIter;
 
 use http::uri::{Authority, Scheme};
 use http::Uri;
+use smallvec::{smallvec, SmallVec};
 
 use crate::transport::time::NextTimeout;
 use crate::util::{SchemeExt, UriExt};
@@ -31,13 +32,20 @@ pub trait Resolver: Debug + Send + Sync + 'static {
         uri: &Uri,
         config: &AgentConfig,
         timeout: NextTimeout,
-    ) -> Result<SocketAddr, Error>;
+    ) -> Result<ResolvedSocketAddrs, Error>;
 }
+
+/// Max number of socket addresses to keep from the resolver.
+const MAX_ADDRS: usize = 16;
+
+/// Addresses as returned by the resolver.
+pub type ResolvedSocketAddrs = SmallVec<[SocketAddr; MAX_ADDRS]>;
 
 /// Default resolver implementation.
 ///
 /// Uses std::net [`ToSocketAddrs`](https://doc.rust-lang.org/std/net/trait.ToSocketAddrs.html) to
 /// do the lookup. Can optionally spawn a thread to abort lookup if the relevant timeout is set.
+#[derive(Default)]
 pub struct DefaultResolver {
     _private: (),
 }
@@ -74,7 +82,7 @@ impl Resolver for DefaultResolver {
         uri: &Uri,
         config: &AgentConfig,
         timeout: NextTimeout,
-    ) -> Result<SocketAddr, Error> {
+    ) -> Result<ResolvedSocketAddrs, Error> {
         uri.ensure_valid_url()?;
 
         // unwrap is ok due to ensure_full_url() above.
@@ -82,14 +90,14 @@ impl Resolver for DefaultResolver {
         let authority = uri.authority().unwrap();
 
         if cfg!(feature = "_test") {
-            return Ok(SocketAddr::V4(SocketAddrV4::new(
+            return Ok(smallvec![SocketAddr::V4(SocketAddrV4::new(
                 Ipv4Addr::new(10, 0, 0, 1),
                 authority
                     .port_u16()
                     .or_else(|| scheme.default_port())
                     // unwrap is ok because ensure_valid_url() above.
                     .unwrap(),
-            )));
+            ))]);
         }
 
         // This will be on the form "myspecialhost.org:1234". The port is mandatory.
@@ -108,12 +116,16 @@ impl Resolver for DefaultResolver {
             resolve_async(addr, timeout)?
         };
 
-        let mut wanted = config.ip_family.keep_wanted(iter);
-        let maybe_addr = wanted.next();
+        let wanted = config.ip_family.keep_wanted(iter);
+        let result: ResolvedSocketAddrs = wanted.take(MAX_ADDRS).collect();
 
-        debug!("Resolved: {:?}", maybe_addr);
+        debug!("Resolved: {:?}", result);
 
-        maybe_addr.ok_or(Error::HostNotFound)
+        if result.is_empty() {
+            Err(Error::HostNotFound)
+        } else {
+            Ok(result)
+        }
     }
 }
 
@@ -156,12 +168,6 @@ impl IpFamily {
 impl fmt::Debug for DefaultResolver {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("DefaultResolver").finish()
-    }
-}
-
-impl Default for DefaultResolver {
-    fn default() -> Self {
-        Self { _private: () }
     }
 }
 

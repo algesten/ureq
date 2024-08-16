@@ -164,7 +164,7 @@ impl Agent {
 
         // For CONNECT proxy, this is the address of the proxy server, for
         // all other cases it's the address of the URL being requested.
-        let mut addr = None;
+        let mut addrs = None;
 
         let mut connection: Option<Connection> = None;
         let mut response;
@@ -181,7 +181,7 @@ impl Agent {
 
             match unit.poll_event(current_time(), buffers)? {
                 Event::Reset { must_close } => {
-                    addr = None;
+                    addrs = None;
 
                     if let Some(c) = connection.take() {
                         if must_close {
@@ -268,7 +268,7 @@ impl Agent {
                     // cannot make requests with partial uri like "/path".
                     effective_uri.ensure_valid_url()?;
 
-                    addr = Some(
+                    addrs = Some(
                         self.resolver
                             .resolve(effective_uri, &self.config, timeout)?,
                     );
@@ -276,11 +276,13 @@ impl Agent {
                 }
 
                 Event::OpenConnection { uri, timeout } => {
-                    let addr = addr.expect("addr to be available after Event::Resolve");
+                    let addrs = addrs
+                        .take()
+                        .expect("addr to be available after Event::Resolve");
 
                     let details = ConnectionDetails {
                         uri,
-                        addr,
+                        addrs,
                         resolver: &*self.resolver,
                         config: &self.config,
                         now: current_time(),

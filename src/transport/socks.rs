@@ -1,15 +1,17 @@
 use core::fmt;
 use std::net::{SocketAddr, TcpStream};
 use std::sync::mpsc::{self, RecvTimeoutError};
-use std::thread;
+use std::{io, thread};
 
 use socks::{Socks4Stream, Socks5Stream};
 
 use crate::proxy::{Proto, Proxy};
+use crate::resolver::ResolvedSocketAddrs;
 use crate::transport::tcp::TcpTransport;
 use crate::transport::LazyBuffers;
 use crate::Error;
 
+use super::time::NextTimeout;
 use super::{ConnectionDetails, Connector, Transport};
 
 /// Connector for SOCKS proxies.
@@ -41,32 +43,11 @@ impl Connector for SocksConnector {
             return Ok(chained);
         }
 
-        trace!("Try connect SOCKS {} -> {}", proxy.uri(), details.addr);
-
-        let proxy_addr = details
+        let proxy_addrs = details
             .resolver
             .resolve(proxy.uri(), details.config, details.timeout)?;
-        let target_addr = details.addr;
 
-        let timeout = details.timeout;
-
-        // The async behavior is only used if we want to time cap connecting.
-        let use_sync = timeout.after.is_not_happening();
-
-        let stream = if use_sync {
-            connect_proxy(proxy, proxy_addr, target_addr)?
-        } else {
-            let (tx, rx) = mpsc::sync_channel(1);
-            let proxy = proxy.clone();
-
-            thread::spawn(move || tx.send(connect_proxy(&proxy, proxy_addr, target_addr)));
-
-            match rx.recv_timeout(*timeout.after) {
-                Ok(v) => v?,
-                Err(RecvTimeoutError::Timeout) => return Err(Error::Timeout(timeout.reason)),
-                Err(RecvTimeoutError::Disconnected) => unreachable!("mpsc sender gone"),
-            }
-        };
+        let stream = try_connect(&proxy_addrs, &details.addrs, proxy, details.timeout)?;
 
         if details.config.no_delay {
             stream.set_nodelay(true)?;
@@ -78,9 +59,65 @@ impl Connector for SocksConnector {
         );
         let transport = Box::new(TcpTransport::new(stream, buffers));
 
-        debug!("SOCKS connected {} -> {}", proxy.uri(), details.addr);
-
         Ok(Some(transport))
+    }
+}
+
+fn try_connect(
+    proxy_addrs: &ResolvedSocketAddrs,
+    target_addrs: &ResolvedSocketAddrs,
+    proxy: &Proxy,
+    timeout: NextTimeout,
+) -> Result<TcpStream, Error> {
+    for proxy_addr in proxy_addrs {
+        for target_addr in target_addrs {
+            trace!("Try connect SOCKS {} -> {}", proxy.uri(), target_addr);
+
+            match try_connect_single(*proxy_addr, *target_addr, proxy, timeout) {
+                Ok(v) => {
+                    debug!("SOCKS connected {} -> {}", proxy.uri(), target_addr);
+                    return Ok(v);
+                }
+                // Intercept ConnectionRefused to try next addrs
+                Err(Error::Io(e)) if e.kind() == io::ErrorKind::ConnectionRefused => {
+                    trace!("{} -> {} proxy connection refused", proxy_addr, target_addr);
+                    continue;
+                }
+                // Other errors bail
+                Err(e) => return Err(e),
+            }
+        }
+    }
+
+    debug!("Proxy failed to to connect to any resolved address");
+    Err(Error::Io(io::Error::new(
+        io::ErrorKind::ConnectionRefused,
+        "Connection refused",
+    )))
+}
+
+fn try_connect_single(
+    proxy_addr: SocketAddr,
+    target_addr: SocketAddr,
+    proxy: &Proxy,
+    timeout: NextTimeout,
+) -> Result<TcpStream, Error> {
+    // The async behavior is only used if we want to time cap connecting.
+    let use_sync = timeout.after.is_not_happening();
+
+    if use_sync {
+        connect_proxy(proxy, proxy_addr, target_addr)
+    } else {
+        let (tx, rx) = mpsc::sync_channel(1);
+        let proxy = proxy.clone();
+
+        thread::spawn(move || tx.send(connect_proxy(&proxy, proxy_addr, target_addr)));
+
+        match rx.recv_timeout(*timeout.after) {
+            Ok(v) => v,
+            Err(RecvTimeoutError::Timeout) => Err(Error::Timeout(timeout.reason)),
+            Err(RecvTimeoutError::Disconnected) => unreachable!("mpsc sender gone"),
+        }
     }
 }
 
