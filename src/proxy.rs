@@ -278,6 +278,18 @@ impl fmt::Debug for Proxy {
     }
 }
 
+impl fmt::Display for Proto {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Proto::Http => write!(f, "HTTP"),
+            Proto::Https => write!(f, "HTTPS"),
+            Proto::Socks4 => write!(f, "SOCKS4"),
+            Proto::Socks4A => write!(f, "SOCKS4a"),
+            Proto::Socks5 => write!(f, "SOCKS5"),
+        }
+    }
+}
+
 impl fmt::Debug for ConnectProxyConnector {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ProxyConnector").finish()
