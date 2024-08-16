@@ -22,13 +22,12 @@
 //! up a chain of concrete connectors.
 
 use std::fmt::Debug;
-use std::net::SocketAddr;
 
 use http::uri::Scheme;
 use http::Uri;
 
 use crate::proxy::Proto;
-use crate::resolver::Resolver;
+use crate::resolver::{ResolvedSocketAddrs, Resolver};
 use crate::{AgentConfig, Error};
 
 pub use self::tcp::TcpConnector;
@@ -106,10 +105,10 @@ pub struct ConnectionDetails<'a> {
     /// Full uri that is being requested.
     pub uri: &'a Uri,
 
-    /// A resolved IP address for the uri being requested. See [`Resolver`].
+    /// The resolved IP address + port for the uri being requested. See [`Resolver`].
     ///
     /// For CONNECT proxy, this is the address of the proxy server.
-    pub addr: SocketAddr,
+    pub addrs: ResolvedSocketAddrs,
 
     /// The Agent configuration.
     pub config: &'a AgentConfig,
