@@ -69,13 +69,23 @@ fn try_connect(
     proxy: &Proxy,
     timeout: NextTimeout,
 ) -> Result<TcpStream, Error> {
-    for proxy_addr in proxy_addrs {
-        for target_addr in target_addrs {
-            trace!("Try connect SOCKS {} -> {}", proxy.uri(), target_addr);
+    for target_addr in target_addrs {
+        for proxy_addr in proxy_addrs {
+            trace!(
+                "Try connect {} {} -> {}",
+                proxy.proto(),
+                proxy_addr,
+                target_addr
+            );
 
             match try_connect_single(*proxy_addr, *target_addr, proxy, timeout) {
                 Ok(v) => {
-                    debug!("SOCKS connected {} -> {}", proxy.uri(), target_addr);
+                    debug!(
+                        "{} connected {} -> {}",
+                        proxy.proto(),
+                        proxy_addr,
+                        target_addr
+                    );
                     return Ok(v);
                 }
                 // Intercept ConnectionRefused to try next addrs
