@@ -3,10 +3,8 @@ use std::collections::VecDeque;
 use std::mem;
 use std::sync::Arc;
 
-use hoot::client::flow::state::{
-    Await100, Cleanup, Prepare, RecvBody, RecvResponse, Redirect, SendBody as FlowSendBody,
-    SendRequest,
-};
+use hoot::client::flow::state::{Await100, Cleanup, Prepare, RecvBody, RecvResponse};
+use hoot::client::flow::state::{Redirect, SendBody as FlowSendBody, SendRequest};
 use hoot::client::flow::{Await100Result, RecvBodyResult, RecvResponseResult, SendRequestResult};
 use hoot::BodyMode;
 use http::{HeaderMap, HeaderName, HeaderValue, Method, Request, Response, Uri, Version};
@@ -68,6 +66,7 @@ pub(crate) enum Event<'a> {
     AwaitInput { timeout: NextTimeout },
     Response { response: Response<()>, end: bool },
     ResponseBody { amount: usize },
+    End { must_close: bool },
 }
 
 #[allow(unused)]
@@ -160,31 +159,12 @@ impl<'b> Unit<SendBody<'b>> {
             State::RecvBody(_) => Some(Event::AwaitInput { timeout }),
 
             State::Redirect(flow) => {
-                // Whether the previous connection must be closed.
-                let must_close = flow.must_close_connection();
-
-                let maybe_new_flow = flow.as_new_flow(self.config.redirect_auth_headers)?;
-                let status = flow.status();
-
-                if let Some(flow) = maybe_new_flow {
-                    info!(
-                        "Redirect ({}): {} {:?}",
-                        status,
-                        flow.method(),
-                        DebugUri(flow.uri())
-                    );
-
-                    // Start over the state
-                    self.set_state(State::Begin(flow));
-
-                    // Tell caller to reset state
-                    Some(Event::Reset { must_close })
-                } else {
-                    return Err(Error::RedirectFailed);
-                }
+                let (state, event) = handle_redirect(flow, &self.config)?;
+                self.set_state(state);
+                Some(event)
             }
 
-            State::Cleanup(flow) => Some(Event::Reset {
+            State::Cleanup(flow) => Some(Event::End {
                 must_close: flow.must_close_connection(),
             }),
 
@@ -455,15 +435,17 @@ impl Unit<()> {
 
         let timeout = self.next_timeout(now)?;
 
-        match &self.state {
+        match &mut self.state {
             State::RecvBody(_) => Ok(Event::AwaitInput { timeout }),
-            State::Cleanup(flow) => Ok(Event::Reset {
+            State::Redirect(flow) => {
+                let (state, event) = handle_redirect(flow, &self.config)?;
+                self.set_state(state);
+                Ok(event)
+            }
+            State::Cleanup(flow) => Ok(Event::End {
                 must_close: flow.must_close_connection(),
             }),
-            State::Redirect(flow) => Ok(Event::Reset {
-                must_close: flow.must_close_connection(),
-            }),
-            _ => unreachable!(),
+            x => unreachable!("Unexpected state: {}", x.name()),
         }
     }
 
@@ -613,6 +595,30 @@ fn send_body(
     })
 }
 
+fn handle_redirect(
+    flow: &mut Flow<Redirect>,
+    config: &AgentConfig,
+) -> Result<(State, Event<'static>), Error> {
+    // Whether the previous connection must be closed.
+    let must_close = flow.must_close_connection();
+
+    let maybe_new_flow = flow.as_new_flow(config.redirect_auth_headers)?;
+    let status = flow.status();
+
+    if let Some(flow) = maybe_new_flow {
+        info!(
+            "Redirect ({}): {} {:?}",
+            status,
+            flow.method(),
+            DebugUri(flow.uri())
+        );
+
+        Ok((State::Begin(flow), Event::Reset { must_close }))
+    } else {
+        Err(Error::RedirectFailed)
+    }
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct CallTimings {
     pub time_call_start: Option<Instant>,
@@ -736,6 +742,10 @@ impl fmt::Debug for Event<'_> {
             Self::ResponseBody { amount } => f
                 .debug_struct("ResponseBody")
                 .field("amount", amount)
+                .finish(),
+            Self::End { must_close } => f
+                .debug_struct("End")
+                .field("must_close", must_close)
                 .finish(),
         }
     }
