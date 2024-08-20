@@ -52,7 +52,7 @@ impl UnitHandler {
 
             let timeout = match event {
                 Event::AwaitInput { timeout } => timeout,
-                Event::Reset { must_close } => {
+                Event::Reset { must_close } | Event::End { must_close } => {
                     if let Some(connection) = self.connection.take() {
                         if must_close {
                             trace!("Must close");
@@ -67,7 +67,7 @@ impl UnitHandler {
                     }
                     return Ok(0);
                 }
-                _ => unreachable!("Expected event AwaitInput or Reset"),
+                x => unreachable!("Expected event AwaitInput or Reset, got: {:?}", x),
             };
 
             // Can we use content that is already buffered?

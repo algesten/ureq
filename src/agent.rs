@@ -9,7 +9,7 @@ use http::{HeaderName, HeaderValue, Method, Request, Response, Uri};
 use crate::body::{Body, ResponseInfo};
 use crate::middleware::MiddlewareNext;
 use crate::pool::{Connection, ConnectionPool};
-use crate::resolver::{DefaultResolver, Resolver};
+use crate::resolver::{DefaultResolver, ResolvedSocketAddrs, Resolver};
 use crate::send_body::AsSendBody;
 use crate::transport::time::Instant;
 use crate::transport::{ConnectionDetails, Connector, DefaultConnector, NoBuffers};
@@ -167,7 +167,7 @@ impl Agent {
         let mut addrs = None;
 
         let mut connection: Option<Connection> = None;
-        let mut response;
+        let mut response = None;
         let mut no_buffers = NoBuffers;
         let mut recv_body_mode = BodyMode::NoBody;
 
@@ -181,18 +181,13 @@ impl Agent {
 
             match unit.poll_event(current_time(), buffers)? {
                 Event::Reset { must_close } => {
-                    addrs = None;
-
-                    if let Some(c) = connection.take() {
-                        if must_close {
-                            c.close();
-                        } else {
-                            c.reuse(current_time());
-                        }
-                    }
-
-                    recv_body_mode = BodyMode::NoBody;
-
+                    reset(
+                        &mut addrs,
+                        &mut connection,
+                        must_close,
+                        &current_time,
+                        &mut recv_body_mode,
+                    );
                     unit.handle_input(current_time(), Input::Begin, &mut [])?;
                 }
 
@@ -379,6 +374,17 @@ impl Agent {
                     // Implicitly, if we find ourselves here, we are following a redirect and need
                     // to consume the body to be able to make the next request.
                 }
+
+                Event::End { must_close } => {
+                    reset(
+                        &mut addrs,
+                        &mut connection,
+                        must_close,
+                        &current_time,
+                        &mut recv_body_mode,
+                    );
+                    break;
+                }
             }
         }
 
@@ -406,6 +412,26 @@ impl Agent {
     pub(crate) fn config(&self) -> &AgentConfig {
         &self.config
     }
+}
+
+fn reset(
+    addrs: &mut Option<ResolvedSocketAddrs>,
+    connection: &mut Option<Connection>,
+    must_close: bool,
+    current_time: &dyn Fn() -> Instant,
+    recv_body_mode: &mut BodyMode,
+) {
+    *addrs = None;
+
+    if let Some(c) = connection.take() {
+        if must_close {
+            c.close();
+        } else {
+            c.reuse(current_time());
+        }
+    }
+
+    *recv_body_mode = BodyMode::NoBody;
 }
 
 fn set_header(unit: &mut Unit<SendBody>, now: Instant, name: &'static str, value: HeaderValue) {
