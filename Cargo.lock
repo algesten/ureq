@@ -1004,7 +1004,6 @@ dependencies = [
  "http",
  "log",
  "native-tls",
- "once_cell",
  "rustls",
  "rustls-pemfile",
  "rustls-pki-types",

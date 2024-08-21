@@ -398,12 +398,12 @@ mk_method!(trace, TRACE, WithoutBody);
 #[cfg(test)]
 pub(crate) mod test {
 
-    use once_cell::sync::Lazy;
+    use std::sync::LazyLock;
 
     use super::*;
 
     pub fn init_test_log() {
-        static INIT_LOG: Lazy<()> = Lazy::new(env_logger::init);
+        static INIT_LOG: LazyLock<()> = LazyLock::new(env_logger::init);
         *INIT_LOG
     }
 

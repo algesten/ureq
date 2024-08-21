@@ -13,7 +13,7 @@ exclude = ["/cargo_deny.sh", "/deny.toml", "/test.sh"]
 
 
 # MSRV
-rust-version = "1.67"
+rust-version = "1.70"
 
 [package.metadata.docs.rs]
 features = ["rustls", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset", "json", "_test"]
@@ -41,7 +41,6 @@ hoot = "0.2.1"
 http = "1.1.0"
 log = "0.4.22"
 thiserror = "1.0.61"
-once_cell = "1.19.0"
 smallvec = "1.13.2"
 utf-8 = "0.7.6"
 

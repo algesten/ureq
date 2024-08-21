@@ -1,9 +1,8 @@
 use std::convert::TryInto;
 use std::fmt;
 use std::io::{Read, Write};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
-use once_cell::sync::OnceCell;
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::{ClientConfig, ClientConnection, RootCertStore, StreamOwned, ALL_VERSIONS};
 use rustls_pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs1KeyDer, PrivatePkcs8KeyDer};
@@ -23,7 +22,7 @@ use super::TlsConfig;
 /// Requires feature flag **rustls**.
 #[derive(Default)]
 pub struct RustlsConnector {
-    config: OnceCell<Arc<ClientConfig>>,
+    config: OnceLock<Arc<ClientConfig>>,
 }
 
 impl Connector for RustlsConnector {

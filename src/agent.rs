@@ -216,8 +216,8 @@ impl Agent {
 
                     #[cfg(any(feature = "gzip", feature = "brotli"))]
                     {
-                        use once_cell::sync::Lazy;
-                        static ACCEPTS: Lazy<String> = Lazy::new(|| {
+                        use std::sync::LazyLock;
+                        static ACCEPTS: LazyLock<String> = LazyLock::new(|| {
                             let mut value = String::with_capacity(10);
                             #[cfg(feature = "gzip")]
                             value.push_str("gzip");
