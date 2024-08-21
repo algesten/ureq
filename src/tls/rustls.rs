@@ -5,7 +5,9 @@ use std::sync::Arc;
 
 use once_cell::sync::OnceCell;
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
-use rustls::{ClientConfig, ClientConnection, RootCertStore, StreamOwned, ALL_VERSIONS};
+#[cfg(feature = "rustls-ring")]
+use rustls::RootCertStore;
+use rustls::{ClientConfig, ClientConnection, StreamOwned, ALL_VERSIONS};
 use rustls_pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs1KeyDer, PrivatePkcs8KeyDer};
 use rustls_pki_types::{PrivateSec1KeyDer, ServerName};
 
@@ -18,9 +20,12 @@ use crate::Error;
 
 use super::TlsConfig;
 
+#[cfg(all(feature = "rustls-ring", feature = "rustls-mbedtls"))]
+compile_error!("only one of rustls-ring or rustls-mbedtls must be enabled");
+
 /// Wrapper for TLS using rustls.
 ///
-/// Requires feature flag **rustls**.
+/// Requires feature flag **rustls-ring** or **rustls-mbedtls**.
 #[derive(Default)]
 pub struct RustlsConnector {
     config: OnceCell<Arc<ClientConfig>>,
@@ -91,9 +96,13 @@ impl Connector for RustlsConnector {
 fn build_config(tls_config: &TlsConfig) -> Arc<ClientConfig> {
     // Improve chances of ureq working out-of-the-box by not requiring the user
     // to select a default crypto provider.
+    #[cfg(feature = "rustls-ring")]
     let provider = rustls::crypto::CryptoProvider::get_default()
         .cloned()
         .unwrap_or(Arc::new(rustls::crypto::ring::default_provider()));
+
+    #[cfg(feature = "rustls-mbedtls")]
+    let provider = Arc::new(rustls_mbedcrypto_provider::mbedtls_crypto_provider());
 
     let builder = ClientConfig::builder_with_provider(provider.clone())
         .with_protocol_versions(ALL_VERSIONS)
@@ -105,6 +114,7 @@ fn build_config(tls_config: &TlsConfig) -> Arc<ClientConfig> {
             .dangerous()
             .with_custom_certificate_verifier(Arc::new(DisabledVerifier))
     } else {
+        #[cfg(feature = "rustls-ring")]
         match &tls_config.root_certs {
             RootCerts::SpecificCerts(certs) => {
                 let root_certs = certs.iter().map(|c| CertificateDer::from(c.der()));
@@ -127,6 +137,31 @@ fn build_config(tls_config: &TlsConfig) -> Arc<ClientConfig> {
                 };
                 builder.with_root_certificates(root_store)
             }
+        }
+
+        #[cfg(feature = "rustls-mbedtls")]
+        match &tls_config.root_certs {
+            RootCerts::SpecificCerts(certs) => {
+                let root_certs: Vec<_> = certs
+                    .iter()
+                    .map(|c| CertificateDer::from(c.der()))
+                    .collect();
+
+                builder
+                    .dangerous()
+                    .with_custom_certificate_verifier(Arc::new(
+                        rustls_mbedpki_provider::MbedTlsServerCertVerifier::new(root_certs.iter())
+                            .unwrap(),
+                    ))
+            }
+            RootCerts::PlatformVerifier | RootCerts::WebPki => builder
+                .dangerous()
+                .with_custom_certificate_verifier(Arc::new(
+                    rustls_mbedpki_provider::MbedTlsServerCertVerifier::new(
+                        webpki_root_certs::TLS_SERVER_ROOT_CERTS,
+                    )
+                    .unwrap(),
+                )),
         }
     };
 

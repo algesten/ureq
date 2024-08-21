@@ -5,9 +5,9 @@ use std::sync::Arc;
 mod cert;
 pub use cert::{parse_pem, Certificate, PemItem, PrivateKey};
 
-#[cfg(feature = "rustls")]
+#[cfg(feature = "_rustls")]
 mod rustls;
-#[cfg(feature = "rustls")]
+#[cfg(feature = "_rustls")]
 pub use self::rustls::RustlsConnector;
 
 #[cfg(feature = "native-tls")]
@@ -27,7 +27,7 @@ pub enum TlsProvider {
     /// [process-wide default cryptographic backend](https://docs.rs/rustls/latest/rustls/crypto/struct.CryptoProvider.html#method.install_default),
     /// or [Ring](https://crates.io/crates/ring) if no process-wide default is set.
     ///
-    /// Requires the feature flag **rustls**.
+    /// Requires the feature flag **rustls-ring** or **rustls-mbedtls**.
     ///
     /// This is the default.
     Rustls,
@@ -46,7 +46,7 @@ impl TlsProvider {
     pub(crate) fn is_feature_enabled(&self) -> bool {
         match self {
             TlsProvider::Rustls => {
-                cfg!(feature = "rustls")
+                cfg!(feature = "_rustls")
             }
             TlsProvider::NativeTls => {
                 cfg!(feature = "native-tls")
@@ -64,8 +64,8 @@ impl TlsProvider {
 
 /// Configuration of TLS.
 ///
-/// This configuration is in common for both the different TLS mechanisms (available through
-/// feature flags **rustls** and **native-tls**).
+/// This configuration is in common for all the different TLS mechanisms (available through
+/// feature flags **rustls-ring**, **rustls-mbedtls** and **native-tls**).
 #[derive(Debug, Clone)]
 pub struct TlsConfig {
     /// The provider to use.
@@ -107,7 +107,8 @@ pub enum RootCerts {
 
     /// Use the platform's verifier.
     ///
-    /// * For **rustls**, this uses the `rustls-platform-verifier` crate.
+    /// * For **rustls-ring**, this uses the `rustls-platform-verifier` crate.
+    /// * For **rustls-mbedtls**, this is the same as `WebPki`.
     /// * For **native-tls**, this uses the roots that native-tls loads by default.
     PlatformVerifier,
 

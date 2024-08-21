@@ -83,7 +83,7 @@ pub enum Error {
     /// *Note:* The wrapped error struct is not considered part of ureq API.
     /// Breaking changes in that struct will not be reflected in ureq
     /// major versions.
-    #[cfg(feature = "rustls")]
+    #[cfg(feature = "_rustls")]
     #[error("rustls: {0}")]
     Rustls(#[from] rustls::Error),
 

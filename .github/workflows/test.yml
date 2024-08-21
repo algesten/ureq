@@ -89,11 +89,16 @@ jobs:
         with:
           toolchain: stable
           override: true
-      - name: Test
+      - name: Test with rustls-ring
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --no-default-features --features "_test rustls ${{ matrix.feature }}"
+          args: --no-default-features --features "_test rustls-ring ${{ matrix.feature }}"
+      - name: Test with rustls-mbedtls
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --no-default-features --features "_test rustls-mbedtls ${{ matrix.feature }}"
 
 
   cargo-deny:

@@ -246,7 +246,7 @@ impl Default for DefaultConnector {
             TcpConnector::default().boxed(),
             //
             // If rustls is enabled, prefer that
-            #[cfg(feature = "rustls")]
+            #[cfg(feature = "_rustls")]
             crate::tls::RustlsConnector::default().boxed(),
             //
             // Panic if the config calls for rustls, the uri scheme is https and that
