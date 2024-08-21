@@ -1,7 +1,6 @@
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use hoot::parser::try_parse_response;
-use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::io::Write;
 

@@ -267,8 +267,6 @@ impl fmt::Display for Cookie<'_> {
 #[cfg(test)]
 mod test {
 
-    use std::convert::TryFrom;
-
     use super::*;
 
     fn uri() -> Uri {

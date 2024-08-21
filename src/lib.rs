@@ -317,8 +317,6 @@
 #[macro_use]
 extern crate log;
 
-use std::convert::TryFrom;
-
 /// Re-exported http-crate.
 pub use http;
 
