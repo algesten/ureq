@@ -170,7 +170,7 @@ impl Transport for RustlsTransport {
     }
 
     fn transmit_output(&mut self, amount: usize, timeout: NextTimeout) -> Result<(), Error> {
-        self.stream.get_mut().timeout = timeout;
+        self.stream.get_mut().set_timeout(timeout);
 
         let output = &self.buffers.output()[..amount];
         self.stream.write_all(output)?;
@@ -183,7 +183,7 @@ impl Transport for RustlsTransport {
             return Ok(true);
         }
 
-        self.stream.get_mut().timeout = timeout;
+        self.stream.get_mut().set_timeout(timeout);
 
         let input = self.buffers.input_mut();
         let amount = self.stream.read(input)?;
@@ -248,7 +248,7 @@ impl fmt::Debug for RustlsConnector {
 impl fmt::Debug for RustlsTransport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RustlsTransport")
-            .field("chained", &self.stream.sock.transport)
+            .field("chained", &self.stream.sock.inner())
             .finish()
     }
 }

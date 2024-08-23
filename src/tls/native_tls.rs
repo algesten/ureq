@@ -179,7 +179,7 @@ impl Transport for NativeTlsTransport {
 
     fn transmit_output(&mut self, amount: usize, timeout: NextTimeout) -> Result<(), Error> {
         let stream = self.stream.handshaken()?;
-        stream.get_mut().timeout = timeout;
+        stream.get_mut().set_timeout(timeout);
 
         let output = &self.buffers.output()[..amount];
         stream.write_all(output)?;
@@ -193,7 +193,7 @@ impl Transport for NativeTlsTransport {
         }
 
         let stream = self.stream.handshaken()?;
-        stream.get_mut().timeout = timeout;
+        stream.get_mut().set_timeout(timeout);
 
         let input = self.buffers.input_mut();
         let amount = stream.read(input)?;
