@@ -11,8 +11,8 @@ use super::Transport;
 /// ureq this is used both for the [`RustlsConnector`](crate::tls::RustlsConnector) and the
 /// [`NativeTlsConnector`](crate::tls::NativeTlsConnector).
 pub struct TransportAdapter {
-    pub(crate) timeout: NextTimeout,
-    pub(crate) transport: Box<dyn Transport>,
+    timeout: NextTimeout,
+    transport: Box<dyn Transport>,
 }
 
 impl TransportAdapter {
@@ -27,6 +27,11 @@ impl TransportAdapter {
         }
     }
 
+    /// Set a new value of the timeout.
+    pub fn set_timeout(&mut self, timeout: NextTimeout) {
+        self.timeout = timeout;
+    }
+
     /// Reference to the adapted transport
     pub fn get_ref(&self) -> &dyn Transport {
         &*self.transport
@@ -35,6 +40,11 @@ impl TransportAdapter {
     /// Mut reference to the adapted transport
     pub fn get_mut(&mut self) -> &mut dyn Transport {
         &mut *self.transport
+    }
+
+    /// Reference to the inner transport.
+    pub fn inner(&self) -> &dyn Transport {
+        &*self.transport
     }
 
     /// Turn the adapter back into the wrapped transport
