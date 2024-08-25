@@ -349,7 +349,7 @@ impl<'b> Unit<SendBody<'b>> {
                         self.redirect_count += 1;
                         // If we reached max redirections set end: true to
                         // make outer loop stop and return the body.
-                        self.redirect_count >= self.config.max_redirects
+                        self.redirect_count > self.config.max_redirects
                     } else {
                         true
                     };
