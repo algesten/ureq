@@ -269,6 +269,21 @@ fn setup_default_handlers(handlers: &mut Vec<TestHandler>) {
         handlers,
     );
 
+    maybe_add(
+        TestHandler::new("/redirect-to", |_uri, _req, w| {
+            write!(
+                w,
+                "HTTP/1.1 302 OK\r\n\
+                Location: /get\r\n\
+                Content-Length: 22\r\n\
+                \r\n\
+                You've been redirected\
+                ",
+            )
+        }),
+        handlers,
+    );
+
     #[cfg(feature = "charset")]
     {
         let (cow, _, _) =
