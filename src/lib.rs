@@ -549,6 +549,25 @@ pub(crate) mod test {
     }
 
     #[test]
+    fn redirect_no_follow() {
+        init_test_log();
+        let agent: Agent = AgentConfig {
+            max_redirects: 0,
+            ..Default::default()
+        }
+        .into();
+        let mut res = agent
+            .get("http://httpbin.org/redirect-to?url=%2Fget")
+            .call()
+            .unwrap();
+        let txt = res.body_mut().read_to_string().unwrap();
+        #[cfg(feature = "_test")]
+        assert_eq!(txt, "You've been redirected");
+        #[cfg(not(feature = "_test"))]
+        assert_eq!(txt, "");
+    }
+
+    #[test]
     fn connect_https_invalid_name() {
         let result = get("https://example.com{REQUEST_URI}/").call();
         let err = result.unwrap_err();
