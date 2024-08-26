@@ -159,6 +159,9 @@
 //!    (e.g.  `Content-Type: text/plain; charset=iso-8859-1`). Without this, the
 //!    library defaults to Rust's built in `utf-8`.
 //! * **json** enables JSON sending and receiving via serde_json.
+//! * **net2** allows for more TCP configuration such as `TCP_KEEPALIVE`, `IP_TTL` and `SO_LINGER`.
+//!
+//! * **full** enables all the optional features.
 //!
 //! # JSON
 //!

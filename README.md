@@ -160,6 +160,8 @@ The default enabled features are: **rustls**, **gzip** and **json**.
    library defaults to Rust's built in `utf-8`.
 * **json** enables JSON sending and receiving via serde_json.
 
+* **full** enables all the optional features.
+
 ## JSON
 
 By enabling the **json** feature, the library supports serde json.

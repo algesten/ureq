@@ -74,11 +74,13 @@ jobs:
         feature:
           - ""
           - charset
+          - native-tls
           - cookies
           - socks-proxy
           - gzip
           - brotli
           - json
+          - net2
     env:
       RUST_BACKTRACE: "1"
       RUSTFLAGS: "-D dead_code -D unused-variables -D unused"

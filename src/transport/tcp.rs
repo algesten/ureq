@@ -88,6 +88,21 @@ fn try_connect_single(
         stream.set_nodelay(true)?;
     }
 
+    #[cfg(feature = "net2")]
+    {
+        if let Some(keepalive) = config.tcp_keepalive {
+            net2::TcpStreamExt::set_keepalive(&stream, Some(keepalive))?;
+        }
+
+        if let Some(ttl) = config.ttl {
+            net2::TcpStreamExt::set_ttl(&stream, ttl)?;
+        }
+
+        if let Some(linger) = config.linger {
+            net2::TcpStreamExt::set_linger(&stream, Some(linger))?;
+        }
+    }
+
     debug!("Connected TcpStream to {}", addr);
 
     Ok(stream)

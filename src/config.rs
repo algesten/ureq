@@ -70,6 +70,34 @@ pub struct AgentConfig {
     /// Defaults to `true`.
     pub no_delay: bool,
 
+    /// Set the TCP keep alive duration.
+    ///
+    /// On Unix, this option will set the `SO_KEEPALIVE` as well as the `TCP_KEEPALIVE` or
+    /// `TCP_KEEPIDLE` option (depending on your platform). On Windows, this will set the
+    /// `SIO_KEEPALIVE_VALS` option.
+    ///
+    /// This does nothing for SOCKS connections.
+    ///
+    /// Defaults to `None`.
+    #[cfg(feature = "net2")]
+    pub tcp_keepalive: Option<Duration>,
+
+    /// Set IP_TTL configuration on the socket.
+    ///
+    /// This does nothing for SOCKS connections.
+    ///
+    /// Defaults to `None`.
+    #[cfg(feature = "net2")]
+    pub ttl: Option<u32>,
+
+    /// Set the SO_LINGER configuration on the socket.
+    ///
+    /// This does nothing for SOCKS connections.
+    ///
+    /// Defaults to `None`.
+    #[cfg(feature = "net2")]
+    pub linger: Option<Duration>,
+
     /// The max number of redirects to follow before giving up
     ///
     /// Defaults to 10
@@ -241,6 +269,12 @@ impl Default for AgentConfig {
             tls_config: TlsConfig::default(),
             proxy: Proxy::try_from_env(),
             no_delay: true,
+            #[cfg(feature = "net2")]
+            tcp_keepalive: None,
+            #[cfg(feature = "net2")]
+            ttl: None,
+            #[cfg(feature = "net2")]
+            linger: None,
             max_redirects: 10,
             redirect_auth_headers: RedirectAuthHeaders::Never,
             user_agent: "ureq".to_string(), // TODO(martin): add version

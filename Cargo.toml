@@ -19,7 +19,8 @@ rust-version = "1.67"
 features = ["rustls", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset", "json", "_test"]
 
 [features]
-default = ["rustls", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset", "json"]
+default = ["rustls", "gzip", "json"]
+full = ["rustls", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset", "json", "net2"]
 rustls = ["dep:rustls", "_tls", "dep:rustls-platform-verifier", "dep:webpki-roots"]
 native-tls = ["dep:native-tls", "dep:der", "_tls", "dep:webpki-root-certs"]
 socks-proxy = ["dep:socks"]
@@ -28,6 +29,7 @@ gzip = ["dep:flate2"]
 brotli = ["dep:brotli-decompressor"]
 charset = ["dep:encoding_rs"]
 json = ["dep:serde", "dep:serde_json"]
+net2 = ["dep:net2"]
 
 # Underscore prefixed features are internal
 _url = ["dep:url"]
@@ -70,6 +72,8 @@ encoding_rs = { version = "0.8.34", optional = true }
 
 serde = { version = "1.0.204", optional = true, default-features = false, features = ["std"] }
 serde_json = { version = "1.0.120", optional = true, default-features = false, features = ["std"] }
+
+net2 = { version = "0.2.39", optional = true, default-features = false, features = ["duration"] }
 
 [build-dependencies]
 cc = "1.0.106"
