@@ -4,16 +4,12 @@ use std::sync::Arc;
 
 use hoot::BodyMode;
 
-use crate::pool::Connection;
-use crate::transport::time::Instant;
-use crate::unit::Unit;
+use crate::run::{BodyHandler, BodyHandlerRef};
 use crate::Error;
 
-use self::handler::{UnitHandler, UnitHandlerRef};
 use self::limit::LimitReader;
 use self::lossy::LossyUtf8Reader;
 
-mod handler;
 mod limit;
 mod lossy;
 
@@ -51,8 +47,9 @@ const MAX_BODY_SIZE: u64 = 10 * 1024 * 1024;
 /// ```
 
 pub struct Body {
+    handler: BodyHandler,
     info: Arc<ResponseInfo>,
-    unit_handler: UnitHandler,
+    //
 }
 
 #[derive(Clone)]
@@ -64,15 +61,10 @@ pub(crate) struct ResponseInfo {
 }
 
 impl Body {
-    pub(crate) fn new(
-        unit: Unit<()>,
-        connection: Connection,
-        info: ResponseInfo,
-        current_time: impl Fn() -> Instant + Send + Sync + 'static,
-    ) -> Self {
+    pub(crate) fn new(handler: BodyHandler, info: ResponseInfo) -> Self {
         Body {
+            handler,
             info: Arc::new(info),
-            unit_handler: UnitHandler::new(unit, connection, current_time),
         }
     }
 
@@ -266,7 +258,7 @@ impl Body {
     /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn with_config(&mut self) -> BodyWithConfig {
-        let handler = UnitHandlerRef::Shared(&mut self.unit_handler);
+        let handler = BodyHandlerRef::Shared(&mut self.handler);
         BodyWithConfig::new(handler, self.info.clone())
     }
 
@@ -290,7 +282,7 @@ impl Body {
     /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn into_with_config(self) -> BodyWithConfig<'static> {
-        let handler = UnitHandlerRef::Owned(self.unit_handler);
+        let handler = BodyHandlerRef::Owned(self.handler);
         BodyWithConfig::new(handler, self.info.clone())
     }
 }
@@ -303,14 +295,14 @@ impl Body {
 /// * [Body::into_with_config()]
 ///
 pub struct BodyWithConfig<'a> {
-    handler: UnitHandlerRef<'a>,
+    handler: BodyHandlerRef<'a>,
     info: Arc<ResponseInfo>,
     limit: u64,
     lossy_utf8: bool,
 }
 
 impl<'a> BodyWithConfig<'a> {
-    fn new(handler: UnitHandlerRef<'a>, info: Arc<ResponseInfo>) -> Self {
+    fn new(handler: BodyHandlerRef<'a>, info: Arc<ResponseInfo>) -> Self {
         BodyWithConfig {
             handler,
             info,
@@ -480,7 +472,7 @@ fn split_content_type(content_type: &str) -> (Option<String>, Option<String>) {
 /// # Ok::<_, ureq::Error>(())
 /// ```
 pub struct BodyReader<'a> {
-    reader: MaybeLossyDecoder<CharsetDecoder<ContentDecoder<LimitReader<UnitHandlerRef<'a>>>>>,
+    reader: MaybeLossyDecoder<CharsetDecoder<ContentDecoder<LimitReader<BodyHandlerRef<'a>>>>>,
     // If this reader is used as SendBody for another request, this
     // body mode can indiciate the content-length. Gzip, charset etc
     // would mean input is not same as output.
@@ -489,7 +481,7 @@ pub struct BodyReader<'a> {
 
 impl<'a> BodyReader<'a> {
     fn new(
-        reader: LimitReader<UnitHandlerRef<'a>>,
+        reader: LimitReader<BodyHandlerRef<'a>>,
         info: &ResponseInfo,
         incoming_body_mode: BodyMode,
         lossy_utf8: bool,

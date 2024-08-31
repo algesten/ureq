@@ -307,9 +307,9 @@ checksum = "d231dfb89cfffdbc30e7fc41579ed6066ad03abda9e567ccafae602b97ec5024"
 
 [[package]]
 name = "hoot"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1edde946702c191c64156eafd95b6ff38070bbe786968b47fc2edbdd706a9843"
+checksum = "bd1606deff1a6473a8f7b7dbb8c270f93ef3d491ee0bda579c283254f0a1bbd2"
 dependencies = [
  "http",
  "httparse",

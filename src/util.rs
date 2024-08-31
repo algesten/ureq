@@ -3,7 +3,7 @@ use std::convert::TryFrom;
 use std::io::{self, ErrorKind};
 
 use http::uri::{Authority, Scheme};
-use http::{HeaderMap, Response, Uri};
+use http::{HeaderMap, HeaderValue, Method, Response, Uri, Version};
 
 use crate::proxy::Proto;
 use crate::Error;
@@ -140,6 +140,25 @@ impl ConsumeBuf {
             self.filled -= self.consumed;
             self.consumed = 0;
         }
+    }
+}
+
+/// Wrapper to only log non-sensitive data.
+pub(crate) struct DebugRequest<'a> {
+    pub method: &'a Method,
+    pub uri: &'a Uri,
+    pub version: Version,
+    pub headers: HeaderMap<HeaderValue>,
+}
+
+impl<'a> fmt::Debug for DebugRequest<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Request")
+            .field("method", &self.method)
+            .field("uri", &DebugUri(self.uri))
+            .field("version", &self.version)
+            .field("headers", &DebugHeaders(&self.headers))
+            .finish()
     }
 }
 
