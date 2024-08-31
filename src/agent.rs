@@ -153,6 +153,7 @@ impl Agent {
         #[cfg(any(feature = "gzip", feature = "brotli"))]
         let has_header_accept_enc = headers.has_accept_encoding();
         let has_header_ua = headers.has_user_agent();
+        let has_header_accept = headers.has_accept();
 
         // Timeouts on the request level overrides the agent level.
         let timeouts = *request
@@ -248,6 +249,11 @@ impl Agent {
                         // set bad values, it's not really a big problem.
                         let value = HeaderValue::try_from(&self.config.user_agent).unwrap();
                         set_header(&mut unit, current_time(), "user-agent", value);
+                    }
+
+                    if !has_header_accept {
+                        let value = HeaderValue::from_static("*/*");
+                        set_header(&mut unit, current_time(), "accept", value);
                     }
 
                     unit.handle_input(current_time(), Input::Prepared, &mut [])?;
