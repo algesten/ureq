@@ -513,6 +513,11 @@ impl BodyHandler {
                 if output_used > 0 {
                     return Ok(output_used);
                 }
+
+                if input_used > 0 {
+                    // Body might be fulfilled now.
+                    continue;
+                }
             }
 
             let timeout = timings.next_timeout(TimeoutReason::RecvBody);
