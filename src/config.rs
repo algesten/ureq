@@ -426,9 +426,38 @@ impl CallTimings {
         }
         .unwrap_or(Instant::NotHappening);
 
-        let after = expire_at.duration_since(self.now());
+        let global_at = self.global_timeout();
+
+        let (at, reason) = if global_at < expire_at {
+            (global_at, TimeoutReason::Global)
+        } else {
+            (expire_at, reason)
+        };
+
+        let after = at.duration_since(self.now());
 
         NextTimeout { after, reason }
+    }
+
+    fn global_timeout(&self) -> Instant {
+        let global_start = self.time_global_start.unwrap();
+        let call_start = self.time_call_start.unwrap();
+
+        let global_at = global_start
+            + self
+                .timeouts
+                .global
+                .map(|t| t.into())
+                .unwrap_or(crate::transport::time::Duration::NotHappening);
+
+        let call_at = call_start
+            + self
+                .timeouts
+                .per_call
+                .map(|t| t.into())
+                .unwrap_or(crate::transport::time::Duration::NotHappening);
+
+        global_at.min(call_at)
     }
 
     pub(crate) fn new_call(self) -> CallTimings {

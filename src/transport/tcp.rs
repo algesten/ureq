@@ -142,7 +142,11 @@ impl Transport for TcpTransport {
         )?;
 
         let output = &self.buffers.output()[..amount];
-        self.stream.write_all(output).normalize_would_block()?;
+        match self.stream.write_all(output).normalize_would_block() {
+            Ok(v) => Ok(v),
+            Err(e) if e.kind() == io::ErrorKind::TimedOut => Err(Error::Timeout(timeout.reason)),
+            Err(e) => Err(e.into()),
+        }?;
 
         Ok(())
     }
@@ -161,7 +165,11 @@ impl Transport for TcpTransport {
         )?;
 
         let input = self.buffers.input_mut();
-        let amount = self.stream.read(input)?;
+        let amount = match self.stream.read(input).normalize_would_block() {
+            Ok(v) => Ok(v),
+            Err(e) if e.kind() == io::ErrorKind::TimedOut => Err(Error::Timeout(timeout.reason)),
+            Err(e) => Err(e.into()),
+        }?;
         self.buffers.add_filled(amount);
 
         Ok(amount > 0)
