@@ -482,18 +482,20 @@ impl BodyHandler {
             BodyHandler::WithBody(flow, connection, timings) => (flow, connection, timings),
         };
 
+        let mut remote_closed = false;
+
         loop {
             let body_fulfilled = match flow.body_mode() {
                 BodyMode::NoBody => unreachable!("must be a BodyMode for BodyHandler"),
                 // These modes are fulfilled by either reaching the content-length or
                 // receiving an end chunk delimiter.
                 BodyMode::LengthDelimited(_) | BodyMode::Chunked => flow.can_proceed(),
-                // This mode can only end once we read a 0.
-                BodyMode::CloseDelimited => false,
+                // This mode can only end once remote closes
+                BodyMode::CloseDelimited => remote_closed,
             };
 
             if body_fulfilled {
-                self.ended(redirect);
+                self.ended(redirect)?;
                 return Ok(0);
             }
 
@@ -516,7 +518,20 @@ impl BodyHandler {
             }
 
             let timeout = timings.next_timeout(TimeoutReason::RecvBody);
-            let made_progress = connection.await_input(timeout)?;
+
+            let made_progress = match connection.await_input(timeout) {
+                Ok(v) => v,
+                Err(Error::Io(e)) => match e.kind() {
+                    io::ErrorKind::UnexpectedEof
+                    | io::ErrorKind::ConnectionAborted
+                    | io::ErrorKind::ConnectionReset => {
+                        remote_closed = true;
+                        true
+                    }
+                    _ => return Err(Error::Io(e)),
+                },
+                Err(e) => return Err(e),
+            };
 
             let input = connection.buffers().input();
             let input_ended = input.is_empty();
@@ -527,7 +542,7 @@ impl BodyHandler {
             if output_used > 0 {
                 return Ok(output_used);
             } else if input_ended {
-                self.ended(redirect);
+                self.ended(redirect)?;
                 return Ok(0);
             } else if made_progress {
                 // The await_input() made progress, but handled amount is 0. This
@@ -541,7 +556,7 @@ impl BodyHandler {
         }
     }
 
-    fn ended(&mut self, redirect: &mut Option<Flow<Redirect>>) {
+    fn ended(&mut self, redirect: &mut Option<Flow<Redirect>>) -> Result<(), Error> {
         let handler = mem::replace(self, BodyHandler::WithoutBody);
 
         let BodyHandler::WithBody(flow, connection, mut timings) = handler else {
@@ -549,6 +564,10 @@ impl BodyHandler {
         };
 
         timings.record_timeout(TimeoutReason::RecvBody);
+
+        if !flow.can_proceed() {
+            return Err(Error::disconnected());
+        }
 
         let must_close_connection = match flow.proceed().unwrap() {
             RecvBodyResult::Redirect(flow) => {
@@ -560,6 +579,8 @@ impl BodyHandler {
         };
 
         cleanup(connection, must_close_connection, timings.now());
+
+        Ok(())
     }
 
     fn consume_redirect_body(&mut self) -> Result<Flow<Redirect>, Error> {
