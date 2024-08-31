@@ -303,6 +303,7 @@ pub(crate) trait HeaderMapExt {
     fn has_send_body_mode(&self) -> bool {
         self.is_chunked() || self.content_length().is_some()
     }
+    fn has_accept(&self) -> bool;
 }
 
 impl HeaderMapExt for HeaderMap {
@@ -329,5 +330,9 @@ impl HeaderMapExt for HeaderMap {
 
     fn has_user_agent(&self) -> bool {
         self.contains_key("user-agent")
+    }
+
+    fn has_accept(&self) -> bool {
+        self.contains_key("accept")
     }
 }
