@@ -482,11 +482,6 @@ impl BodyHandler {
             BodyHandler::WithBody(flow, connection, timings) => (flow, connection, timings),
         };
 
-        if flow.can_proceed() {
-            self.ended(redirect);
-            return Ok(0);
-        }
-
         loop {
             let body_fulfilled = match flow.body_mode() {
                 BodyMode::NoBody => unreachable!("must be a BodyMode for BodyHandler"),
