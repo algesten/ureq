@@ -542,6 +542,13 @@ pub(crate) mod test {
     }
 
     #[test]
+    fn simple_get() {
+        init_test_log();
+        let mut res = get("http://httpbin.org/get").call().unwrap();
+        res.body_mut().read_to_string().unwrap();
+    }
+
+    #[test]
     fn simple_head() {
         init_test_log();
         let mut res = head("http://httpbin.org/get").call().unwrap();
