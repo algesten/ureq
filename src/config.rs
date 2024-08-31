@@ -85,7 +85,7 @@ pub struct AgentConfig {
 
     /// Value to use for the `User-Agent` field
     ///
-    /// Defaults to `ureq <version>`
+    /// Defaults to `ureq/<version>`
     pub user_agent: String,
 
     /// The timeout settings on agent level.
@@ -231,6 +231,9 @@ impl AgentConfig {
     }
 }
 
+pub static DEFAULT_USER_AGENT: &str =
+    concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
+
 impl Default for AgentConfig {
     fn default() -> Self {
         Self {
@@ -243,7 +246,7 @@ impl Default for AgentConfig {
             no_delay: true,
             max_redirects: 10,
             redirect_auth_headers: RedirectAuthHeaders::Never,
-            user_agent: "ureq".to_string(), // TODO(martin): add version
+            user_agent: DEFAULT_USER_AGENT.to_string(),
             timeouts: Timeouts::default(),
             max_response_header_size: 64 * 1024,
             input_buffer_size: 128 * 1024,
