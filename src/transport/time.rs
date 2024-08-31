@@ -1,7 +1,7 @@
 //! Internal time wrappers
 
 use std::cmp::Ordering;
-use std::ops::{Add, AddAssign, Deref, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Deref};
 use std::time;
 
 use crate::TimeoutReason;
@@ -40,16 +40,15 @@ impl Duration {
     }
 }
 
+const NOT_HAPPENING: time::Duration = time::Duration::from_secs(u64::MAX);
+
 impl Deref for Duration {
     type Target = time::Duration;
 
     fn deref(&self) -> &Self::Target {
         match self {
             Duration::Exact(v) => v,
-            Duration::NotHappening => {
-                const NOT_HAPPENING: time::Duration = time::Duration::from_secs(u64::MAX);
-                &NOT_HAPPENING
-            }
+            Duration::NotHappening => &NOT_HAPPENING,
         }
     }
 }
@@ -81,37 +80,20 @@ impl Add<Duration> for Instant {
     type Output = Instant;
 
     fn add(self, rhs: Duration) -> Self::Output {
-        match self {
-            Instant::Exact(v) => Instant::Exact(v.add(*rhs)),
-            x => x,
+        match (self, rhs) {
+            (Instant::AlreadyHappened, Duration::Exact(_)) => Instant::AlreadyHappened,
+            (Instant::AlreadyHappened, Duration::NotHappening) => Instant::AlreadyHappened,
+            (Instant::Exact(v1), Duration::Exact(v2)) => Instant::Exact(v1.add(v2)),
+            (Instant::Exact(_), Duration::NotHappening) => Instant::NotHappening,
+            (Instant::NotHappening, Duration::Exact(_)) => Instant::NotHappening,
+            (Instant::NotHappening, Duration::NotHappening) => Instant::NotHappening,
         }
     }
 }
 
 impl AddAssign<Duration> for Instant {
     fn add_assign(&mut self, rhs: Duration) {
-        if let Instant::Exact(v) = self {
-            v.add_assign(*rhs)
-        }
-    }
-}
-
-impl Sub<Duration> for Instant {
-    type Output = Instant;
-
-    fn sub(self, rhs: Duration) -> Self::Output {
-        match self {
-            Instant::Exact(v) => Instant::Exact(v.sub(*rhs)),
-            x => x,
-        }
-    }
-}
-
-impl SubAssign<Duration> for Instant {
-    fn sub_assign(&mut self, rhs: Duration) {
-        if let Instant::Exact(v) = self {
-            v.sub_assign(*rhs)
-        }
+        *self = (*self).add(rhs);
     }
 }
 
