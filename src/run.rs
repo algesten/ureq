@@ -23,7 +23,7 @@ pub(crate) fn run(
     request: Request<()>,
     mut body: SendBody,
 ) -> Result<Response<Body>, Error> {
-    let mut redirect_count = 1;
+    let mut redirect_count = 0;
 
     // Timeouts on the request level overrides the agent level.
     let timeouts = *request
