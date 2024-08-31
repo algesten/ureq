@@ -247,12 +247,14 @@ impl From<io::Error> for Error {
 
 #[cfg(test)]
 mod test {
+    use crate::test::init_test_log;
     use crate::transport::set_handler;
 
     use super::*;
 
     #[test]
     fn status_code_error_redirect() {
+        init_test_log();
         set_handler(
             "/redirect_a",
             302,

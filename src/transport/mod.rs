@@ -34,7 +34,6 @@ pub use self::tcp::TcpConnector;
 use self::time::{Instant, NextTimeout};
 
 mod buf;
-pub(crate) use buf::NoBuffers;
 pub use buf::{Buffers, LazyBuffers};
 
 mod tcp;

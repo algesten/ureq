@@ -338,8 +338,8 @@ mod error;
 mod pool;
 mod proxy;
 mod request;
+mod run;
 mod send_body;
-mod unit;
 mod util;
 
 pub mod middleware;
@@ -455,7 +455,7 @@ pub(crate) mod test {
 
     #[test]
     #[cfg(feature = "native-tls")]
-    fn connect_https_google_native_tls() {
+    fn connect_https_google_native_tls_simple() {
         init_test_log();
         use crate::tls::{TlsConfig, TlsProvider};
 

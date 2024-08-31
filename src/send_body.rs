@@ -74,10 +74,6 @@ impl<'a> SendBody<'a> {
         Ok(n)
     }
 
-    pub(crate) fn is_ended(&self) -> bool {
-        self.ended
-    }
-
     pub(crate) fn body_mode(&self) -> BodyMode {
         self.inner.body_mode()
     }
