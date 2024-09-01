@@ -422,9 +422,10 @@ fn recv_response(
                 config.max_response_header_size,
             ));
         }
-        if let Some(response) = maybe_response {
-            connection.consume_input(amount);
 
+        connection.consume_input(amount);
+
+        if let Some(response) = maybe_response {
             assert!(flow.can_proceed());
             break response;
         } else if !made_progress {
