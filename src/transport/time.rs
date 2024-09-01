@@ -1,7 +1,7 @@
 //! Internal time wrappers
 
 use std::cmp::Ordering;
-use std::ops::{Add, AddAssign, Deref};
+use std::ops::{Add, Deref};
 use std::time;
 
 /// Wrapper for [`std::time::Instant`] that provides additional time points in the past or future
@@ -86,12 +86,6 @@ impl Add<Duration> for Instant {
             (Instant::NotHappening, Duration::Exact(_)) => Instant::NotHappening,
             (Instant::NotHappening, Duration::NotHappening) => Instant::NotHappening,
         }
-    }
-}
-
-impl AddAssign<Duration> for Instant {
-    fn add_assign(&mut self, rhs: Duration) {
-        *self = (*self).add(rhs);
     }
 }
 
