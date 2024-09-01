@@ -1,15 +1,22 @@
 use std::fmt;
 use std::sync::Arc;
 
+use smallvec::SmallVec;
+
 use crate::transport::time::{Duration, Instant};
 use crate::Timeouts;
 
 /// The various timeouts.
+///
+/// Each enum corresponds to a value in [`AgentConfig::timeouts`][crate::AgentConfig::timeouts].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Timeout {
-    /// Timeout for entire call.
+    /// Timeout for entire operation.
     Global,
+
+    /// Timeout for the current call (when redirected).
+    PerCall,
 
     /// Timeout in the resolver.
     Resolve,
@@ -20,13 +27,13 @@ pub enum Timeout {
     /// Timeout while sending the request headers.
     SendRequest,
 
-    /// Timeout when sending then request body.
-    SendBody,
-
     /// Internal value never seen outside ureq (since awaiting 100 is expected
     /// to timeout).
     #[doc(hidden)]
     Await100,
+
+    /// Timeout when sending then request body.
+    SendBody,
 
     /// Timeout while receiving the response headers.
     RecvResponse,
@@ -35,20 +42,124 @@ pub enum Timeout {
     RecvBody,
 }
 
+impl Timeout {
+    /// Give the immediate preceeding Timeout
+    fn preceeding(&self) -> impl Iterator<Item = Timeout> {
+        let prev: &[Timeout] = match self {
+            Timeout::Resolve => &[Timeout::PerCall],
+            Timeout::Connect => &[Timeout::Resolve],
+            Timeout::SendRequest => &[Timeout::Connect],
+            Timeout::Await100 => &[Timeout::SendRequest],
+            Timeout::SendBody => &[Timeout::SendRequest, Timeout::Await100],
+            Timeout::RecvResponse => &[Timeout::SendRequest, Timeout::SendBody],
+            Timeout::RecvBody => &[Timeout::RecvResponse],
+            _ => &[],
+        };
+
+        prev.iter().copied()
+    }
+
+    /// All timeouts to check
+    fn timeouts_to_check(&self) -> impl Iterator<Item = Timeout> {
+        // Always check Global and PerCall
+        self.preceeding().chain([Timeout::Global, Timeout::PerCall])
+    }
+
+    /// Get the corresponding configured timeout
+    fn configured_timeout(&self, timeouts: &Timeouts) -> Option<Duration> {
+        match self {
+            Timeout::Global => timeouts.global,
+            Timeout::PerCall => timeouts.per_call,
+            Timeout::Resolve => timeouts.resolve,
+            Timeout::Connect => timeouts.connect,
+            Timeout::SendRequest => timeouts.send_request,
+            Timeout::Await100 => timeouts.await_100,
+            Timeout::SendBody => timeouts.send_body,
+            Timeout::RecvResponse => timeouts.recv_response,
+            Timeout::RecvBody => timeouts.recv_body,
+        }
+        .map(Into::into)
+    }
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct CallTimings {
-    pub timeouts: Timeouts,
-    pub current_time: CurrentTime,
+    timeouts: Timeouts,
+    current_time: CurrentTime,
+    times: SmallVec<[(Timeout, Instant); 8]>,
+}
 
-    pub time_global_start: Option<Instant>,
-    pub time_call_start: Option<Instant>,
-    pub time_resolve: Option<Instant>,
-    pub time_connect: Option<Instant>,
-    pub time_send_request: Option<Instant>,
-    pub time_send_body: Option<Instant>,
-    pub time_await_100: Option<Instant>,
-    pub time_recv_response: Option<Instant>,
-    pub time_recv_body: Option<Instant>,
+impl CallTimings {
+    pub(crate) fn new(timeouts: Timeouts, current_time: CurrentTime) -> Self {
+        let mut times = SmallVec::default();
+
+        let now = current_time.now();
+        times.push((Timeout::Global, now));
+        times.push((Timeout::PerCall, now));
+
+        CallTimings {
+            timeouts,
+            current_time,
+            times,
+        }
+    }
+
+    pub(crate) fn new_call(mut self) -> CallTimings {
+        self.times.retain(|(t, _)| *t == Timeout::Global);
+        self.times.push((Timeout::PerCall, self.current_time.now()));
+
+        CallTimings {
+            timeouts: self.timeouts,
+            current_time: self.current_time,
+            times: self.times,
+        }
+    }
+
+    pub(crate) fn now(&self) -> Instant {
+        self.current_time.now()
+    }
+
+    pub(crate) fn record_time(&mut self, timeout: Timeout) {
+        // Each time should only be recorded once
+        assert!(
+            self.time_of(timeout).is_none(),
+            "{:?} recorded more than once",
+            timeout
+        );
+
+        // There need to be at least one preceeding time recorded
+        // since it follows a graph/call tree.
+        let any_preceeding = timeout
+            .preceeding()
+            .filter_map(|to_check| self.time_of(to_check))
+            .any(|_| true);
+
+        assert!(any_preceeding, "{:?} has no preceeding", timeout);
+
+        // Record the time
+        self.times.push((timeout, self.current_time.now()));
+    }
+
+    fn time_of(&self, timeout: Timeout) -> Option<Instant> {
+        self.times.iter().find(|x| x.0 == timeout).map(|x| x.1)
+    }
+
+    pub(crate) fn next_timeout(&self, timeout: Timeout) -> NextTimeout {
+        let (reason, at) = timeout
+            .timeouts_to_check()
+            .filter_map(|to_check| {
+                let time = self.time_of(to_check)?;
+                let timeout = to_check.configured_timeout(&self.timeouts)?;
+                Some((to_check, time + timeout))
+            })
+            .min_by(|a, b| a.1.cmp(&b.1))
+            .unwrap_or((Timeout::Global, Instant::NotHappening));
+
+        let now = self.now();
+        let after = at.duration_since(now);
+
+        NextTimeout { after, reason }
+    }
 }
 
 #[derive(Clone)]
@@ -60,7 +171,7 @@ impl CurrentTime {
     }
 }
 
-/// A pair of [`Duration`] and [`TimeoutReason`].
+/// A pair of [`Duration`] and [`Timeout`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NextTimeout {
     /// Duration until next timeout.
@@ -81,126 +192,6 @@ impl NextTimeout {
     }
 }
 
-impl CallTimings {
-    pub(crate) fn now(&self) -> Instant {
-        self.current_time.now()
-    }
-
-    pub(crate) fn record_timeout(&mut self, reason: Timeout) {
-        match reason {
-            Timeout::Global => {
-                let now = self.now();
-                if self.time_global_start.is_none() {
-                    self.time_global_start = Some(now);
-                }
-                self.time_call_start = Some(now);
-            }
-            Timeout::Resolve => {
-                self.time_resolve = Some(self.now());
-            }
-            Timeout::Connect => {
-                self.time_connect = Some(self.now());
-            }
-            Timeout::SendRequest => {
-                self.time_send_request = Some(self.now());
-            }
-            Timeout::SendBody => {
-                self.time_send_body = Some(self.now());
-            }
-            Timeout::Await100 => {
-                self.time_await_100 = Some(self.now());
-            }
-            Timeout::RecvResponse => {
-                self.time_recv_response = Some(self.now());
-            }
-            Timeout::RecvBody => {
-                self.time_recv_body = Some(self.now());
-            }
-        }
-    }
-
-    pub(crate) fn next_timeout(&self, reason: Timeout) -> NextTimeout {
-        // self.time_xxx unwraps() below are OK. If the unwrap fails, we have a state
-        // bug where we progressed to a certain state without setting the corresponding time.
-        let timeouts = &self.timeouts;
-
-        let expire_at = match reason {
-            Timeout::Global => timeouts
-                .global
-                .map(|t| self.time_global_start.unwrap() + t.into()),
-            Timeout::Resolve => timeouts
-                .resolve
-                .map(|t| self.time_call_start.unwrap() + t.into()),
-            Timeout::Connect => timeouts
-                .connect
-                .map(|t| self.time_resolve.unwrap() + t.into()),
-            Timeout::SendRequest => timeouts
-                .send_request
-                .map(|t| self.time_connect.unwrap() + t.into()),
-            Timeout::SendBody => timeouts
-                .send_body
-                .map(|t| self.time_send_request.unwrap() + t.into()),
-            Timeout::Await100 => timeouts
-                .await_100
-                .map(|t| self.time_send_request.unwrap() + t.into()),
-            Timeout::RecvResponse => timeouts.recv_response.map(|t| {
-                // The fallback order is important. See state diagram in hoot.
-                self.time_send_body
-                    .or(self.time_await_100)
-                    .or(self.time_send_request)
-                    .unwrap()
-                    + t.into()
-            }),
-            Timeout::RecvBody => timeouts
-                .recv_body
-                .map(|t| self.time_recv_response.unwrap() + t.into()),
-        }
-        .unwrap_or(Instant::NotHappening);
-
-        let global_at = self.global_timeout();
-
-        let (at, reason) = if global_at < expire_at {
-            (global_at, Timeout::Global)
-        } else {
-            (expire_at, reason)
-        };
-
-        let after = at.duration_since(self.now());
-
-        NextTimeout { after, reason }
-    }
-
-    fn global_timeout(&self) -> Instant {
-        let global_start = self.time_global_start.unwrap();
-        let call_start = self.time_call_start.unwrap();
-
-        let global_at = global_start
-            + self
-                .timeouts
-                .global
-                .map(|t| t.into())
-                .unwrap_or(crate::transport::time::Duration::NotHappening);
-
-        let call_at = call_start
-            + self
-                .timeouts
-                .per_call
-                .map(|t| t.into())
-                .unwrap_or(crate::transport::time::Duration::NotHappening);
-
-        global_at.min(call_at)
-    }
-
-    pub(crate) fn new_call(self) -> CallTimings {
-        CallTimings {
-            timeouts: self.timeouts,
-            time_global_start: self.time_global_start,
-            current_time: self.current_time,
-            ..Default::default()
-        }
-    }
-}
-
 impl fmt::Debug for CurrentTime {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("CurrentTime").finish()
@@ -217,8 +208,9 @@ impl fmt::Display for Timeout {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let r = match self {
             Timeout::Global => "global",
-            Timeout::Resolve => "resolver",
-            Timeout::Connect => "open connection",
+            Timeout::PerCall => "per call",
+            Timeout::Resolve => "resolve",
+            Timeout::Connect => "connect",
             Timeout::SendRequest => "send request",
             Timeout::SendBody => "send body",
             Timeout::Await100 => "await 100",
