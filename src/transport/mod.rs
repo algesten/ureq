@@ -31,7 +31,7 @@ use crate::resolver::{ResolvedSocketAddrs, Resolver};
 use crate::{AgentConfig, Error};
 
 pub use self::tcp::TcpConnector;
-use self::time::{Instant, NextTimeout};
+use self::time::Instant;
 
 mod buf;
 pub use buf::{Buffers, LazyBuffers};
@@ -57,6 +57,8 @@ pub use self::socks::SocksConnector;
 pub use crate::proxy::ConnectProxyConnector;
 
 pub mod time;
+
+pub use crate::timings::NextTimeout;
 
 /// Trait for components providing some aspect of connecting.
 ///

@@ -4,8 +4,6 @@ use std::cmp::Ordering;
 use std::ops::{Add, AddAssign, Deref};
 use std::time;
 
-use crate::TimeoutReason;
-
 /// Wrapper for [`std::time::Instant`] that provides additional time points in the past or future
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Instant {
@@ -139,27 +137,6 @@ impl Ord for Duration {
 impl From<std::time::Duration> for Duration {
     fn from(value: std::time::Duration) -> Self {
         Self::Exact(value)
-    }
-}
-
-/// A pair of [`Duration`] and [`TimeoutReason`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct NextTimeout {
-    /// Duration until next timeout.
-    pub after: Duration,
-    /// The name of the next timeout.s
-    pub reason: TimeoutReason,
-}
-
-impl NextTimeout {
-    pub(crate) fn not_zero(&self) -> Option<Duration> {
-        if self.after.is_not_happening() {
-            None
-        } else if self.after.is_zero() {
-            Some(Duration::from_secs(1))
-        } else {
-            Some(self.after)
-        }
     }
 }
 

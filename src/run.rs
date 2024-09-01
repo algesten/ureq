@@ -9,12 +9,12 @@ use http::uri::Scheme;
 use http::{HeaderValue, Request, Response, Uri};
 
 use crate::body::ResponseInfo;
-use crate::config::CallTimings;
 use crate::pool::Connection;
+use crate::timings::CallTimings;
 use crate::transport::time::{Duration, Instant};
 use crate::transport::ConnectionDetails;
 use crate::util::{DebugRequest, DebugResponse, DebugUri, HeaderMapExt, UriExt};
-use crate::{Agent, AgentConfig, Body, Error, SendBody, TimeoutReason, Timeouts};
+use crate::{Agent, AgentConfig, Body, Error, SendBody, Timeout, Timeouts};
 
 type Flow<T> = hoot::client::flow::Flow<(), T>;
 
@@ -39,15 +39,15 @@ pub(crate) fn run(
     let mut flow = Flow::new(request)?;
 
     let (response, handler) = loop {
-        timings.record_timeout(TimeoutReason::Global);
+        timings.record_timeout(Timeout::Global);
 
-        let timeout = timings.next_timeout(TimeoutReason::Global);
+        let timeout = timings.next_timeout(Timeout::Global);
         let timed_out = match timeout.after {
             Duration::Exact(v) => v.is_zero(),
             Duration::NotHappening => false,
         };
         if timed_out {
-            return Err(Error::Timeout(TimeoutReason::Global));
+            return Err(Error::Timeout(Timeout::Global));
         }
 
         match flow_run(agent, flow, &mut body, redirect_count, &mut timings)? {
@@ -114,7 +114,7 @@ fn flow_run(
     redirect_count: u32,
     timings: &mut CallTimings,
 ) -> Result<FlowResult, Error> {
-    timings.record_timeout(crate::TimeoutReason::Global);
+    timings.record_timeout(crate::Timeout::Global);
 
     let uri = flow.uri().clone();
     info!("{} {:?}", flow.method(), &DebugUri(flow.uri()));
@@ -282,10 +282,10 @@ fn connect(agent: &Agent, uri: &Uri, timings: &mut CallTimings) -> Result<Connec
     let addrs = agent.resolver.resolve(
         effective_uri,
         &agent.config,
-        timings.next_timeout(TimeoutReason::Resolver),
+        timings.next_timeout(Timeout::Resolve),
     )?;
 
-    timings.record_timeout(TimeoutReason::Resolver);
+    timings.record_timeout(Timeout::Resolve);
 
     let details = ConnectionDetails {
         uri,
@@ -293,12 +293,12 @@ fn connect(agent: &Agent, uri: &Uri, timings: &mut CallTimings) -> Result<Connec
         resolver: &*agent.resolver,
         config: &agent.config,
         now: timings.now(),
-        timeout: timings.next_timeout(TimeoutReason::OpenConnection),
+        timeout: timings.next_timeout(Timeout::Connect),
     };
 
     let connection = agent.pool.connect(&details)?;
 
-    timings.record_timeout(TimeoutReason::OpenConnection);
+    timings.record_timeout(Timeout::Connect);
 
     Ok(connection)
 }
@@ -315,11 +315,11 @@ fn send_request(
 
         let buffers = connection.buffers();
         let amount = flow.write(buffers.output())?;
-        let timeout = timings.next_timeout(TimeoutReason::SendRequest);
+        let timeout = timings.next_timeout(Timeout::SendRequest);
         connection.transmit_output(amount, timeout)?;
     }
 
-    timings.record_timeout(TimeoutReason::SendRequest);
+    timings.record_timeout(Timeout::SendRequest);
     Ok(flow.proceed().unwrap())
 }
 
@@ -329,7 +329,7 @@ fn await_100(
     timings: &mut CallTimings,
 ) -> Result<Await100Result<()>, Error> {
     while flow.can_keep_await_100() {
-        let timeout = timings.next_timeout(TimeoutReason::Await100);
+        let timeout = timings.next_timeout(Timeout::Await100);
 
         if timeout.after.is_zero() {
             // Stop waiting for 100-continue.a
@@ -355,7 +355,7 @@ fn await_100(
         }
     }
 
-    timings.record_timeout(TimeoutReason::Await100);
+    timings.record_timeout(Timeout::Await100);
     Ok(flow.proceed())
 }
 
@@ -403,11 +403,11 @@ fn send_body(
             output_used
         };
 
-        let timeout = timings.next_timeout(TimeoutReason::SendBody);
+        let timeout = timings.next_timeout(Timeout::SendBody);
         connection.transmit_output(output_used, timeout)?;
     }
 
-    timings.record_timeout(TimeoutReason::SendBody);
+    timings.record_timeout(Timeout::SendBody);
     Ok(flow.proceed().unwrap())
 }
 
@@ -418,7 +418,7 @@ fn recv_response(
     timings: &mut CallTimings,
 ) -> Result<(Response<()>, RecvResponseResult<()>), Error> {
     let response = loop {
-        let timeout = timings.next_timeout(TimeoutReason::RecvResponse);
+        let timeout = timings.next_timeout(Timeout::RecvResponse);
         let made_progress = connection.await_input(timeout)?;
 
         let input = connection.buffers().input();
@@ -442,7 +442,7 @@ fn recv_response(
         }
     };
 
-    timings.record_timeout(TimeoutReason::RecvResponse);
+    timings.record_timeout(Timeout::RecvResponse);
     Ok((response, flow.proceed().unwrap()))
 }
 
@@ -528,7 +528,7 @@ impl BodyHandler {
                 return Ok(0);
             }
 
-            let timeout = timings.next_timeout(TimeoutReason::RecvBody);
+            let timeout = timings.next_timeout(Timeout::RecvBody);
 
             let made_progress = match connection.await_input(timeout) {
                 Ok(v) => v,
@@ -568,7 +568,7 @@ impl BodyHandler {
     }
 
     fn ended(&mut self) -> Result<(), Error> {
-        self.timings.record_timeout(TimeoutReason::RecvBody);
+        self.timings.record_timeout(Timeout::RecvBody);
 
         let flow = self.flow.take().expect("ended() called with body");
 

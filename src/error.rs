@@ -1,6 +1,8 @@
-use std::{fmt, io};
+use std::io;
 
 use thiserror::Error;
+
+use crate::Timeout;
 
 /// Errors from ureq.
 #[derive(Debug, Error)]
@@ -38,7 +40,7 @@ pub enum Error {
     ///
     /// By default no timeouts are set, which means this error can't happen.
     #[error("timeout: {0}")]
-    Timeout(TimeoutReason),
+    Timeout(Timeout),
 
     /// Error when resolving a hostname fails.
     #[error("host not found")]
@@ -180,53 +182,6 @@ impl Error {
 
     pub(crate) fn disconnected() -> Error {
         io::Error::new(io::ErrorKind::UnexpectedEof, "Peer disconnected").into()
-    }
-}
-
-/// Motivation for an [`Error::Timeout`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum TimeoutReason {
-    /// Timeout for entire call.
-    Global,
-
-    /// Timeout in the resolver.
-    Resolver,
-
-    /// Timeout while opening the connection.
-    OpenConnection,
-
-    /// Timeout while sending the request headers.
-    SendRequest,
-
-    /// Timeout when sending then request body.
-    SendBody,
-
-    /// Internal value never seen outside ureq (since awaiting 100 is expected
-    /// to timeout).
-    #[doc(hidden)]
-    Await100,
-
-    /// Timeout while receiving the response headers.
-    RecvResponse,
-
-    /// Timeout while receiving the response body.
-    RecvBody,
-}
-
-impl fmt::Display for TimeoutReason {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let r = match self {
-            TimeoutReason::Global => "global",
-            TimeoutReason::Resolver => "resolver",
-            TimeoutReason::OpenConnection => "open connection",
-            TimeoutReason::SendRequest => "send request",
-            TimeoutReason::SendBody => "send body",
-            TimeoutReason::Await100 => "await 100",
-            TimeoutReason::RecvResponse => "receive response",
-            TimeoutReason::RecvBody => "receive body",
-        };
-        write!(f, "{}", r)
     }
 }
 

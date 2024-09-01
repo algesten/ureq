@@ -1,9 +1,9 @@
 use std::io;
 
-use crate::transport::time::{Duration, NextTimeout};
-use crate::TimeoutReason;
+use crate::transport::time::Duration;
+use crate::Timeout;
 
-use super::Transport;
+use super::{NextTimeout, Transport};
 
 /// Helper to turn a [`Transport`] into a std::io [`Read`](io::Read) and [`Write`](io::Write).
 ///
@@ -21,7 +21,7 @@ impl TransportAdapter {
         Self {
             timeout: NextTimeout {
                 after: Duration::NotHappening,
-                reason: TimeoutReason::Global,
+                reason: Timeout::Global,
             },
             transport,
         }

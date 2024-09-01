@@ -11,8 +11,7 @@ use crate::transport::tcp::TcpTransport;
 use crate::transport::LazyBuffers;
 use crate::Error;
 
-use super::time::NextTimeout;
-use super::{ConnectionDetails, Connector, Transport};
+use super::{ConnectionDetails, Connector, NextTimeout, Transport};
 
 /// Connector for SOCKS proxies.
 ///

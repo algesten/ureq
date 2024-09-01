@@ -18,7 +18,7 @@ use http::uri::{Authority, Scheme};
 use http::Uri;
 use smallvec::{smallvec, SmallVec};
 
-use crate::transport::time::NextTimeout;
+use crate::transport::NextTimeout;
 use crate::util::{SchemeExt, UriExt};
 use crate::{AgentConfig, Error};
 
@@ -187,7 +187,7 @@ mod test {
                 &config,
                 NextTimeout {
                     after: Duration::NotHappening,
-                    reason: crate::TimeoutReason::Global,
+                    reason: crate::Timeout::Global,
                 },
             )
             .unwrap_err();
