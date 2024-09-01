@@ -1,5 +1,5 @@
 use std::convert::TryFrom;
-use std::io;
+use std::{io, mem};
 
 use hoot::client::flow::state::{Await100, RecvBody, RecvResponse, Redirect, SendRequest};
 use hoot::client::flow::state::{Prepare, SendBody as SendBodyState};
@@ -52,11 +52,11 @@ pub(crate) fn run(
 
         match flow_run(agent, flow, &mut body, redirect_count, &mut timings)? {
             // Follow redirect
-            FlowResult::Redirect(rflow) => {
+            FlowResult::Redirect(rflow, rtimings) => {
                 redirect_count += 1;
 
                 flow = handle_redirect(rflow, &agent.config)?;
-                timings = timings.new_call();
+                timings = rtimings.new_call();
             }
 
             // Return response
@@ -87,17 +87,11 @@ pub(crate) fn run(
 
     Ok(response)
 }
-
+#[allow(clippy::large_enum_variant)]
 enum FlowResult {
-    Redirect(Flow<Redirect>),
+    Redirect(Flow<Redirect>, CallTimings),
     Response(Response<()>, BodyHandler),
 }
-
-// #[allow(clippy::large_enum_variant)]
-// pub(crate) enum BodyHandler {
-//     WithBody(Flow<RecvBody>, Connection, CallTimings),
-//     WithoutBody,
-// }
 
 #[derive(Default)]
 pub(crate) struct BodyHandler {
@@ -162,7 +156,7 @@ fn flow_run(
 
     let ret = match response_result {
         RecvResponseResult::RecvBody(flow) => {
-            let timings = std::mem::take(timings);
+            let timings = mem::take(timings);
             let mut handler = BodyHandler {
                 flow: Some(flow),
                 connection: Some(connection),
@@ -173,7 +167,7 @@ fn flow_run(
             if response.status().is_redirection() && redirect_count < agent.config.max_redirects {
                 let flow = handler.consume_redirect_body()?;
 
-                FlowResult::Redirect(flow)
+                FlowResult::Redirect(flow, handler.timings)
             } else {
                 FlowResult::Response(response, handler)
             }
@@ -184,7 +178,7 @@ fn flow_run(
             if redirect_count >= agent.config.max_redirects {
                 FlowResult::Response(response, BodyHandler::default())
             } else {
-                FlowResult::Redirect(flow)
+                FlowResult::Redirect(flow, mem::take(timings))
             }
         }
         RecvResponseResult::Cleanup(flow) => {
