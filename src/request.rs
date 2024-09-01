@@ -8,7 +8,7 @@ use http::{HeaderName, HeaderValue, Method, Request, Response, Uri, Version};
 use crate::body::Body;
 use crate::send_body::AsSendBody;
 use crate::util::private::Private;
-use crate::{Agent, Error, SendBody, Timeouts};
+use crate::{Agent, AgentConfig, Error, SendBody, Timeouts};
 
 /// Transparent wrapper around [`http::request::Builder`].
 ///
@@ -89,9 +89,43 @@ impl<Any> RequestBuilder<Any> {
         self
     }
 
+    /// Override agent level config on the request level.
+    ///
+    /// The agent config is copied and modified on request level.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use ureq::{Agent, AgentConfig, Timeouts};
+    /// use std::time::Duration;
+    ///
+    /// let agent: Agent = AgentConfig {
+    ///     https_only: false,
+    ///     ..Default::default()
+    /// }.into();
+    ///
+    /// let mut builder = agent.get("http://httpbin.org/get");
+    ///
+    /// let config = builder.config();
+    /// config.https_only = true;
+    ///
+    /// // Make the request
+    /// let result = builder.call();
+    ///
+    /// // The https_only was set on request level
+    /// assert!(matches!(result.unwrap_err(), ureq::Error::RequireHttpsOnly(_)));
+    ///
+    /// // The request level did not affect the agent level
+    /// assert!(!agent.config().https_only);
+    /// # Ok::<_, ureq::Error>(())
+    /// ```
+    pub fn config(&mut self) -> &mut AgentConfig {
+        self.request_level_config()
+    }
+
     /// Override agent timeouts on the request level.
     ///
-    /// The agent setting is copied and modified on request level.
+    /// The agent config is copied and modified on request level.
     ///
     /// # Example
     ///
@@ -122,16 +156,23 @@ impl<Any> RequestBuilder<Any> {
     /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn timeouts(&mut self) -> &mut Timeouts {
+        &mut self.request_level_config().timeouts
+    }
+
+    fn request_level_config(&mut self) -> &mut AgentConfig {
         let exts = self
             .builder
             .extensions_mut()
             .expect("builder without errors");
 
-        if exts.get::<Timeouts>().is_none() {
-            exts.insert(self.agent.config().timeouts);
+        if exts.get::<AgentConfig>().is_none() {
+            let config_ref = &*self.agent.config;
+            // This is the cost of setting request level config
+            let config: AgentConfig = config_ref.clone();
+            exts.insert(config);
         }
 
-        // unwrap is ok because of above logic
+        // Unwrap is OK because of above check
         exts.get_mut().unwrap()
     }
 }

@@ -137,8 +137,8 @@ pub enum Error {
 
     /// The setting [`AgentConfig::https_only`](crate::AgentConfig::https_only) is true and
     /// the URI is not https.
-    #[error("agent is configured for https only: {0}")]
-    AgentRequireHttpsOnly(String),
+    #[error("configured for https only: {0}")]
+    RequireHttpsOnly(String),
 
     /// The response header, from status up until body, is too big.
     ///

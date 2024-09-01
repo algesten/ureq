@@ -1,4 +1,5 @@
 use std::convert::TryFrom;
+use std::sync::Arc;
 use std::{io, mem};
 
 use hoot::client::flow::state::{Await100, RecvBody, RecvResponse, Redirect, SendRequest};
@@ -14,22 +15,28 @@ use crate::timings::{CallTimings, CurrentTime};
 use crate::transport::time::{Duration, Instant};
 use crate::transport::ConnectionDetails;
 use crate::util::{DebugRequest, DebugResponse, DebugUri, HeaderMapExt, UriExt};
-use crate::{Agent, AgentConfig, Body, Error, SendBody, Timeout, Timeouts};
+use crate::{Agent, AgentConfig, Body, Error, SendBody, Timeout};
 
 type Flow<T> = hoot::client::flow::Flow<(), T>;
 
+/// Run a request.
+///
+/// This is the "main loop" of entire ureq.
 pub(crate) fn run(
     agent: &Agent,
-    request: Request<()>,
+    mut request: Request<()>,
     mut body: SendBody,
 ) -> Result<Response<Body>, Error> {
     let mut redirect_count = 0;
 
-    // Timeouts on the request level overrides the agent level.
-    let timeouts = *request
-        .extensions()
-        .get::<Timeouts>()
-        .unwrap_or(&agent.config.timeouts);
+    // Configuration on the request level overrides the agent level.
+    let config = request
+        .extensions_mut()
+        .remove::<AgentConfig>()
+        .map(Arc::new)
+        .unwrap_or_else(|| agent.config.clone());
+
+    let timeouts = config.timeouts;
 
     let mut timings = CallTimings::new(timeouts, CurrentTime::default());
 
@@ -45,12 +52,19 @@ pub(crate) fn run(
             return Err(Error::Timeout(Timeout::Global));
         }
 
-        match flow_run(agent, flow, &mut body, redirect_count, &mut timings)? {
+        match flow_run(
+            agent,
+            &config,
+            flow,
+            &mut body,
+            redirect_count,
+            &mut timings,
+        )? {
             // Follow redirect
             FlowResult::Redirect(rflow, rtimings) => {
                 redirect_count += 1;
 
-                flow = handle_redirect(rflow, &agent.config)?;
+                flow = handle_redirect(rflow, &config)?;
                 timings = rtimings.new_call();
             }
 
@@ -76,34 +90,16 @@ pub(crate) fn run(
     let status = response.status();
     let is_err = status.is_client_error() || status.is_server_error();
 
-    if agent.config.http_status_as_error && is_err {
+    if config.http_status_as_error && is_err {
         return Err(Error::StatusCode(status.as_u16()));
     }
 
     Ok(response)
 }
-#[allow(clippy::large_enum_variant)]
-enum FlowResult {
-    Redirect(Flow<Redirect>, CallTimings),
-    Response(Response<()>, BodyHandler),
-}
-
-#[derive(Default)]
-pub(crate) struct BodyHandler {
-    flow: Option<Flow<RecvBody>>,
-    connection: Option<Connection>,
-    timings: CallTimings,
-    remote_closed: bool,
-    redirect: Option<Flow<Redirect>>,
-}
-
-pub(crate) enum BodyHandlerRef<'a> {
-    Shared(&'a mut BodyHandler),
-    Owned(BodyHandler),
-}
 
 fn flow_run(
     agent: &Agent,
+    config: &AgentConfig,
     mut flow: Flow<Prepare>,
     body: &mut SendBody,
     redirect_count: u32,
@@ -112,13 +108,13 @@ fn flow_run(
     let uri = flow.uri().clone();
     info!("{} {:?}", flow.method(), &DebugUri(flow.uri()));
 
-    if agent.config.https_only && uri.scheme() != Some(&Scheme::HTTPS) {
-        return Err(Error::AgentRequireHttpsOnly(uri.to_string()));
+    if config.https_only && uri.scheme() != Some(&Scheme::HTTPS) {
+        return Err(Error::RequireHttpsOnly(uri.to_string()));
     }
 
-    add_headers(&mut flow, agent, body, &uri)?;
+    add_headers(&mut flow, agent, config, body, &uri)?;
 
-    let mut connection = connect(agent, &uri, timings)?;
+    let mut connection = connect(agent, config, &uri, timings)?;
 
     let mut flow = flow.proceed();
 
@@ -143,7 +139,7 @@ fn flow_run(
         SendRequestResult::RecvResponse(flow) => flow,
     };
 
-    let (response, response_result) = recv_response(flow, &mut connection, &agent.config, timings)?;
+    let (response, response_result) = recv_response(flow, &mut connection, config, timings)?;
 
     info!("{:?}", DebugResponse(&response));
 
@@ -157,7 +153,7 @@ fn flow_run(
                 ..Default::default()
             };
 
-            if response.status().is_redirection() && redirect_count < agent.config.max_redirects {
+            if response.status().is_redirection() && redirect_count < config.max_redirects {
                 let flow = handler.consume_redirect_body()?;
 
                 FlowResult::Redirect(flow, handler.timings)
@@ -168,7 +164,7 @@ fn flow_run(
         RecvResponseResult::Redirect(flow) => {
             cleanup(connection, flow.must_close_connection(), timings.now());
 
-            if redirect_count >= agent.config.max_redirects {
+            if redirect_count >= config.max_redirects {
                 FlowResult::Response(response, BodyHandler::default())
             } else {
                 FlowResult::Redirect(flow, mem::take(timings))
@@ -183,9 +179,20 @@ fn flow_run(
     Ok(ret)
 }
 
+/// Return type of [`flow_run`].
+#[allow(clippy::large_enum_variant)]
+enum FlowResult {
+    /// Flow resulted in a redirect.
+    Redirect(Flow<Redirect>, CallTimings),
+
+    /// Flow resulted in a response.
+    Response(Response<()>, BodyHandler),
+}
+
 fn add_headers(
     flow: &mut Flow<Prepare>,
     agent: &Agent,
+    config: &AgentConfig,
     body: &SendBody,
     uri: &Uri,
 ) -> Result<(), Error> {
@@ -247,10 +254,10 @@ fn add_headers(
         }
     }
 
-    if !has_header_ua && !agent.config.user_agent.is_empty() {
+    if !has_header_ua && !config.user_agent.is_empty() {
         // unwrap is ok because a user might override the agent, and if they
         // set bad values, it's not really a big problem.
-        let value = HeaderValue::try_from(&agent.config.user_agent).unwrap();
+        let value = HeaderValue::try_from(&config.user_agent).unwrap();
         flow.header("user-agent", value)?;
     }
 
@@ -262,9 +269,14 @@ fn add_headers(
     Ok(())
 }
 
-fn connect(agent: &Agent, uri: &Uri, timings: &mut CallTimings) -> Result<Connection, Error> {
+fn connect(
+    agent: &Agent,
+    config: &AgentConfig,
+    uri: &Uri,
+    timings: &mut CallTimings,
+) -> Result<Connection, Error> {
     // If we're using a CONNECT proxy, we need to resolve that hostname.
-    let maybe_connect_uri = agent.config.connect_proxy_uri();
+    let maybe_connect_uri = config.connect_proxy_uri();
 
     let effective_uri = maybe_connect_uri.unwrap_or(uri);
 
@@ -274,7 +286,7 @@ fn connect(agent: &Agent, uri: &Uri, timings: &mut CallTimings) -> Result<Connec
 
     let addrs = agent.resolver.resolve(
         effective_uri,
-        &agent.config,
+        config,
         timings.next_timeout(Timeout::Resolve),
     )?;
 
@@ -284,7 +296,7 @@ fn connect(agent: &Agent, uri: &Uri, timings: &mut CallTimings) -> Result<Connec
         uri,
         addrs,
         resolver: &*agent.resolver,
-        config: &agent.config,
+        config,
         now: timings.now(),
         timeout: timings.next_timeout(Timeout::Connect),
     };
@@ -465,13 +477,13 @@ fn cleanup(connection: Connection, must_close: bool, now: Instant) {
     }
 }
 
-impl<'a> io::Read for BodyHandlerRef<'a> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        match self {
-            BodyHandlerRef::Shared(v) => v.read(buf),
-            BodyHandlerRef::Owned(v) => v.read(buf),
-        }
-    }
+#[derive(Default)]
+pub(crate) struct BodyHandler {
+    flow: Option<Flow<RecvBody>>,
+    connection: Option<Connection>,
+    timings: CallTimings,
+    remote_closed: bool,
+    redirect: Option<Flow<Redirect>>,
 }
 
 impl BodyHandler {
@@ -603,5 +615,19 @@ impl BodyHandler {
 impl io::Read for BodyHandler {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.do_read(buf).map_err(|e| e.into_io())
+    }
+}
+
+pub(crate) enum BodyHandlerRef<'a> {
+    Shared(&'a mut BodyHandler),
+    Owned(BodyHandler),
+}
+
+impl<'a> io::Read for BodyHandlerRef<'a> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        match self {
+            BodyHandlerRef::Shared(v) => v.read(buf),
+            BodyHandlerRef::Owned(v) => v.read(buf),
+        }
     }
 }
