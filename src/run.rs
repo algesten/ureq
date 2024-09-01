@@ -209,7 +209,10 @@ fn add_headers(
     let has_header_accept = headers.has_accept();
 
     #[cfg(not(feature = "cookies"))]
-    let _ = uri;
+    {
+        let _ = agent;
+        let _ = uri;
+    }
     #[cfg(feature = "cookies")]
     {
         let value = agent.jar.get_request_cookies(uri);
