@@ -140,7 +140,8 @@ impl Agent {
         run(self, request, body)
     }
 
-    pub(crate) fn config(&self) -> &AgentConfig {
+    /// Get the config for this agent.
+    pub fn config(&self) -> &AgentConfig {
         &self.config
     }
 }
