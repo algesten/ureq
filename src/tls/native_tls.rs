@@ -195,9 +195,9 @@ impl Transport for NativeTlsTransport {
         let stream = self.stream.handshaken()?;
         stream.get_mut().set_timeout(timeout);
 
-        let input = self.buffers.input_mut();
+        let input = self.buffers.input_append_buf();
         let amount = stream.read(input)?;
-        self.buffers.add_filled(amount);
+        self.buffers.input_appended(amount);
 
         Ok(amount > 0)
     }

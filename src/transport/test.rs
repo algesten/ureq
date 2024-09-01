@@ -406,7 +406,7 @@ impl Transport for TestTransport {
     }
 
     fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
-        let input = self.buffers.input_mut();
+        let input = self.buffers.input_append_buf();
         let buf = match self.rx.recv_timeout(timeout.after) {
             Ok(v) => v,
             Err(RecvTimeoutError::Timeout) => return Err(Error::Timeout(timeout.reason)),
@@ -422,7 +422,7 @@ impl Transport for TestTransport {
         assert!(input.len() >= buf.len());
         let max = input.len().min(buf.len());
         input[..max].copy_from_slice(&buf[..]);
-        self.buffers.add_filled(max);
+        self.buffers.input_appended(max);
         Ok(max > 0)
     }
 

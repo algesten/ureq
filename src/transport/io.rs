@@ -62,7 +62,7 @@ impl io::Read for TransportAdapter {
 
         let max = buf.len().min(input.len());
         buf[..max].copy_from_slice(&input[..max]);
-        self.transport.buffers().consume(max);
+        self.transport.buffers().input_consume(max);
 
         Ok(max)
     }
@@ -70,7 +70,7 @@ impl io::Read for TransportAdapter {
 
 impl io::Write for TransportAdapter {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let output = self.transport.buffers().output_mut();
+        let output = self.transport.buffers().output();
 
         let max = buf.len().min(output.len());
         output[..max].copy_from_slice(&buf[..max]);
