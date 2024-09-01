@@ -1,5 +1,5 @@
 use std::convert::TryFrom;
-use std::{io, mem};
+use std::io;
 
 use hoot::client::flow::state::{Await100, RecvBody, RecvResponse, Redirect, SendRequest};
 use hoot::client::flow::state::{Prepare, SendBody as SendBodyState};
@@ -66,10 +66,11 @@ pub(crate) fn run(
 
     let (parts, _) = response.into_parts();
 
-    let recv_body_mode = match &handler {
-        BodyHandler::WithBody(flow, _, _) => flow.body_mode(),
-        BodyHandler::WithoutBody => BodyMode::NoBody,
-    };
+    let recv_body_mode = handler
+        .flow
+        .as_ref()
+        .map(|f| f.body_mode())
+        .unwrap_or(BodyMode::NoBody);
 
     let info = ResponseInfo::new(&parts.headers, recv_body_mode);
 
@@ -92,10 +93,19 @@ enum FlowResult {
     Response(Response<()>, BodyHandler),
 }
 
-#[allow(clippy::large_enum_variant)]
-pub(crate) enum BodyHandler {
-    WithBody(Flow<RecvBody>, Connection, CallTimings),
-    WithoutBody,
+// #[allow(clippy::large_enum_variant)]
+// pub(crate) enum BodyHandler {
+//     WithBody(Flow<RecvBody>, Connection, CallTimings),
+//     WithoutBody,
+// }
+
+#[derive(Default)]
+pub(crate) struct BodyHandler {
+    flow: Option<Flow<RecvBody>>,
+    connection: Option<Connection>,
+    timings: CallTimings,
+    remote_closed: bool,
+    redirect: Option<Flow<Redirect>>,
 }
 
 pub(crate) enum BodyHandlerRef<'a> {
@@ -153,7 +163,12 @@ fn flow_run(
     let ret = match response_result {
         RecvResponseResult::RecvBody(flow) => {
             let timings = std::mem::take(timings);
-            let mut handler = BodyHandler::WithBody(flow, connection, timings);
+            let mut handler = BodyHandler {
+                flow: Some(flow),
+                connection: Some(connection),
+                timings,
+                ..Default::default()
+            };
 
             if response.status().is_redirection() && redirect_count < agent.config.max_redirects {
                 let flow = handler.consume_redirect_body()?;
@@ -167,14 +182,14 @@ fn flow_run(
             cleanup(connection, flow.must_close_connection(), timings.now());
 
             if redirect_count >= agent.config.max_redirects {
-                FlowResult::Response(response, BodyHandler::WithoutBody)
+                FlowResult::Response(response, BodyHandler::default())
             } else {
                 FlowResult::Redirect(flow)
             }
         }
         RecvResponseResult::Cleanup(flow) => {
             cleanup(connection, flow.must_close_connection(), timings.now());
-            FlowResult::Response(response, BodyHandler::WithoutBody)
+            FlowResult::Response(response, BodyHandler::default())
         }
     };
 
@@ -473,17 +488,12 @@ impl<'a> io::Read for BodyHandlerRef<'a> {
 }
 
 impl BodyHandler {
-    fn do_read(
-        &mut self,
-        buf: &mut [u8],
-        redirect: &mut Option<Flow<Redirect>>,
-    ) -> Result<usize, Error> {
-        let (flow, connection, timings) = match self {
-            BodyHandler::WithoutBody => return Ok(0),
-            BodyHandler::WithBody(flow, connection, timings) => (flow, connection, timings),
+    fn do_read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
+        let (Some(flow), Some(connection), timings) =
+            (&mut self.flow, &mut self.connection, &mut self.timings)
+        else {
+            return Ok(0);
         };
-
-        let mut remote_closed = false;
 
         loop {
             let body_fulfilled = match flow.body_mode() {
@@ -492,11 +502,11 @@ impl BodyHandler {
                 // receiving an end chunk delimiter.
                 BodyMode::LengthDelimited(_) | BodyMode::Chunked => flow.can_proceed(),
                 // This mode can only end once remote closes
-                BodyMode::CloseDelimited => remote_closed,
+                BodyMode::CloseDelimited => false,
             };
 
             if body_fulfilled {
-                self.ended(redirect)?;
+                self.ended()?;
                 return Ok(0);
             }
 
@@ -518,6 +528,12 @@ impl BodyHandler {
                 }
             }
 
+            if self.remote_closed {
+                // we should not try to await_input again.
+                self.ended()?;
+                return Ok(0);
+            }
+
             let timeout = timings.next_timeout(TimeoutReason::RecvBody);
 
             let made_progress = match connection.await_input(timeout) {
@@ -526,7 +542,7 @@ impl BodyHandler {
                     io::ErrorKind::UnexpectedEof
                     | io::ErrorKind::ConnectionAborted
                     | io::ErrorKind::ConnectionReset => {
-                        remote_closed = true;
+                        self.remote_closed = true;
                         true
                     }
                     _ => return Err(Error::Io(e)),
@@ -543,7 +559,7 @@ impl BodyHandler {
             if output_used > 0 {
                 return Ok(output_used);
             } else if input_ended {
-                self.ended(redirect)?;
+                self.ended()?;
                 return Ok(0);
             } else if made_progress {
                 // The await_input() made progress, but handled amount is 0. This
@@ -557,14 +573,10 @@ impl BodyHandler {
         }
     }
 
-    fn ended(&mut self, redirect: &mut Option<Flow<Redirect>>) -> Result<(), Error> {
-        let handler = mem::replace(self, BodyHandler::WithoutBody);
+    fn ended(&mut self) -> Result<(), Error> {
+        self.timings.record_timeout(TimeoutReason::RecvBody);
 
-        let BodyHandler::WithBody(flow, connection, mut timings) = handler else {
-            unreachable!("ended() only from do_read() with body");
-        };
-
-        timings.record_timeout(TimeoutReason::RecvBody);
+        let flow = self.flow.take().expect("ended() called with body");
 
         if !flow.can_proceed() {
             return Err(Error::disconnected());
@@ -573,34 +585,36 @@ impl BodyHandler {
         let must_close_connection = match flow.proceed().unwrap() {
             RecvBodyResult::Redirect(flow) => {
                 let c = flow.must_close_connection();
-                *redirect = Some(flow);
+                self.redirect = Some(flow);
                 c
             }
             RecvBodyResult::Cleanup(v) => v.must_close_connection(),
         };
 
-        cleanup(connection, must_close_connection, timings.now());
+        let connection = self.connection.take().expect("ended() called with body");
+        cleanup(connection, must_close_connection, self.timings.now());
 
         Ok(())
     }
 
     fn consume_redirect_body(&mut self) -> Result<Flow<Redirect>, Error> {
         let mut buf = vec![0; 1024];
-        let mut redirect = None;
         loop {
-            let amount = self.do_read(&mut buf, &mut redirect)?;
+            let amount = self.do_read(&mut buf)?;
             if amount == 0 {
                 break;
             }
         }
+
         // Unwrap is OK, because we are only consuming the redirect body if
         // such a body was signalled by the remote.
+        let redirect = self.redirect.take();
         Ok(redirect.expect("remote to have signaled redirect"))
     }
 }
 
 impl io::Read for BodyHandler {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.do_read(buf, &mut None).map_err(|e| e.into_io())
+        self.do_read(buf).map_err(|e| e.into_io())
     }
 }
