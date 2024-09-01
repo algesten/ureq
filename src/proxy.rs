@@ -231,7 +231,7 @@ impl Connector for ConnectProxyConnector {
                     }
                     continue;
                 };
-                buffers.consume(used_input);
+                buffers.input_consume(used_input);
                 break response;
             };
 

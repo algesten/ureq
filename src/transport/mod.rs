@@ -153,20 +153,22 @@ impl<'a> ConnectionDetails<'a> {
 /// For sending data, the order of calls are:
 ///
 /// 1. [`Transport::buffers()`] to obtain the buffers.
-/// 2. [`Buffers::output_mut()`], [`Buffers::input_and_output`] or [`Buffers::tmp_and_output`]
-///    depending where in the lifce cycle of the request ureq is.
+/// 2. [`Buffers::output()`] or [`Buffers::tmp_and_output`]
+///    depending where in the life cycle of the request ureq is.
 /// 3. [`Transport::transmit_output()`] to ask the transport to send/flush the `amount` of
 ///    buffers used in 2.
 ///
 /// For receiving data, the order of calls are:
 ///
 /// 1. [`Transport::await_input()`]
-/// 2. The transport impl itself uses [`Buffers::input_mut()`] to fill a number
-///    of bytes from the underlying transport and use [`Buffers::add_filled`] to
+/// 2. The transport impl itself uses [`Buffers::input_append_buf()`] to fill a number
+///    of bytes from the underlying transport and use [`Buffers::input_appended()`] to
 ///    tell the buffer how much been filled.
 /// 3. [`Transport::buffers()`] to obtain the buffers
-/// 4. [`Buffers::input()`] followed by [`Buffers::consume()`]. It's important to retain the
+/// 4. [`Buffers::input()`] followed by [`Buffers::input_consume()`]. It's important to retain the
 ///    unconsumed bytes for the next call to `await_input()`. This is handled by [`LazyBuffers`].
+///    It's important to call [`Buffers::input_consume()`] also with 0 consumed bytes since that's
+///    how we keep track of whether the input is making progress.
 ///
 pub trait Transport: Debug + Send + Sync {
     /// Provide buffers for this transport.
@@ -181,7 +183,7 @@ pub trait Transport: Debug + Send + Sync {
     fn transmit_output(&mut self, amount: usize, timeout: NextTimeout) -> Result<(), Error>;
 
     /// Await input from the transport. The transport should internally use
-    /// [`Buffers::input_mut()`] followed by [`Buffers::add_filled()`] to
+    /// [`Buffers::input_append_buf()`] followed by [`Buffers::input_appended()`] to
     /// store the incoming data.
     fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error>;
 

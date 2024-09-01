@@ -314,7 +314,7 @@ fn send_request(
         }
 
         let buffers = connection.buffers();
-        let amount = flow.write(buffers.output_mut())?;
+        let amount = flow.write(buffers.output())?;
         let timeout = timings.next_timeout(TimeoutReason::SendRequest);
         connection.transmit_output(amount, timeout)?;
     }

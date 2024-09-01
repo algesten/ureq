@@ -164,13 +164,13 @@ impl Transport for TcpTransport {
             TcpStream::set_read_timeout,
         )?;
 
-        let input = self.buffers.input_mut();
+        let input = self.buffers.input_append_buf();
         let amount = match self.stream.read(input).normalize_would_block() {
             Ok(v) => Ok(v),
             Err(e) if e.kind() == io::ErrorKind::TimedOut => Err(Error::Timeout(timeout.reason)),
             Err(e) => Err(e.into()),
         }?;
-        self.buffers.add_filled(amount);
+        self.buffers.input_appended(amount);
 
         Ok(amount > 0)
     }

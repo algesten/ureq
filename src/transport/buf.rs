@@ -4,18 +4,14 @@ use crate::util::ConsumeBuf;
 ///
 /// In ureq, the buffers are provided by the [`Transport`](crate::transport::Transport).
 pub trait Buffers {
-    /// Read only output buffers.
-    fn output(&self) -> &[u8];
-
     /// Mut handle to output buffers to write new data. Data is always
-    /// written from `0..`, there is no expectation to retain half
-    /// used output buffers.
-    fn output_mut(&mut self) -> &mut [u8];
+    /// written from `0..`.
+    fn output(&mut self) -> &mut [u8];
 
     /// Unconsumed bytes in the input buffer as read only.
     ///
-    /// The input buffer is written to by using `input_mut` followed by]
-    /// `add_filled` to indiciate how many additional bytes were added to the
+    /// The input buffer is written to by using [`Buffers::input_append_buf`] followed by
+    /// [`Buffers::input_appended`] to indiciate how many additional bytes were added to the
     /// input.
     ///
     /// This buffer should return the total unconsumed bytes.
@@ -25,28 +21,23 @@ pub trait Buffers {
     fn input(&self) -> &[u8];
 
     /// Input buffer to write to. This can be called despite there being unconsumed bytes
-    /// left.
+    /// left in the buffer already.
     ///
     /// Example: if the internal buffer is `input: Vec<u8>`, and we have counters for
     /// `filled: usize` and `consumed: usize`. This returns `&mut input[filled..]`.
-    fn input_mut(&mut self) -> &mut [u8];
+    fn input_append_buf(&mut self) -> &mut [u8];
 
-    /// Add a number of read bytes into `input_mut()`.
+    /// Add a number of read bytes into [`Buffers::input_append_buf()`].
     ///
     /// Example: if the internal buffer is `input: Vec<u8>`, and we have counters for
     /// `filled: usize` and `consumed: usize`, this increases `filled`.
-    fn add_filled(&mut self, amount: usize);
+    fn input_appended(&mut self, amount: usize);
 
     /// Consume a number of bytes from `&input`.
     ///
     /// Example: if the internal buffer is `input: Vec<u8>`, and we have counters for
     /// `filled: usize` and `consumed: usize`, this increases `consumed`.
-    fn consume(&mut self, amount: usize);
-
-    /// Helper to access both input and output buffer at the same time (to work around the
-    /// borrow checker). This is used to handle incoming data from the remote peer for example
-    /// when getting chunked data as input and dechunking it into the output.
-    fn input_and_output(&mut self) -> (&[u8], &mut [u8]);
+    fn input_consume(&mut self, amount: usize);
 
     /// Helper to get a scratch buffer (`tmp`) and the output buffer. This is used when
     /// sending the request body in which case we use a `Read` trait to read from the
@@ -111,11 +102,7 @@ impl LazyBuffers {
 }
 
 impl Buffers for LazyBuffers {
-    fn output(&self) -> &[u8] {
-        &self.output
-    }
-
-    fn output_mut(&mut self) -> &mut [u8] {
+    fn output(&mut self) -> &mut [u8] {
         self.ensure_allocation();
         &mut self.output
     }
@@ -124,14 +111,9 @@ impl Buffers for LazyBuffers {
         self.input.unconsumed()
     }
 
-    fn input_mut(&mut self) -> &mut [u8] {
+    fn input_append_buf(&mut self) -> &mut [u8] {
         self.ensure_allocation();
         self.input.free_mut()
-    }
-
-    fn input_and_output(&mut self) -> (&[u8], &mut [u8]) {
-        self.ensure_allocation();
-        (self.input.unconsumed(), &mut self.output)
     }
 
     fn tmp_and_output(&mut self) -> (&mut [u8], &mut [u8]) {
@@ -153,11 +135,11 @@ impl Buffers for LazyBuffers {
         (self.input.free_mut(), &mut self.output)
     }
 
-    fn add_filled(&mut self, amount: usize) {
+    fn input_appended(&mut self, amount: usize) {
         self.input.add_filled(amount);
     }
 
-    fn consume(&mut self, amount: usize) {
+    fn input_consume(&mut self, amount: usize) {
         self.progress = amount > 0;
         self.input.consume(amount);
     }
