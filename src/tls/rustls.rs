@@ -11,9 +11,8 @@ use rustls_pki_types::{PrivateSec1KeyDer, ServerName};
 
 use crate::tls::cert::KeyKind;
 use crate::tls::{RootCerts, TlsProvider};
-use crate::transport::time::NextTimeout;
 use crate::transport::{Buffers, ConnectionDetails, Connector, LazyBuffers};
-use crate::transport::{Transport, TransportAdapter};
+use crate::transport::{NextTimeout, Transport, TransportAdapter};
 use crate::Error;
 
 use super::TlsConfig;

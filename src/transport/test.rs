@@ -9,10 +9,10 @@ use std::{fmt, io, thread};
 
 use http::{Method, Request, Uri};
 
-use crate::transport::time::{Duration, NextTimeout};
+use crate::transport::time::Duration;
 use crate::Error;
 
-use super::{Buffers, ConnectionDetails, Connector, LazyBuffers, Transport};
+use super::{Buffers, ConnectionDetails, Connector, LazyBuffers, NextTimeout, Transport};
 
 #[derive(Default)]
 pub(crate) struct TestConnector;

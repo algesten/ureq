@@ -4,7 +4,6 @@ use std::io::{Read, Write};
 use std::sync::Arc;
 
 use crate::tls::{RootCerts, TlsProvider};
-use crate::transport::time::NextTimeout;
 use crate::{transport::*, Error};
 use der::pem::LineEnding;
 use der::Document;

@@ -3,11 +3,11 @@ use std::net::{SocketAddr, TcpStream};
 use std::{fmt, io, time};
 
 use crate::resolver::ResolvedSocketAddrs;
-use crate::transport::time::{Duration, NextTimeout};
+use crate::transport::time::Duration;
 use crate::util::IoResultExt;
 use crate::{AgentConfig, Error};
 
-use super::{Buffers, ConnectionDetails, Connector, LazyBuffers, Transport};
+use super::{Buffers, ConnectionDetails, Connector, LazyBuffers, NextTimeout, Transport};
 
 #[derive(Default)]
 /// Connector for regular TCP sockets.

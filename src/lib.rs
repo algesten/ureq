@@ -340,6 +340,7 @@ mod proxy;
 mod request;
 mod run;
 mod send_body;
+mod timings;
 mod util;
 
 pub mod middleware;
@@ -355,8 +356,9 @@ mod cookies;
 pub use cookies::{Cookie, CookieJar};
 
 pub use agent::Agent;
-pub use error::{Error, TimeoutReason};
+pub use error::Error;
 pub use send_body::SendBody;
+pub use timings::Timeout;
 
 /// Run a [`http::Request<impl AsSendBody>`].
 pub fn run(request: Request<impl AsSendBody>) -> Result<Response<Body>, Error> {
