@@ -202,13 +202,14 @@ impl From<io::Error> for Error {
 
 #[cfg(test)]
 mod test {
-    use crate::test::init_test_log;
-    use crate::transport::set_handler;
 
     use super::*;
 
     #[test]
+    #[cfg(feature = "_test")]
     fn status_code_error_redirect() {
+        use crate::test::init_test_log;
+        use crate::transport::set_handler;
         init_test_log();
         set_handler(
             "/redirect_a",
