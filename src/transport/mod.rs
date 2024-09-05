@@ -44,9 +44,9 @@ pub use io::TransportAdapter;
 mod chain;
 pub use chain::ChainedConnector;
 
-#[cfg(any(test, feature = "_test"))]
+#[cfg(feature = "_test")]
 mod test;
-#[cfg(any(test, feature = "_test"))]
+#[cfg(feature = "_test")]
 pub use test::set_handler;
 
 #[cfg(feature = "socks-proxy")]
