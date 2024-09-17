@@ -19,7 +19,7 @@ rust-version = "1.67"
 features = ["rustls", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset", "json", "_test"]
 
 [features]
-default = ["rustls", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset", "json"]
+default = ["rustls", "gzip", "json"]
 rustls = ["dep:rustls", "_tls", "dep:rustls-platform-verifier", "dep:webpki-roots"]
 native-tls = ["dep:native-tls", "dep:der", "_tls", "dep:webpki-root-certs"]
 socks-proxy = ["dep:socks"]
