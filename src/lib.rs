@@ -354,6 +354,18 @@
 //! [actix-web](https://crates.io/crates/actix-web), and [hyper](https://crates.io/crates/hyper).
 //!
 
+/// Re-exported rustls crate
+///
+/// Use this re-export to always get a compatible version of `ClientConfig`.
+#[cfg(feature = "rustls")]
+pub use rustls;
+
+/// Re-exported native-tls crate
+///
+/// Use this re-export to always get a compatible version of `TlsConnector`.
+#[cfg(feature = "native-tls")]
+pub use native_tls;
+
 mod agent;
 mod body;
 mod chunked;
