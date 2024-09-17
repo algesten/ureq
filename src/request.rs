@@ -17,6 +17,11 @@ use crate::{Agent, AgentConfig, Error, SendBody, Timeouts};
 pub struct RequestBuilder<B> {
     agent: Agent,
     builder: http::request::Builder,
+
+    // This is only used in case http::request::Builder contains an error
+    // (such as URL parsing error), and the user wants a `.config()`.
+    dummy_config: Option<Box<AgentConfig>>,
+
     _ph: PhantomData<B>,
 }
 
@@ -160,10 +165,14 @@ impl<Any> RequestBuilder<Any> {
     }
 
     fn request_level_config(&mut self) -> &mut AgentConfig {
-        let exts = self
-            .builder
-            .extensions_mut()
-            .expect("builder without errors");
+        let Some(exts) = self.builder.extensions_mut() else {
+            // This means self.builder has an error such as URL parsing error.
+            // The error will surface on .call() (or .send()) and we fill in
+            // a dummy AgentConfig meanwhile.
+            return self
+                .dummy_config
+                .get_or_insert_with(|| Box::new(AgentConfig::default()));
+        };
 
         if exts.get::<AgentConfig>().is_none() {
             let config_ref = &*self.agent.config;
@@ -186,6 +195,7 @@ impl RequestBuilder<WithoutBody> {
         Self {
             agent,
             builder: Request::builder().method(method).uri(uri),
+            dummy_config: None,
             _ph: PhantomData,
         }
     }
@@ -214,6 +224,7 @@ impl RequestBuilder<WithBody> {
         Self {
             agent,
             builder: Request::builder().method(method).uri(uri),
+            dummy_config: None,
             _ph: PhantomData,
         }
     }
@@ -320,6 +331,10 @@ impl fmt::Debug for RequestBuilder<WithBody> {
 
 #[cfg(test)]
 mod test {
+    use std::time::Duration;
+
+    use crate::get;
+    use crate::test::init_test_log;
 
     use super::*;
 
@@ -346,5 +361,12 @@ mod test {
             format!("{:?}", call),
             "RequestBuilder<WithBody> { method: POST, uri: https://foo/bar }"
         );
+    }
+
+    #[test]
+    fn config_after_broken_url() {
+        init_test_log();
+        let mut req = get("http://x.y.z/ borked url");
+        req.timeouts().global = Some(Duration::from_millis(1));
     }
 }
