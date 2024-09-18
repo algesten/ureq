@@ -81,7 +81,7 @@ pub struct TlsConfig {
 
     /// The set of trusted root certificates to use to validate server certificates.
     ///
-    /// Defaults to `PlatformVerifier` to use the platform default root certs.
+    /// Defaults to `WebPki`.
     pub(crate) root_certs: RootCerts,
 
     /// Whether to send SNI (Server Name Indication) to the remote server.
@@ -132,7 +132,7 @@ impl TlsConfigBuilder {
 
     /// The set of trusted root certificates to use to validate server certificates.
     ///
-    /// Defaults to `PlatformVerifier` to use the platform default root certs.
+    /// Defaults to `WebPki`.
     pub fn root_certs(mut self, v: RootCerts) -> Self {
         self.config.root_certs = v;
         self
@@ -184,7 +184,8 @@ pub enum RootCerts {
 
     /// Use the platform's verifier.
     ///
-    /// * For **rustls**, this uses the `rustls-platform-verifier` crate.
+    /// * For **rustls**, this uses the `rustls-platform-verifier` crate. It requires
+    ///   the feature **platform-verifier**.
     /// * For **native-tls**, this uses the roots that native-tls loads by default.
     PlatformVerifier,
 
@@ -192,6 +193,8 @@ pub enum RootCerts {
     ///
     /// This is useful when you can't trust the system roots, such as in
     /// environments where TLS is intercepted and decrypted by a proxy (MITM attack).
+    ///
+    /// This is the default value.
     WebPki,
 }
 
@@ -214,7 +217,7 @@ impl Default for TlsConfig {
         Self {
             provider,
             client_cert: None,
-            root_certs: RootCerts::PlatformVerifier,
+            root_certs: RootCerts::WebPki,
             use_sni: true,
             disable_verification: false,
         }

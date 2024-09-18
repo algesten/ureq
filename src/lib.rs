@@ -146,6 +146,8 @@
 //!   accidentally switching on an unwanted TLS implementation, `native-tls` is never picked up as
 //!   a default or used by the crate level convenience calls (`ureq::get` etc) – it must be configured
 //!   on the agent.
+//! * **platform-verifier** enables verifying the server certificates using a method native to the
+//!   platform ureq is executing on. See [rustls-platform-verifier] crate.
 //! * **socks-proxy** enables proxy config using the `socks4://`, `socks4a://`, `socks5://`
 //!    and `socks://` (equal to `socks5://`) prefix.
 //! * **cookies** enables cookies.
@@ -158,11 +160,11 @@
 //!
 //! # TLS (https)
 //!
+//! ## rustls
+//!
 //! By default, ureq uses [`rustls` crate] with the `ring` cryptographic provider.
 //! As of Sep 2024, the `ring` provider has a higher chance of compiling successfully. If the user
 //! installs another [default provider], that choice is respected.
-//!
-//! ## rustls
 //!
 //! ```
 //! # #[cfg(feature = "rustls")]
@@ -200,6 +202,54 @@
 //! agent.get("https://www.google.com/").call().unwrap();
 //! # } Ok::<_, ureq::Error>(())
 //! ```
+//!
+//! ## Root certificates
+//!
+//! ### webpki-roots
+//!
+//! By default, ureq uses Mozilla's root certificates via the [webpki-roots] crate. This is a static
+//! bundle of root certificates that do not update automatically. It also circumvents whatever root
+//! certificates are installed on the host running ureq, which might be a good or a bad thing depending
+//! on your perspective. There is also no mechanism for
+//! [SCT](https://en.wikipedia.org/wiki/Certificate_Transparency),
+//! [CRLs](https://en.wikipedia.org/wiki/Certificate_revocation_list) or other revocations.
+//! To maintain a "fresh" list of root certs, you need to bump the ureq dependency from time to time.
+//!
+//! The main reason for chosing this as the default is to minimize the number of dependencies. More
+//! details about this decision can be found at [PR 818](https://github.com/algesten/ureq/pull/818)
+//!
+//! If your use case for ureq is talking to a limited number of servers with high trust, the
+//! default setting is likely sufficient. If you use ureq with a high number of servers, or servers
+//! you don't trust, we recommend using the platform verifier (see below).
+//!
+//! ### platform-verifier
+//!
+//! The [rustls-platform-verifier] crate provides access to natively checking the certificate via your OS.
+//! To use this verifier, you need to enable it using feature flag **platform-verifier** as well as
+//! configure an agent to use it.
+//!
+//! ```
+//! # #[cfg(all(feature = "rustls", feature="platform-verifier"))]
+//! # {
+//! use ureq::Agent;
+//! use ureq::tls::{TlsConfig, RootCerts};
+//!
+//! let agent = Agent::config_builder()
+//!     .tls_config(
+//!         TlsConfig::builder()
+//!             .root_certs(RootCerts::PlatformVerifier)
+//!             .build()
+//!     )
+//!     .build()
+//!     .new_agent();
+//!
+//! let response = agent.get("https://httpbin.org/get").call()?;
+//! # } Ok::<_, ureq::Error>(())
+//! ```
+//!
+//! Setting `RootCerts::PlatformVerifier` together with `TlsProvider::NativeTls` means
+//! also native-tls will use the OS roots instead of [webpki-roots] crate. Whether that
+//! results in a config that has CRLs and revocations is up to whatever native-tls links to.
 //!
 //! # JSON
 //!
@@ -321,6 +371,8 @@
 //! [`rustls` crate]: https://crates.io/crates/rustls
 //! [default provider]: https://docs.rs/rustls/latest/rustls/crypto/struct.CryptoProvider.html#method.install_default
 //! [`native-tls`]: https://crates.io/crates/native-tls
+//! [rustls-platform-verifier]: https://crates.io/crates/rustls-platform-verifier
+//! [webpki-roots]: https://crates.io/crates/webpki-roots
 //!
 //! ## Example using HTTP
 //!
