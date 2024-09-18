@@ -1,6 +1,6 @@
 //! Chained interception to modify the request or response.
 
-use core::fmt;
+use std::fmt;
 use std::sync::Arc;
 
 use crate::{Agent, Body, Error, SendBody};

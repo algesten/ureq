@@ -1,4 +1,4 @@
-use core::fmt;
+use std::fmt;
 use std::net::{SocketAddr, TcpStream};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::{io, thread};
