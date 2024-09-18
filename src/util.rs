@@ -1,5 +1,5 @@
-use core::fmt;
 use std::convert::TryFrom;
+use std::fmt;
 use std::io::{self, ErrorKind};
 
 use http::uri::{Authority, Scheme};

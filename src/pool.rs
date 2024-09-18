@@ -1,5 +1,5 @@
-use core::fmt;
 use std::collections::VecDeque;
+use std::fmt;
 use std::sync::{Arc, Mutex, Weak};
 
 use http::uri::{Authority, Scheme};
