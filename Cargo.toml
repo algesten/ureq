@@ -16,11 +16,12 @@ exclude = ["/cargo_deny.sh", "/deny.toml", "/test.sh"]
 rust-version = "1.67"
 
 [package.metadata.docs.rs]
-features = ["rustls", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset", "json", "_test"]
+features = ["rustls", "platform-verifier", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset", "json", "_test"]
 
 [features]
 default = ["rustls", "gzip", "json"]
-rustls = ["dep:rustls", "_tls", "dep:rustls-platform-verifier", "dep:webpki-roots"]
+rustls = ["dep:rustls", "_tls", "dep:webpki-roots"]
+platform-verifier = ["dep:rustls-platform-verifier"]
 native-tls = ["dep:native-tls", "dep:der", "_tls", "dep:webpki-root-certs"]
 socks-proxy = ["dep:socks"]
 cookies = ["dep:cookie_store", "_url"]

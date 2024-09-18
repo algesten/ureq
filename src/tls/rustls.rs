@@ -114,6 +114,11 @@ fn build_config(tls_config: &TlsConfig) -> Arc<ClientConfig> {
 
                 builder.with_root_certificates(root_store)
             }
+            #[cfg(not(feature = "platform-verifier"))]
+            RootCerts::PlatformVerifier => {
+                panic!("Rustls + PlatformVerifier requires feature: platform-verifier");
+            }
+            #[cfg(feature = "platform-verifier")]
             RootCerts::PlatformVerifier => builder
                 // This actually not dangerous. The rustls_platform_verifier is safe.
                 .dangerous()
