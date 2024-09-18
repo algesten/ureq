@@ -1,5 +1,6 @@
 //! TLS for handling `https`.
 
+use std::fmt;
 use std::sync::Arc;
 
 mod cert;
@@ -66,7 +67,7 @@ impl TlsProvider {
 ///
 /// This configuration is in common for both the different TLS mechanisms (available through
 /// feature flags **rustls** and **native-tls**).
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct TlsConfig {
     /// The provider to use.
     ///
@@ -96,6 +97,18 @@ pub struct TlsConfig {
     /// This breaks encryption and leaks secrets. Must never be enabled for code where
     /// any level of security is required.
     pub disable_verification: bool,
+
+    // This is here to force users of ureq to use the ..Default::default() pattern
+    // as part of creating `AgentConfig`. That way we can introduce new settings without
+    // it becoming a breaking changes.
+    #[doc(hidden)]
+    pub _must_use_default: private::Private,
+}
+
+// Deliberately not publicly visible.
+mod private {
+    #[derive(Debug, Clone, Copy)]
+    pub struct Private;
 }
 
 /// Configuration setting for root certs.
@@ -127,6 +140,8 @@ impl Default for TlsConfig {
             root_certs: RootCerts::PlatformVerifier,
             use_sni: true,
             disable_verification: false,
+
+            _must_use_default: private::Private,
         }
     }
 }
@@ -134,5 +149,17 @@ impl Default for TlsConfig {
 impl Default for TlsProvider {
     fn default() -> Self {
         Self::Rustls
+    }
+}
+
+impl fmt::Debug for TlsConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TlsConfig")
+            .field("provider", &self.provider)
+            .field("client_cert", &self.client_cert)
+            .field("root_certs", &self.root_certs)
+            .field("use_sni", &self.use_sni)
+            .field("disable_verification", &self.disable_verification)
+            .finish()
     }
 }

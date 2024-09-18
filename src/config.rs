@@ -13,13 +13,12 @@ use crate::tls::TlsConfig;
 
 /// Config as built by AgentBuilder and then static for the lifetime of the Agent.
 ///
-/// When creating config instances, the `..Default::default()` pattern must be used.
-/// See example below.
+/// When creating config instances, the prefer way is to use the `..Default::default()` pattern.
 ///
 /// # Example
 ///
 /// ```
-/// use ureq::{AgentConfig, Timeouts};
+/// use ureq::{Agent, AgentConfig, Timeouts};
 /// use std::time::Duration;
 ///
 /// let config = AgentConfig {
@@ -30,7 +29,33 @@ use crate::tls::TlsConfig;
 ///     https_only: true,
 ///     ..Default::default()
 /// };
+///
+/// let agent = Agent::new_with_config(config);
 /// ```
+///
+/// And alternative way is to set properties on an already created onfig
+///
+/// ```
+/// use ureq::{Agent, AgentConfig, Timeouts};
+/// use std::time::Duration;
+///
+/// let mut config = AgentConfig::new();
+/// config.timeouts.global = Some(Duration::from_secs(10));
+/// config.https_only = true;
+///
+/// let agent: Agent = config.into();
+/// ```
+///
+/// Note: For a struct with pub fields, Rust dosn't have a way to force the use of
+/// `..Default::default()`. `AgentConfig` must be instantiated in one two ways:
+///
+/// 1. `AgentConfig::default()` or `AgentConfig::new()`.
+/// 2. `AgentConfig { <override defaults>, ..Default::default() }`
+///
+/// Any other way to construct the config is not valid, and breaking changes arising
+/// from doing that are not considered breaking. Specifically it is not correct to use
+/// `AgentConfig { ... }` without a `..Default::default()`.
+///
 #[derive(Clone)]
 pub struct AgentConfig {
     /// Whether to treat 4xx and 5xx HTTP status codes as
@@ -139,6 +164,15 @@ pub struct AgentConfig {
     // it becoming a breaking changes.
     #[doc(hidden)]
     pub _must_use_default: private::Private,
+}
+
+impl AgentConfig {
+    /// Creates a new AgentConfig with defaults values.
+    ///
+    /// This is the same as `AgentConfig::default()`.
+    pub fn new() -> Self {
+        Self::default()
+    }
 }
 
 /// Request timeout configuration.
@@ -283,12 +317,17 @@ impl fmt::Debug for AgentConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut dbg = f.debug_struct("AgentConfig");
 
-        dbg.field("timeouts", &self.timeouts)
+        dbg.field("http_status_as_error", &self.http_status_as_error)
             .field("https_only", &self.https_only)
+            .field("ip_family", &self.ip_family)
+            .field("tls_config", &self.tls_config)
+            .field("proxy", &self.proxy)
             .field("no_delay", &self.no_delay)
             .field("max_redirects", &self.max_redirects)
             .field("redirect_auth_headers", &self.redirect_auth_headers)
             .field("user_agent", &self.user_agent)
+            .field("timeouts", &self.timeouts)
+            .field("max_response_header_size", &self.max_response_header_size)
             .field("input_buffer_size", &self.input_buffer_size)
             .field("output_buffer_size", &self.output_buffer_size)
             .field("max_idle_connections", &self.max_idle_connections)
@@ -297,7 +336,7 @@ impl fmt::Debug for AgentConfig {
                 &self.max_idle_connections_per_host,
             )
             .field("max_idle_age", &self.max_idle_age)
-            .field("proxy", &self.proxy);
+            .field("middleware", &self.middleware);
 
         #[cfg(feature = "_tls")]
         {
