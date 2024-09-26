@@ -244,3 +244,10 @@ impl<const N: usize> AsSendBody for &[u8; N] {
         BodyInner::ByteSlice(self.as_slice()).into()
     }
 }
+
+impl Private for () {}
+impl AsSendBody for () {
+    fn as_body(&mut self) -> SendBody {
+        BodyInner::None.into()
+    }
+}
