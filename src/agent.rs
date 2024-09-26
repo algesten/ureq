@@ -144,6 +144,18 @@ impl Agent {
     pub fn config(&self) -> &AgentConfig {
         &self.config
     }
+
+    /// Alter the configuration for this request.
+    pub fn configure_request<'a>(
+        &self,
+        request: &'a mut Request<impl AsSendBody + 'static>,
+    ) -> &'a mut AgentConfig {
+        let exts = request.extensions_mut();
+        if exts.get::<AgentConfig>().is_none() {
+            exts.insert(self.config().clone());
+        }
+        exts.get_mut().unwrap()
+    }
 }
 
 macro_rules! mk_method {
