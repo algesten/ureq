@@ -5,6 +5,8 @@
 In anticipation of releasig ureq 3.x, the main branch is now the 3.x version. The current
 main released version is in the [2.x](https://github.com/algesten/ureq/tree/2.x) branch.
 
+[Read our migration doc](MIGRATE-2-to-3.md)
+
 ---
 
 # ureq
