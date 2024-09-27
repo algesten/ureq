@@ -304,7 +304,7 @@ fn connect(
         timeout: timings.next_timeout(Timeout::Connect),
     };
 
-    let connection = agent.pool.connect(&details)?;
+    let connection = agent.pool.connect(&details, config.max_idle_age.into())?;
 
     timings.record_time(Timeout::Connect);
 
