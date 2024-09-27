@@ -122,29 +122,33 @@ pub struct AgentConfig {
     ///
     /// From the status, including all headers up until the body.
     ///
-    /// Defaults to `64KB`.
+    /// Defaults to 64kb.
     pub max_response_header_size: usize,
 
     /// Default size of the input buffer
     ///
     /// The default connectors use this setting.
     ///
-    /// Defaults to 512kb.
+    /// Defaults to 128kb.
     pub input_buffer_size: usize,
 
     /// Default size of the output buffer.
     ///
     /// The default connectors use this setting.
     ///
-    /// Defaults to 512kb.
+    /// Defaults to 128kb.
     pub output_buffer_size: usize,
 
     /// Max number of idle pooled connections overall.
+    ///
+    /// This setting has no effect when used per-request.
     ///
     /// Defaults to 10
     pub max_idle_connections: usize,
 
     /// Max number of idle pooled connections per host/port combo.
+    ///
+    /// This setting has no effect when used per-request.
     ///
     /// Defaults to 3
     pub max_idle_connections_per_host: usize,
