@@ -155,6 +155,12 @@ pub struct AgentConfig {
 
     /// Max duration to keep an idle connection in the pool
     ///
+    /// This can also be configured per-request to be shorter than the pool.
+    /// For example: if the pool is configured to 15 seconds and we have a
+    /// connection with an age of 10 seconds, a request setting this config
+    /// property to 3 seconds, would ignore the pooled connection (but still
+    /// leave it in the pool).
+    ///
     /// Defaults to 15 seconds
     pub max_idle_age: Duration,
 

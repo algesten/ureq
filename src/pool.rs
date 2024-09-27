@@ -24,14 +24,18 @@ impl ConnectionPool {
         }
     }
 
-    pub fn connect(&self, details: &ConnectionDetails) -> Result<Connection, Error> {
+    pub fn connect(
+        &self,
+        details: &ConnectionDetails,
+        max_idle_age: Duration,
+    ) -> Result<Connection, Error> {
         let key = PoolKey::new(details.uri, &details.config.proxy);
 
         {
             let mut pool = self.pool.lock().unwrap();
             pool.purge(details.now);
 
-            if let Some(conn) = pool.get(&key) {
+            if let Some(conn) = pool.get(&key, max_idle_age, details.now) {
                 debug!("Use pooled: {:?}", key);
                 return Ok(conn);
             }
@@ -243,13 +247,20 @@ impl Pool {
         self.lru.push_back(conn)
     }
 
-    fn get(&mut self, key: &PoolKey) -> Option<Connection> {
+    fn get(&mut self, key: &PoolKey, max_idle_age: Duration, now: Instant) -> Option<Connection> {
         while let Some(i) = self.lru.iter().position(|c| c.key == *key) {
             let mut conn = self.lru.remove(i).unwrap(); // unwrap ok since we just got the position
 
             // Before we release the connection, we probe that it appears to still work.
             if !conn.is_open() {
                 // This connection is broken. Try find another one.
+                continue;
+            }
+
+            if conn.age(now) >= max_idle_age {
+                // A max_duration that is shorter in the request than the pool.
+                // This connection survives in the pool, but is not used for this
+                // specific connection.
                 continue;
             }
 
