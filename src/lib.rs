@@ -57,10 +57,10 @@
 //!
 //! ```rust
 //! # fn no_run() -> Result<(), ureq::Error> {
-//! use ureq::{Agent, AgentConfig, Timeouts};
+//! use ureq::{Agent, Config, Timeouts};
 //! use std::time::Duration;
 //!
-//! let agent: Agent = AgentConfig {
+//! let agent: Agent = Config {
 //!     timeouts: Timeouts {
 //!         global: Some(Duration::from_secs(5)),
 //!         ..Default::default()
@@ -118,7 +118,7 @@
 //! protocol errors. By default, also HTTP status code errors (when the
 //! server responded 4xx or 5xx) results in `Error`.
 //!
-//! This behavior can be turned off via [`AgentConfig::http_status_as_error`].
+//! This behavior can be turned off via [`Config::http_status_as_error`].
 //!
 //! ```rust
 //! use ureq::Error;
@@ -281,11 +281,11 @@
 //! ## Example using HTTP
 //!
 //! ```rust
-//! use ureq::{Agent, AgentConfig, Proxy};
+//! use ureq::{Agent, Config, Proxy};
 //! # fn no_run() -> std::result::Result<(), ureq::Error> {
 //! // Configure an http connect proxy.
 //! let proxy = Proxy::new("http://user:password@cool.proxy:9090")?;
-//! let agent: Agent = AgentConfig {
+//! let agent: Agent = Config {
 //!     proxy: Some(proxy),
 //!     ..Default::default()
 //! }.into();
@@ -299,12 +299,12 @@
 //! ## Example using SOCKS5
 //!
 //! ```rust
-//! use ureq::{Agent, AgentConfig, Proxy};
+//! use ureq::{Agent, Config, Proxy};
 //! # #[cfg(feature = "socks-proxy")]
 //! # fn no_run() -> std::result::Result<(), ureq::Error> {
 //! // Configure a SOCKS proxy.
 //! let proxy = Proxy::new("socks5://user:password@cool.proxy:9090")?;
-//! let agent: Agent = AgentConfig {
+//! let agent: Agent = Config {
 //!     proxy: Some(proxy),
 //!     ..Default::default()
 //! }.into();
@@ -323,7 +323,7 @@ use std::convert::TryFrom;
 pub use http;
 
 pub use body::{Body, BodyReader, BodyWithConfig};
-pub use config::{AgentConfig, Timeouts};
+pub use config::{Config, Timeouts};
 use http::Method;
 use http::{Request, Response, Uri};
 pub use proxy::Proxy;
@@ -433,7 +433,7 @@ pub(crate) mod test {
         init_test_log();
         use crate::tls::{TlsConfig, TlsProvider};
 
-        let agent: Agent = AgentConfig {
+        let agent: Agent = Config {
             tls_config: TlsConfig {
                 provider: TlsProvider::Rustls,
                 ..Default::default()
@@ -461,7 +461,7 @@ pub(crate) mod test {
         init_test_log();
         use crate::tls::{TlsConfig, TlsProvider};
 
-        let agent: Agent = AgentConfig {
+        let agent: Agent = Config {
             tls_config: TlsConfig {
                 provider: TlsProvider::NativeTls,
                 ..Default::default()
@@ -492,7 +492,7 @@ pub(crate) mod test {
 
         use crate::tls::{RootCerts, TlsConfig, TlsProvider};
 
-        let agent: Agent = AgentConfig {
+        let agent: Agent = Config {
             tls_config: TlsConfig {
                 provider: TlsProvider::Rustls,
                 root_certs: RootCerts::WebPki,
@@ -512,7 +512,7 @@ pub(crate) mod test {
 
         use crate::tls::{RootCerts, TlsConfig, TlsProvider};
 
-        let agent: Agent = AgentConfig {
+        let agent: Agent = Config {
             tls_config: TlsConfig {
                 provider: TlsProvider::NativeTls,
                 root_certs: RootCerts::WebPki,
@@ -560,7 +560,7 @@ pub(crate) mod test {
     #[test]
     fn redirect_no_follow() {
         init_test_log();
-        let agent: Agent = AgentConfig {
+        let agent: Agent = Config {
             max_redirects: 0,
             ..Default::default()
         }

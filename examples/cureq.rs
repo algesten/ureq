@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use auto_args::AutoArgs;
 use ureq::tls::TlsConfig;
-use ureq::{Agent, AgentConfig, Timeouts};
+use ureq::{Agent, Config, Timeouts};
 
 #[derive(Debug, AutoArgs)]
 struct Opt {
@@ -31,7 +31,7 @@ fn main() {
 }
 
 fn run(opt: &Opt) -> Result<(), ureq::Error> {
-    let agent: Agent = AgentConfig {
+    let agent: Agent = Config {
         timeouts: Timeouts {
             global: opt.max_time.map(|t| Duration::from_secs(t.into())),
             ..Default::default()

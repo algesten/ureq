@@ -9,7 +9,7 @@ use crate::proxy::Proxy;
 use crate::transport::time::{Duration, Instant};
 use crate::transport::{Buffers, ConnectionDetails, Connector, NextTimeout, Transport};
 use crate::util::DebugAuthority;
-use crate::{AgentConfig, Error};
+use crate::{Config, Error};
 
 pub(crate) struct ConnectionPool {
     connector: Box<dyn Connector>,
@@ -17,7 +17,7 @@ pub(crate) struct ConnectionPool {
 }
 
 impl ConnectionPool {
-    pub fn new(connector: impl Connector, config: &AgentConfig) -> Self {
+    pub fn new(connector: impl Connector, config: &Config) -> Self {
         ConnectionPool {
             connector: Box::new(connector),
             pool: Arc::new(Mutex::new(Pool::new(config))),
@@ -186,7 +186,7 @@ struct Pool {
 }
 
 impl Pool {
-    fn new(config: &AgentConfig) -> Self {
+    fn new(config: &Config) -> Self {
         Pool {
             lru: VecDeque::new(),
             max_idle_connections: config.max_idle_connections,

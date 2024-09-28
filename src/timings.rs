@@ -8,7 +8,7 @@ use crate::Timeouts;
 
 /// The various timeouts.
 ///
-/// Each enum corresponds to a value in [`AgentConfig::timeouts`][crate::AgentConfig::timeouts].
+/// Each enum corresponds to a value in [`Config::timeouts`][crate::Config::timeouts].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Timeout {

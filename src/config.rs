@@ -11,17 +11,19 @@ use crate::Proxy;
 #[cfg(feature = "_tls")]
 use crate::tls::TlsConfig;
 
-/// Config as built by AgentBuilder and then static for the lifetime of the Agent.
+/// Config primarily for the [`Agent`], but also per-request.
 ///
-/// When creating config instances, the prefer way is to use the `..Default::default()` pattern.
+/// # Agent level config
 ///
-/// # Example
+/// When creating config instances, the prefered way is to use the `..Default::default()` pattern.
+///
+/// ## Example
 ///
 /// ```
-/// use ureq::{Agent, AgentConfig, Timeouts};
+/// use ureq::{Agent, Config, Timeouts};
 /// use std::time::Duration;
 ///
-/// let config = AgentConfig {
+/// let config = Config {
 ///     timeouts: Timeouts {
 ///         global: Some(Duration::from_secs(10)),
 ///         ..Default::default()
@@ -33,31 +35,79 @@ use crate::tls::TlsConfig;
 /// let agent = Agent::new_with_config(config);
 /// ```
 ///
-/// And alternative way is to set properties on an already created onfig
+/// And alternative way is to set properties on an already created config
 ///
 /// ```
-/// use ureq::{Agent, AgentConfig, Timeouts};
+/// use ureq::{Agent, Config};
 /// use std::time::Duration;
 ///
-/// let mut config = AgentConfig::new();
+/// let mut config = Config::new();
 /// config.timeouts.global = Some(Duration::from_secs(10));
 /// config.https_only = true;
 ///
 /// let agent: Agent = config.into();
 /// ```
 ///
-/// Note: For a struct with pub fields, Rust dosn't have a way to force the use of
-/// `..Default::default()`. `AgentConfig` must be instantiated in one two ways:
+/// # Request level config
 ///
-/// 1. `AgentConfig::default()` or `AgentConfig::new()`.
-/// 2. `AgentConfig { <override defaults>, ..Default::default() }`
+/// The config can also be change per-request. Since every request ultimately executes
+/// using an [`Agent`] (also the root-level `ureq::get(...)` have an implicit agent),
+/// a request level config clones the agent level config.
+///
+/// There are two ways of getting a request level config.
+///
+/// ## Request builder example
+///
+/// The first way is via [`RequestBuilder::config()`][crate::RequestBuilder::config].
+///
+/// ```
+/// use ureq::{Agent, Config};
+///
+/// let agent: Agent = Config {
+///     https_only: false,
+///     ..Default::default()
+/// }.into();
+///
+/// let mut builder = agent.get("http://httpbin.org/get");
+///
+/// let config = builder.config();
+/// config.https_only = true;
+/// ```
+///
+/// ## HTTP request example
+///
+/// The second way is via [`Agent::configure_request()`][crate::Agent::configure_request].
+/// This is used when working with the http crate [`http::Request`] type directly.
+///
+/// ```
+/// use ureq::{Agent, Config};
+///
+/// let agent: Agent = Config {
+///     https_only: false,
+///     ..Default::default()
+/// }.into();
+///
+/// let mut request = http::Request::get("http://httpbin.org/get")
+///     .body(()).unwrap();
+///
+/// let config = agent.configure_request(&mut request);
+/// config.https_only = true;
+/// ```
+///
+/// # Correct usage
+///
+/// Note: For a struct with pub fields, Rust dosn't have a way to force the use of
+/// `..Default::default()`. `Config` must be instantiated in one two ways:
+///
+/// 1. `Config::default()` or `Config::new()`.
+/// 2. `Config { <override defaults>, ..Default::default() }`
 ///
 /// Any other way to construct the config is not valid, and breaking changes arising
 /// from doing that are not considered breaking. Specifically it is not correct to use
-/// `AgentConfig { ... }` without a `..Default::default()`.
+/// `Config { ... }` without a `..Default::default()`.
 ///
 #[derive(Clone)]
-pub struct AgentConfig {
+pub struct Config {
     /// Whether to treat 4xx and 5xx HTTP status codes as
     /// [`Err(Error::StatusCode))`](crate::Error::StatusCode).
     ///
@@ -84,7 +134,7 @@ pub struct AgentConfig {
 
     /// Proxy configuration.
     ///
-    /// Picked up from environment when using [`AgentConfig::default()`] or
+    /// Picked up from environment when using [`Config::default()`] or
     /// [`Agent::new_with_defaults()`][crate::Agent::new_with_defaults].
     pub proxy: Option<Proxy>,
 
@@ -170,16 +220,16 @@ pub struct AgentConfig {
     pub middleware: MiddlewareChain,
 
     // This is here to force users of ureq to use the ..Default::default() pattern
-    // as part of creating `AgentConfig`. That way we can introduce new settings without
+    // as part of creating `Config`. That way we can introduce new settings without
     // it becoming a breaking changes.
     #[doc(hidden)]
     pub _must_use_default: private::Private,
 }
 
-impl AgentConfig {
-    /// Creates a new AgentConfig with defaults values.
+impl Config {
+    /// Creates a new Config with defaults values.
     ///
-    /// This is the same as `AgentConfig::default()`.
+    /// This is the same as `Config::default()`.
     pub fn new() -> Self {
         Self::default()
     }
@@ -251,7 +301,7 @@ pub struct Timeouts {
     pub recv_body: Option<Duration>,
 
     // This is here to force users of ureq to use the ..Default::default() pattern
-    // as part of creating `AgentConfig`. That way we can introduce new settings without
+    // as part of creating `Config`. That way we can introduce new settings without
     // it becoming a breaking changes.
     #[doc(hidden)]
     pub _must_use_default: private::Private,
@@ -263,7 +313,7 @@ mod private {
     pub struct Private;
 }
 
-impl AgentConfig {
+impl Config {
     pub(crate) fn connect_proxy_uri(&self) -> Option<&Uri> {
         let proxy = self.proxy.as_ref()?;
 
@@ -278,7 +328,7 @@ impl AgentConfig {
 pub static DEFAULT_USER_AGENT: &str =
     concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
 
-impl Default for AgentConfig {
+impl Default for Config {
     fn default() -> Self {
         Self {
             http_status_as_error: true,
@@ -323,9 +373,9 @@ impl Default for Timeouts {
     }
 }
 
-impl fmt::Debug for AgentConfig {
+impl fmt::Debug for Config {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut dbg = f.debug_struct("AgentConfig");
+        let mut dbg = f.debug_struct("Config");
 
         dbg.field("http_status_as_error", &self.http_status_as_error)
             .field("https_only", &self.https_only)

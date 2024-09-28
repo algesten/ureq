@@ -5,7 +5,7 @@ use std::{fmt, io, time};
 use crate::resolver::ResolvedSocketAddrs;
 use crate::transport::time::Duration;
 use crate::util::IoResultExt;
-use crate::{AgentConfig, Error};
+use crate::{Config, Error};
 
 use super::{Buffers, ConnectionDetails, Connector, LazyBuffers, NextTimeout, Transport};
 
@@ -39,7 +39,7 @@ impl Connector for TcpConnector {
 fn try_connect(
     addrs: &ResolvedSocketAddrs,
     timeout: NextTimeout,
-    config: &AgentConfig,
+    config: &Config,
 ) -> Result<TcpStream, Error> {
     for addr in addrs {
         match try_connect_single(*addr, timeout, config) {
@@ -65,7 +65,7 @@ fn try_connect(
 fn try_connect_single(
     addr: SocketAddr,
     timeout: NextTimeout,
-    config: &AgentConfig,
+    config: &Config,
 ) -> Result<TcpStream, Error> {
     trace!("Try connect TcpStream to {}", addr);
 

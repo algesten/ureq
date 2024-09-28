@@ -8,7 +8,7 @@ use http::{HeaderName, HeaderValue, Method, Request, Response, Uri, Version};
 use crate::body::Body;
 use crate::send_body::AsSendBody;
 use crate::util::private::Private;
-use crate::{Agent, AgentConfig, Error, SendBody, Timeouts};
+use crate::{Agent, Config, Error, SendBody, Timeouts};
 
 /// Transparent wrapper around [`http::request::Builder`].
 ///
@@ -20,7 +20,7 @@ pub struct RequestBuilder<B> {
 
     // This is only used in case http::request::Builder contains an error
     // (such as URL parsing error), and the user wants a `.config()`.
-    dummy_config: Option<Box<AgentConfig>>,
+    dummy_config: Option<Box<Config>>,
 
     _ph: PhantomData<B>,
 }
@@ -101,10 +101,9 @@ impl<Any> RequestBuilder<Any> {
     /// # Example
     ///
     /// ```
-    /// use ureq::{Agent, AgentConfig, Timeouts};
-    /// use std::time::Duration;
+    /// use ureq::{Agent, Config};
     ///
-    /// let agent: Agent = AgentConfig {
+    /// let agent: Agent = Config {
     ///     https_only: false,
     ///     ..Default::default()
     /// }.into();
@@ -124,7 +123,7 @@ impl<Any> RequestBuilder<Any> {
     /// assert!(!agent.config().https_only);
     /// # Ok::<_, ureq::Error>(())
     /// ```
-    pub fn config(&mut self) -> &mut AgentConfig {
+    pub fn config(&mut self) -> &mut Config {
         self.request_level_config()
     }
 
@@ -135,10 +134,10 @@ impl<Any> RequestBuilder<Any> {
     /// # Example
     ///
     /// ```
-    /// use ureq::{Agent, AgentConfig, Timeouts};
+    /// use ureq::{Agent, Config, Timeouts};
     /// use std::time::Duration;
     ///
-    /// let agent: Agent = AgentConfig {
+    /// let agent: Agent = Config {
     ///     timeouts: Timeouts {
     ///         global: Some(Duration::from_secs(10)),
     ///        ..Default::default()
@@ -164,20 +163,20 @@ impl<Any> RequestBuilder<Any> {
         &mut self.request_level_config().timeouts
     }
 
-    fn request_level_config(&mut self) -> &mut AgentConfig {
+    fn request_level_config(&mut self) -> &mut Config {
         let Some(exts) = self.builder.extensions_mut() else {
             // This means self.builder has an error such as URL parsing error.
             // The error will surface on .call() (or .send()) and we fill in
-            // a dummy AgentConfig meanwhile.
+            // a dummy Config meanwhile.
             return self
                 .dummy_config
-                .get_or_insert_with(|| Box::new(AgentConfig::default()));
+                .get_or_insert_with(|| Box::new(Config::default()));
         };
 
-        if exts.get::<AgentConfig>().is_none() {
+        if exts.get::<Config>().is_none() {
             let config_ref = &*self.agent.config;
             // This is the cost of setting request level config
-            let config: AgentConfig = config_ref.clone();
+            let config: Config = config_ref.clone();
             exts.insert(config);
         }
 

@@ -99,7 +99,7 @@ pub struct TlsConfig {
     pub disable_verification: bool,
 
     // This is here to force users of ureq to use the ..Default::default() pattern
-    // as part of creating `AgentConfig`. That way we can introduce new settings without
+    // as part of creating `Config`. That way we can introduce new settings without
     // it becoming a breaking changes.
     #[doc(hidden)]
     pub _must_use_default: private::Private,
