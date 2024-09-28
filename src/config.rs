@@ -325,6 +325,14 @@ mod private {
 }
 
 impl Config {
+    /// Creates a new agent by cloning this config.
+    ///
+    /// * Cloning the config does not incur heap allocations.
+    /// * The created [`Agent`] will not be affected by further changes to this config.
+    pub fn new_agent(&self) -> Agent {
+        self.clone().into()
+    }
+
     pub(crate) fn user_agent(&self) -> &str {
         self.user_agent.as_deref().unwrap_or(DEFAULT_USER_AGENT)
     }
