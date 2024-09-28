@@ -92,7 +92,7 @@ fn build_connector(tls_config: &TlsConfig) -> Result<Arc<TlsConnector>, Error> {
         builder.danger_accept_invalid_hostnames(true);
     } else {
         match &tls_config.root_certs {
-            RootCerts::SpecificCerts(certs) => {
+            RootCerts::Specific(certs) => {
                 // Only use the specific roots.
                 builder.disable_built_in_roots(true);
                 add_valid_der(certs.iter().map(|c| c.der()), &mut builder);
@@ -112,7 +112,8 @@ fn build_connector(tls_config: &TlsConfig) -> Result<Arc<TlsConnector>, Error> {
         }
     }
 
-    if let Some((certs, key)) = &tls_config.client_cert {
+    if let Some(certs_and_key) = &tls_config.client_cert {
+        let (certs, key) = &*certs_and_key.0;
         let certs_pem = certs
             .iter()
             .map(|c| pemify(c.der(), "CERTIFICATE"))
