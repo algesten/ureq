@@ -60,13 +60,10 @@
 //! use ureq::{Agent, Config, Timeouts};
 //! use std::time::Duration;
 //!
-//! let agent: Agent = Config {
-//!     timeouts: Timeouts {
-//!         global: Some(Duration::from_secs(5)),
-//!         ..Default::default()
-//!     },
-//!     ..Default::default()
-//! }.into();
+//! let mut config = Config::new();
+//! config.timeouts.global = Some(Duration::from_secs(5));
+//!
+//! let agent: Agent = config.into();
 //!
 //! let body: String = agent.get("http://example.com/page")
 //!     .call()?
@@ -144,7 +141,7 @@
 //!
 //! The default enabled features are: **rustls**, **gzip** and **json**.
 //!
-//! * **rustls** enabled the rustls TLS implementation. This is the defeault for the the crate level
+//! * **rustls** enabled the rustls TLS implementation. This is the default for the the crate level
 //!   convenience calls (`ureq::get` etc).
 //! * **native-tls** enables the native tls backend for TLS. Due to the risk of diamond dependencies
 //!   accidentally switching on an unwanted TLS implementation, `native-tls` is never picked up as
@@ -159,6 +156,45 @@
 //!    (e.g.  `Content-Type: text/plain; charset=iso-8859-1`). Without this, the
 //!    library defaults to Rust's built in `utf-8`.
 //! * **json** enables JSON sending and receiving via serde_json.
+//!
+//! # TLS (https)
+//!
+//! By default, ureq uses [`rustls` crate] with the `ring` cryptographic provider.
+//! As of Sep 20204, the `ring` provider has a higher chance of compiling successfully. If the user
+//! installs another [default provider], that choice is respected.
+//!
+//! ## rustls
+//!
+//! ```
+//! # #[cfg(feature = "rustls")]
+//! # {
+//! // This uses rustls
+//! ureq::get("https://www.google.com/").call().unwrap();
+//! # } Ok::<_, ureq::Error>(())
+//! ```
+//!
+//! ## native-tls
+//!
+//! As an alternative, ureq ships with [`native-tls`] as a TLS provider. This must be
+//! enabled using the **native-tls** feature. Due to the risk of diamond dependencies
+//! accidentally switching on an unwanted TLS implementation, `native-tls` is never picked
+//! up as a default or used by the crate level convenience calls (`ureq::get` etc) – it
+//! must be configured on the agent.
+//!
+//! ```
+//! # #[cfg(feature = "native-tls")]
+//! # {
+//! use ureq::{Config, tls::TlsProvider};
+//!
+//! let mut config = Config::new();
+//! // requires the native-tls feature
+//! config.tls_config.provider = TlsProvider::NativeTls;
+//!
+//! let agent = config.new_agent();
+//!
+//! agent.get("https://www.google.com/").call().unwrap();
+//! # } Ok::<_, ureq::Error>(())
+//! ```
 //!
 //! # JSON
 //!
@@ -277,6 +313,9 @@
 //! [`CONNECT`]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods/CONNECT
 //! [`SOCKS4`]: https://en.wikipedia.org/wiki/SOCKS#SOCKS4
 //! [`SOCKS5`]: https://en.wikipedia.org/wiki/SOCKS#SOCKS5
+//! [`rustls` crate]: https://crates.io/crates/rustls
+//! [default provider]: https://docs.rs/rustls/latest/rustls/crypto/struct.CryptoProvider.html#method.install_default
+//! [`native-tls`]: https://crates.io/crates/native-tls
 //!
 //! ## Example using HTTP
 //!

@@ -6,12 +6,12 @@ use http::Uri;
 
 use crate::middleware::MiddlewareChain;
 use crate::resolver::IpFamily;
-use crate::Proxy;
+use crate::{Agent, Proxy};
 
 #[cfg(feature = "_tls")]
 use crate::tls::TlsConfig;
 
-/// Config primarily for the [`Agent`][crate::Agent], but also per-request.
+/// Config primarily for the [`Agent`], but also per-request.
 ///
 /// Config objects are cheap to clone and should not incur any heap allocations.
 ///
@@ -53,7 +53,7 @@ use crate::tls::TlsConfig;
 /// # Request level config
 ///
 /// The config can also be change per-request. Since every request ultimately executes
-/// using an [`Agent`][crate::Agent] (also the root-level `ureq::get(...)` have an implicit agent),
+/// using an [`Agent`] (also the root-level `ureq::get(...)` have an implicit agent),
 /// a request level config clones the agent level config.
 ///
 /// There are two ways of getting a request level config.

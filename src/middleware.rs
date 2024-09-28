@@ -64,7 +64,6 @@ use crate::{Agent, Body, Error, SendBody};
 ///     agent.get("http://httpbin.org/headers").call()?.body_mut().read_json()?;
 ///
 /// assert_eq!(&result["headers"]["X-My-Header"], "value_42");
-///
 /// # } Ok::<_, ureq::Error>(())
 /// ```
 ///
