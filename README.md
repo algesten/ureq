@@ -2,8 +2,11 @@
 
 # !!! main branch is ureq 3.x !!!
 
-In anticipation of releasig ureq 3.x, the main branch is now the 3.x version. The current
-main released version is in the [2.x](https://github.com/algesten/ureq/tree/2.x) branch.
+* The main branch is now the 3.x version
+* We are currently releasing release candidates for 3.x
+* We want input and feedback on 3.x
+* The crates main released version is in the [2.x](https://github.com/algesten/ureq/tree/2.x) branch
+* No further PRs or changes are accepted to 2.x
 
 [Read our migration doc](MIGRATE-2-to-3.md)
 
