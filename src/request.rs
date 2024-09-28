@@ -6,6 +6,7 @@ use std::ops::{Deref, DerefMut};
 use http::{HeaderName, HeaderValue, Method, Request, Response, Uri, Version};
 
 use crate::body::Body;
+use crate::config::RequestLevelConfig;
 use crate::send_body::AsSendBody;
 use crate::util::private::Private;
 use crate::{Agent, Config, Error, SendBody, Timeouts};
@@ -173,15 +174,14 @@ impl<Any> RequestBuilder<Any> {
                 .get_or_insert_with(|| Box::new(Config::default()));
         };
 
-        if exts.get::<Config>().is_none() {
-            let config_ref = &*self.agent.config;
-            // This is the cost of setting request level config
-            let config: Config = config_ref.clone();
-            exts.insert(config);
+        if exts.get::<RequestLevelConfig>().is_none() {
+            exts.insert(self.agent.new_request_level_config());
         }
 
         // Unwrap is OK because of above check
-        exts.get_mut().unwrap()
+        let req_level: &mut RequestLevelConfig = exts.get_mut().unwrap();
+
+        &mut req_level.0
     }
 }
 

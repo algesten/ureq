@@ -307,6 +307,9 @@ pub struct Timeouts {
     pub _must_use_default: private::Private,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct RequestLevelConfig(pub Config);
+
 // Deliberately not publicly visible.
 mod private {
     #[derive(Debug, Clone, Copy)]

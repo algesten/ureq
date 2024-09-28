@@ -10,6 +10,7 @@ use http::uri::Scheme;
 use http::{HeaderValue, Request, Response, Uri};
 
 use crate::body::ResponseInfo;
+use crate::config::RequestLevelConfig;
 use crate::pool::Connection;
 use crate::timings::{CallTimings, CurrentTime};
 use crate::transport::time::{Duration, Instant};
@@ -32,7 +33,8 @@ pub(crate) fn run(
     // Configuration on the request level overrides the agent level.
     let config = request
         .extensions_mut()
-        .remove::<Config>()
+        .remove::<RequestLevelConfig>()
+        .map(|rl| rl.0)
         .map(Arc::new)
         .unwrap_or_else(|| agent.config.clone());
 

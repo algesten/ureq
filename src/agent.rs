@@ -5,6 +5,7 @@ use std::sync::Arc;
 use http::{Method, Request, Response, Uri};
 
 use crate::body::Body;
+use crate::config::RequestLevelConfig;
 use crate::middleware::MiddlewareNext;
 use crate::pool::ConnectionPool;
 use crate::resolver::{DefaultResolver, Resolver};
@@ -147,10 +148,19 @@ impl Agent {
         request: &'a mut Request<impl AsSendBody + 'static>,
     ) -> &'a mut Config {
         let exts = request.extensions_mut();
-        if exts.get::<Config>().is_none() {
-            exts.insert(self.config().clone());
+
+        if exts.get::<RequestLevelConfig>().is_none() {
+            exts.insert(self.new_request_level_config());
         }
-        exts.get_mut().unwrap()
+
+        // Unwrap is OK because of above check
+        let req_level: &mut RequestLevelConfig = exts.get_mut().unwrap();
+
+        &mut req_level.0
+    }
+
+    pub(crate) fn new_request_level_config(&self) -> RequestLevelConfig {
+        RequestLevelConfig(self.config.as_ref().clone())
     }
 }
 
