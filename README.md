@@ -63,16 +63,13 @@ holds a connection pool for reuse, and a cookie store if you use the
 an Agent also allows setting options like the TLS configuration.
 
 ```rust
-use ureq::{Agent, AgentConfig, Timeouts};
+use ureq::{Agent, Config, Timeouts};
 use std::time::Duration;
 
-let agent: Agent = AgentConfig {
-    timeouts: Timeouts {
-        global: Some(Duration::from_secs(5)),
-        ..Default::default()
-    },
-    ..Default::default()
-}.into();
+let mut config = Config::new();
+config.timeouts.global = Some(Duration::from_secs(5));
+
+let agent: Agent = config.into();
 
 let body: String = agent.get("http://example.com/page")
     .call()?
@@ -120,7 +117,7 @@ ureq returns errors via `Result<T, ureq::Error>`. That includes I/O errors,
 protocol errors. By default, also HTTP status code errors (when the
 server responded 4xx or 5xx) results in `Error`.
 
-This behavior can be turned off via [`AgentConfig::http_status_as_error`].
+This behavior can be turned off via [`Config::http_status_as_error`].
 
 ```rust
 use ureq::Error;
@@ -144,7 +141,7 @@ You can control them when including ureq as a dependency.
 
 The default enabled features are: **rustls**, **gzip** and **json**.
 
-* **rustls** enabled the rustls TLS implementation. This is the defeault for the the crate level
+* **rustls** enabled the rustls TLS implementation. This is the default for the the crate level
   convenience calls (`ureq::get` etc).
 * **native-tls** enables the native tls backend for TLS. Due to the risk of diamond dependencies
   accidentally switching on an unwanted TLS implementation, `native-tls` is never picked up as
@@ -159,6 +156,39 @@ The default enabled features are: **rustls**, **gzip** and **json**.
    (e.g.  `Content-Type: text/plain; charset=iso-8859-1`). Without this, the
    library defaults to Rust's built in `utf-8`.
 * **json** enables JSON sending and receiving via serde_json.
+
+## TLS (https)
+
+By default, ureq uses [`rustls` crate] with the `ring` cryptographic provider.
+As of Sep 20204, the `ring` provider has a higher chance of compiling successfully. If the user
+installs another [default provider], that choice is respected.
+
+### rustls
+
+```rust
+// This uses rustls
+ureq::get("https://www.google.com/").call().unwrap();
+```
+
+### native-tls
+
+As an alternative, ureq ships with [`native-tls`] as a TLS provider. This must be
+enabled using the **native-tls** feature. Due to the risk of diamond dependencies
+accidentally switching on an unwanted TLS implementation, `native-tls` is never picked
+up as a default or used by the crate level convenience calls (`ureq::get` etc) – it
+must be configured on the agent.
+
+```rust
+use ureq::{Config, tls::TlsProvider};
+
+let mut config = Config::new();
+// requires the native-tls feature
+config.tls_config.provider = TlsProvider::NativeTls;
+
+let agent = config.new_agent();
+
+agent.get("https://www.google.com/").call().unwrap();
+```
 
 ## JSON
 
@@ -276,14 +306,17 @@ Proxies settings are configured on an [Agent]. All request sent through the agen
 [`CONNECT`]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods/CONNECT
 [`SOCKS4`]: https://en.wikipedia.org/wiki/SOCKS#SOCKS4
 [`SOCKS5`]: https://en.wikipedia.org/wiki/SOCKS#SOCKS5
+[`rustls` crate]: https://crates.io/crates/rustls
+[default provider]: https://docs.rs/rustls/latest/rustls/crypto/struct.CryptoProvider.html#method.install_default
+[`native-tls`]: https://crates.io/crates/native-tls
 
 ### Example using HTTP
 
 ```rust
-use ureq::{Agent, AgentConfig, Proxy};
+use ureq::{Agent, Config, Proxy};
 // Configure an http connect proxy.
 let proxy = Proxy::new("http://user:password@cool.proxy:9090")?;
-let agent: Agent = AgentConfig {
+let agent: Agent = Config {
     proxy: Some(proxy),
     ..Default::default()
 }.into();
@@ -295,10 +328,10 @@ let resp = agent.get("http://cool.server").call()?;
 ### Example using SOCKS5
 
 ```rust
-use ureq::{Agent, AgentConfig, Proxy};
+use ureq::{Agent, Config, Proxy};
 // Configure a SOCKS proxy.
 let proxy = Proxy::new("socks5://user:password@cool.proxy:9090")?;
-let agent: Agent = AgentConfig {
+let agent: Agent = Config {
     proxy: Some(proxy),
     ..Default::default()
 }.into();
