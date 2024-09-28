@@ -3,6 +3,7 @@
 use std::fmt;
 use std::sync::Arc;
 
+use crate::run::run;
 use crate::{Agent, Body, Error, SendBody};
 
 /// Chained processing of request (and response).
@@ -212,7 +213,7 @@ impl<'a> MiddlewareNext<'a> {
             // When chain is over, call the actual do_run on agent.
             let (parts, body) = request.into_parts();
             let request = http::Request::from_parts(parts, ());
-            self.agent.do_run(request, body)
+            run(self.agent, request, body)
         }
     }
 }

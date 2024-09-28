@@ -290,7 +290,7 @@ impl RequestBuilder<WithBody> {
 }
 
 fn do_call(agent: Agent, request: Request<()>, body: SendBody) -> Result<Response<Body>, Error> {
-    let response = agent.run_middleware(request, body)?;
+    let response = agent.run_via_middleware(request, body)?;
     Ok(response)
 }
 
