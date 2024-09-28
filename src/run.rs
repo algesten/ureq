@@ -15,7 +15,7 @@ use crate::timings::{CallTimings, CurrentTime};
 use crate::transport::time::{Duration, Instant};
 use crate::transport::ConnectionDetails;
 use crate::util::{DebugRequest, DebugResponse, DebugUri, HeaderMapExt, UriExt};
-use crate::{Agent, AgentConfig, Body, Error, SendBody, Timeout};
+use crate::{Agent, Body, Config, Error, SendBody, Timeout};
 
 type Flow<T> = hoot::client::flow::Flow<(), T>;
 
@@ -32,7 +32,7 @@ pub(crate) fn run(
     // Configuration on the request level overrides the agent level.
     let config = request
         .extensions_mut()
-        .remove::<AgentConfig>()
+        .remove::<Config>()
         .map(Arc::new)
         .unwrap_or_else(|| agent.config.clone());
 
@@ -99,7 +99,7 @@ pub(crate) fn run(
 
 fn flow_run(
     agent: &Agent,
-    config: &AgentConfig,
+    config: &Config,
     mut flow: Flow<Prepare>,
     body: &mut SendBody,
     redirect_count: u32,
@@ -192,7 +192,7 @@ enum FlowResult {
 fn add_headers(
     flow: &mut Flow<Prepare>,
     agent: &Agent,
-    config: &AgentConfig,
+    config: &Config,
     body: &SendBody,
     uri: &Uri,
 ) -> Result<(), Error> {
@@ -274,7 +274,7 @@ fn add_headers(
 
 fn connect(
     agent: &Agent,
-    config: &AgentConfig,
+    config: &Config,
     uri: &Uri,
     timings: &mut CallTimings,
 ) -> Result<Connection, Error> {
@@ -422,7 +422,7 @@ fn send_body(
 fn recv_response(
     mut flow: Flow<RecvResponse>,
     connection: &mut Connection,
-    config: &AgentConfig,
+    config: &Config,
     timings: &mut CallTimings,
 ) -> Result<(Response<()>, RecvResponseResult<()>), Error> {
     let response = loop {
@@ -454,7 +454,7 @@ fn recv_response(
     Ok((response, flow.proceed().unwrap()))
 }
 
-fn handle_redirect(mut flow: Flow<Redirect>, config: &AgentConfig) -> Result<Flow<Prepare>, Error> {
+fn handle_redirect(mut flow: Flow<Redirect>, config: &Config) -> Result<Flow<Prepare>, Error> {
     let maybe_new_flow = flow.as_new_flow(config.redirect_auth_headers)?;
     let status = flow.status();
 

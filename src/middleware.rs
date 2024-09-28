@@ -39,7 +39,7 @@ use crate::{Agent, Body, Error, SendBody};
 /// A common use case is to add headers to the outgoing request. Here an example of how.
 ///
 /// ```no_run
-/// use ureq::{Body, SendBody, Agent, AgentConfig};
+/// use ureq::{Body, SendBody, Agent, Config};
 /// use ureq::middleware::MiddlewareNext;
 /// use ureq::http::{Request, Response, header::HeaderValue};
 ///
@@ -54,7 +54,7 @@ use crate::{Agent, Body, Error, SendBody};
 ///     next.handle(req)
 /// }
 ///
-/// let mut config = AgentConfig::default();
+/// let mut config = Config::default();
 /// config.middleware.add(my_middleware);
 ///
 /// let agent: Agent = config.into();
@@ -115,7 +115,7 @@ use crate::{Agent, Body, Error, SendBody};
 /// through the agent.
 ///
 /// ```
-/// use ureq::{Body, SendBody, Agent, AgentConfig};
+/// use ureq::{Body, SendBody, Agent, Config};
 /// use ureq::middleware::{Middleware, MiddlewareNext};
 /// use ureq::http::{Request, Response};
 /// use std::sync::atomic::{AtomicU64, Ordering};
@@ -140,7 +140,7 @@ use crate::{Agent, Body, Error, SendBody};
 ///
 /// let shared_counter = Arc::new(AtomicU64::new(0));
 ///
-/// let mut config = AgentConfig::default();
+/// let mut config = Config::default();
 /// config.middleware.add(MyCounter(shared_counter.clone()));
 ///
 /// let agent: Agent = config.into();
@@ -166,7 +166,7 @@ pub trait Middleware: Send + Sync + 'static {
 ///
 /// Defaults to an empty chain.
 ///
-/// This is set in [`AgentConfig`](crate::AgentConfig).
+/// This is set in [`Config`](crate::Config).
 #[derive(Clone, Default)]
 pub struct MiddlewareChain {
     chain: Arc<Vec<Box<dyn Middleware>>>,

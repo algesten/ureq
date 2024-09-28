@@ -8,7 +8,7 @@ use crate::Timeout;
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum Error {
-    /// When [`AgentConfig::http_status_as_error`](crate::AgentConfig::http_status_as_error) is true,
+    /// When [`Config::http_status_as_error`](crate::Config::http_status_as_error) is true,
     /// 4xx and 5xx response status codes are translated to this error.
     ///
     /// This is the default behavior.
@@ -135,7 +135,7 @@ pub enum Error {
     #[error("unknown character set: {0}")]
     UnknownCharset(String),
 
-    /// The setting [`AgentConfig::https_only`](crate::AgentConfig::https_only) is true and
+    /// The setting [`Config::https_only`](crate::Config::https_only) is true and
     /// the URI is not https.
     #[error("configured for https only: {0}")]
     RequireHttpsOnly(String),

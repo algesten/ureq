@@ -20,7 +20,7 @@ use smallvec::{smallvec, SmallVec};
 
 use crate::transport::NextTimeout;
 use crate::util::{SchemeExt, UriExt};
-use crate::{AgentConfig, Error};
+use crate::{Config, Error};
 
 /// Trait for name resolvers.
 pub trait Resolver: Debug + Send + Sync + 'static {
@@ -30,7 +30,7 @@ pub trait Resolver: Debug + Send + Sync + 'static {
     fn resolve(
         &self,
         uri: &Uri,
-        config: &AgentConfig,
+        config: &Config,
         timeout: NextTimeout,
     ) -> Result<ResolvedSocketAddrs, Error>;
 }
@@ -80,7 +80,7 @@ impl Resolver for DefaultResolver {
     fn resolve(
         &self,
         uri: &Uri,
-        config: &AgentConfig,
+        config: &Config,
         timeout: NextTimeout,
     ) -> Result<ResolvedSocketAddrs, Error> {
         uri.ensure_valid_url()?;
@@ -180,7 +180,7 @@ mod test {
     #[test]
     fn unknown_scheme() {
         let uri: Uri = "foo://some:42/123".parse().unwrap();
-        let config = AgentConfig::default();
+        let config = Config::default();
         let err = DefaultResolver::default()
             .resolve(
                 &uri,

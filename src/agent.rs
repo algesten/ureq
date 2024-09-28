@@ -11,7 +11,7 @@ use crate::resolver::{DefaultResolver, Resolver};
 use crate::run::run;
 use crate::send_body::AsSendBody;
 use crate::transport::{Connector, DefaultConnector};
-use crate::{AgentConfig, Error, RequestBuilder, SendBody};
+use crate::{Config, Error, RequestBuilder, SendBody};
 use crate::{WithBody, WithoutBody};
 
 /// Agents keep state between requests.
@@ -41,7 +41,7 @@ use crate::{WithBody, WithoutBody};
 /// that shares the same underlying connection pool and other state.
 #[derive(Debug, Clone)]
 pub struct Agent {
-    pub(crate) config: Arc<AgentConfig>,
+    pub(crate) config: Arc<Config>,
     pub(crate) pool: Arc<ConnectionPool>,
     pub(crate) resolver: Arc<dyn Resolver>,
 
@@ -53,14 +53,14 @@ impl Agent {
     /// Creates an agent with defaults.
     pub fn new_with_defaults() -> Self {
         Self::with_parts(
-            AgentConfig::default(),
+            Config::default(),
             DefaultConnector::default(),
             DefaultResolver::default(),
         )
     }
 
     /// Creates an agent with config.
-    pub fn new_with_config(config: AgentConfig) -> Self {
+    pub fn new_with_config(config: Config) -> Self {
         Self::with_parts(
             config,
             DefaultConnector::default(),
@@ -71,11 +71,7 @@ impl Agent {
     /// Creates an agent with a bespoke transport and resolver.
     ///
     /// _This is low level API that isn't for regular use of ureq._
-    pub fn with_parts(
-        config: AgentConfig,
-        connector: impl Connector,
-        resolver: impl Resolver,
-    ) -> Self {
+    pub fn with_parts(config: Config, connector: impl Connector, resolver: impl Resolver) -> Self {
         let pool = Arc::new(ConnectionPool::new(connector, &config));
 
         Agent {
@@ -141,7 +137,7 @@ impl Agent {
     }
 
     /// Get the config for this agent.
-    pub fn config(&self) -> &AgentConfig {
+    pub fn config(&self) -> &Config {
         &self.config
     }
 
@@ -149,9 +145,9 @@ impl Agent {
     pub fn configure_request<'a>(
         &self,
         request: &'a mut Request<impl AsSendBody + 'static>,
-    ) -> &'a mut AgentConfig {
+    ) -> &'a mut Config {
         let exts = request.extensions_mut();
-        if exts.get::<AgentConfig>().is_none() {
+        if exts.get::<Config>().is_none() {
             exts.insert(self.config().clone());
         }
         exts.get_mut().unwrap()
@@ -188,8 +184,8 @@ mk_method!(
     (trace, TRACE, WithoutBody)
 );
 
-impl From<AgentConfig> for Agent {
-    fn from(value: AgentConfig) -> Self {
+impl From<Config> for Agent {
+    fn from(value: Config) -> Self {
         Agent::new_with_config(value)
     }
 }

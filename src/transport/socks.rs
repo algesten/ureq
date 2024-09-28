@@ -17,7 +17,7 @@ use super::{ConnectionDetails, Connector, NextTimeout, Transport};
 ///
 /// Requires the **socks-proxy** feature.
 ///
-/// The connector looks at the proxy settings in [`AgentConfig::proxy`](crate::AgentConfig::proxy) to
+/// The connector looks at the proxy settings in [`Config::proxy`](crate::Config::proxy) to
 /// determine whether to attempt a proxy connection or not.
 #[derive(Default)]
 pub struct SocksConnector {}

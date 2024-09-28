@@ -28,7 +28,7 @@ use http::Uri;
 
 use crate::proxy::Proto;
 use crate::resolver::{ResolvedSocketAddrs, Resolver};
-use crate::{AgentConfig, Error};
+use crate::{Config, Error};
 
 pub use self::tcp::TcpConnector;
 use self::time::Instant;
@@ -112,7 +112,7 @@ pub struct ConnectionDetails<'a> {
     pub addrs: ResolvedSocketAddrs,
 
     /// The Agent configuration.
-    pub config: &'a AgentConfig,
+    pub config: &'a Config,
 
     /// The resolver configured on [`Agent`](crate::Agent).
     ///
@@ -306,7 +306,7 @@ mod no_proxy {
                                 configured by environment variables"
                             );
                         } else {
-                            // If a user bothered to manually create a AgentConfig.proxy setting,
+                            // If a user bothered to manually create a Config.proxy setting,
                             // and it's not honored, assume it's a serious error.
                             panic!(
                                 "Enable feature socks-proxy to use
