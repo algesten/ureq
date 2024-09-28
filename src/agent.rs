@@ -109,6 +109,25 @@ impl Agent {
     }
 
     /// Run a [`http::Request<impl AsSendBody>`].
+    ///
+    /// Used to execute http crate [`http::Request`] directly on this agent.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use ureq::Agent;
+    ///
+    /// let agent: Agent = Agent::new_with_defaults();
+    ///
+    /// let mut request =
+    ///     http::Request::get("http://httpbin.org/get")
+    ///     .body(())?;
+    ///
+    /// let body = agent.run(request)?
+    ///     .body_mut()
+    ///     .read_to_string()?;
+    /// # Ok::<(), ureq::Error>(())
+    /// ```
     pub fn run(&self, request: Request<impl AsSendBody>) -> Result<Response<Body>, Error> {
         let (parts, mut body) = request.into_parts();
         let body = body.as_body();
@@ -142,7 +161,13 @@ impl Agent {
         &self.config
     }
 
-    /// Alter the configuration for this request.
+    /// Alter the configuration for an http crate request.
+    ///
+    /// Notice: It's an error to configure a [`http::Request`] using
+    /// one instance of [`Agent`] and run using another instance. The
+    /// library does not currently detect this situation, but it is
+    /// not considered a breaking change if this is enforced in
+    /// the future.
     pub fn configure_request<'a>(
         &self,
         request: &'a mut Request<impl AsSendBody + 'static>,

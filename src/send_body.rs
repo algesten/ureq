@@ -104,6 +104,7 @@ use http::Response;
 /// * `TcpStream`
 /// * `UnixStream` (not on windows)
 /// * `&[u8; N]`
+/// * `()`
 ///
 /// # Example
 ///
