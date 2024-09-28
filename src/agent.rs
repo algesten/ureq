@@ -9,7 +9,6 @@ use crate::config::RequestLevelConfig;
 use crate::middleware::MiddlewareNext;
 use crate::pool::ConnectionPool;
 use crate::resolver::{DefaultResolver, Resolver};
-use crate::run::run;
 use crate::send_body::AsSendBody;
 use crate::transport::{Connector, DefaultConnector};
 use crate::{Config, Error, RequestBuilder, SendBody};
@@ -133,10 +132,10 @@ impl Agent {
         let body = body.as_body();
         let request = Request::from_parts(parts, ());
 
-        self.do_run(request, body)
+        self.run_via_middleware(request, body)
     }
 
-    pub(crate) fn run_middleware(
+    pub(crate) fn run_via_middleware(
         &self,
         request: Request<()>,
         body: SendBody,
@@ -146,14 +145,6 @@ impl Agent {
 
         let next = MiddlewareNext::new(self);
         next.handle(request)
-    }
-
-    pub(crate) fn do_run(
-        &self,
-        request: Request<()>,
-        body: SendBody,
-    ) -> Result<Response<Body>, Error> {
-        run(self, request, body)
     }
 
     /// Get the config for this agent.
