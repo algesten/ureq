@@ -607,7 +607,7 @@ impl AgentBuilder {
     ///     .build();
     /// # Ok(())
     /// # }
-    #[cfg(feature = "tls")]
+    #[cfg(any(feature = "tls", feature = "tls-aws-lc-rs"))]
     pub fn tls_config(mut self, tls_config: Arc<rustls::ClientConfig>) -> Self {
         self.config.tls_config = TlsConfig(Arc::new(tls_config));
         self

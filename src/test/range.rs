@@ -1,5 +1,5 @@
 #[test]
-#[cfg(feature = "tls")]
+#[cfg(any(feature = "tls", feature = "tls-aws-lc-rs"))]
 fn read_range_rustls() {
     use std::io::Read;
 

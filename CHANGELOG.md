@@ -1,4 +1,6 @@
 # Unreleased
+  * Provides `tls-aws-lc-rs` feature to be able to use the default __rustls__
+    `aws-lc-rs` crypto provider.
 
 # 2.10.1
   * default `ureq` Rustls tls config updated to avoid panic for applications

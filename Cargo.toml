@@ -21,7 +21,8 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = ["tls", "gzip"]
-tls = ["dep:webpki-roots", "dep:rustls", "dep:rustls-pki-types"]
+tls = ["dep:webpki-roots", "dep:rustls", "rustls/ring", "dep:rustls-pki-types"]
+tls-aws-lc-rs = ["dep:webpki-roots", "dep:rustls", "rustls/aws_lc_rs", "dep:rustls-pki-types"]
 native-certs = ["dep:rustls-native-certs"]
 native-tls = ["dep:native-tls"]
 json = ["dep:serde", "dep:serde_json"]
@@ -51,7 +52,7 @@ encoding_rs = { version = "0.8", optional = true }
 cookie_store = { version = "0.21", optional = true, default-features = false, features = ["preserve_order"] }
 log = "0.4"
 webpki-roots = { version = "0.26", optional = true }
-rustls = { version = "0.23.5", optional = true, default-features = false, features = ["ring", "logging", "std", "tls12"] }
+rustls = { version = "0.23.5", optional = true, default-features = false, features = ["logging", "std", "tls12"] }
 rustls-pki-types = { version = "1", optional = true }
 rustls-native-certs = { version = "0.7", optional = true }
 native-tls = { version = "0.2", optional = true }
@@ -66,7 +67,7 @@ hootbin = { version = "0.1.5", optional = true }
 [dev-dependencies]
 env_logger = { version = "<=0.9", default-features = false, features = ["humantime"] }
 serde = { version = "1", features = ["derive"] }
-rustls = { version = "0.23.5", default-features = false, features = ["std", "ring"] }
+rustls = { version = "0.23.5", default-features = false, features = ["std"] }
 rustls-pemfile = { version = "2.0" }
 
 [[example]]

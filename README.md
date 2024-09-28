@@ -82,7 +82,7 @@ Ureq supports sending and receiving json, if you enable the "json" feature:
 
 ```rust
   // Requires the `json` feature enabled.
-  let resp: String = ureq::post("http://myapi.example.com/ingest")
+  let resp: String = ureq::post("http://myapi.example.com/post/ingest")
       .set("X-My-Header", "Secret")
       .send_json(ureq::json!({
           "name": "martin",
@@ -119,7 +119,8 @@ You can control them when including ureq as a dependency.
 
 `ureq = { version = "*", features = ["json", "charset"] }`
 
-* `tls` enables https. This is enabled by default.
+* `tls` enables https _(rustls)_ with _ring_ crypto provider. This is enabled by default.
+* `tls-aws-lc-rs` enables https _(rustls)_ with _aws_lc_rs_ crypto provider.
 * `native-certs` makes the default TLS implementation use the OS' trust store (see TLS doc below).
 * `cookies` enables cookies.
 * `json` enables [Response::into_json()] and [Request::send_json()] via serde_json.
@@ -247,7 +248,8 @@ be manually configured using [`AgentBuilder::tls_connector`].
 
 You might want to use native-tls if you need to interoperate with servers that
 only support less-secure TLS configurations (rustls doesn't support TLS 1.0 and 1.1, for
-instance).
+instance). You might also want to use it if you need to validate certificates for IP addresses,
+which are not currently supported in rustls.
 
 Here's an example of constructing an Agent that uses native-tls. It requires the
 "native-tls" feature to be enabled.
@@ -319,6 +321,7 @@ If ureq is not what you're looking for, check out these other Rust HTTP clients:
 [std::sync::Arc]: https://doc.rust-lang.org/stable/alloc/sync/struct.Arc.html
 [std::io::Read]: https://doc.rust-lang.org/stable/std/io/trait.Read.html
 [Agent]: https://docs.rs/ureq/latest/ureq/struct.Agent.html
+[AgentBuilder]: https://docs.rs/ureq/latest/ureq/struct.AgentBuilder.html
 [get()]: https://docs.rs/ureq/latest/ureq/fn.get.html
 [post()]: https://docs.rs/ureq/latest/ureq/fn.post.html
 [put()]: https://docs.rs/ureq/latest/ureq/fn.put.html

@@ -148,7 +148,8 @@
 //!
 //! `ureq = { version = "*", features = ["json", "charset"] }`
 //!
-//! * `tls` enables https. This is enabled by default.
+//! * `tls` enables https _(rustls)_ with _ring_ crypto provider. This is enabled by default.
+//! * `tls-aws-lc-rs` enables https _(rustls)_ with _aws_lc_rs_ crypto provider.
 //! * `native-certs` makes the default TLS implementation use the OS' trust store (see TLS doc below).
 //! * `cookies` enables cookies.
 //! * `json` enables [Response::into_json()] and [Request::send_json()] via serde_json.
@@ -357,7 +358,7 @@
 /// Re-exported rustls crate
 ///
 /// Use this re-export to always get a compatible version of `ClientConfig`.
-#[cfg(feature = "rustls")]
+#[cfg(any(feature = "tls", feature = "tls-aws-lc-rs"))]
 pub use rustls;
 
 /// Re-exported native-tls crate
@@ -382,7 +383,7 @@ mod unit;
 
 // rustls is our default tls engine. If the feature is on, it will be
 // used for the shortcut calls the top of the crate (`ureq::get` etc).
-#[cfg(feature = "tls")]
+#[cfg(any(feature = "tls", feature = "tls-aws-lc-rs"))]
 mod rtls;
 
 // native-tls is a feature that must be configured via the AgentBuilder.
@@ -391,14 +392,14 @@ mod rtls;
 mod ntls;
 
 // If we have rustls compiled, that is the default.
-#[cfg(feature = "tls")]
+#[cfg(any(feature = "tls", feature = "tls-aws-lc-rs"))]
 pub(crate) fn default_tls_config() -> std::sync::Arc<dyn TlsConnector> {
     rtls::default_tls_config()
 }
 
 // Without rustls compiled, we just fail on https when using the shortcut
 // calls at the top of the crate (`ureq::get` etc).
-#[cfg(not(feature = "tls"))]
+#[cfg(not(any(feature = "tls", feature = "tls-aws-lc-rs")))]
 pub(crate) fn default_tls_config() -> std::sync::Arc<dyn TlsConnector> {
     use std::sync::Arc;
 
@@ -596,7 +597,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "tls")]
+    #[cfg(any(feature = "tls", feature = "tls-aws-lc-rs"))]
     fn connect_https_google_rustls() {
         let agent = Agent::new();
 
