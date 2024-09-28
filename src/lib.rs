@@ -399,10 +399,14 @@ mk_method!(trace, TRACE, WithoutBody);
 
 #[cfg(test)]
 pub(crate) mod test {
-
+    use assert_no_alloc::AllocDisabler;
     use once_cell::sync::Lazy;
 
     use super::*;
+
+    #[global_allocator]
+    // Some tests checks that we are not allocating
+    static A: AllocDisabler = AllocDisabler;
 
     pub fn init_test_log() {
         static INIT_LOG: Lazy<()> = Lazy::new(env_logger::init);
