@@ -105,7 +105,7 @@ fn build_config(tls_config: &TlsConfig) -> Arc<ClientConfig> {
             .with_custom_certificate_verifier(Arc::new(DisabledVerifier))
     } else {
         match &tls_config.root_certs {
-            RootCerts::SpecificCerts(certs) => {
+            RootCerts::Specific(certs) => {
                 let root_certs = certs.iter().map(|c| CertificateDer::from(c.der()));
 
                 let mut root_store = RootCertStore::empty();
@@ -129,7 +129,8 @@ fn build_config(tls_config: &TlsConfig) -> Arc<ClientConfig> {
         }
     };
 
-    let mut config = if let Some((certs, key)) = &tls_config.client_cert {
+    let mut config = if let Some(certs_and_key) = &tls_config.client_cert {
+        let (certs, key) = &*certs_and_key.0;
         let cert_chain = certs
             .iter()
             .map(|c| CertificateDer::from(c.der()).into_owned());

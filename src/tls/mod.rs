@@ -74,10 +74,10 @@ pub struct TlsConfig {
     /// Defaults to [`TlsProvider::Rustls`].
     pub provider: TlsProvider,
 
-    /// Client certificate chains with corresponding private keys.
+    /// Client certificate chain with corresponding private key.
     ///
     /// Defaults to `None`.
-    pub client_cert: Option<(Vec<Certificate<'static>>, Arc<PrivateKey<'static>>)>,
+    pub client_cert: Option<ClientCert>,
 
     /// The set of trusted root certificates to use to validate server certificates.
     ///
@@ -111,12 +111,23 @@ mod private {
     pub struct Private;
 }
 
+/// A client certificate.
+#[derive(Debug, Clone)]
+pub struct ClientCert(pub Arc<(Vec<Certificate<'static>>, PrivateKey<'static>)>);
+
+impl ClientCert {
+    /// Creates a new client certificate from a chain and a private key.
+    pub fn new_with_certs(chain: &[Certificate<'static>], key: PrivateKey<'static>) -> Self {
+        Self(Arc::new((chain.to_vec(), key)))
+    }
+}
+
 /// Configuration setting for root certs.
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum RootCerts {
     /// Use these specific certificates as root certs.
-    SpecificCerts(Vec<Certificate<'static>>),
+    Specific(Arc<Vec<Certificate<'static>>>),
 
     /// Use the platform's verifier.
     ///
@@ -129,6 +140,19 @@ pub enum RootCerts {
     /// This is useful when you can't trust the system roots, such as in
     /// environments where TLS is intercepted and decrypted by a proxy (MITM attack).
     WebPki,
+}
+
+impl RootCerts {
+    /// Use these specific root certificates
+    pub fn new_with_certs(certs: &[Certificate<'static>]) -> Self {
+        certs.iter().cloned().into()
+    }
+}
+
+impl<I: IntoIterator<Item = Certificate<'static>>> From<I> for RootCerts {
+    fn from(value: I) -> Self {
+        RootCerts::Specific(Arc::new(value.into_iter().collect()))
+    }
 }
 
 impl Default for TlsConfig {
@@ -161,5 +185,17 @@ impl fmt::Debug for TlsConfig {
             .field("use_sni", &self.use_sni)
             .field("disable_verification", &self.disable_verification)
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use assert_no_alloc::*;
+
+    #[test]
+    fn tls_config_clone_does_not_allocate() {
+        let c = TlsConfig::default();
+        assert_no_alloc(|| c.clone());
     }
 }

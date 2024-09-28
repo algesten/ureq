@@ -259,10 +259,10 @@ fn add_headers(
         }
     }
 
-    if !has_header_ua && !config.user_agent.is_empty() {
+    if !has_header_ua {
         // unwrap is ok because a user might override the agent, and if they
         // set bad values, it's not really a big problem.
-        let value = HeaderValue::try_from(&config.user_agent).unwrap();
+        let value = HeaderValue::try_from(config.user_agent()).unwrap();
         flow.header("user-agent", value)?;
     }
 

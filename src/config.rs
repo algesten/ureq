@@ -13,6 +13,8 @@ use crate::tls::TlsConfig;
 
 /// Config primarily for the [`Agent`][crate::Agent], but also per-request.
 ///
+/// Config objects are cheap to clone and should not incur any heap allocations.
+///
 /// # Agent level config
 ///
 /// When creating config instances, the prefered way is to use the `..Default::default()` pattern.
@@ -158,10 +160,16 @@ pub struct Config {
     /// Defaults to `None`.
     pub redirect_auth_headers: RedirectAuthHeaders,
 
-    /// Value to use for the `User-Agent` field
+    /// Value to use for the `User-Agent` field.
+    ///
+    /// `None` means the default value which is `ureq/<version>`.
+    ///
+    /// This can be overridden by setting a `user-agent` header on the request
+    /// object. The one difference is that a connection to a HTTP proxy server
+    /// will receive this value, not the request-level one.
     ///
     /// Defaults to `ureq/<version>`
-    pub user_agent: String,
+    pub user_agent: Option<String>,
 
     /// The timeout settings on agent level.
     ///
@@ -317,6 +325,10 @@ mod private {
 }
 
 impl Config {
+    pub(crate) fn user_agent(&self) -> &str {
+        self.user_agent.as_deref().unwrap_or(DEFAULT_USER_AGENT)
+    }
+
     pub(crate) fn connect_proxy_uri(&self) -> Option<&Uri> {
         let proxy = self.proxy.as_ref()?;
 
@@ -343,7 +355,7 @@ impl Default for Config {
             no_delay: true,
             max_redirects: 10,
             redirect_auth_headers: RedirectAuthHeaders::Never,
-            user_agent: DEFAULT_USER_AGENT.to_string(),
+            user_agent: None,
             timeouts: Timeouts::default(),
             max_response_header_size: 64 * 1024,
             input_buffer_size: 128 * 1024,
@@ -423,5 +435,17 @@ impl fmt::Debug for Timeouts {
             .field("recv_response", &self.recv_response)
             .field("recv_body", &self.recv_body)
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use assert_no_alloc::*;
+
+    #[test]
+    fn default_config_clone_does_not_allocate() {
+        let c = Config::new();
+        assert_no_alloc(|| c.clone());
     }
 }

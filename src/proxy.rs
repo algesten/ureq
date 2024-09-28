@@ -4,6 +4,7 @@ use hoot::parser::try_parse_response;
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::io::Write;
+use std::sync::Arc;
 
 use http::{StatusCode, Uri};
 
@@ -43,6 +44,11 @@ impl Proto {
 /// Proxy server settings
 #[derive(Clone, Eq, Hash, PartialEq)]
 pub struct Proxy {
+    inner: Arc<ProxyInner>,
+}
+
+#[derive(Eq, Hash, PartialEq)]
+struct ProxyInner {
     proto: Proto,
     uri: Uri,
     from_env: bool,
@@ -85,10 +91,14 @@ impl Proxy {
         let scheme = uri.scheme_str().unwrap_or("http");
         let proto = scheme.try_into()?;
 
-        Ok(Self {
+        let inner = ProxyInner {
             proto,
             uri,
             from_env,
+        };
+
+        Ok(Self {
+            inner: Arc::new(inner),
         })
     }
 
@@ -127,17 +137,18 @@ impl Proxy {
     }
 
     pub(crate) fn proto(&self) -> Proto {
-        self.proto
+        self.inner.proto
     }
 
     /// The proxy uri
     pub fn uri(&self) -> &Uri {
-        &self.uri
+        &self.inner.uri
     }
 
     /// The host part of the proxy uri
     pub fn host(&self) -> &str {
-        self.uri
+        self.inner
+            .uri
             .authority()
             .map(|a| a.host())
             .expect("constructor to ensure there is an authority")
@@ -145,26 +156,27 @@ impl Proxy {
 
     /// The port of the proxy uri
     pub fn port(&self) -> u16 {
-        self.uri
+        self.inner
+            .uri
             .authority()
             .and_then(|a| a.port_u16())
-            .unwrap_or_else(|| self.proto.default_port())
+            .unwrap_or_else(|| self.inner.proto.default_port())
     }
 
     /// The username of the proxy uri
     pub fn username(&self) -> Option<&str> {
-        self.uri.authority().and_then(|a| a.username())
+        self.inner.uri.authority().and_then(|a| a.username())
     }
 
     /// The password of the proxy uri
     pub fn password(&self) -> Option<&str> {
-        self.uri.authority().and_then(|a| a.password())
+        self.inner.uri.authority().and_then(|a| a.password())
     }
 
     /// Whether this proxy setting was created manually or from
     /// environment variables.
     pub fn is_from_env(&self) -> bool {
-        self.from_env
+        self.inner.from_env
     }
 }
 
@@ -203,7 +215,7 @@ impl Connector for ConnectProxyConnector {
 
             write!(w, "CONNECT {}:{} HTTP/1.1\r\n", host, port)?;
             write!(w, "Host: {}:{}\r\n", host, port)?;
-            write!(w, "User-Agent: {}\r\n", details.config.user_agent)?;
+            write!(w, "User-Agent: {}\r\n", details.config.user_agent())?;
             write!(w, "Proxy-Connection: Keep-Alive\r\n")?;
 
             let use_creds = proxy.username().is_some() || proxy.password().is_some();
@@ -271,9 +283,9 @@ impl TryFrom<&str> for Proto {
 impl fmt::Debug for Proxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Proxy")
-            .field("proto", &self.proto)
-            .field("uri", &DebugUri(&self.uri))
-            .field("from_env", &self.from_env)
+            .field("proto", &self.inner.proto)
+            .field("uri", &DebugUri(&self.inner.uri))
+            .field("from_env", &self.inner.from_env)
             .finish()
     }
 }
@@ -312,7 +324,7 @@ mod tests {
         assert_eq!(proxy.password(), Some("p@ssw0rd"));
         assert_eq!(proxy.host(), "localhost");
         assert_eq!(proxy.port(), 9999);
-        assert_eq!(proxy.proto, Proto::Http);
+        assert_eq!(proxy.inner.proto, Proto::Http);
     }
 
     #[test]
@@ -322,7 +334,7 @@ mod tests {
         assert_eq!(proxy.password(), Some("p@ssw0rd"));
         assert_eq!(proxy.host(), "localhost");
         assert_eq!(proxy.port(), 9999);
-        assert_eq!(proxy.proto, Proto::Http);
+        assert_eq!(proxy.inner.proto, Proto::Http);
     }
 
     #[test]
@@ -332,7 +344,7 @@ mod tests {
         assert_eq!(proxy.password(), Some("p@ssw0rd"));
         assert_eq!(proxy.host(), "localhost");
         assert_eq!(proxy.port(), 9999);
-        assert_eq!(proxy.proto, Proto::Socks4);
+        assert_eq!(proxy.inner.proto, Proto::Socks4);
     }
 
     #[test]
@@ -342,7 +354,7 @@ mod tests {
         assert_eq!(proxy.password(), Some("p@ssw0rd"));
         assert_eq!(proxy.host(), "localhost");
         assert_eq!(proxy.port(), 9999);
-        assert_eq!(proxy.proto, Proto::Socks4A);
+        assert_eq!(proxy.inner.proto, Proto::Socks4A);
     }
 
     #[test]
@@ -352,7 +364,7 @@ mod tests {
         assert_eq!(proxy.password(), Some("p@ssw0rd"));
         assert_eq!(proxy.host(), "localhost");
         assert_eq!(proxy.port(), 9999);
-        assert_eq!(proxy.proto, Proto::Socks5);
+        assert_eq!(proxy.inner.proto, Proto::Socks5);
     }
 
     #[test]
@@ -362,7 +374,7 @@ mod tests {
         assert_eq!(proxy.password(), Some("p@ssw0rd"));
         assert_eq!(proxy.host(), "localhost");
         assert_eq!(proxy.port(), 9999);
-        assert_eq!(proxy.proto, Proto::Socks5);
+        assert_eq!(proxy.inner.proto, Proto::Socks5);
     }
 
     #[test]
@@ -372,7 +384,7 @@ mod tests {
         assert_eq!(proxy.password(), Some("p@ssw0rd"));
         assert_eq!(proxy.host(), "localhost");
         assert_eq!(proxy.port(), 9999);
-        assert_eq!(proxy.proto, Proto::Http);
+        assert_eq!(proxy.inner.proto, Proto::Http);
     }
 
     #[test]
@@ -382,7 +394,7 @@ mod tests {
         assert_eq!(proxy.password(), None);
         assert_eq!(proxy.host(), "localhost");
         assert_eq!(proxy.port(), 9999);
-        assert_eq!(proxy.proto, Proto::Http);
+        assert_eq!(proxy.inner.proto, Proto::Http);
     }
 
     #[test]
@@ -392,6 +404,18 @@ mod tests {
         assert_eq!(proxy.password(), None);
         assert_eq!(proxy.host(), "localhost");
         assert_eq!(proxy.port(), 80);
-        assert_eq!(proxy.proto, Proto::Http);
+        assert_eq!(proxy.inner.proto, Proto::Http);
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use assert_no_alloc::*;
+
+    #[test]
+    fn proxy_clone_does_not_allocate() {
+        let c = Proxy::new("socks://1.2.3.4").unwrap();
+        assert_no_alloc(|| c.clone());
     }
 }

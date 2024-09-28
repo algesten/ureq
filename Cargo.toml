@@ -79,6 +79,7 @@ cc = "1.0.106"
 env_logger = "=0.10.2"
 auto-args = "0.3.0"
 serde = { version = "1.0.204", features = ["std", "derive"] }
+assert_no_alloc = "1.1.2"
 
 
 [[example]]
