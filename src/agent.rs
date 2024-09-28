@@ -20,6 +20,8 @@ use crate::{WithBody, WithoutBody};
 /// But by creating an agent as entry point for the request, we
 /// can keep a state.
 ///
+/// # Example
+///
 /// ```no_run
 /// let mut agent = ureq::agent();
 ///
@@ -37,8 +39,48 @@ use crate::{WithBody, WithoutBody};
 /// # Ok::<_, ureq::Error>(())
 /// ```
 ///
-/// Agent uses inner `Arc`, so cloning an Agent results in an instance
+/// # About threads and cloning
+///
+/// Agent uses inner [`Arc`]. Cloning an Agent results in an instance
 /// that shares the same underlying connection pool and other state.
+///
+/// The connection pool contains an inner [`Mutex`][std::sync::Mutex] which is (briefly)
+/// held when borrowing a pooled connection, or returning a connection to the pool.
+///
+/// All request functions in ureq have a signature similar to this:
+///
+/// ```
+/// # use ureq::{Body, AsSendBody, Error};
+/// fn run(request: http::Request<impl AsSendBody>) -> Result<http::Response<Body>, Error> {
+///     // <something>
+/// # todo!()
+/// }
+/// ```
+///
+/// It follows that:
+///
+/// * An Agent is borrowed for the duration of:
+///     1. Sending the request header ([`http::Request`])
+///     2. Sending the request body ([`SendBody`])
+///     3. Receiving the response header ([`http::Response`])
+/// * The [`Body`] of the response is not bound to the lifetime of the Agent.
+///
+/// A response [`Body`] can be streamed (for instance via [`Body::into_reader()`]). The [`Body`]
+/// implements [`Send`], which means it's possible to read the response body on another thread than
+/// the one that run the request. Behind the scenes, the [`Body`] retains the connection to the remote
+/// server and it is returned to the agent's pool, once the Body instance (or reader) is dropped.
+///
+/// There is an asymmetry in that sending a request body will borrow the Agent instance, while receiving
+/// the response body does not. This inconvencience is somewhat mitigated by that [`Agent::run()`] (or
+/// going via the methods such as [`Agent::get()`]), borrows `&self`, i.e. not exclusive `mut` borrows.
+///
+/// That cloning the agent shares the connection pool is considered a feature. It is often useful to
+/// retain a single pool for the entire process, while dispatching requests from different threads.
+/// And if we want separate pools, we can create multiple agents via one of the constructors
+/// (such as [`Agent::new_with_config()`]).
+///
+/// Note that both [`Config::clone()`] and [`Agent::clone()`] are  "cheap" meaning they should not
+/// incur any heap allocation.
 #[derive(Debug, Clone)]
 pub struct Agent {
     pub(crate) config: Arc<Config>,
@@ -217,8 +259,20 @@ impl From<Config> for Agent {
 }
 
 #[cfg(test)]
-impl crate::Agent {
+impl Agent {
     pub fn pool_count(&self) -> usize {
         self.pool.pool_count()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use assert_no_alloc::*;
+
+    #[test]
+    fn agent_clone_does_not_allocate() {
+        let a = Agent::new_with_defaults();
+        assert_no_alloc(|| a.clone());
     }
 }
