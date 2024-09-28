@@ -40,7 +40,24 @@ jobs:
           RUSTDOCFLAGS: -Dwarnings
         with:
           command: doc
-          args: --no-deps --all-features --document-private-items
+          args: --no-deps --no-default-features --features tls,native-certs,native-tls,json,charset,cookies,socks-proxy,gzip,brotli,http-interop,http-crate,proxy-from-env,testdeps --document-private-items
+  doc-tls-aws-lc-rs:
+    name: Docs tls-aws-lc-rs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - name: Docs
+        uses: actions-rs/cargo@v1
+        env:
+          RUSTDOCFLAGS: -Dwarnings
+        with:
+          command: doc
+          args: --no-deps --no-default-features --features tls-aws-lc-rs,native-certs,native-tls,json,charset,cookies,socks-proxy,gzip,brotli,http-interop,http-crate,proxy-from-env,testdeps --document-private-items
 
   build_versions:
     strategy:
@@ -70,6 +87,7 @@ jobs:
         tls:
           - ""
           - "tls"
+          - "tls-aws-lc-rs"
           - "native-tls"
         feature:
           - ""
