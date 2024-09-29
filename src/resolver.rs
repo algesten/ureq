@@ -9,17 +9,16 @@
 //! In some situations it might be desirable to not do this lookup, or to use another system
 //! than DNS for it.
 use std::fmt::{self, Debug};
-use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, ToSocketAddrs};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4, ToSocketAddrs};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::thread::{self};
 use std::vec::IntoIter;
 
 use http::uri::{Authority, Scheme};
 use http::Uri;
-use smallvec::{smallvec, SmallVec};
 
 use crate::transport::NextTimeout;
-use crate::util::{SchemeExt, UriExt};
+use crate::util::{ArrayVec, SchemeExt, UriExt};
 use crate::{Config, Error};
 
 /// Trait for name resolvers.
@@ -39,7 +38,7 @@ pub trait Resolver: Debug + Send + Sync + 'static {
 const MAX_ADDRS: usize = 16;
 
 /// Addresses as returned by the resolver.
-pub type ResolvedSocketAddrs = SmallVec<[SocketAddr; MAX_ADDRS]>;
+pub type ResolvedSocketAddrs = ArrayVec<SocketAddr, MAX_ADDRS>;
 
 /// Default resolver implementation.
 ///
@@ -90,14 +89,16 @@ impl Resolver for DefaultResolver {
         let authority = uri.authority().unwrap();
 
         if cfg!(feature = "_test") {
-            return Ok(smallvec![SocketAddr::V4(SocketAddrV4::new(
+            let mut v = ArrayVec::from_fn(|_| "0.0.0.0:1".parse().unwrap());
+            v.push(SocketAddr::V4(SocketAddrV4::new(
                 Ipv4Addr::new(10, 0, 0, 1),
                 authority
                     .port_u16()
                     .or_else(|| scheme.default_port())
                     // unwrap is ok because ensure_valid_url() above.
                     .unwrap(),
-            ))]);
+            )));
+            return Ok(v);
         }
 
         // This will be on the form "myspecialhost.org:1234". The port is mandatory.
@@ -117,7 +118,15 @@ impl Resolver for DefaultResolver {
         };
 
         let wanted = config.ip_family.keep_wanted(iter);
-        let result: ResolvedSocketAddrs = wanted.take(MAX_ADDRS).collect();
+
+        fn uninited_socketaddr() -> SocketAddr {
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0)
+        }
+
+        let mut result: ResolvedSocketAddrs = ArrayVec::from_fn(|_| uninited_socketaddr());
+        for addr in wanted.take(MAX_ADDRS) {
+            result.push(addr);
+        }
 
         debug!("Resolved: {:?}", result);
 

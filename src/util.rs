@@ -1,6 +1,7 @@
 use std::convert::TryFrom;
 use std::fmt;
 use std::io::{self, ErrorKind};
+use std::ops::{Deref, DerefMut};
 
 use http::uri::{Authority, Scheme};
 use http::{HeaderMap, HeaderValue, Method, Response, Uri, Version};
@@ -353,5 +354,64 @@ impl HeaderMapExt for HeaderMap {
 
     fn has_accept(&self) -> bool {
         self.contains_key("accept")
+    }
+}
+
+pub struct ArrayVec<T, const N: usize> {
+    len: usize,
+    arr: [T; N],
+}
+
+impl<T, const N: usize> Deref for ArrayVec<T, N> {
+    type Target = [T];
+
+    fn deref(&self) -> &Self::Target {
+        &self.arr[..self.len]
+    }
+}
+
+impl<T, const N: usize> DerefMut for ArrayVec<T, N> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.arr[..self.len]
+    }
+}
+
+impl<T, const N: usize> ArrayVec<T, N> {
+    pub fn from_fn(cb: impl FnMut(usize) -> T) -> Self {
+        Self {
+            len: 0,
+            arr: std::array::from_fn(cb),
+        }
+    }
+
+    pub fn push(&mut self, value: T) {
+        self.arr[self.len] = value;
+        self.len += 1;
+    }
+
+    pub fn truncate(&mut self, len: usize) {
+        assert!(len <= self.len);
+        self.len = len;
+    }
+}
+
+impl<T, const N: usize> fmt::Debug for ArrayVec<T, N>
+where
+    T: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ArrayVec")
+            .field("len", &self.len)
+            .field("arr", &self.arr)
+            .finish()
+    }
+}
+
+impl<'a, T, const N: usize> IntoIterator for &'a ArrayVec<T, N> {
+    type Item = &'a T;
+    type IntoIter = core::slice::Iter<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self[..self.len].iter()
     }
 }
