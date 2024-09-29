@@ -403,7 +403,6 @@ impl fmt::Debug for Config {
         dbg.field("http_status_as_error", &self.http_status_as_error)
             .field("https_only", &self.https_only)
             .field("ip_family", &self.ip_family)
-            .field("tls_config", &self.tls_config)
             .field("proxy", &self.proxy)
             .field("no_delay", &self.no_delay)
             .field("max_redirects", &self.max_redirects)
