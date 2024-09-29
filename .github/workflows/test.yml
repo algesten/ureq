@@ -96,6 +96,35 @@ jobs:
           command: test
           args: --no-default-features --features "_test rustls ${{ matrix.feature }}"
 
+  build_without_rustls:
+    name: Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        feature:
+          - ""
+          - charset
+          - cookies
+          - socks-proxy
+          - gzip
+          - brotli
+          - json
+          - native-tls
+    env:
+      RUST_BACKTRACE: "1"
+      RUSTFLAGS: "-D dead_code -D unused-variables -D unused"
+    steps:
+      - uses: actions/checkout@master
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - name: Test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --no-default-features --features "_test ${{ matrix.feature }}"
 
   cargo-deny:
     name: cargo-deny
