@@ -1,9 +1,8 @@
 use std::fmt;
 use std::sync::Arc;
 
-use smallvec::SmallVec;
-
 use crate::transport::time::{Duration, Instant};
+use crate::util::ArrayVec;
 use crate::Timeouts;
 
 /// The various timeouts.
@@ -82,16 +81,30 @@ impl Timeout {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(crate) struct CallTimings {
     timeouts: Timeouts,
     current_time: CurrentTime,
-    times: SmallVec<[(Timeout, Instant); 8]>,
+    times: ArrayVec<(Timeout, Instant), 8>,
+}
+
+impl Default for CallTimings {
+    fn default() -> Self {
+        Self {
+            timeouts: Default::default(),
+            current_time: Default::default(),
+            times: empty_times(),
+        }
+    }
+}
+
+fn empty_times() -> ArrayVec<(Timeout, Instant), 8> {
+    ArrayVec::from_fn(|_| (Timeout::Global, Instant::AlreadyHappened))
 }
 
 impl CallTimings {
     pub(crate) fn new(timeouts: Timeouts, current_time: CurrentTime) -> Self {
-        let mut times = SmallVec::default();
+        let mut times = empty_times();
 
         let now = current_time.now();
         times.push((Timeout::Global, now));
@@ -105,7 +118,7 @@ impl CallTimings {
     }
 
     pub(crate) fn new_call(mut self) -> CallTimings {
-        self.times.retain(|(t, _)| *t == Timeout::Global);
+        self.times.truncate(1); // Global is in position 0.
         self.times.push((Timeout::PerCall, self.current_time.now()));
 
         CallTimings {

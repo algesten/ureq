@@ -1,49 +1,40 @@
-use std::io;
-
-use thiserror::Error;
+use std::{fmt, io};
 
 use crate::Timeout;
 
 /// Errors from ureq.
-#[derive(Debug, Error)]
+#[derive(Debug)]
 #[non_exhaustive]
 pub enum Error {
     /// When [`Config::http_status_as_error`](crate::Config::http_status_as_error) is true,
     /// 4xx and 5xx response status codes are translated to this error.
     ///
     /// This is the default behavior.
-    #[error("http status: {0}")]
     StatusCode(u16),
 
     /// Errors arising from the http-crate.
     ///
     /// These errors happen for things like invalid characters in header names.
-    #[error("http: {0}")]
-    Http(#[from] http::Error),
+    Http(http::Error),
 
     /// Error if the URI is missing scheme or host.
-    #[error("bad uri: {0}")]
     BadUri(String),
 
     /// An HTTP/1.1 protocol error.
     ///
     /// This can happen if the remote server ends incorrect HTTP data like
     /// missing version or invalid chunked transfer.
-    #[error("protocol: {0}")]
-    Protocol(#[from] hoot::Error),
+    Protocol(hoot::Error),
 
     /// Error in io such as the TCP socket.
-    #[error("io: {0}")]
     Io(io::Error),
 
     /// Error raised if the request hits any configured timeout.
     ///
     /// By default no timeouts are set, which means this error can't happen.
-    #[error("timeout: {0}")]
     Timeout(Timeout),
 
     /// Error when resolving a hostname fails.
-    #[error("host not found")]
     HostNotFound,
 
     /// A redirect failed.
@@ -51,24 +42,19 @@ pub enum Error {
     /// This happens when ureq encounters a redirect when sending a request body
     /// such as a POST request, and receives a 307/308 response. ureq refuses to
     /// redirect the POST body and instead raises this error.
-    #[error("redirect failed")]
     RedirectFailed,
 
     /// Error when creating proxy settings.
-    #[error("invalid proxy url")]
     InvalidProxyUrl,
 
     /// A connection failed.
-    #[error("connection failed")]
     ConnectionFailed,
 
     /// A send body (Such as `&str`) is larger than the `content-length` header.
-    #[error("the response body is larger than request limit: {0}")]
     BodyExceedsLimit(u64),
 
     /// Some error with TLS.
     #[cfg(feature = "_tls")]
-    #[error("{0}")]
     Tls(&'static str),
 
     /// Error in reading PEM certificates/private keys.
@@ -77,7 +63,6 @@ pub enum Error {
     /// Breaking changes in that struct will not be reflected in ureq
     /// major versions.
     #[cfg(feature = "_tls")]
-    #[error("PEM: {0:?}")]
     Pem(rustls_pemfile::Error),
 
     /// An error originating in Rustls.
@@ -86,8 +71,7 @@ pub enum Error {
     /// Breaking changes in that struct will not be reflected in ureq
     /// major versions.
     #[cfg(feature = "rustls")]
-    #[error("rustls: {0}")]
-    Rustls(#[from] rustls::Error),
+    Rustls(rustls::Error),
 
     /// An error originating in Native-TLS.
     ///
@@ -95,8 +79,7 @@ pub enum Error {
     /// Breaking changes in that struct will not be reflected in ureq
     /// major versions.
     #[cfg(feature = "native-tls")]
-    #[error("native-tls: {0}")]
-    NativeTls(#[from] native_tls::Error),
+    NativeTls(native_tls::Error),
 
     /// An error providing DER encoded certificates or private keys to Native-TLS.
     ///
@@ -104,8 +87,7 @@ pub enum Error {
     /// Breaking changes in that struct will not be reflected in ureq
     /// major versions.
     #[cfg(feature = "native-tls")]
-    #[error("der: {0}")]
-    Der(#[from] der::Error),
+    Der(der::Error),
 
     /// An error with the cookies.
     ///
@@ -113,12 +95,10 @@ pub enum Error {
     /// Breaking changes in that struct will not be reflected in ureq
     /// major versions.
     #[cfg(feature = "cookies")]
-    #[error("cookie: {0}")]
-    Cookie(#[from] cookie_store::CookieError),
+    Cookie(cookie_store::CookieError),
 
     /// An error parsing a cookie value.
     #[cfg(feature = "cookies")]
-    #[error("{0}")]
     CookieValue(&'static str),
 
     /// An error in the cookie store.
@@ -127,45 +107,38 @@ pub enum Error {
     /// Breaking changes in that struct will not be reflected in ureq
     /// major versions.
     #[cfg(feature = "cookies")]
-    #[error("cookie: {0}")]
-    CookieJar(#[from] cookie_store::Error),
+    CookieJar(cookie_store::Error),
 
     /// An unrecognised character set.
     #[cfg(feature = "charset")]
-    #[error("unknown character set: {0}")]
     UnknownCharset(String),
 
     /// The setting [`Config::https_only`](crate::Config::https_only) is true and
     /// the URI is not https.
-    #[error("configured for https only: {0}")]
     RequireHttpsOnly(String),
 
     /// The response header, from status up until body, is too big.
-    ///
-    #[error("response header is too big: {0} > {1}")]
     LargeResponseHeader(usize, usize),
 
     /// Body decompression failed (gzip or brotli).
-    #[error("{0} decompression failed: {1}")]
     #[cfg(any(feature = "gzip", feature = "brotli"))]
     Decompress(&'static str, io::Error),
 
     /// Serde JSON error.
     #[cfg(feature = "json")]
-    #[error("json: {0}")]
-    Json(#[from] serde_json::Error),
+    Json(serde_json::Error),
 
     /// Attempt to connect to a CONNECT proxy failed.
-    #[error("CONNECT proxy failed: {0}")]
     ConnectProxyFailed(String),
 
     /// hoot made no progress and there is no more input to read.
     ///
     /// We should never see this value.
     #[doc(hidden)]
-    #[error("body data reading stalled")]
     BodyStalled,
 }
+
+impl std::error::Error for Error {}
 
 impl Error {
     /// Convert the error into a [`std::io::Error`].
@@ -197,6 +170,108 @@ impl From<io::Error> for Error {
         } else {
             Error::Io(e)
         }
+    }
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Error::StatusCode(v) => write!(f, "http status: {}", v),
+            Error::Http(v) => write!(f, "http: {}", v),
+            Error::BadUri(v) => write!(f, "bad uri: {}", v),
+            Error::Protocol(v) => write!(f, "protocol: {}", v),
+            Error::Io(v) => write!(f, "io: {}", v),
+            Error::Timeout(v) => write!(f, "timeout: {}", v),
+            Error::HostNotFound => write!(f, "host not found"),
+            Error::RedirectFailed => write!(f, "redirect failed"),
+            Error::InvalidProxyUrl => write!(f, "invalid proxy url"),
+            Error::ConnectionFailed => write!(f, "connection failed"),
+            Error::BodyExceedsLimit(v) => {
+                write!(f, "the response body is larger than request limit: {}", v)
+            }
+            #[cfg(feature = "_tls")]
+            Error::Tls(v) => write!(f, "{}", v),
+            #[cfg(feature = "_tls")]
+            Error::Pem(v) => write!(f, "PEM: {:?}", v),
+            #[cfg(feature = "rustls")]
+            Error::Rustls(v) => write!(f, "rustls: {}", v),
+            #[cfg(feature = "native-tls")]
+            Error::NativeTls(v) => write!(f, "native-tls: {}", v),
+            #[cfg(feature = "native-tls")]
+            Error::Der(v) => write!(f, "der: {}", v),
+            #[cfg(feature = "cookies")]
+            Error::Cookie(v) => write!(f, "cookie: {}", v),
+            #[cfg(feature = "cookies")]
+            Error::CookieValue(v) => write!(f, "{}", v),
+            #[cfg(feature = "cookies")]
+            Error::CookieJar(v) => write!(f, "cookie: {}", v),
+            #[cfg(feature = "charset")]
+            Error::UnknownCharset(v) => write!(f, "unknown character set: {}", v),
+            Error::RequireHttpsOnly(v) => write!(f, "configured for https only: {}", v),
+            Error::LargeResponseHeader(x, y) => {
+                write!(f, "response header is too big: {} > {}", x, y)
+            }
+            #[cfg(any(feature = "gzip", feature = "brotli"))]
+            Error::Decompress(x, y) => write!(f, "{} decompression failed: {}", x, y),
+            #[cfg(feature = "json")]
+            Error::Json(v) => write!(f, "json: {}", v),
+            Error::ConnectProxyFailed(v) => write!(f, "CONNECT proxy failed: {}", v),
+            Error::BodyStalled => write!(f, "body data reading stalled"),
+        }
+    }
+}
+
+impl From<http::Error> for Error {
+    fn from(value: http::Error) -> Self {
+        Self::Http(value)
+    }
+}
+
+impl From<hoot::Error> for Error {
+    fn from(value: hoot::Error) -> Self {
+        Self::Protocol(value)
+    }
+}
+
+#[cfg(feature = "rustls")]
+impl From<rustls::Error> for Error {
+    fn from(value: rustls::Error) -> Self {
+        Self::Rustls(value)
+    }
+}
+
+#[cfg(feature = "native-tls")]
+impl From<native_tls::Error> for Error {
+    fn from(value: native_tls::Error) -> Self {
+        Self::NativeTls(value)
+    }
+}
+
+#[cfg(feature = "native-tls")]
+impl From<der::Error> for Error {
+    fn from(value: der::Error) -> Self {
+        Self::Der(value)
+    }
+}
+
+#[cfg(feature = "cookies")]
+impl From<cookie_store::CookieError> for Error {
+    fn from(value: cookie_store::CookieError) -> Self {
+        Self::Cookie(value)
+    }
+}
+
+#[cfg(feature = "cookies")]
+impl From<cookie_store::Error> for Error {
+    fn from(value: cookie_store::Error) -> Self {
+        Self::CookieJar(value)
+    }
+}
+
+#[cfg(feature = "json")]
+impl From<serde_json::Error> for Error {
+    fn from(value: serde_json::Error) -> Self {
+        Self::Json(value)
     }
 }
 

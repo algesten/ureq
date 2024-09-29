@@ -316,15 +316,14 @@ checksum = "fbf6a919d6cf397374f7dfeeea91d974c7c0a7221d0d0f4f20d859d329e53fcc"
 
 [[package]]
 name = "hoot"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd1606deff1a6473a8f7b7dbb8c270f93ef3d491ee0bda579c283254f0a1bbd2"
+checksum = "936723a03900105673cf6efb8821399ebdc287a494949c375f2ce50db83bf6c9"
 dependencies = [
  "http",
  "httparse",
  "log",
- "smallvec",
- "thiserror",
+ "tinyvec",
  "url",
 ]
 
@@ -831,12 +830,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 
 [[package]]
-name = "smallvec"
-version = "1.13.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
-
-[[package]]
 name = "socks"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1027,9 +1020,7 @@ dependencies = [
  "rustls-platform-verifier",
  "serde",
  "serde_json",
- "smallvec",
  "socks",
- "thiserror",
  "url",
  "utf-8",
  "webpki-root-certs",
