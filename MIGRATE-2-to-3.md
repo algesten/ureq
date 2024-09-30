@@ -44,5 +44,5 @@ confusing, so 3.x has no built-in retries.
 For now, ureq 3.x can't change the charset of a send body. It can however still do that
 for the response body.
 
-[http crate]         : https://crates.io/crates/http
+[http crate]: https://crates.io/crates/http
 [http-related crates]: https://crates.io/crates/http/reverse_dependencies
