@@ -1,6 +1,3 @@
-#![forbid(unsafe_code)]
-#![warn(clippy::all)]
-#![deny(missing_docs)]
 //!<div align="center">
 //!  <!-- Version -->
 //!  <a href="https://crates.io/crates/ureq">
@@ -352,7 +349,11 @@
 //! let resp = agent.get("http://cool.server").call()?;
 //! # Ok(())}
 //! ```
-//!
+
+#![forbid(unsafe_code)]
+#![warn(clippy::all)]
+#![deny(missing_docs)]
+
 #[macro_use]
 extern crate log;
 
