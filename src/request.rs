@@ -7,8 +7,10 @@ use http::{HeaderName, HeaderValue, Method, Request, Response, Uri, Version};
 
 use crate::body::Body;
 use crate::config::RequestLevelConfig;
+use crate::query::{parse_query_params, QueryParam};
 use crate::send_body::AsSendBody;
 use crate::util::private::Private;
+use crate::util::UriExt;
 use crate::{Agent, Config, Error, SendBody, Timeouts};
 
 /// Transparent wrapper around [`http::request::Builder`].
@@ -18,6 +20,7 @@ use crate::{Agent, Config, Error, SendBody, Timeouts};
 pub struct RequestBuilder<B> {
     agent: Agent,
     builder: http::request::Builder,
+    query_extra: Vec<QueryParam<'static>>,
 
     // This is only used in case http::request::Builder contains an error
     // (such as URL parsing error), and the user wants a `.config()`.
@@ -54,6 +57,27 @@ impl<Any> RequestBuilder<Any> {
         <HeaderValue as TryFrom<V>>::Error: Into<http::Error>,
     {
         self.builder = self.builder.header(key, value);
+        self
+    }
+
+    /// Add a query paramter to the URL.
+    ///
+    /// Always appends a new parameter, also when using the name of
+    /// an already existing one.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let req = ureq::get("https://httpbin.org/get")
+    ///     .query("my_query", "with_value");
+    /// ```
+    pub fn query<K, V>(mut self, key: K, value: V) -> Self
+    where
+        K: AsRef<str>,
+        V: AsRef<str>,
+    {
+        self.query_extra
+            .push(QueryParam::new_key_value(key.as_ref(), value.as_ref()));
         self
     }
 
@@ -194,6 +218,7 @@ impl RequestBuilder<WithoutBody> {
         Self {
             agent,
             builder: Request::builder().method(method).uri(uri),
+            query_extra: vec![],
             dummy_config: None,
             _ph: PhantomData,
         }
@@ -210,7 +235,7 @@ impl RequestBuilder<WithoutBody> {
     /// ```
     pub fn call(self) -> Result<Response<Body>, Error> {
         let request = self.builder.body(())?;
-        do_call(self.agent, request, SendBody::none())
+        do_call(self.agent, request, self.query_extra, SendBody::none())
     }
 }
 
@@ -223,6 +248,7 @@ impl RequestBuilder<WithBody> {
         Self {
             agent,
             builder: Request::builder().method(method).uri(uri),
+            query_extra: vec![],
             dummy_config: None,
             _ph: PhantomData,
         }
@@ -255,7 +281,7 @@ impl RequestBuilder<WithBody> {
     pub fn send(self, data: impl AsSendBody) -> Result<Response<Body>, Error> {
         let request = self.builder.body(())?;
         let mut data_ref = data;
-        do_call(self.agent, request, data_ref.as_body())
+        do_call(self.agent, request, self.query_extra, data_ref.as_body())
     }
 
     /// Send body data as JSON.
@@ -285,13 +311,65 @@ impl RequestBuilder<WithBody> {
     pub fn send_json(self, data: impl serde::ser::Serialize) -> Result<Response<Body>, Error> {
         let request = self.builder.body(())?;
         let body = SendBody::from_json(&data)?;
-        do_call(self.agent, request, body)
+        do_call(self.agent, request, self.query_extra, body)
     }
 }
 
-fn do_call(agent: Agent, request: Request<()>, body: SendBody) -> Result<Response<Body>, Error> {
+fn do_call(
+    agent: Agent,
+    mut request: Request<()>,
+    query_extra: Vec<QueryParam<'static>>,
+    body: SendBody,
+) -> Result<Response<Body>, Error> {
+    if !query_extra.is_empty() {
+        request.uri().ensure_valid_url()?;
+        request = amend_request_query(request, query_extra.into_iter());
+    }
     let response = agent.run_via_middleware(request, body)?;
     Ok(response)
+}
+
+fn amend_request_query(
+    request: Request<()>,
+    query_extra: impl Iterator<Item = QueryParam<'static>>,
+) -> Request<()> {
+    let (mut parts, body) = request.into_parts();
+    let uri = parts.uri;
+    let mut path = uri.path().to_string();
+    let query_existing = parse_query_params(uri.query().unwrap_or(""));
+
+    let mut do_first = true;
+
+    fn append<'a>(
+        path: &mut String,
+        do_first: &mut bool,
+        iter: impl Iterator<Item = QueryParam<'a>>,
+    ) {
+        for q in iter {
+            if *do_first {
+                *do_first = false;
+                path.push('?');
+            } else {
+                path.push('&');
+            }
+            path.push_str(&q);
+        }
+    }
+
+    append(&mut path, &mut do_first, query_existing);
+    append(&mut path, &mut do_first, query_extra);
+
+    // Unwraps are OK, because we had a correct URI to begin with
+    let rebuild = Uri::builder()
+        .scheme(uri.scheme().unwrap().clone())
+        .authority(uri.authority().unwrap().clone())
+        .path_and_query(path)
+        .build()
+        .unwrap();
+
+    parts.uri = rebuild;
+
+    Request::from_parts(parts, body)
 }
 
 impl<MethodLimit> Deref for RequestBuilder<MethodLimit> {
@@ -367,5 +445,57 @@ mod test {
         init_test_log();
         let mut req = get("http://x.y.z/ borked url");
         req.timeouts().global = Some(Duration::from_millis(1));
+    }
+
+    #[test]
+    fn add_params_to_request_without_query() {
+        let request = Request::builder()
+            .uri("https://foo.bar/path")
+            .body(())
+            .unwrap();
+
+        let amended = amend_request_query(
+            request,
+            vec![
+                QueryParam::new_key_value("x", "z"),
+                QueryParam::new_key_value("ab", "cde"),
+            ]
+            .into_iter(),
+        );
+
+        assert_eq!(amended.uri(), "https://foo.bar/path?x=z&ab=cde");
+    }
+
+    #[test]
+    fn add_params_to_request_with_query() {
+        let request = Request::builder()
+            .uri("https://foo.bar/path?x=z")
+            .body(())
+            .unwrap();
+
+        let amended = amend_request_query(
+            request,
+            vec![QueryParam::new_key_value("ab", "cde")].into_iter(),
+        );
+
+        assert_eq!(amended.uri(), "https://foo.bar/path?x=z&ab=cde");
+    }
+
+    #[test]
+    fn add_params_that_need_percent_encoding() {
+        let request = Request::builder()
+            .uri("https://foo.bar/path")
+            .body(())
+            .unwrap();
+
+        let amended = amend_request_query(
+            request,
+            vec![QueryParam::new_key_value("å ", "i åa ä e ö")].into_iter(),
+        );
+
+        assert_eq!(
+            amended.uri(),
+            "https://foo.bar/path?%C3%A5%20=i%20%C3%A5a%20%C3%A4%20e%20%C3%B6"
+        );
     }
 }

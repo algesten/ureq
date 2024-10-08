@@ -377,6 +377,7 @@ mod config;
 mod error;
 mod pool;
 mod proxy;
+mod query;
 mod request;
 mod run;
 mod send_body;
