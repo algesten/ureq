@@ -32,19 +32,15 @@ impl<'a> SendBody<'a> {
     }
 
     /// Creates a body from an owned [`Read]` impl.
-    pub fn from_owned_reader<R>(reader: R) -> SendBody<'static>
-    where
-        R: Read + Send + Sync + 'static,
-    {
+    pub fn from_owned_reader(reader: impl Read + 'static) -> SendBody<'static> {
         BodyInner::OwnedReader(Box::new(reader)).into()
     }
 
     /// Creates a body to send as JSON from any [`Serialize`](serde::ser::Serialize) value.
     #[cfg(feature = "json")]
-    pub fn from_json<R>(value: &R) -> Result<SendBody<'static>, crate::Error>
-    where
-        R: serde::ser::Serialize,
-    {
+    pub fn from_json(
+        value: &impl serde::ser::Serialize,
+    ) -> Result<SendBody<'static>, crate::Error> {
         let json = serde_json::to_vec_pretty(value)?;
         Ok(Self::from_owned_reader(io::Cursor::new(json)))
     }
@@ -157,7 +153,7 @@ pub(crate) enum BodyInner<'a> {
     ByteSlice(&'a [u8]),
     Body(BodyReader<'a>),
     Reader(&'a mut dyn Read),
-    OwnedReader(Box<dyn Read + Send + Sync>),
+    OwnedReader(Box<dyn Read>),
 }
 
 impl<'a> BodyInner<'a> {
