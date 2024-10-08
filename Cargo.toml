@@ -16,11 +16,12 @@ exclude = ["/cargo_deny.sh", "/deny.toml", "/test.sh"]
 rust-version = "1.67"
 
 [package.metadata.docs.rs]
-features = ["rustls", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset", "json", "_test"]
+features = ["rustls", "rustls-tls12", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset", "json", "_test"]
 
 [features]
-default = ["rustls", "gzip", "json"]
+default = ["rustls", "rustls-tls12", "gzip", "json"]
 rustls = ["dep:rustls", "_tls", "dep:rustls-platform-verifier", "dep:webpki-roots"]
+rustls-tls12 = ["rustls/tls12"]
 native-tls = ["dep:native-tls", "dep:der", "_tls", "dep:webpki-root-certs"]
 socks-proxy = ["dep:socks"]
 cookies = ["dep:cookie_store", "_url"]
@@ -52,7 +53,7 @@ webpki-roots = { version = "0.26.3", optional = true, default-features = false }
 webpki-root-certs = { version = "0.26.4", optional = true, default-features = false }
 
 # ring has a higher chance of compiling cleanly without additional developer environment
-rustls = { version = "0.23.11", optional = true, default-features = false, features = ["ring", "logging", "std", "tls12"] }
+rustls = { version = "0.23.11", optional = true, default-features = false, features = ["ring", "logging", "std"] }
 native-tls = { version = "0.2.12", optional = true, default-features = false }
 der = { version = "0.7.9", optional = true, default-features = false, features = ["pem", "std"] }
 

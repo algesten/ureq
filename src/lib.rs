@@ -136,10 +136,12 @@
 //!
 //! `ureq = { version = "3", features = ["socks-proxy", "charset"] }`
 //!
-//! The default enabled features are: **rustls**, **gzip** and **json**.
+//! The default enabled features are: **rustls**, **rustls-tls12**, **gzip** and **json**.
 //!
-//! * **rustls** enabled the rustls TLS implementation. This is the default for the the crate level
+//! * **rustls** enables the rustls TLS implementation. This is the default for the the crate level
 //!   convenience calls (`ureq::get` etc).
+//! * **rustls-tls12** enables TLS1.2 compatibility for rustls (in addition to TLS1.3). This is
+//!   enabled by default to maximize compatibility.
 //! * **native-tls** enables the native tls backend for TLS. Due to the risk of diamond dependencies
 //!   accidentally switching on an unwanted TLS implementation, `native-tls` is never picked up as
 //!   a default or used by the crate level convenience calls (`ureq::get` etc) – it must be configured
