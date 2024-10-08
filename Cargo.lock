@@ -1014,6 +1014,7 @@ dependencies = [
  "log",
  "native-tls",
  "once_cell",
+ "percent-encoding",
  "rustls",
  "rustls-pemfile",
  "rustls-pki-types",
