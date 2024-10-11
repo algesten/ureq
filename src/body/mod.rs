@@ -132,7 +132,7 @@ impl Body {
     /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn as_reader(&mut self) -> BodyReader {
-        self.with_config().into_reader()
+        self.with_config().reader()
     }
 
     /// Turn this response into an owned `impl Read` of the body.
@@ -158,7 +158,7 @@ impl Body {
     /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn into_reader(self) -> BodyReader<'static> {
-        self.into_with_config().into_reader()
+        self.into_with_config().reader()
     }
 
     /// Read the response as a string.
@@ -235,7 +235,7 @@ impl Body {
     /// ```
     #[cfg(feature = "json")]
     pub fn read_json<T: serde::de::DeserializeOwned>(&mut self) -> Result<T, Error> {
-        let reader = self.with_config().limit(MAX_BODY_SIZE).into_reader();
+        let reader = self.with_config().limit(MAX_BODY_SIZE).reader();
         let value: T = serde_json::from_reader(reader)?;
         Ok(value)
     }
@@ -254,7 +254,7 @@ impl Body {
     ///     .with_config()
     ///     // Reader will only read 50 bytes
     ///     .limit(50)
-    ///     .into_reader();
+    ///     .reader();
     /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn with_config(&mut self) -> BodyWithConfig {
@@ -278,7 +278,7 @@ impl Body {
     ///     .into_with_config()
     ///     // Reader will only read 50 bytes
     ///     .limit(50)
-    ///     .into_reader();
+    ///     .reader();
     /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn into_with_config(self) -> BodyWithConfig<'static> {
@@ -344,7 +344,35 @@ impl<'a> BodyWithConfig<'a> {
     }
 
     /// Creates a reader.
-    pub fn into_reader(self) -> BodyReader<'a> {
+    ///
+    /// The reader is either shared or owned, depending on `with_config` or `into_with_config`.
+    ///
+    /// Consider:
+    ///
+    /// ```
+    /// // Creates an owned reader.
+    /// let reader = ureq::get("https://httpbin.org/get")
+    ///     .call()?
+    ///     .into_body()
+    ///     // takes ownership of Body
+    ///     .into_with_config()
+    ///     .limit(10)
+    ///     .reader();
+    /// # Ok::<_, ureq::Error>(())
+    /// ```
+    ///
+    /// ```
+    /// // Creates a shared reader.
+    /// let reader = ureq::get("https://httpbin.org/get")
+    ///     .call()?
+    ///     .body_mut()
+    ///     // borrows Body
+    ///     .with_config()
+    ///     .limit(10)
+    ///     .reader();
+    /// # Ok::<_, ureq::Error>(())
+    /// ```
+    pub fn reader(self) -> BodyReader<'a> {
         self.do_build()
     }
 
