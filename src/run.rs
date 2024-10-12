@@ -108,7 +108,7 @@ fn flow_run(
     timings: &mut CallTimings,
 ) -> Result<FlowResult, Error> {
     let uri = flow.uri().clone();
-    info!("{} {:?}", flow.method(), &DebugUri(flow.uri()));
+    debug!("{} {:?}", flow.method(), &DebugUri(flow.uri()));
 
     if config.https_only && uri.scheme() != Some(&Scheme::HTTPS) {
         return Err(Error::RequireHttpsOnly(uri.to_string()));
@@ -120,7 +120,7 @@ fn flow_run(
 
     let mut flow = flow.proceed();
 
-    if log_enabled!(log::Level::Info) {
+    if log_enabled!(log::Level::Debug) {
         let headers = flow.headers_map()?;
 
         let r = DebugRequest {
@@ -129,7 +129,7 @@ fn flow_run(
             version: flow.version(),
             headers,
         };
-        info!("{:?}", r);
+        debug!("{:?}", r);
     }
 
     let flow = match send_request(flow, &mut connection, timings)? {
@@ -143,7 +143,7 @@ fn flow_run(
 
     let (response, response_result) = recv_response(flow, &mut connection, config, timings)?;
 
-    info!("{:?}", DebugResponse(&response));
+    debug!("{:?}", DebugResponse(&response));
 
     let ret = match response_result {
         RecvResponseResult::RecvBody(flow) => {
