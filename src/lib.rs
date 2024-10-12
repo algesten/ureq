@@ -54,11 +54,12 @@
 //!
 //! ```rust
 //! # fn no_run() -> Result<(), ureq::Error> {
-//! use ureq::{Agent, Config, Timeouts};
+//! use ureq::Agent;
 //! use std::time::Duration;
 //!
-//! let mut config = Config::new();
-//! config.timeouts.global = Some(Duration::from_secs(5));
+//! let mut config = Agent::config_builder()
+//!     .timeout_global(Some(Duration::from_secs(5)))
+//!     .build();
 //!
 //! let agent: Agent = config.into();
 //!
@@ -112,7 +113,8 @@
 //! protocol errors. By default, also HTTP status code errors (when the
 //! server responded 4xx or 5xx) results in `Error`.
 //!
-//! This behavior can be turned off via [`Config::http_status_as_error`].
+//! This behavior can be turned off via
+//! [`http_status_as_error()`][crate::config::ConfigBuilder::http_status_as_error].
 //!
 //! ```rust
 //! use ureq::Error;
@@ -157,7 +159,7 @@
 //! # TLS (https)
 //!
 //! By default, ureq uses [`rustls` crate] with the `ring` cryptographic provider.
-//! As of Sep 20204, the `ring` provider has a higher chance of compiling successfully. If the user
+//! As of Sep 2024, the `ring` provider has a higher chance of compiling successfully. If the user
 //! installs another [default provider], that choice is respected.
 //!
 //! ## rustls
@@ -181,11 +183,17 @@
 //! ```
 //! # #[cfg(feature = "native-tls")]
 //! # {
-//! use ureq::{Config, tls::TlsProvider};
+//! use ureq::config::Config;
+//! use ureq::tls::{TlsConfig, TlsProvider};
 //!
-//! let mut config = Config::new();
-//! // requires the native-tls feature
-//! config.tls_config.provider = TlsProvider::NativeTls;
+//! let mut config = Config::builder()
+//!     .tls_config(
+//!         TlsConfig::builder()
+//!             // requires the native-tls feature
+//!             .provider(TlsProvider::NativeTls)
+//!             .build()
+//!     )
+//!     .build();
 //!
 //! let agent = config.new_agent();
 //!
@@ -317,14 +325,14 @@
 //! ## Example using HTTP
 //!
 //! ```rust
-//! use ureq::{Agent, Config, Proxy};
+//! use ureq::{Agent, Proxy};
 //! # fn no_run() -> std::result::Result<(), ureq::Error> {
 //! // Configure an http connect proxy.
 //! let proxy = Proxy::new("http://user:password@cool.proxy:9090")?;
-//! let agent: Agent = Config {
-//!     proxy: Some(proxy),
-//!     ..Default::default()
-//! }.into();
+//! let agent: Agent = Agent::config_builder()
+//!     .proxy(Some(proxy))
+//!     .build()
+//!     .into();
 //!
 //! // This is proxied.
 //! let resp = agent.get("http://cool.server").call()?;
@@ -335,15 +343,15 @@
 //! ## Example using SOCKS5
 //!
 //! ```rust
-//! use ureq::{Agent, Config, Proxy};
+//! use ureq::{Agent, Proxy};
 //! # #[cfg(feature = "socks-proxy")]
 //! # fn no_run() -> std::result::Result<(), ureq::Error> {
 //! // Configure a SOCKS proxy.
 //! let proxy = Proxy::new("socks5://user:password@cool.proxy:9090")?;
-//! let agent: Agent = Config {
-//!     proxy: Some(proxy),
-//!     ..Default::default()
-//! }.into();
+//! let agent: Agent = Agent::config_builder()
+//!     .proxy(Some(proxy))
+//!     .build()
+//!     .into();
 //!
 //! // This is proxied.
 //! let resp = agent.get("http://cool.server").call()?;
@@ -363,7 +371,6 @@ use std::convert::TryFrom;
 pub use http;
 
 pub use body::{Body, BodyBuilder, BodyReader, BodyWithConfig};
-pub use config::{Config, Timeouts};
 use http::Method;
 use http::{Request, Response, Uri};
 pub use proxy::Proxy;
@@ -373,7 +380,7 @@ pub use send_body::AsSendBody;
 
 mod agent;
 mod body;
-mod config;
+pub mod config;
 mod error;
 mod pool;
 mod proxy;
@@ -441,6 +448,7 @@ mk_method!(trace, TRACE, WithoutBody);
 #[cfg(test)]
 pub(crate) mod test {
     use assert_no_alloc::AllocDisabler;
+    use config::Config;
     use once_cell::sync::Lazy;
 
     use super::*;
@@ -476,16 +484,14 @@ pub(crate) mod test {
     #[cfg(feature = "rustls")]
     fn connect_https_google_rustls() {
         init_test_log();
+        use config::Config;
+
         use crate::tls::{TlsConfig, TlsProvider};
 
-        let agent: Agent = Config {
-            tls_config: TlsConfig {
-                provider: TlsProvider::Rustls,
-                ..Default::default()
-            },
-            ..Default::default()
-        }
-        .into();
+        let agent: Agent = Config::builder()
+            .tls_config(TlsConfig::builder().provider(TlsProvider::Rustls).build())
+            .build()
+            .into();
 
         let res = agent.get("https://www.google.com/").call().unwrap();
         assert_eq!(
@@ -504,16 +510,18 @@ pub(crate) mod test {
     #[cfg(feature = "native-tls")]
     fn connect_https_google_native_tls_simple() {
         init_test_log();
+        use config::Config;
+
         use crate::tls::{TlsConfig, TlsProvider};
 
-        let agent: Agent = Config {
-            tls_config: TlsConfig {
-                provider: TlsProvider::NativeTls,
-                ..Default::default()
-            },
-            ..Default::default()
-        }
-        .into();
+        let agent: Agent = Config::builder()
+            .tls_config(
+                TlsConfig::builder()
+                    .provider(TlsProvider::NativeTls)
+                    .build(),
+            )
+            .build()
+            .into();
 
         let mut res = agent.get("https://www.google.com/").call().unwrap();
 
@@ -534,18 +542,18 @@ pub(crate) mod test {
     #[cfg(feature = "rustls")]
     fn connect_https_google_rustls_webpki() {
         init_test_log();
-
         use crate::tls::{RootCerts, TlsConfig, TlsProvider};
+        use config::Config;
 
-        let agent: Agent = Config {
-            tls_config: TlsConfig {
-                provider: TlsProvider::Rustls,
-                root_certs: RootCerts::WebPki,
-                ..Default::default()
-            },
-            ..Default::default()
-        }
-        .into();
+        let agent: Agent = Config::builder()
+            .tls_config(
+                TlsConfig::builder()
+                    .provider(TlsProvider::Rustls)
+                    .root_certs(RootCerts::WebPki)
+                    .build(),
+            )
+            .build()
+            .into();
 
         agent.get("https://www.google.com/").call().unwrap();
     }
@@ -554,18 +562,18 @@ pub(crate) mod test {
     #[cfg(feature = "native-tls")]
     fn connect_https_google_native_tls_webpki() {
         init_test_log();
-
         use crate::tls::{RootCerts, TlsConfig, TlsProvider};
+        use config::Config;
 
-        let agent: Agent = Config {
-            tls_config: TlsConfig {
-                provider: TlsProvider::NativeTls,
-                root_certs: RootCerts::WebPki,
-                ..Default::default()
-            },
-            ..Default::default()
-        }
-        .into();
+        let agent: Agent = Config::builder()
+            .tls_config(
+                TlsConfig::builder()
+                    .provider(TlsProvider::NativeTls)
+                    .root_certs(RootCerts::WebPki)
+                    .build(),
+            )
+            .build()
+            .into();
 
         agent.get("https://www.google.com/").call().unwrap();
     }
@@ -605,11 +613,7 @@ pub(crate) mod test {
     #[test]
     fn redirect_no_follow() {
         init_test_log();
-        let agent: Agent = Config {
-            max_redirects: 0,
-            ..Default::default()
-        }
-        .into();
+        let agent: Agent = Config::builder().max_redirects(0).build().into();
         let mut res = agent
             .get("http://httpbin.org/redirect-to?url=%2Fget")
             .call()

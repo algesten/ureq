@@ -40,7 +40,7 @@ use crate::{Agent, Body, Error, SendBody};
 /// A common use case is to add headers to the outgoing request. Here an example of how.
 ///
 /// ```no_run
-/// use ureq::{Body, SendBody, Agent, Config};
+/// use ureq::{Body, SendBody, Agent, config::Config};
 /// use ureq::middleware::MiddlewareNext;
 /// use ureq::http::{Request, Response, header::HeaderValue};
 ///
@@ -55,8 +55,9 @@ use crate::{Agent, Body, Error, SendBody};
 ///     next.handle(req)
 /// }
 ///
-/// let mut config = Config::default();
-/// config.middleware.add(my_middleware);
+/// let mut config = Config::builder()
+///     .middleware(my_middleware)
+///     .build();
 ///
 /// let agent: Agent = config.into();
 ///
@@ -115,7 +116,7 @@ use crate::{Agent, Body, Error, SendBody};
 /// through the agent.
 ///
 /// ```
-/// use ureq::{Body, SendBody, Agent, Config};
+/// use ureq::{Body, SendBody, Agent, config::Config};
 /// use ureq::middleware::{Middleware, MiddlewareNext};
 /// use ureq::http::{Request, Response};
 /// use std::sync::atomic::{AtomicU64, Ordering};
@@ -140,8 +141,9 @@ use crate::{Agent, Body, Error, SendBody};
 ///
 /// let shared_counter = Arc::new(AtomicU64::new(0));
 ///
-/// let mut config = Config::default();
-/// config.middleware.add(MyCounter(shared_counter.clone()));
+/// let mut config = Config::builder()
+///     .middleware(MyCounter(shared_counter.clone()))
+///     .build();
 ///
 /// let agent: Agent = config.into();
 ///
@@ -162,21 +164,13 @@ pub trait Middleware: Send + Sync + 'static {
     ) -> Result<http::Response<Body>, Error>;
 }
 
-/// A chain of middleware.
-///
-/// Defaults to an empty chain.
-///
-/// This is set in [`Config`](crate::Config).
 #[derive(Clone, Default)]
-pub struct MiddlewareChain {
+pub(crate) struct MiddlewareChain {
     chain: Arc<Vec<Box<dyn Middleware>>>,
 }
 
 impl MiddlewareChain {
-    /// Add another middleware to this chain.
-    ///
-    /// Middleware are run in the order they are added.
-    pub fn add(&mut self, mw: impl Middleware) {
+    pub(crate) fn add(&mut self, mw: impl Middleware) {
         let Some(chain) = Arc::get_mut(&mut self.chain) else {
             panic!("Can't add to a MiddlewareChain that is already cloned")
         };

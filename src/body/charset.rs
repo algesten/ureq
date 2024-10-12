@@ -139,14 +139,10 @@ mod test {
     #[cfg(feature = "charset")]
     fn non_ascii_reason() {
         use crate::test::init_test_log;
-        use crate::{Agent, Config};
+        use crate::Agent;
 
         init_test_log();
-        let agent: Agent = Config {
-            max_redirects: 0,
-            ..Default::default()
-        }
-        .into();
+        let agent: Agent = Agent::config_builder().max_redirects(0).build().into();
 
         let res = agent
             .get("https://my.test/non-ascii-reason")

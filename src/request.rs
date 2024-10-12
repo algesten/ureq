@@ -6,12 +6,12 @@ use std::ops::{Deref, DerefMut};
 use http::{HeaderName, HeaderValue, Method, Request, Response, Uri, Version};
 
 use crate::body::Body;
-use crate::config::RequestLevelConfig;
+use crate::config::{Config, ConfigBuilder, RequestLevelConfig, RequestScope};
 use crate::query::{parse_query_params, QueryParam};
 use crate::send_body::AsSendBody;
 use crate::util::private::Private;
 use crate::util::UriExt;
-use crate::{Agent, Config, Error, SendBody, Timeouts};
+use crate::{Agent, Error, SendBody};
 
 /// Transparent wrapper around [`http::request::Builder`].
 ///
@@ -126,69 +126,31 @@ impl<Any> RequestBuilder<Any> {
     /// # Example
     ///
     /// ```
-    /// use ureq::{Agent, Config};
+    /// use ureq::Agent;
     ///
-    /// let agent: Agent = Config {
-    ///     https_only: false,
-    ///     ..Default::default()
-    /// }.into();
+    /// let agent: Agent = Agent::config_builder()
+    ///     .https_only(false)
+    ///     .build()
+    ///     .into();
     ///
-    /// let mut builder = agent.get("http://httpbin.org/get");
-    ///
-    /// let config = builder.config();
-    /// config.https_only = true;
+    /// let request = agent.get("http://httpbin.org/get")
+    ///     .config()
+    ///     // override agent default for this request
+    ///     .https_only(true)
+    ///     .build();
     ///
     /// // Make the request
-    /// let result = builder.call();
+    /// let result = request.call();
     ///
     /// // The https_only was set on request level
     /// assert!(matches!(result.unwrap_err(), ureq::Error::RequireHttpsOnly(_)));
-    ///
-    /// // The request level did not affect the agent level
-    /// assert!(!agent.config().https_only);
     /// # Ok::<_, ureq::Error>(())
     /// ```
-    pub fn config(&mut self) -> &mut Config {
-        self.request_level_config()
+    pub fn config(self) -> ConfigBuilder<RequestScope<Any>> {
+        ConfigBuilder(RequestScope(self))
     }
 
-    /// Override agent timeouts on the request level.
-    ///
-    /// The agent config is copied and modified on request level.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use ureq::{Agent, Config, Timeouts};
-    /// use std::time::Duration;
-    ///
-    /// let agent: Agent = Config {
-    ///     timeouts: Timeouts {
-    ///         global: Some(Duration::from_secs(10)),
-    ///        ..Default::default()
-    ///     },
-    ///     ..Default::default()
-    /// }.into();
-    ///
-    /// let mut builder = agent.get("https://httpbin.org/get");
-    ///
-    /// // This clones the timeouts from agent level to request level.
-    /// let timeouts = builder.timeouts();
-    ///
-    /// assert_eq!(timeouts.global, Some(Duration::from_secs(10)));
-    ///
-    /// // Override the global timeout on the request level.
-    /// timeouts.global = Some(Duration::from_secs(3));
-    ///
-    /// // Make the request
-    /// let response = builder.call()?;
-    /// # Ok::<_, ureq::Error>(())
-    /// ```
-    pub fn timeouts(&mut self) -> &mut Timeouts {
-        &mut self.request_level_config().timeouts
-    }
-
-    fn request_level_config(&mut self) -> &mut Config {
+    pub(crate) fn request_level_config(&mut self) -> &mut Config {
         let Some(exts) = self.builder.extensions_mut() else {
             // This means self.builder has an error such as URL parsing error.
             // The error will surface on .call() (or .send()) and we fill in
@@ -460,8 +422,10 @@ mod test {
     #[test]
     fn config_after_broken_url() {
         init_test_log();
-        let mut req = get("http://x.y.z/ borked url");
-        req.timeouts().global = Some(Duration::from_millis(1));
+        get("http://x.y.z/ borked url")
+            .config()
+            .timeout_global(Some(Duration::from_millis(1)))
+            .build();
     }
 
     #[test]

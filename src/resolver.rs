@@ -17,9 +17,10 @@ use std::vec::IntoIter;
 use http::uri::{Authority, Scheme};
 use http::Uri;
 
+use crate::config::Config;
 use crate::transport::NextTimeout;
 use crate::util::{ArrayVec, SchemeExt, UriExt};
-use crate::{Config, Error};
+use crate::Error;
 
 /// Trait for name resolvers.
 pub trait Resolver: Debug + Send + Sync + 'static {

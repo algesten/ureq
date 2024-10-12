@@ -1,12 +1,14 @@
+//! Agent configuration
+
 use std::fmt;
 use std::time::Duration;
 
 use hoot::client::flow::RedirectAuthHeaders;
 use http::Uri;
 
-use crate::middleware::MiddlewareChain;
+use crate::middleware::{Middleware, MiddlewareChain};
 use crate::resolver::IpFamily;
-use crate::{Agent, Proxy};
+use crate::{Agent, AsSendBody, Proxy, RequestBuilder};
 
 #[cfg(feature = "_tls")]
 use crate::tls::TlsConfig;
@@ -17,38 +19,20 @@ use crate::tls::TlsConfig;
 ///
 /// # Agent level config
 ///
-/// When creating config instances, the prefered way is to use the `..Default::default()` pattern.
-///
 /// ## Example
 ///
 /// ```
-/// use ureq::{Agent, Config, Timeouts};
+/// use ureq::Agent;
 /// use std::time::Duration;
 ///
-/// let config = Config {
-///     timeouts: Timeouts {
-///         global: Some(Duration::from_secs(10)),
-///         ..Default::default()
-///     },
-///     https_only: true,
-///     ..Default::default()
-/// };
+/// let config = Agent::config_builder()
+///     .timeout_global(Some(Duration::from_secs(10)))
+///     .https_only(true)
+///     .build();
 ///
 /// let agent = Agent::new_with_config(config);
 /// ```
 ///
-/// And alternative way is to set properties on an already created config
-///
-/// ```
-/// use ureq::{Agent, Config};
-/// use std::time::Duration;
-///
-/// let mut config = Config::new();
-/// config.timeouts.global = Some(Duration::from_secs(10));
-/// config.https_only = true;
-///
-/// let agent: Agent = config.into();
-/// ```
 ///
 /// # Request level config
 ///
@@ -63,17 +47,19 @@ use crate::tls::TlsConfig;
 /// The first way is via [`RequestBuilder::config()`][crate::RequestBuilder::config].
 ///
 /// ```
-/// use ureq::{Agent, Config};
+/// use ureq::Agent;
 ///
-/// let agent: Agent = Config {
-///     https_only: false,
-///     ..Default::default()
-/// }.into();
+/// let agent: Agent = Agent::config_builder()
+///     .https_only(false)
+///     .build()
+///     .into();
 ///
-/// let mut builder = agent.get("http://httpbin.org/get");
-///
-/// let config = builder.config();
-/// config.https_only = true;
+/// let response = agent.get("http://httpbin.org/get")
+///     .config()
+///     // override agent level setting for this request
+///     .https_only(true)
+///     .build()
+///     .call();
 /// ```
 ///
 /// ## HTTP request example
@@ -82,258 +68,62 @@ use crate::tls::TlsConfig;
 /// This is used when working with the http crate [`http::Request`] type directly.
 ///
 /// ```
-/// use ureq::{Agent, Config};
+/// use ureq::Agent;
 ///
-/// let agent: Agent = Config {
-///     https_only: false,
-///     ..Default::default()
-/// }.into();
+/// let agent: Agent = Agent::config_builder()
+///     .https_only(false)
+///     .build()
+///     .into();
 ///
-/// let mut request = http::Request::get("http://httpbin.org/get")
+/// let request = http::Request::get("http://httpbin.org/get")
 ///     .body(()).unwrap();
 ///
-/// let config = agent.configure_request(&mut request);
-/// config.https_only = true;
+/// let request = agent.configure_request(request)
+///     // override agent level setting for this request
+///     .https_only(true)
+///     .build();
+///
+/// let response = agent.run(request);
 /// ```
-///
-/// # Correct usage
-///
-/// Note: For a struct with pub fields, Rust dosn't have a way to force the use of
-/// `..Default::default()`. `Config` must be instantiated in one two ways:
-///
-/// 1. `Config::default()` or `Config::new()`.
-/// 2. `Config { <override defaults>, ..Default::default() }`
-///
-/// Any other way to construct the config is not valid, and breaking changes arising
-/// from doing that are not considered breaking. Specifically it is not correct to use
-/// `Config { ... }` without a `..Default::default()`.
 ///
 #[derive(Clone)]
 pub struct Config {
-    /// Whether to treat 4xx and 5xx HTTP status codes as
-    /// [`Err(Error::StatusCode))`](crate::Error::StatusCode).
-    ///
-    /// Defaults to `true`.
-    pub http_status_as_error: bool,
-
-    /// Whether to limit requests (including redirects) to https only
-    ///
-    /// Defaults to `false`.
-    pub https_only: bool,
-
-    /// Configuration of IPv4/IPv6.
-    ///
-    /// This affects the resolver.
-    ///
-    /// Defaults to `IpFamily::Any`.
-    pub ip_family: IpFamily,
-
-    /// Config for TLS.
-    ///
-    /// This config is generic for all TLS connectors.
+    pub(crate) http_status_as_error: bool,
+    pub(crate) https_only: bool,
+    pub(crate) ip_family: IpFamily,
     #[cfg(feature = "_tls")]
-    pub tls_config: TlsConfig,
-
-    /// Proxy configuration.
-    ///
-    /// Picked up from environment when using [`Config::default()`] or
-    /// [`Agent::new_with_defaults()`][crate::Agent::new_with_defaults].
-    pub proxy: Option<Proxy>,
-
-    /// Disable Nagle's algorithm
-    ///
-    /// Set TCP_NODELAY. It's up to the transport whether this flag is honored.
-    ///
-    /// Defaults to `true`.
-    pub no_delay: bool,
-
-    /// The max number of redirects to follow before giving up
-    ///
-    /// Defaults to 10
-    pub max_redirects: u32,
-
-    /// How to handle `Authorization` headers when following redirects
-    ///
-    /// * `Never` (the default) means the authorization header is never attached to a redirected call.
-    /// * `SameHost` will keep the header when the redirect is to the same host and under https.
-    ///
-    /// Defaults to `None`.
-    pub redirect_auth_headers: RedirectAuthHeaders,
-
-    /// Value to use for the `User-Agent` field.
-    ///
-    /// `None` means the default value which is `ureq/<version>`.
-    ///
-    /// This can be overridden by setting a `user-agent` header on the request
-    /// object. The one difference is that a connection to a HTTP proxy server
-    /// will receive this value, not the request-level one.
-    ///
-    /// Defaults to `ureq/<version>`
-    pub user_agent: Option<String>,
-
-    /// The timeout settings on agent level.
-    ///
-    /// This can be overridden per request.
-    pub timeouts: Timeouts,
-
-    /// Max size of the HTTP response header.
-    ///
-    /// From the status, including all headers up until the body.
-    ///
-    /// Defaults to 64kb.
-    pub max_response_header_size: usize,
-
-    /// Default size of the input buffer
-    ///
-    /// The default connectors use this setting.
-    ///
-    /// Defaults to 128kb.
-    pub input_buffer_size: usize,
-
-    /// Default size of the output buffer.
-    ///
-    /// The default connectors use this setting.
-    ///
-    /// Defaults to 128kb.
-    pub output_buffer_size: usize,
-
-    /// Max number of idle pooled connections overall.
-    ///
-    /// This setting has no effect when used per-request.
-    ///
-    /// Defaults to 10
-    pub max_idle_connections: usize,
-
-    /// Max number of idle pooled connections per host/port combo.
-    ///
-    /// This setting has no effect when used per-request.
-    ///
-    /// Defaults to 3
-    pub max_idle_connections_per_host: usize,
-
-    /// Max duration to keep an idle connection in the pool
-    ///
-    /// This can also be configured per-request to be shorter than the pool.
-    /// For example: if the pool is configured to 15 seconds and we have a
-    /// connection with an age of 10 seconds, a request setting this config
-    /// property to 3 seconds, would ignore the pooled connection (but still
-    /// leave it in the pool).
-    ///
-    /// Defaults to 15 seconds
-    pub max_idle_age: Duration,
-
-    /// Middleware used for this agent.
-    ///
-    /// Defaults to no middleware.
-    pub middleware: MiddlewareChain,
-
-    // This is here to force users of ureq to use the ..Default::default() pattern
-    // as part of creating `Config`. That way we can introduce new settings without
-    // it becoming a breaking changes.
-    #[doc(hidden)]
-    pub _must_use_default: private::Private,
+    pub(crate) tls_config: TlsConfig,
+    pub(crate) proxy: Option<Proxy>,
+    pub(crate) no_delay: bool,
+    pub(crate) max_redirects: u32,
+    pub(crate) redirect_auth_headers: RedirectAuthHeaders,
+    pub(crate) user_agent: Option<String>,
+    pub(crate) timeouts: Timeouts,
+    pub(crate) max_response_header_size: usize,
+    pub(crate) input_buffer_size: usize,
+    pub(crate) output_buffer_size: usize,
+    pub(crate) max_idle_connections: usize,
+    pub(crate) max_idle_connections_per_host: usize,
+    pub(crate) max_idle_age: Duration,
+    pub(crate) middleware: MiddlewareChain,
 }
 
 impl Config {
-    /// Creates a new Config with defaults values.
+    /// A builder to make a bespoke configuration.
     ///
-    /// This is the same as `Config::default()`.
-    pub fn new() -> Self {
-        Self::default()
+    /// The default values are already set.
+    pub fn builder() -> ConfigBuilder<AgentScope> {
+        ConfigBuilder(AgentScope(Config::default()))
     }
-}
 
-/// Request timeout configuration.
-///
-/// This can be configured both on Agent level as well as per request.
-#[derive(Clone, Copy)]
-pub struct Timeouts {
-    /// Timeout for the entire call
-    ///
-    /// This is end-to-end, from DNS lookup to finishing reading the response body.
-    /// Thus it covers all other timeouts.
-    ///
-    /// Defaults to `None`.
-    pub global: Option<Duration>,
-
-    /// Timeout for call-by-call when following redirects
-    ///
-    /// This covers a single call and the timeout is reset when
-    /// ureq follows a redirections.
-    ///
-    /// Defaults to `None`.
-    pub per_call: Option<Duration>,
-
-    /// Max duration for doing the DNS lookup when establishing the connection
-    ///
-    /// Because most platforms do not have an async syscall for looking up
-    /// a host name, setting this might force str0m to spawn a thread to handle
-    /// the timeout.
-    ///
-    /// Defaults to `None`.
-    pub resolve: Option<Duration>,
-
-    /// Max duration for establishing the connection
-    ///
-    /// For a TLS connection this includes opening the socket and doing the TLS handshake.
-    ///
-    /// Defaults to `None`.
-    pub connect: Option<Duration>,
-
-    /// Max duration for sending the request, but not the request body.
-    ///
-    /// Defaults to `None`.
-    pub send_request: Option<Duration>,
-
-    /// Max duration for awaiting a 100-continue response.
-    ///
-    /// Only used if there is a request body and we sent the `Expect: 100-continue`
-    /// header to indicate we want the server to respond with 100.
-    ///
-    /// This defaults to 1 second.
-    pub await_100: Option<Duration>,
-
-    /// Max duration for sending a request body (if there is one)
-    ///
-    /// Defaults to `None`.
-    pub send_body: Option<Duration>,
-
-    /// Max duration for receiving the response headers, but not the body
-    ///
-    /// Defaults to `None`.
-    pub recv_response: Option<Duration>,
-
-    /// Max duration for receving the response body.
-    ///
-    /// Defaults to `None`.
-    pub recv_body: Option<Duration>,
-
-    // This is here to force users of ureq to use the ..Default::default() pattern
-    // as part of creating `Config`. That way we can introduce new settings without
-    // it becoming a breaking changes.
-    #[doc(hidden)]
-    pub _must_use_default: private::Private,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct RequestLevelConfig(pub Config);
-
-// Deliberately not publicly visible.
-mod private {
-    #[derive(Debug, Clone, Copy)]
-    pub struct Private;
-}
-
-impl Config {
     /// Creates a new agent by cloning this config.
     ///
-    /// * Cloning the config does not incur heap allocations.
-    /// * The created [`Agent`] will not be affected by further changes to this config.
+    /// Cloning the config does not incur heap allocations.
     pub fn new_agent(&self) -> Agent {
         self.clone().into()
     }
 
-    pub(crate) fn user_agent(&self) -> &str {
+    pub(crate) fn get_user_agent(&self) -> &str {
         self.user_agent.as_deref().unwrap_or(DEFAULT_USER_AGENT)
     }
 
@@ -348,8 +138,354 @@ impl Config {
     }
 }
 
-pub static DEFAULT_USER_AGENT: &str =
-    concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
+/// Builder of [`Config`]
+pub struct ConfigBuilder<Scope: private::ConfigScope>(pub(crate) Scope);
+
+#[doc(hidden)]
+pub struct AgentScope(Config);
+#[doc(hidden)]
+pub struct RequestScope<Any>(pub(crate) RequestBuilder<Any>);
+#[doc(hidden)]
+pub struct HttpCrateScope<S: AsSendBody>(pub(crate) http::Request<S>);
+
+impl private::ConfigScope for AgentScope {
+    fn config(&mut self) -> &mut Config {
+        &mut self.0
+    }
+}
+
+impl<Any> private::ConfigScope for RequestScope<Any> {
+    fn config(&mut self) -> &mut Config {
+        self.0.request_level_config()
+    }
+}
+
+impl<S: AsSendBody> private::ConfigScope for HttpCrateScope<S> {
+    fn config(&mut self) -> &mut Config {
+        // This unwrap is OK, because we should not construct an
+        // HttpCrateScope without first ensure it is there.
+        let req_level: &mut RequestLevelConfig = self.0.extensions_mut().get_mut().unwrap();
+        &mut req_level.0
+    }
+}
+
+mod private {
+    use super::Config;
+
+    pub trait ConfigScope {
+        fn config(&mut self) -> &mut Config;
+    }
+}
+
+impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
+    fn config(&mut self) -> &mut Config {
+        self.0.config()
+    }
+
+    /// Whether to treat 4xx and 5xx HTTP status codes as
+    /// [`Err(Error::StatusCode))`](crate::Error::StatusCode).
+    ///
+    /// Defaults to `true`.
+    pub fn http_status_as_error(mut self, v: bool) -> Self {
+        self.config().http_status_as_error = v;
+        self
+    }
+
+    /// Whether to limit requests (including redirects) to https only
+    ///
+    /// Defaults to `false`.
+    pub fn https_only(mut self, v: bool) -> Self {
+        self.config().https_only = v;
+        self
+    }
+
+    /// Configuration of IPv4/IPv6.
+    ///
+    /// This affects the resolver.
+    ///
+    /// Defaults to `IpFamily::Any`.
+    pub fn ip_family(mut self, v: IpFamily) -> Self {
+        self.config().ip_family = v;
+        self
+    }
+
+    /// Config for TLS.
+    ///
+    /// This config is generic for all TLS connectors.
+    #[cfg(feature = "_tls")]
+    pub fn tls_config(mut self, v: TlsConfig) -> Self {
+        self.config().tls_config = v;
+        self
+    }
+
+    /// Proxy configuration.
+    ///
+    /// Picked up from environment when using [`Config::default()`] or
+    /// [`Agent::new_with_defaults()`][crate::Agent::new_with_defaults].
+    pub fn proxy(mut self, v: Option<Proxy>) -> Self {
+        self.config().proxy = v;
+        self
+    }
+
+    /// Disable Nagle's algorithm
+    ///
+    /// Set TCP_NODELAY. It's up to the transport whether this flag is honored.
+    ///
+    /// Defaults to `true`.
+    pub fn no_delay(mut self, v: bool) -> Self {
+        self.config().no_delay = v;
+        self
+    }
+
+    /// The max number of redirects to follow before giving up
+    ///
+    /// Defaults to 10
+    pub fn max_redirects(mut self, v: u32) -> Self {
+        self.config().max_redirects = v;
+        self
+    }
+
+    /// How to handle `Authorization` headers when following redirects
+    ///
+    /// * `Never` (the default) means the authorization header is never attached to a redirected call.
+    /// * `SameHost` will keep the header when the redirect is to the same host and under https.
+    ///
+    /// Defaults to `None`.
+    pub fn redirect_auth_headers(mut self, v: RedirectAuthHeaders) -> Self {
+        self.config().redirect_auth_headers = v;
+        self
+    }
+
+    /// Value to use for the `User-Agent` field.
+    ///
+    /// This can be overridden by setting a `user-agent` header on the request
+    /// object. The one difference is that a connection to a HTTP proxy server
+    /// will receive this value, not the request-level one.
+    ///
+    /// Defaults to `None`, which results in `ureq/<version>`
+    pub fn user_agent(mut self, v: Option<String>) -> Self {
+        self.config().user_agent = v;
+        self
+    }
+
+    /// Max size of the HTTP response header.
+    ///
+    /// From the status, including all headers up until the body.
+    ///
+    /// Defaults to 64kb.
+    pub fn max_response_header_size(mut self, v: usize) -> Self {
+        self.config().max_response_header_size = v;
+        self
+    }
+
+    /// Default size of the input buffer
+    ///
+    /// The default connectors use this setting.
+    ///
+    /// Defaults to 128kb.
+    pub fn input_buffer_size(mut self, v: usize) -> Self {
+        self.config().input_buffer_size = v;
+        self
+    }
+
+    /// Default size of the output buffer.
+    ///
+    /// The default connectors use this setting.
+    ///
+    /// Defaults to 128kb.
+    pub fn output_buffer_size(mut self, v: usize) -> Self {
+        self.config().output_buffer_size = v;
+        self
+    }
+
+    /// Max number of idle pooled connections overall.
+    ///
+    /// This setting has no effect when used per-request.
+    ///
+    /// Defaults to 10
+    pub fn max_idle_connections(mut self, v: usize) -> Self {
+        self.config().max_idle_connections = v;
+        self
+    }
+
+    /// Max number of idle pooled connections per host/port combo.
+    ///
+    /// This setting has no effect when used per-request.
+    ///
+    /// Defaults to 3
+    pub fn max_idle_connections_per_host(mut self, v: usize) -> Self {
+        self.config().max_idle_connections_per_host = v;
+        self
+    }
+
+    /// Max duration to keep an idle connection in the pool
+    ///
+    /// This can also be configured per-request to be shorter than the pool.
+    /// For example: if the pool is configured to 15 seconds and we have a
+    /// connection with an age of 10 seconds, a request setting this config
+    /// property to 3 seconds, would ignore the pooled connection (but still
+    /// leave it in the pool).
+    ///
+    /// Defaults to 15 seconds
+    pub fn max_idle_age(mut self, v: Duration) -> Self {
+        self.config().max_idle_age = v;
+        self
+    }
+
+    /// Add middleware to use for each request in this agent.
+    ///
+    /// Defaults to no middleware.
+    pub fn middleware(mut self, v: impl Middleware) -> Self {
+        self.config().middleware.add(v);
+        self
+    }
+
+    /// Timeout for the entire call
+    ///
+    /// This is end-to-end, from DNS lookup to finishing reading the response body.
+    /// Thus it covers all other timeouts.
+    ///
+    /// Defaults to `None`.
+    pub fn timeout_global(mut self, v: Option<Duration>) -> Self {
+        self.config().timeouts.global = v;
+        self
+    }
+
+    /// Timeout for call-by-call when following redirects
+    ///
+    /// This covers a single call and the timeout is reset when
+    /// ureq follows a redirections.
+    ///
+    /// Defaults to `None`..
+    pub fn timeout_per_call(mut self, v: Option<Duration>) -> Self {
+        self.config().timeouts.per_call = v;
+        self
+    }
+
+    /// Max duration for doing the DNS lookup when establishing the connection
+    ///
+    /// Because most platforms do not have an async syscall for looking up
+    /// a host name, setting this might force str0m to spawn a thread to handle
+    /// the timeout.
+    ///
+    /// Defaults to `None`.
+    pub fn timeout_resolve(mut self, v: Option<Duration>) -> Self {
+        self.config().timeouts.resolve = v;
+        self
+    }
+
+    /// Max duration for establishing the connection
+    ///
+    /// For a TLS connection this includes opening the socket and doing the TLS handshake.
+    ///
+    /// Defaults to `None`.
+    pub fn timeout_connect(mut self, v: Option<Duration>) -> Self {
+        self.config().timeouts.connect = v;
+        self
+    }
+
+    /// Max duration for sending the request, but not the request body.
+    ///
+    /// Defaults to `None`.
+    pub fn timeout_send_request(mut self, v: Option<Duration>) -> Self {
+        self.config().timeouts.send_request = v;
+        self
+    }
+
+    /// Max duration for awaiting a 100-continue response.
+    ///
+    /// Only used if there is a request body and we sent the `Expect: 100-continue`
+    /// header to indicate we want the server to respond with 100.
+    ///
+    /// This defaults to 1 second.
+    pub fn timeout_await_100(mut self, v: Option<Duration>) -> Self {
+        self.config().timeouts.await_100 = v;
+        self
+    }
+
+    /// Max duration for sending a request body (if there is one)
+    ///
+    /// Defaults to `None`.
+    pub fn timeout_send_body(mut self, v: Option<Duration>) -> Self {
+        self.config().timeouts.send_body = v;
+        self
+    }
+
+    /// Max duration for receiving the response headers, but not the body
+    ///
+    /// Defaults to `None`.
+    pub fn timeout_recv_response(mut self, v: Option<Duration>) -> Self {
+        self.config().timeouts.recv_response = v;
+        self
+    }
+
+    /// Max duration for receving the response body.
+    ///
+    /// Defaults to `None`.
+    pub fn timeout_recv_body(mut self, v: Option<Duration>) -> Self {
+        self.config().timeouts.recv_body = v;
+        self
+    }
+}
+
+impl ConfigBuilder<AgentScope> {
+    /// Finalize the config
+    pub fn build(self) -> Config {
+        self.0 .0
+    }
+}
+
+impl<Any> ConfigBuilder<RequestScope<Any>> {
+    /// Finalize the config
+    pub fn build(self) -> RequestBuilder<Any> {
+        self.0 .0
+    }
+}
+
+impl<S: AsSendBody> ConfigBuilder<HttpCrateScope<S>> {
+    /// Finalize the config
+    pub fn build(self) -> http::Request<S> {
+        self.0 .0
+    }
+}
+
+/// Request timeout configuration.
+///
+/// This can be configured both on Agent level as well as per request.
+#[derive(Clone, Copy)]
+pub struct Timeouts {
+    /// Timeout for the entire call
+    pub global: Option<Duration>,
+
+    /// Timeout for call-by-call when following redirects
+    pub per_call: Option<Duration>,
+
+    /// Max duration for doing the DNS lookup when establishing the connection
+    pub resolve: Option<Duration>,
+
+    /// Max duration for establishing the connection
+    pub connect: Option<Duration>,
+
+    /// Max duration for sending the request, but not the request body.
+    pub send_request: Option<Duration>,
+
+    /// Max duration for awaiting a 100-continue response.
+    pub await_100: Option<Duration>,
+
+    /// Max duration for sending a request body (if there is one)
+    pub send_body: Option<Duration>,
+
+    /// Max duration for receiving the response headers, but not the body
+    pub recv_response: Option<Duration>,
+
+    /// Max duration for receving the response body.
+    pub recv_body: Option<Duration>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct RequestLevelConfig(pub Config);
+
+static DEFAULT_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
 
 impl Default for Config {
     fn default() -> Self {
@@ -372,8 +508,6 @@ impl Default for Config {
             max_idle_connections_per_host: 3,
             max_idle_age: Duration::from_secs(15),
             middleware: MiddlewareChain::default(),
-
-            _must_use_default: private::Private,
         }
     }
 }
@@ -390,8 +524,6 @@ impl Default for Timeouts {
             send_body: None,
             recv_response: None,
             recv_body: None,
-
-            _must_use_default: private::Private,
         }
     }
 }
@@ -452,7 +584,7 @@ mod test {
 
     #[test]
     fn default_config_clone_does_not_allocate() {
-        let c = Config::new();
+        let c = Config::default();
         assert_no_alloc(|| c.clone());
     }
 }

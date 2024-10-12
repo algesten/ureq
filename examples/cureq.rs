@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use auto_args::AutoArgs;
 use ureq::tls::TlsConfig;
-use ureq::{Agent, Config, Timeouts};
+use ureq::Agent;
 
 #[derive(Debug, AutoArgs)]
 struct Opt {
@@ -31,18 +31,15 @@ fn main() {
 }
 
 fn run(opt: &Opt) -> Result<(), ureq::Error> {
-    let agent: Agent = Config {
-        timeouts: Timeouts {
-            global: opt.max_time.map(|t| Duration::from_secs(t.into())),
-            ..Default::default()
-        },
-        tls_config: TlsConfig {
-            disable_verification: opt.insecure.unwrap_or(false),
-            ..Default::default()
-        },
-        ..Default::default()
-    }
-    .into();
+    let agent: Agent = Agent::config_builder()
+        .timeout_global(opt.max_time.map(|t| Duration::from_secs(t.into())))
+        .tls_config(
+            TlsConfig::builder()
+                .disable_verification(opt.insecure.unwrap_or(false))
+                .build(),
+        )
+        .build()
+        .into();
 
     let mut res = agent.get(&opt.url).call()?;
 
