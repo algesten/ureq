@@ -622,17 +622,3 @@ impl io::Read for BodyHandler {
         self.do_read(buf).map_err(|e| e.into_io())
     }
 }
-
-pub(crate) enum BodyHandlerRef<'a> {
-    Shared(&'a mut BodyHandler),
-    Owned(BodyHandler),
-}
-
-impl<'a> io::Read for BodyHandlerRef<'a> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        match self {
-            BodyHandlerRef::Shared(v) => v.read(buf),
-            BodyHandlerRef::Owned(v) => v.read(buf),
-        }
-    }
-}
