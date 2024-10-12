@@ -190,8 +190,6 @@ const NON_SENSITIVE_HEADERS: &[&str] = &[
     "accept",
     "accept-encoding",
     "accept-charset",
-    "date",
-    "connection",
     "server",
     "user-agent",
 ];
