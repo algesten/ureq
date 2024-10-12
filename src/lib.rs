@@ -362,7 +362,7 @@ use std::convert::TryFrom;
 /// Re-exported http-crate.
 pub use http;
 
-pub use body::{Body, BodyReader, BodyWithConfig};
+pub use body::{Body, BodyBuilder, BodyReader, BodyWithConfig};
 pub use config::{Config, Timeouts};
 use http::Method;
 use http::{Request, Response, Uri};

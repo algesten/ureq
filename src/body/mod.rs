@@ -1,15 +1,17 @@
 use std::fmt;
-use std::io::{self, Read};
+use std::io;
 use std::sync::Arc;
 
+pub use build::BodyBuilder;
 use hoot::BodyMode;
 
-use crate::run::{BodyHandler, BodyHandlerRef};
+use crate::run::BodyHandler;
 use crate::Error;
 
 use self::limit::LimitReader;
 use self::lossy::LossyUtf8Reader;
 
+mod build;
 mod limit;
 mod lossy;
 
@@ -47,9 +49,13 @@ const MAX_BODY_SIZE: u64 = 10 * 1024 * 1024;
 /// ```
 
 pub struct Body {
-    handler: BodyHandler,
+    source: BodyDataSource,
     info: Arc<ResponseInfo>,
-    //
+}
+
+enum BodyDataSource {
+    Handler(BodyHandler),
+    Reader(Box<dyn io::Read + Send + Sync>),
 }
 
 #[derive(Clone)]
@@ -61,9 +67,17 @@ pub(crate) struct ResponseInfo {
 }
 
 impl Body {
+    /// Builder for creating a body
+    ///
+    /// This is useful for testing, or for [`Middleware`][crate::middleware::Middleware] that
+    /// returns another body than the requested one.
+    pub fn builder() -> BodyBuilder {
+        BodyBuilder::new()
+    }
+
     pub(crate) fn new(handler: BodyHandler, info: ResponseInfo) -> Self {
         Body {
-            handler,
+            source: BodyDataSource::Handler(handler),
             info: Arc::new(info),
         }
     }
@@ -258,7 +272,7 @@ impl Body {
     /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn with_config(&mut self) -> BodyWithConfig {
-        let handler = BodyHandlerRef::Shared(&mut self.handler);
+        let handler = (&mut self.source).into();
         BodyWithConfig::new(handler, self.info.clone())
     }
 
@@ -282,7 +296,7 @@ impl Body {
     /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn into_with_config(self) -> BodyWithConfig<'static> {
-        let handler = BodyHandlerRef::Owned(self.handler);
+        let handler = self.source.into();
         BodyWithConfig::new(handler, self.info.clone())
     }
 }
@@ -295,14 +309,14 @@ impl Body {
 /// * [Body::into_with_config()]
 ///
 pub struct BodyWithConfig<'a> {
-    handler: BodyHandlerRef<'a>,
+    handler: BodySourceRef<'a>,
     info: Arc<ResponseInfo>,
     limit: u64,
     lossy_utf8: bool,
 }
 
 impl<'a> BodyWithConfig<'a> {
-    fn new(handler: BodyHandlerRef<'a>, info: Arc<ResponseInfo>) -> Self {
+    fn new(handler: BodySourceRef<'a>, info: Arc<ResponseInfo>) -> Self {
         BodyWithConfig {
             handler,
             info,
@@ -378,6 +392,7 @@ impl<'a> BodyWithConfig<'a> {
 
     /// Read into string.
     pub fn read_to_string(self) -> Result<String, Error> {
+        use std::io::Read;
         let mut reader = self.do_build();
         let mut buf = String::new();
         reader.read_to_string(&mut buf)?;
@@ -386,6 +401,7 @@ impl<'a> BodyWithConfig<'a> {
 
     /// Read into vector.
     pub fn read_to_vec(self) -> Result<Vec<u8>, Error> {
+        use std::io::Read;
         let mut reader = self.do_build();
         let mut buf = Vec::new();
         reader.read_to_end(&mut buf)?;
@@ -500,7 +516,7 @@ fn split_content_type(content_type: &str) -> (Option<String>, Option<String>) {
 /// # Ok::<_, ureq::Error>(())
 /// ```
 pub struct BodyReader<'a> {
-    reader: MaybeLossyDecoder<CharsetDecoder<ContentDecoder<LimitReader<BodyHandlerRef<'a>>>>>,
+    reader: MaybeLossyDecoder<CharsetDecoder<ContentDecoder<LimitReader<BodySourceRef<'a>>>>>,
     // If this reader is used as SendBody for another request, this
     // body mode can indiciate the content-length. Gzip, charset etc
     // would mean input is not same as output.
@@ -509,7 +525,7 @@ pub struct BodyReader<'a> {
 
 impl<'a> BodyReader<'a> {
     fn new(
-        reader: LimitReader<BodyHandlerRef<'a>>,
+        reader: LimitReader<BodySourceRef<'a>>,
         info: &ResponseInfo,
         incoming_body_mode: BodyMode,
         lossy_utf8: bool,
@@ -567,7 +583,7 @@ impl<'a> BodyReader<'a> {
 }
 
 #[allow(unused)]
-fn charset_decoder<R: Read>(
+fn charset_decoder<R: io::Read>(
     reader: R,
     mime_type: Option<&str>,
     charset: Option<&str>,
@@ -611,7 +627,7 @@ impl<R: io::Read> io::Read for MaybeLossyDecoder<R> {
     }
 }
 
-impl<'a> Read for BodyReader<'a> {
+impl<'a> io::Read for BodyReader<'a> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.reader.read(buf)
     }
@@ -623,7 +639,7 @@ enum CharsetDecoder<R> {
     PassThrough(R),
 }
 
-impl<R: io::Read> Read for CharsetDecoder<R> {
+impl<R: io::Read> io::Read for CharsetDecoder<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         match self {
             #[cfg(feature = "charset")]
@@ -641,7 +657,7 @@ enum ContentDecoder<R: io::Read> {
     PassThrough(R),
 }
 
-impl<R: Read> Read for ContentDecoder<R> {
+impl<R: io::Read> io::Read for ContentDecoder<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         match self {
             #[cfg(feature = "gzip")]
@@ -668,6 +684,41 @@ impl From<&str> for ContentEncoding {
                 info!("Unknown content-encoding: {}", s);
                 ContentEncoding::Unknown
             }
+        }
+    }
+}
+
+impl<'a> From<&'a mut BodyDataSource> for BodySourceRef<'a> {
+    fn from(value: &'a mut BodyDataSource) -> Self {
+        match value {
+            BodyDataSource::Handler(v) => Self::HandlerShared(v),
+            BodyDataSource::Reader(v) => Self::ReaderShared(v),
+        }
+    }
+}
+impl From<BodyDataSource> for BodySourceRef<'static> {
+    fn from(value: BodyDataSource) -> Self {
+        match value {
+            BodyDataSource::Handler(v) => Self::HandlerOwned(v),
+            BodyDataSource::Reader(v) => Self::ReaderOwned(v),
+        }
+    }
+}
+
+pub(crate) enum BodySourceRef<'a> {
+    HandlerShared(&'a mut BodyHandler),
+    HandlerOwned(BodyHandler),
+    ReaderShared(&'a mut (dyn io::Read + Send + Sync)),
+    ReaderOwned(Box<dyn io::Read + Send + Sync>),
+}
+
+impl<'a> io::Read for BodySourceRef<'a> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        match self {
+            BodySourceRef::HandlerShared(v) => v.read(buf),
+            BodySourceRef::HandlerOwned(v) => v.read(buf),
+            BodySourceRef::ReaderShared(v) => v.read(buf),
+            BodySourceRef::ReaderOwned(v) => v.read(buf),
         }
     }
 }
