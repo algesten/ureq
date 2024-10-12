@@ -68,11 +68,12 @@ holds a connection pool for reuse, and a cookie store if you use the
 an Agent also allows setting options like the TLS configuration.
 
 ```rust
-use ureq::{Agent, Config, Timeouts};
+use ureq::Agent;
 use std::time::Duration;
 
-let mut config = Config::new();
-config.timeouts.global = Some(Duration::from_secs(5));
+let mut config = Agent::config_builder()
+    .timeout_global(Some(Duration::from_secs(5)))
+    .build();
 
 let agent: Agent = config.into();
 
@@ -122,7 +123,8 @@ ureq returns errors via `Result<T, ureq::Error>`. That includes I/O errors,
 protocol errors. By default, also HTTP status code errors (when the
 server responded 4xx or 5xx) results in `Error`.
 
-This behavior can be turned off via [`Config::http_status_as_error`].
+This behavior can be turned off via
+[`http_status_as_error()`][crate::config::ConfigBuilder::http_status_as_error].
 
 ```rust
 use ureq::Error;
@@ -165,7 +167,7 @@ The default enabled features are: **rustls**, **gzip** and **json**.
 ## TLS (https)
 
 By default, ureq uses [`rustls` crate] with the `ring` cryptographic provider.
-As of Sep 20204, the `ring` provider has a higher chance of compiling successfully. If the user
+As of Sep 2024, the `ring` provider has a higher chance of compiling successfully. If the user
 installs another [default provider], that choice is respected.
 
 ### rustls
@@ -184,11 +186,17 @@ up as a default or used by the crate level convenience calls (`ureq::get` etc) â
 must be configured on the agent.
 
 ```rust
-use ureq::{Config, tls::TlsProvider};
+use ureq::config::Config;
+use ureq::tls::{TlsConfig, TlsProvider};
 
-let mut config = Config::new();
-// requires the native-tls feature
-config.tls_config.provider = TlsProvider::NativeTls;
+let mut config = Config::builder()
+    .tls_config(
+        TlsConfig::builder()
+            // requires the native-tls feature
+            .provider(TlsProvider::NativeTls)
+            .build()
+    )
+    .build();
 
 let agent = config.new_agent();
 
@@ -318,13 +326,13 @@ Proxies settings are configured on an [Agent]. All request sent through the agen
 ### Example using HTTP
 
 ```rust
-use ureq::{Agent, Config, Proxy};
+use ureq::{Agent, Proxy};
 // Configure an http connect proxy.
 let proxy = Proxy::new("http://user:password@cool.proxy:9090")?;
-let agent: Agent = Config {
-    proxy: Some(proxy),
-    ..Default::default()
-}.into();
+let agent: Agent = Agent::config_builder()
+    .proxy(Some(proxy))
+    .build()
+    .into();
 
 // This is proxied.
 let resp = agent.get("http://cool.server").call()?;
@@ -333,15 +341,14 @@ let resp = agent.get("http://cool.server").call()?;
 ### Example using SOCKS5
 
 ```rust
-use ureq::{Agent, Config, Proxy};
+use ureq::{Agent, Proxy};
 // Configure a SOCKS proxy.
 let proxy = Proxy::new("socks5://user:password@cool.proxy:9090")?;
-let agent: Agent = Config {
-    proxy: Some(proxy),
-    ..Default::default()
-}.into();
+let agent: Agent = Agent::config_builder()
+    .proxy(Some(proxy))
+    .build()
+    .into();
 
 // This is proxied.
 let resp = agent.get("http://cool.server").call()?;
 ```
-

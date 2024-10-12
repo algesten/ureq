@@ -72,17 +72,17 @@ pub struct TlsConfig {
     /// The provider to use.
     ///
     /// Defaults to [`TlsProvider::Rustls`].
-    pub provider: TlsProvider,
+    pub(crate) provider: TlsProvider,
 
     /// Client certificate chain with corresponding private key.
     ///
     /// Defaults to `None`.
-    pub client_cert: Option<ClientCert>,
+    pub(crate) client_cert: Option<ClientCert>,
 
     /// The set of trusted root certificates to use to validate server certificates.
     ///
     /// Defaults to `PlatformVerifier` to use the platform default root certs.
-    pub root_certs: RootCerts,
+    pub(crate) root_certs: RootCerts,
 
     /// Whether to send SNI (Server Name Indication) to the remote server.
     ///
@@ -90,25 +90,78 @@ pub struct TlsConfig {
     /// to for servers where multiple domains/sites are hosted on the same IP.
     ///
     /// Defaults to `true`.
-    pub use_sni: bool,
+    pub(crate) use_sni: bool,
 
     /// **WARNING** Disable all server certificate verification.
     ///
     /// This breaks encryption and leaks secrets. Must never be enabled for code where
     /// any level of security is required.
-    pub disable_verification: bool,
-
-    // This is here to force users of ureq to use the ..Default::default() pattern
-    // as part of creating `Config`. That way we can introduce new settings without
-    // it becoming a breaking changes.
-    #[doc(hidden)]
-    pub _must_use_default: private::Private,
+    pub(crate) disable_verification: bool,
 }
 
-// Deliberately not publicly visible.
-mod private {
-    #[derive(Debug, Clone, Copy)]
-    pub struct Private;
+impl TlsConfig {
+    /// Builder to make a bespoke config.
+    pub fn builder() -> TlsConfigBuilder {
+        TlsConfigBuilder {
+            config: TlsConfig::default(),
+        }
+    }
+}
+
+/// Builder of [`TlsConfig`]
+pub struct TlsConfigBuilder {
+    config: TlsConfig,
+}
+
+impl TlsConfigBuilder {
+    /// The provider to use.
+    ///
+    /// Defaults to [`TlsProvider::Rustls`].
+    pub fn provider(mut self, v: TlsProvider) -> Self {
+        self.config.provider = v;
+        self
+    }
+
+    /// Client certificate chain with corresponding private key.
+    ///
+    /// Defaults to `None`.
+    pub fn client_cert(mut self, v: Option<ClientCert>) -> Self {
+        self.config.client_cert = v;
+        self
+    }
+
+    /// The set of trusted root certificates to use to validate server certificates.
+    ///
+    /// Defaults to `PlatformVerifier` to use the platform default root certs.
+    pub fn root_certs(mut self, v: RootCerts) -> Self {
+        self.config.root_certs = v;
+        self
+    }
+
+    /// Whether to send SNI (Server Name Indication) to the remote server.
+    ///
+    /// This is used by the server to determine which domain/certificate we are connecting
+    /// to for servers where multiple domains/sites are hosted on the same IP.
+    ///
+    /// Defaults to `true`.
+    pub fn use_sni(mut self, v: bool) -> Self {
+        self.config.use_sni = v;
+        self
+    }
+
+    /// **WARNING** Disable all server certificate verification.
+    ///
+    /// This breaks encryption and leaks secrets. Must never be enabled for code where
+    /// any level of security is required.
+    pub fn disable_verification(mut self, v: bool) -> Self {
+        self.config.disable_verification = v;
+        self
+    }
+
+    /// Finalize the config
+    pub fn build(self) -> TlsConfig {
+        self.config
+    }
 }
 
 /// A client certificate.
@@ -164,8 +217,6 @@ impl Default for TlsConfig {
             root_certs: RootCerts::PlatformVerifier,
             use_sni: true,
             disable_verification: false,
-
-            _must_use_default: private::Private,
         }
     }
 }

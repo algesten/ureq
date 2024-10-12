@@ -1,13 +1,14 @@
 use std::fmt;
 use std::sync::Arc;
 
+use crate::config::Timeouts;
 use crate::transport::time::{Duration, Instant};
 use crate::util::ArrayVec;
-use crate::Timeouts;
 
 /// The various timeouts.
 ///
-/// Each enum corresponds to a value in [`Config::timeouts`][crate::Config::timeouts].
+/// Each enum corresponds to a value in
+/// [`ConfigBuilder::timeout_xxx`][crate::config::ConfigBuilder::timeout_global].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Timeout {

@@ -26,9 +26,10 @@ use std::fmt::Debug;
 use http::uri::Scheme;
 use http::Uri;
 
+use crate::config::Config;
 use crate::proxy::Proto;
 use crate::resolver::{ResolvedSocketAddrs, Resolver};
-use crate::{Config, Error};
+use crate::Error;
 
 pub use self::tcp::TcpConnector;
 use self::time::Instant;

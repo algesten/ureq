@@ -10,13 +10,13 @@ use http::uri::Scheme;
 use http::{HeaderValue, Request, Response, Uri};
 
 use crate::body::ResponseInfo;
-use crate::config::RequestLevelConfig;
+use crate::config::{Config, RequestLevelConfig};
 use crate::pool::Connection;
 use crate::timings::{CallTimings, CurrentTime};
 use crate::transport::time::{Duration, Instant};
 use crate::transport::ConnectionDetails;
 use crate::util::{DebugRequest, DebugResponse, DebugUri, HeaderMapExt, UriExt};
-use crate::{Agent, Body, Config, Error, SendBody, Timeout};
+use crate::{Agent, Body, Error, SendBody, Timeout};
 
 type Flow<T> = hoot::client::flow::Flow<(), T>;
 
@@ -262,7 +262,7 @@ fn add_headers(
     if !has_header_ua {
         // unwrap is ok because a user might override the agent, and if they
         // set bad values, it's not really a big problem.
-        let value = HeaderValue::try_from(config.user_agent()).unwrap();
+        let value = HeaderValue::try_from(config.get_user_agent()).unwrap();
         flow.header("user-agent", value)?;
     }
 

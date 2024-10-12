@@ -5,11 +5,12 @@ use std::sync::{Arc, Mutex, Weak};
 use http::uri::{Authority, Scheme};
 use http::Uri;
 
+use crate::config::Config;
 use crate::proxy::Proxy;
 use crate::transport::time::{Duration, Instant};
 use crate::transport::{Buffers, ConnectionDetails, Connector, NextTimeout, Transport};
 use crate::util::DebugAuthority;
-use crate::{Config, Error};
+use crate::Error;
 
 pub(crate) struct ConnectionPool {
     connector: Box<dyn Connector>,

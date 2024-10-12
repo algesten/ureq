@@ -215,7 +215,7 @@ impl Connector for ConnectProxyConnector {
 
             write!(w, "CONNECT {}:{} HTTP/1.1\r\n", host, port)?;
             write!(w, "Host: {}:{}\r\n", host, port)?;
-            write!(w, "User-Agent: {}\r\n", details.config.user_agent())?;
+            write!(w, "User-Agent: {}\r\n", details.config.get_user_agent())?;
             write!(w, "Proxy-Connection: Keep-Alive\r\n")?;
 
             let use_creds = proxy.username().is_some() || proxy.password().is_some();

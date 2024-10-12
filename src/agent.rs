@@ -5,13 +5,13 @@ use std::sync::Arc;
 use http::{Method, Request, Response, Uri};
 
 use crate::body::Body;
-use crate::config::RequestLevelConfig;
+use crate::config::{AgentScope, Config, ConfigBuilder, HttpCrateScope, RequestLevelConfig};
 use crate::middleware::MiddlewareNext;
 use crate::pool::ConnectionPool;
 use crate::resolver::{DefaultResolver, Resolver};
 use crate::send_body::AsSendBody;
 use crate::transport::{Connector, DefaultConnector};
-use crate::{Config, Error, RequestBuilder, SendBody};
+use crate::{Error, RequestBuilder, SendBody};
 use crate::{WithBody, WithoutBody};
 
 /// Agents keep state between requests.
@@ -110,6 +110,13 @@ impl Agent {
         )
     }
 
+    /// Shortcut to reach a [`ConfigBuilder`]
+    ///
+    /// This is the same as doing [`Config::builder()`].
+    pub fn config_builder() -> ConfigBuilder<AgentScope> {
+        Config::builder()
+    }
+
     /// Creates an agent with a bespoke transport and resolver.
     ///
     /// _This is low level API that isn't for regular use of ureq._
@@ -201,20 +208,17 @@ impl Agent {
     /// library does not currently detect this situation, but it is
     /// not considered a breaking change if this is enforced in
     /// the future.
-    pub fn configure_request<'a>(
+    pub fn configure_request<S: AsSendBody>(
         &self,
-        request: &'a mut Request<impl AsSendBody + 'static>,
-    ) -> &'a mut Config {
+        mut request: Request<S>,
+    ) -> ConfigBuilder<HttpCrateScope<S>> {
         let exts = request.extensions_mut();
 
         if exts.get::<RequestLevelConfig>().is_none() {
             exts.insert(self.new_request_level_config());
         }
 
-        // Unwrap is OK because of above check
-        let req_level: &mut RequestLevelConfig = exts.get_mut().unwrap();
-
-        &mut req_level.0
+        ConfigBuilder(HttpCrateScope(request))
     }
 
     pub(crate) fn new_request_level_config(&self) -> RequestLevelConfig {
