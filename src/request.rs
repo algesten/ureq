@@ -284,6 +284,23 @@ impl RequestBuilder<WithBody> {
         do_call(self.agent, request, self.query_extra, data_ref.as_body())
     }
 
+    /// Send an empty body.
+    ///
+    /// The method is POST, PUT or PATCH, which normally has a body. Using
+    /// this function makes it explicit you want to send an empty body despite
+    /// the method.
+    ///
+    /// This is equivalent to `.send(&[])`.
+    ///
+    /// ```
+    /// let res = ureq::post("http://httpbin.org/post")
+    ///     .send_empty()?;
+    /// # Ok::<_, ureq::Error>(())
+    /// ```
+    pub fn send_empty(self) -> Result<Response<Body>, Error> {
+        self.send(&[])
+    }
+
     /// Send body data as JSON.
     ///
     /// Requires the **json** feature.
