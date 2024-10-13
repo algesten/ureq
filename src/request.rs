@@ -60,7 +60,7 @@ impl<Any> RequestBuilder<Any> {
         self
     }
 
-    /// Add a query paramter to the URL.
+    /// Add a query parameter to the URL.
     ///
     /// Always appends a new parameter, also when using the name of
     /// an already existing one.
@@ -78,6 +78,34 @@ impl<Any> RequestBuilder<Any> {
     {
         self.query_extra
             .push(QueryParam::new_key_value(key.as_ref(), value.as_ref()));
+        self
+    }
+
+    /// Set multi query parameters.
+    ///
+    /// For example, to set `?format=json&dest=/login`
+    ///
+    /// ```
+    /// let query = vec![
+    ///     ("format", "json"),
+    ///     ("dest", "/login"),
+    /// ];
+    ///
+    /// let response = ureq::get("http://httpbin.org/get")
+    ///    .query_pairs(query)
+    ///    .call()?;
+    /// # Ok::<_, ureq::Error>(())
+    /// ```
+    pub fn query_pairs<I, K, V>(mut self, iter: I) -> Self
+    where
+        I: IntoIterator<Item = (K, V)>,
+        K: AsRef<str>,
+        V: AsRef<str>,
+    {
+        self.query_extra.extend(
+            iter.into_iter()
+                .map(|(k, v)| QueryParam::new_key_value(k.as_ref(), v.as_ref())),
+        );
         self
     }
 
