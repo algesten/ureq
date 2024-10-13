@@ -2,8 +2,11 @@ use std::convert::TryFrom;
 use std::fmt;
 use std::io::{self, ErrorKind};
 
+use http::header::{ACCEPT, ACCEPT_CHARSET, ACCEPT_ENCODING};
+use http::header::{CONNECTION, CONTENT_ENCODING, CONTENT_LENGTH, CONTENT_TYPE};
+use http::header::{DATE, HOST, LOCATION, SERVER, TRANSFER_ENCODING, USER_AGENT};
 use http::uri::{Authority, Scheme};
-use http::{HeaderMap, HeaderValue, Method, Response, Uri, Version};
+use http::{HeaderMap, HeaderName, HeaderValue, Method, Response, Uri, Version};
 
 use crate::proxy::Proto;
 use crate::Error;
@@ -179,20 +182,20 @@ impl<'a, B> fmt::Debug for DebugResponse<'a, B> {
 
 pub(crate) struct DebugHeaders<'a>(pub &'a HeaderMap);
 
-const NON_SENSITIVE_HEADERS: &[&str] = &[
-    "date",
-    "content-type",
-    "content-length",
-    "transfer-encoding",
-    "connection",
-    "location",
-    "content-encoding",
-    "host",
-    "accept",
-    "accept-encoding",
-    "accept-charset",
-    "server",
-    "user-agent",
+const NON_SENSITIVE_HEADERS: &[HeaderName] = &[
+    DATE,
+    CONTENT_TYPE,
+    CONTENT_LENGTH,
+    TRANSFER_ENCODING,
+    CONNECTION,
+    LOCATION,
+    CONTENT_ENCODING,
+    HOST,
+    ACCEPT,
+    ACCEPT_ENCODING,
+    ACCEPT_CHARSET,
+    SERVER,
+    USER_AGENT,
 ];
 
 impl<'a> fmt::Debug for DebugHeaders<'a> {
@@ -201,7 +204,7 @@ impl<'a> fmt::Debug for DebugHeaders<'a> {
         debug.entries(
             self.0
                 .iter()
-                .filter(|(name, _)| NON_SENSITIVE_HEADERS.contains(&name.as_str())),
+                .filter(|(name, _)| NON_SENSITIVE_HEADERS.contains(name)),
         );
 
         let redact_count = self
@@ -209,7 +212,7 @@ impl<'a> fmt::Debug for DebugHeaders<'a> {
             .iter()
             .filter(|(name, _)| {
                 // println!("{}", name);
-                !NON_SENSITIVE_HEADERS.contains(&name.as_str())
+                !NON_SENSITIVE_HEADERS.contains(name)
             })
             .count();
 
