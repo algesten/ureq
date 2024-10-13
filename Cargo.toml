@@ -37,7 +37,7 @@ _test = []
 
 [dependencies]
 base64 = "0.22.1"
-hoot = "0.2.4"
+hoot = "0.2.5"
 # hoot = { path = "../hoot/hoot" }
 http = "1.1.0"
 log = "0.4.22"

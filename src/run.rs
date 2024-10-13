@@ -44,6 +44,10 @@ pub(crate) fn run(
 
     let mut flow = Flow::new(request)?;
 
+    if config.force_send_body {
+        flow.send_body_despite_method();
+    }
+
     let (response, handler) = loop {
         let timeout = timings.next_timeout(Timeout::Global);
         let timed_out = match timeout.after {

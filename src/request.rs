@@ -227,6 +227,38 @@ impl RequestBuilder<WithoutBody> {
         let request = self.builder.body(())?;
         do_call(self.agent, request, self.query_extra, SendBody::none())
     }
+
+    /// Force sending a body.
+    ///
+    /// This is an escape hatch to interact with broken services.
+    ///
+    /// According to the spec, methods such as GET, DELETE and TRACE should
+    /// not have a body. Despite that there are broken API services and
+    /// servers that use it.
+    ///
+    /// Example using DELETE while sending a body.
+    ///
+    /// ```
+    /// let res = ureq::delete("http://httpbin.org/delete")
+    ///     // this "unlocks" send() below
+    ///     .force_send_body()
+    ///     .send("DELETE with body is not correct")?;
+    /// # Ok::<_, ureq::Error>(())
+    /// ```
+    pub fn force_send_body(mut self) -> RequestBuilder<WithBody> {
+        // This is how we communicate to run() that we want to disable
+        // the method-body-compliance check.
+        let config = self.request_level_config();
+        config.force_send_body = true;
+
+        RequestBuilder {
+            agent: self.agent,
+            builder: self.builder,
+            query_extra: self.query_extra,
+            dummy_config: None,
+            _ph: PhantomData,
+        }
+    }
 }
 
 impl RequestBuilder<WithBody> {
