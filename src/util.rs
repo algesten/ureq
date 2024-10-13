@@ -2,10 +2,9 @@ use std::convert::TryFrom;
 use std::fmt;
 use std::io::{self, ErrorKind};
 
-use http::header::{
-    ACCEPT, ACCEPT_CHARSET, ACCEPT_ENCODING, CONNECTION, CONTENT_ENCODING, CONTENT_LENGTH,
-    CONTENT_TYPE, DATE, HOST, LOCATION, SERVER, TRANSFER_ENCODING, USER_AGENT,
-};
+use http::header::{ACCEPT, ACCEPT_CHARSET, ACCEPT_ENCODING};
+use http::header::{CONNECTION, CONTENT_ENCODING, CONTENT_LENGTH, CONTENT_TYPE};
+use http::header::{DATE, HOST, LOCATION, SERVER, TRANSFER_ENCODING, USER_AGENT};
 use http::uri::{Authority, Scheme};
 use http::{HeaderMap, HeaderName, HeaderValue, Method, Response, Uri, Version};
 
