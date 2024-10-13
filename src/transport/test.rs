@@ -240,6 +240,13 @@ fn setup_default_handlers(handlers: &mut Vec<TestHandler>) {
     );
 
     maybe_add(
+        TestHandler::new("/delete", |_uri, _req, w| {
+            write!(w, "HTTP/1.1 200 OK\r\n\r\ndeleted\n")
+        }),
+        handlers,
+    );
+
+    maybe_add(
         TestHandler::new("/robots.txt", |_uri, _req, w| {
             write!(
                 w,
