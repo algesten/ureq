@@ -21,16 +21,15 @@
 //! Ureq's first priority is being easy for you to use. It's great for
 //! anyone who wants a low-overhead HTTP client that just gets the job done. Works
 //! very well with HTTP APIs. Its features include cookies, JSON, HTTP proxies,
-//! HTTPS, interoperability with the `http` crate, and charset decoding.
+//! HTTPS, charset decoding, and is based on the API of the `http` crate.
 //!
 //! Ureq is in pure Rust for safety and ease of understanding. It avoids using
-//! `unsafe` directly. It [uses blocking I/O][blocking] instead of async I/O, because that keeps
+//! `unsafe` directly. It uses blocking I/O instead of async I/O, because that keeps
 //! the API simple and keeps dependencies to a minimum. For TLS, ureq uses
-//! [rustls or native-tls](#https--tls--ssl).
+//! rustls or native-tls.
 //!
 //! See the [changelog] for details of recent releases.
 //!
-//! [blocking]: #blocking-io-for-simplicity
 //! [changelog]: https://github.com/algesten/ureq/blob/main/CHANGELOG.md
 //!
 //! # Usage
@@ -141,22 +140,22 @@
 //! The default enabled features are: **rustls**, **gzip** and **json**.
 //!
 //! * **rustls** enabled the rustls TLS implementation. This is the default for the the crate level
-//!   convenience calls (`ureq::get` etc).
+//!   convenience calls (`ureq::get` etc)
 //! * **native-tls** enables the native tls backend for TLS. Due to the risk of diamond dependencies
 //!   accidentally switching on an unwanted TLS implementation, `native-tls` is never picked up as
 //!   a default or used by the crate level convenience calls (`ureq::get` etc) – it must be configured
-//!   on the agent.
+//!   on the agent
 //! * **platform-verifier** enables verifying the server certificates using a method native to the
-//!   platform ureq is executing on. See [rustls-platform-verifier] crate.
+//!   platform ureq is executing on. See [rustls-platform-verifier] crate
 //! * **socks-proxy** enables proxy config using the `socks4://`, `socks4a://`, `socks5://`
-//!    and `socks://` (equal to `socks5://`) prefix.
-//! * **cookies** enables cookies.
-//! * **gzip** enables requests of gzip-compressed responses and decompresses them.
-//! * **brotli** enables requests brotli-compressed responses and decompresses them.
+//!    and `socks://` (equal to `socks5://`) prefix
+//! * **cookies** enables cookies
+//! * **gzip** enables requests of gzip-compressed responses and decompresses them
+//! * **brotli** enables requests brotli-compressed responses and decompresses them
 //! * **charset** enables interpreting the charset part of the Content-Type header
 //!    (e.g.  `Content-Type: text/plain; charset=iso-8859-1`). Without this, the
-//!    library defaults to Rust's built in `utf-8`.
-//! * **json** enables JSON sending and receiving via serde_json.
+//!    library defaults to Rust's built in `utf-8`
+//! * **json** enables JSON sending and receiving via serde_json
 //!
 //! # TLS (https)
 //!
@@ -315,6 +314,11 @@
 //!
 //! * `Response<Body>`
 //!
+//! ## Sending form data
+//!
+//! [`RequestBuilder::send_form()`] provides a way to send `application/x-www-form-urlencoded`
+//! encoded data. The key/values provided will be URL encoded.
+//!
 //! ## Overriding
 //!
 //! If you set your own Content-Length or Transfer-Encoding header before
@@ -330,7 +334,7 @@
 //!
 //! # Character encoding
 //!
-//! By enabling the **charset** feature, the library supports sending/receiving other
+//! By enabling the **charset** feature, the library supports receiving other
 //! character sets than `utf-8`.
 //!
 //! For [`Body::read_to_string()`] we read the header like:
@@ -340,9 +344,7 @@
 //! and if it contains a charset specification, we try to decode the body using that
 //! encoding. In the absence of, or failing to interpret the charset, we fall back on `utf-8`.
 //!
-//! Similarly when using [`request.send()`][RequestBuilder::send()] with a text body,
-//! we first check if the user has set a `; charset=<whatwg charset>` and attempt
-//! to encode the request body using that.
+//! Currently ureq does not provide a way to encode when sending request bodies.
 //!
 //! ## Lossy utf-8
 //!
