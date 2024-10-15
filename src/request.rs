@@ -7,9 +7,11 @@ use http::{HeaderName, HeaderValue, Method, Request, Response, Uri, Version};
 
 use crate::body::Body;
 use crate::config::{Config, ConfigBuilder, RequestLevelConfig, RequestScope};
+use crate::query::url_enc;
 use crate::query::{parse_query_params, QueryParam};
 use crate::send_body::AsSendBody;
 use crate::util::private::Private;
+use crate::util::HeaderMapExt;
 use crate::util::UriExt;
 use crate::{Agent, Error, SendBody};
 
@@ -321,6 +323,55 @@ impl RequestBuilder<WithBody> {
     /// ```
     pub fn send_empty(self) -> Result<Response<Body>, Error> {
         self.send(&[])
+    }
+
+    /// Send form encoded data.
+    ///
+    /// Constructs a [form submission] with the content-type header
+    /// `application/x-www-form-urlencoded`. Keys and values will be URL encoded.
+    ///
+    /// ```
+    /// let form = [
+    ///     ("name", "martin"),
+    ///     ("favorite_bird", "blue-footed booby"),
+    /// ];
+    ///
+    /// let response = ureq::post("http://httpbin.org/post")
+    ///    .send_form(form)?;
+    /// # Ok::<_, ureq::Error>(())
+    /// ```
+    ///
+    /// [form submission]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods/POST#url-encoded_form_submission
+    pub fn send_form<I, K, V>(self, iter: I) -> Result<Response<Body>, Error>
+    where
+        I: IntoIterator<Item = (K, V)>,
+        K: AsRef<str>,
+        V: AsRef<str>,
+    {
+        let iter = iter.into_iter();
+
+        // TODO(martin): can we calculate a size hint for capacity here?
+        let mut body = String::new();
+
+        for (k, v) in iter {
+            if !body.is_empty() {
+                body.push('&');
+            }
+            body.push_str(&url_enc(k.as_ref()));
+            body.push('=');
+            body.push_str(&url_enc(v.as_ref()));
+        }
+
+        let mut request = self.builder.body(())?;
+
+        if !request.headers().has_content_type() {
+            request.headers_mut().append(
+                http::header::CONTENT_TYPE,
+                HeaderValue::from_static("application/x-www-form-urlencoded"),
+            );
+        }
+
+        do_call(self.agent, request, self.query_extra, body.as_body())
     }
 
     /// Send body data as JSON.
