@@ -1,5 +1,21 @@
 # Unreleased
 
+# 3.0.0-rc2
+  * Remove pub-field config structs in favor of builders (#848)
+  * BodyBuilder to create a response Body for test/middleware (#847)
+  * RequestBuilder::send_empty() convenience fn (#846)
+  * Rename BodyWithConfig::into_reader -> reader (#845)
+  * Escape hatch to send body for any method (#857)
+  * Reintrodice RequestBuilder::query (#843)
+  * Reintroduce RequestBuilder::query_pairs (#856)
+  * Reintroduce ResponseBuilder::send_form helper (#859)
+  * (internal) Use HeaderName for non-sensitive headers (#855)
+  * Fix broken build with rustls (#832)
+  * Reduce dependency count, platform-verifier feature (#833, #818)
+
+# 3.0.0-rc1
+  * Ground up rewrite based on the http crate API.
+
 # 2.10.1
   * default `ureq` Rustls tls config updated to avoid panic for applications
     that activate the default Rustls `aws-lc-rs` feature without setting
