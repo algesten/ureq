@@ -326,6 +326,7 @@ pub(crate) trait HeaderMapExt {
         self.is_chunked() || self.content_length().is_some()
     }
     fn has_accept(&self) -> bool;
+    fn has_content_type(&self) -> bool;
 }
 
 impl HeaderMapExt for HeaderMap {
@@ -356,5 +357,9 @@ impl HeaderMapExt for HeaderMap {
 
     fn has_accept(&self) -> bool {
         self.contains_key("accept")
+    }
+
+    fn has_content_type(&self) -> bool {
+        self.contains_key("content-type")
     }
 }
