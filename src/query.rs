@@ -17,13 +17,13 @@ enum Source<'a> {
     Owned(String),
 }
 
-fn enc(i: &str) -> Cow<str> {
+pub fn url_enc(i: &str) -> Cow<str> {
     utf8_percent_encode(i, percent_encoding::NON_ALPHANUMERIC).into()
 }
 
 impl<'a> QueryParam<'a> {
     pub fn new_key_value(param: &str, value: &str) -> QueryParam<'static> {
-        let s = format!("{}={}", enc(param), enc(value));
+        let s = format!("{}={}", url_enc(param), url_enc(value));
         QueryParam {
             source: Source::Owned(s),
         }
