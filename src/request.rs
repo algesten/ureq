@@ -379,7 +379,8 @@ impl RequestBuilder<WithBody> {
     /// Requires the **json** feature.
     ///
     /// The data typically derives [`Serialize`](serde::Serialize) and is converted
-    /// to a string before sending (does allocate).
+    /// to a string before sending (does allocate). Will set the content-type header
+    /// `application/json`.
     ///
     /// ```
     /// use serde::Serialize;
@@ -399,8 +400,16 @@ impl RequestBuilder<WithBody> {
     /// ```
     #[cfg(feature = "json")]
     pub fn send_json(self, data: impl serde::ser::Serialize) -> Result<Response<Body>, Error> {
-        let request = self.builder.body(())?;
+        let mut request = self.builder.body(())?;
         let body = SendBody::from_json(&data)?;
+
+        if !request.headers().has_content_type() {
+            request.headers_mut().append(
+                http::header::CONTENT_TYPE,
+                HeaderValue::from_static("application/json; charset=utf-8"),
+            );
+        }
+
         do_call(self.agent, request, self.query_extra, body)
     }
 }
