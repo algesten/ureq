@@ -687,6 +687,45 @@ pub(crate) mod test {
         assert_eq!(err.to_string(), "http: invalid uri character");
     }
 
+    #[test]
+    #[cfg(all(feature = "cookies", feature = "_test"))]
+    fn store_response_cookies() {
+        let agent = Agent::new_with_defaults();
+        let _ = agent.get("https://www.google.com").call().unwrap();
+
+        let mut all: Vec<_> = agent
+            .cookie_jar_lock()
+            .iter()
+            .map(|c| c.name().to_string())
+            .collect();
+
+        all.sort();
+
+        assert_eq!(all, ["AEC", "__Secure-ENID"])
+    }
+
+    #[test]
+    #[cfg(all(feature = "cookies", feature = "_test"))]
+    fn send_request_cookies() {
+        init_test_log();
+
+        let agent = Agent::new_with_defaults();
+        let uri = Uri::from_static("http://cookie.test/cookie-test");
+        let uri2 = Uri::from_static("http://cookie2.test/cookie-test");
+
+        let mut jar = agent.cookie_jar_lock();
+        jar.insert(Cookie::parse("a=1", &uri).unwrap(), &uri)
+            .unwrap();
+        jar.insert(Cookie::parse("b=2", &uri).unwrap(), &uri)
+            .unwrap();
+        jar.insert(Cookie::parse("c=3", &uri2).unwrap(), &uri2)
+            .unwrap();
+
+        jar.release();
+
+        let _ = agent.get("http://cookie.test/cookie-test").call().unwrap();
+    }
+
     // This doesn't need to run, just compile.
     fn _ensure_send_sync() {
         fn is_send(_t: impl Send) {}

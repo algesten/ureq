@@ -133,9 +133,11 @@ impl Agent {
         }
     }
 
-    /// Access the cookie jar.
+    /// Access the shared cookie jar.
     ///
-    /// Used to persist and manipulate the cookies.
+    /// Used to persist and manipulate the cookies. The jar is shared between
+    /// all clones of the same [`Agent`], meaning you must drop the CookieJar
+    /// before using the agent, or end up with a deadlock.
     ///
     /// ```no_run
     /// use std::io::Write;
@@ -148,11 +150,17 @@ impl Agent {
     ///
     /// // Saves (persistent) cookies
     /// let mut file = File::create("cookies.json")?;
-    /// agent.cookie_jar().save_json(&mut file)?;
+    /// let jar = agent.cookie_jar_lock();
+    ///
+    /// jar.save_json(&mut file)?;
+    ///
+    /// // Release the cookie jar to use agents again.
+    /// jar.release();
+    ///
     /// # Ok::<_, ureq::Error>(())
     /// ```
     #[cfg(feature = "cookies")]
-    pub fn cookie_jar(&self) -> crate::cookies::CookieJar<'_> {
+    pub fn cookie_jar_lock(&self) -> crate::cookies::CookieJar<'_> {
         self.jar.lock()
     }
 

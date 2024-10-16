@@ -149,6 +149,20 @@ fn flow_run(
 
     info!("{:?}", DebugResponse(&response));
 
+    #[cfg(feature = "cookies")]
+    {
+        let mut jar = agent.cookie_jar_lock();
+
+        let iter = response
+            .headers()
+            .get_all(http::header::SET_COOKIE)
+            .iter()
+            .filter_map(|h| h.to_str().ok())
+            .filter_map(|s| crate::Cookie::parse(s, &uri).ok());
+
+        jar.store_response_cookies(iter, &uri);
+    }
+
     let ret = match response_result {
         RecvResponseResult::RecvBody(flow) => {
             let timings = mem::take(timings);
