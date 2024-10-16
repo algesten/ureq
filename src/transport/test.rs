@@ -143,6 +143,14 @@ fn setup_default_handlers(handlers: &mut Vec<TestHandler>) {
                 w,
                 "HTTP/1.1 200 OK\r\n\
                 Content-Type: text/html;charset=ISO-8859-1\r\n\
+                set-cookie: AEC=AVYB7cpadYFS8ZgaioQ17NnxHl1QcSQ_2aH2WEIg1KGDXD5kjk2HhpGVhfk; \
+                    expires=Mon, 14-Apr-2025 17:23:39 GMT; path=/; domain=.google.com; \
+                    Secure; HttpOnly; SameSite=lax\r\n\
+                set-cookie: __Secure-ENID=23.SE=WaDe-mOBoV2nk-IwHr73boNt6dYcjzQh1X_k8zv2UmUXBL\
+                    m80a3pzLJyx1N1NOqBxDDOR8OJyvuNYw5phFf0VnbqzVtcKPijo2FY8O_vymzyc7x2VwFhGlgU\
+                    WXSWYinjWL7Zvz_EOcA4kfnEXweW5ZDzLrvaLuBIrz5CA_-454AMIXpDiZAVPChCawbkzMptAr\
+                    lMTikkon2EQVXsicqq1XnrMEMPZR5Ld2JC6lpBM8A; expires=Sun, 16-Nov-2025 09:41:57 \
+                    GMT; path=/; domain=.google.com; Secure; HttpOnly; SameSite=lax\r\n\
                 \r\n\
                 ureq test server here"
             )
@@ -286,6 +294,30 @@ fn setup_default_handlers(handlers: &mut Vec<TestHandler>) {
                 \r\n\
                 You've been redirected\
                 ",
+            )
+        }),
+        handlers,
+    );
+
+    maybe_add(
+        TestHandler::new("/cookie-test", |_uri, req, w| {
+            let mut all: Vec<_> = req
+                .headers()
+                .get_all("cookie")
+                .iter()
+                .map(|c| c.to_str().unwrap())
+                .collect();
+
+            all.sort();
+
+            assert_eq!(all, ["a=1;b=2"]);
+
+            write!(
+                w,
+                "HTTP/1.1 200 OK\r\n\
+                content-length: 2\r\n\
+                \r\n\
+                ok",
             )
         }),
         handlers,

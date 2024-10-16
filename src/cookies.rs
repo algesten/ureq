@@ -16,7 +16,7 @@ pub(crate) struct SharedCookieJar {
 
 /// Collection of cookies.
 ///
-/// The jar is accessed using [`Agent::cookie_jar`][crate::Agent::cookie_jar].
+/// The jar is accessed using [`Agent::cookie_jar_lock`][crate::Agent::cookie_jar_lock].
 /// It can be saved and loaded.
 pub struct CookieJar<'a>(MutexGuard<'a, CookieStore>);
 
@@ -43,6 +43,15 @@ pub struct Cookie<'a>(CookieInner<'a>);
 enum CookieInner<'a> {
     Borrowed(&'a cookie_store::Cookie<'a>),
     Owned(cookie_store::Cookie<'a>),
+}
+
+impl<'a> CookieInner<'a> {
+    fn into_static(self) -> cookie_store::Cookie<'static> {
+        match self {
+            CookieInner::Borrowed(v) => v.clone().into_owned(),
+            CookieInner::Owned(v) => v.into_owned(),
+        }
+    }
 }
 
 impl<'a> Cookie<'a> {
@@ -139,6 +148,19 @@ impl<'a> CookieJar<'a> {
         *self.0 = store;
         Ok(())
     }
+
+    pub(crate) fn store_response_cookies<'b>(
+        &mut self,
+        iter: impl Iterator<Item = Cookie<'b>>,
+        uri: &Uri,
+    ) {
+        let url = uri.try_into_url().expect("uri to be a url");
+        let raw_cookies = iter.map(|c| c.0.into_static().into());
+        self.0.store_response_cookies(raw_cookies, &url);
+    }
+
+    /// Release the cookie jar.
+    pub fn release(self) {}
 }
 
 impl SharedCookieJar {
