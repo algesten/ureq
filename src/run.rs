@@ -7,7 +7,7 @@ use hoot::client::flow::state::{Prepare, SendBody as SendBodyState};
 use hoot::client::flow::{Await100Result, RecvBodyResult, RecvResponseResult, SendRequestResult};
 use hoot::BodyMode;
 use http::uri::Scheme;
-use http::{HeaderValue, Request, Response, Uri};
+use http::{header, HeaderValue, Request, Response, Uri};
 
 use crate::body::ResponseInfo;
 use crate::config::{Config, RequestLevelConfig};
@@ -239,7 +239,7 @@ fn add_headers(
         if !value.is_empty() {
             let value = HeaderValue::from_str(&value)
                 .map_err(|_| Error::CookieValue("Cookie value is an invalid http-header"))?;
-            flow.header("cookie", value)?;
+            flow.header(header::COOKIE, value)?;
         }
     }
 
@@ -259,7 +259,7 @@ fn add_headers(
         // unwrap is ok because above ACCEPTS will produce a valid value
         let value = HeaderValue::from_str(&ACCEPTS).unwrap();
         if !has_header_accept_enc {
-            flow.header("accept-encoding", value)?;
+            flow.header(header::ACCEPT_ENCODING, value)?;
         }
     }
 
@@ -267,11 +267,11 @@ fn add_headers(
         match send_body_mode {
             BodyMode::LengthDelimited(v) => {
                 let value = HeaderValue::from(v);
-                flow.header("content-length", value)?;
+                flow.header(header::CONTENT_LENGTH, value)?;
             }
             BodyMode::Chunked => {
                 let value = HeaderValue::from_static("chunked");
-                flow.header("transfer-encoding", value)?;
+                flow.header(header::TRANSFER_ENCODING, value)?;
             }
             _ => {}
         }
@@ -281,12 +281,12 @@ fn add_headers(
         // unwrap is ok because a user might override the agent, and if they
         // set bad values, it's not really a big problem.
         let value = HeaderValue::try_from(config.get_user_agent()).unwrap();
-        flow.header("user-agent", value)?;
+        flow.header(header::USER_AGENT, value)?;
     }
 
     if !has_header_accept {
         let value = HeaderValue::from_static("*/*");
-        flow.header("accept", value)?;
+        flow.header(header::ACCEPT, value)?;
     }
 
     Ok(())
