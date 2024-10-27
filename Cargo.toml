@@ -29,6 +29,7 @@ gzip = ["dep:flate2"]
 brotli = ["dep:brotli-decompressor"]
 charset = ["dep:encoding_rs"]
 json = ["dep:serde", "dep:serde_json"]
+vendored = ["native-tls?/vendored"]
 
 # Underscore prefixed features are internal
 _url = ["dep:url"]
