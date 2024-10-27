@@ -360,7 +360,7 @@ fn await_100(
         let timeout = timings.next_timeout(Timeout::Await100);
 
         if timeout.after.is_zero() {
-            // Stop waiting for 100-continue.a
+            // Stop waiting for 100-continue.
             break;
         }
 
@@ -372,7 +372,10 @@ fn await_100(
                 }
 
                 let amount = flow.try_read_100(input)?;
-                connection.consume_input(amount);
+                if amount > 0 {
+                    connection.consume_input(amount);
+                    break;
+                }
             }
             Err(Error::Timeout(_)) => {
                 // If we get a timeout while waiting for input, that is not an error,
