@@ -156,6 +156,7 @@
 //!    (e.g.  `Content-Type: text/plain; charset=iso-8859-1`). Without this, the
 //!    library defaults to Rust's built in `utf-8`
 //! * **json** enables JSON sending and receiving via serde_json
+//! * **vendored** compiles and statically links to a copy of non-Rust vendors (e.g. OpenSSL from `native-tls`)
 //!
 //! # TLS (https)
 //!
