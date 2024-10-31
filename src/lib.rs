@@ -634,6 +634,35 @@ pub(crate) mod test {
     }
 
     #[test]
+    #[cfg(feature = "rustls")]
+    fn connect_https_google_noverif() {
+        init_test_log();
+        use crate::tls::{TlsConfig, TlsProvider};
+
+        let agent: Agent = Config {
+            tls_config: TlsConfig {
+                provider: TlsProvider::Rustls,
+                disable_verification: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+        .into();
+
+        let res = agent.get("https://www.google.com/").call().unwrap();
+        assert_eq!(
+            "text/html;charset=ISO-8859-1",
+            res.headers()
+                .get("content-type")
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .replace("; ", ";")
+        );
+        assert_eq!(res.body().mime_type(), Some("text/html"));
+    }
+
+    #[test]
     fn simple_put_content_len() {
         init_test_log();
         let mut res = put("http://httpbin.org/put").send(&[0_u8; 100]).unwrap();
