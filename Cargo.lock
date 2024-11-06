@@ -315,18 +315,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fbf6a919d6cf397374f7dfeeea91d974c7c0a7221d0d0f4f20d859d329e53fcc"
 
 [[package]]
-name = "hoot"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a018c1f2075066355e95ac5ab7909d35a84c9d14d1fae84c4bacdf6dec188d8"
-dependencies = [
- "http",
- "httparse",
- "log",
- "url",
-]
-
-[[package]]
 name = "http"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1018,7 +1006,6 @@ dependencies = [
  "encoding_rs",
  "env_logger",
  "flate2",
- "hoot",
  "http",
  "log",
  "native-tls",
@@ -1031,10 +1018,23 @@ dependencies = [
  "serde",
  "serde_json",
  "socks",
+ "ureq-proto",
  "url",
  "utf-8",
  "webpki-root-certs",
  "webpki-roots",
+]
+
+[[package]]
+name = "ureq-proto"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2334475018d005dc8d946e44cf3200310824943c091cbe5306afadca60ff473c"
+dependencies = [
+ "http",
+ "httparse",
+ "log",
+ "url",
 ]
 
 [[package]]

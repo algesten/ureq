@@ -3,7 +3,7 @@ use std::io;
 use std::sync::Arc;
 
 pub use build::BodyBuilder;
-use hoot::BodyMode;
+use ureq_proto::BodyMode;
 
 use crate::run::BodyHandler;
 use crate::Error;

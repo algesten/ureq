@@ -3,8 +3,8 @@
 use std::fmt;
 use std::time::Duration;
 
-use hoot::client::flow::RedirectAuthHeaders;
 use http::Uri;
+use ureq_proto::client::flow::RedirectAuthHeaders;
 
 use crate::middleware::{Middleware, MiddlewareChain};
 use crate::resolver::IpFamily;
