@@ -1,5 +1,6 @@
 use std::{fmt, io};
 
+use crate::http;
 use crate::Timeout;
 
 /// Errors from ureq.

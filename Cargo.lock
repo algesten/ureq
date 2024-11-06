@@ -1006,7 +1006,6 @@ dependencies = [
  "encoding_rs",
  "env_logger",
  "flate2",
- "http",
  "log",
  "native-tls",
  "once_cell",

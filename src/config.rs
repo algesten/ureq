@@ -6,6 +6,7 @@ use std::time::Duration;
 use http::Uri;
 use ureq_proto::client::flow::RedirectAuthHeaders;
 
+use crate::http;
 use crate::middleware::{Middleware, MiddlewareChain};
 use crate::resolver::IpFamily;
 use crate::{Agent, AsSendBody, Proxy, RequestBuilder};
@@ -68,7 +69,7 @@ use crate::tls::TlsConfig;
 /// This is used when working with the http crate [`http::Request`] type directly.
 ///
 /// ```
-/// use ureq::Agent;
+/// use ureq::{http, Agent};
 ///
 /// let agent: Agent = Agent::config_builder()
 ///     .https_only(false)

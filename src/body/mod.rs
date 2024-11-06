@@ -5,6 +5,7 @@ use std::sync::Arc;
 pub use build::BodyBuilder;
 use ureq_proto::BodyMode;
 
+use crate::http;
 use crate::run::BodyHandler;
 use crate::Error;
 

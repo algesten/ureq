@@ -13,6 +13,7 @@ use ureq_proto::BodyMode;
 
 use crate::body::ResponseInfo;
 use crate::config::{Config, RequestLevelConfig};
+use crate::http;
 use crate::pool::Connection;
 use crate::timings::{CallTimings, CurrentTime};
 use crate::transport::time::{Duration, Instant};

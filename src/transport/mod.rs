@@ -27,6 +27,7 @@ use http::uri::Scheme;
 use http::Uri;
 
 use crate::config::Config;
+use crate::http;
 use crate::proxy::Proto;
 use crate::resolver::{ResolvedSocketAddrs, Resolver};
 use crate::Error;

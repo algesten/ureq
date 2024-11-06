@@ -3,6 +3,7 @@ use std::io::{self, Read, Stdin};
 use std::net::TcpStream;
 
 use crate::body::{Body, BodyReader};
+use crate::http;
 use crate::util::private::Private;
 
 /// Request body for sending data via POST, PUT and PATCH.
