@@ -423,7 +423,7 @@ extern crate log;
 use std::convert::TryFrom;
 
 /// Re-exported http-crate.
-pub use http;
+pub use ureq_proto::http;
 
 pub use body::{Body, BodyBuilder, BodyReader, BodyWithConfig};
 use http::Method;

@@ -6,6 +6,7 @@ use std::sync::{Mutex, MutexGuard};
 use cookie_store::CookieStore;
 use http::Uri;
 
+use crate::http;
 use crate::util::UriExt;
 use crate::Error;
 

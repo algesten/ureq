@@ -14,7 +14,7 @@ use super::{Body, BodyDataSource, ContentEncoding, ResponseInfo};
 ///
 /// ```
 /// use ureq::Body;
-/// use http::Response;
+/// use ureq::http::Response;
 ///
 /// let body = Body::builder()
 ///     .mime_type("text/plain")

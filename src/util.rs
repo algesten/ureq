@@ -8,6 +8,7 @@ use http::header::{DATE, HOST, LOCATION, SERVER, TRANSFER_ENCODING, USER_AGENT};
 use http::uri::{Authority, Scheme};
 use http::{HeaderMap, HeaderName, HeaderValue, Method, Response, Uri, Version};
 
+use crate::http;
 use crate::proxy::Proto;
 use crate::Error;
 

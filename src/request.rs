@@ -7,6 +7,7 @@ use http::{HeaderName, HeaderValue, Method, Request, Response, Uri, Version};
 
 use crate::body::Body;
 use crate::config::{Config, ConfigBuilder, RequestLevelConfig, RequestScope};
+use crate::http;
 use crate::query::url_enc;
 use crate::query::{parse_query_params, QueryParam};
 use crate::send_body::AsSendBody;

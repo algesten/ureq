@@ -6,6 +6,7 @@ use http::uri::{Authority, Scheme};
 use http::Uri;
 
 use crate::config::Config;
+use crate::http;
 use crate::proxy::Proxy;
 use crate::transport::time::{Duration, Instant};
 use crate::transport::{Buffers, ConnectionDetails, Connector, NextTimeout, Transport};

@@ -18,6 +18,7 @@ use http::uri::{Authority, Scheme};
 use http::Uri;
 
 use crate::config::Config;
+use crate::http;
 use crate::transport::NextTimeout;
 use crate::util::{ArrayVec, SchemeExt, UriExt};
 use crate::Error;

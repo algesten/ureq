@@ -110,7 +110,7 @@ impl<'a> PartialEq for QueryParam<'a> {
 mod test {
     use super::*;
 
-    use http::Uri;
+    use crate::http::Uri;
 
     #[test]
     fn query_string_does_not_start_with_question_mark() {

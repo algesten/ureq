@@ -9,6 +9,7 @@ use std::{fmt, io, thread};
 
 use http::{Method, Request, Uri};
 
+use crate::http;
 use crate::transport::time::Duration;
 use crate::Error;
 

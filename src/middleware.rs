@@ -3,6 +3,7 @@
 use std::fmt;
 use std::sync::Arc;
 
+use crate::http;
 use crate::run::run;
 use crate::{Agent, Body, Error, SendBody};
 

@@ -8,6 +8,7 @@ use ureq_proto::parser::try_parse_response;
 
 use http::{StatusCode, Uri};
 
+use crate::http;
 use crate::transport::{ConnectionDetails, Connector, Transport, TransportAdapter};
 use crate::util::{AuthorityExt, DebugUri, SchemeExt, UriExt};
 use crate::Error;

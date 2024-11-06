@@ -6,6 +6,7 @@ use http::{Method, Request, Response, Uri};
 
 use crate::body::Body;
 use crate::config::{AgentScope, Config, ConfigBuilder, HttpCrateScope, RequestLevelConfig};
+use crate::http;
 use crate::middleware::MiddlewareNext;
 use crate::pool::ConnectionPool;
 use crate::resolver::{DefaultResolver, Resolver};
@@ -50,7 +51,7 @@ use crate::{WithBody, WithoutBody};
 /// All request functions in ureq have a signature similar to this:
 ///
 /// ```
-/// # use ureq::{Body, AsSendBody, Error};
+/// # use ureq::{http, Body, AsSendBody, Error};
 /// fn run(request: http::Request<impl AsSendBody>) -> Result<http::Response<Body>, Error> {
 ///     // <something>
 /// # todo!()
@@ -171,7 +172,7 @@ impl Agent {
     /// # Example
     ///
     /// ```
-    /// use ureq::Agent;
+    /// use ureq::{http, Agent};
     ///
     /// let agent: Agent = Agent::new_with_defaults();
     ///
