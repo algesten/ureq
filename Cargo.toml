@@ -38,8 +38,8 @@ _test = []
 
 [dependencies]
 base64 = "0.22.1"
-hoot = "0.2.5"
-# hoot = { path = "../hoot/hoot" }
+ureq-proto = "0.1.0"
+# ureq-proto = { path = "../ureq-proto" }
 http = "1.1.0"
 log = "0.4.22"
 once_cell = "1.19.0"

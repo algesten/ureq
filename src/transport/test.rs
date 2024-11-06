@@ -110,7 +110,8 @@ fn test_run(
 
     let req = loop {
         let input = reader.fill_buf().expect("test fill_buf");
-        let maybe = hoot::parser::try_parse_request::<100>(input).expect("test parse request");
+        let maybe =
+            ureq_proto::parser::try_parse_request::<100>(input).expect("test parse request");
         if let Some((amount, req)) = maybe {
             reader.consume(amount);
             break req;

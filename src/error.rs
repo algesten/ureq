@@ -24,7 +24,7 @@ pub enum Error {
     ///
     /// This can happen if the remote server ends incorrect HTTP data like
     /// missing version or invalid chunked transfer.
-    Protocol(hoot::Error),
+    Protocol(ureq_proto::Error),
 
     /// Error in io such as the TCP socket.
     Io(io::Error),
@@ -227,8 +227,8 @@ impl From<http::Error> for Error {
     }
 }
 
-impl From<hoot::Error> for Error {
-    fn from(value: hoot::Error) -> Self {
+impl From<ureq_proto::Error> for Error {
+    fn from(value: ureq_proto::Error) -> Self {
         Self::Protocol(value)
     }
 }

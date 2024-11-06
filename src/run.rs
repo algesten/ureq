@@ -2,12 +2,14 @@ use std::convert::TryFrom;
 use std::sync::Arc;
 use std::{io, mem};
 
-use hoot::client::flow::state::{Await100, RecvBody, RecvResponse, Redirect, SendRequest};
-use hoot::client::flow::state::{Prepare, SendBody as SendBodyState};
-use hoot::client::flow::{Await100Result, RecvBodyResult, RecvResponseResult, SendRequestResult};
-use hoot::BodyMode;
 use http::uri::Scheme;
 use http::{header, HeaderValue, Request, Response, Uri};
+use ureq_proto::client::flow::state::{Await100, RecvBody, RecvResponse, Redirect, SendRequest};
+use ureq_proto::client::flow::state::{Prepare, SendBody as SendBodyState};
+use ureq_proto::client::flow::{
+    Await100Result, RecvBodyResult, RecvResponseResult, SendRequestResult,
+};
+use ureq_proto::BodyMode;
 
 use crate::body::ResponseInfo;
 use crate::config::{Config, RequestLevelConfig};
@@ -18,7 +20,7 @@ use crate::transport::ConnectionDetails;
 use crate::util::{DebugRequest, DebugResponse, DebugUri, HeaderMapExt, UriExt};
 use crate::{Agent, Body, Error, SendBody, Timeout};
 
-type Flow<T> = hoot::client::flow::Flow<(), T>;
+type Flow<T> = ureq_proto::client::flow::Flow<(), T>;
 
 /// Run a request.
 ///

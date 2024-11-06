@@ -11,7 +11,7 @@ use http::{HeaderMap, HeaderName, HeaderValue, Method, Response, Uri, Version};
 use crate::proxy::Proto;
 use crate::Error;
 
-pub use hoot::ArrayVec;
+pub use ureq_proto::ArrayVec;
 
 pub(crate) mod private {
     pub trait Private {}

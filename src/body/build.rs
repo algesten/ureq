@@ -1,7 +1,7 @@
 use std::io::{self, Cursor};
 use std::sync::Arc;
 
-use hoot::BodyMode;
+use ureq_proto::BodyMode;
 
 use super::{Body, BodyDataSource, ContentEncoding, ResponseInfo};
 

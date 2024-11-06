@@ -75,8 +75,8 @@ impl<'a> SendBody<'a> {
     }
 }
 
-use hoot::BodyMode;
 use http::Response;
+use ureq_proto::BodyMode;
 
 /// Trait for common types to send in POST, PUT or PATCH.
 ///
