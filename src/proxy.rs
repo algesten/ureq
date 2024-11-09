@@ -8,6 +8,7 @@ use ureq_proto::parser::try_parse_response;
 
 use http::{StatusCode, Uri};
 
+use crate::config::DEFAULT_USER_AGENT;
 use crate::http;
 use crate::transport::{ConnectionDetails, Connector, Transport, TransportAdapter};
 use crate::util::{AuthorityExt, DebugUri, SchemeExt, UriExt};
@@ -216,7 +217,9 @@ impl Connector for ConnectProxyConnector {
 
             write!(w, "CONNECT {}:{} HTTP/1.1\r\n", host, port)?;
             write!(w, "Host: {}:{}\r\n", host, port)?;
-            write!(w, "User-Agent: {}\r\n", details.config.get_user_agent())?;
+            if let Some(v) = details.config.user_agent.as_str(DEFAULT_USER_AGENT) {
+                write!(w, "User-Agent: {}\r\n", v)?;
+            }
             write!(w, "Proxy-Connection: Keep-Alive\r\n")?;
 
             let use_creds = proxy.username().is_some() || proxy.password().is_some();

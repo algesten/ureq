@@ -1,18 +1,17 @@
-use std::convert::TryFrom;
 use std::sync::Arc;
 use std::{io, mem};
 
 use http::uri::Scheme;
 use http::{header, HeaderValue, Request, Response, Uri};
+use once_cell::sync::Lazy;
 use ureq_proto::client::flow::state::{Await100, RecvBody, RecvResponse, Redirect, SendRequest};
 use ureq_proto::client::flow::state::{Prepare, SendBody as SendBodyState};
-use ureq_proto::client::flow::{
-    Await100Result, RecvBodyResult, RecvResponseResult, SendRequestResult,
-};
+use ureq_proto::client::flow::{Await100Result, RecvBodyResult};
+use ureq_proto::client::flow::{RecvResponseResult, SendRequestResult};
 use ureq_proto::BodyMode;
 
 use crate::body::ResponseInfo;
-use crate::config::{Config, RequestLevelConfig};
+use crate::config::{Config, RequestLevelConfig, DEFAULT_USER_AGENT};
 use crate::http;
 use crate::pool::Connection;
 use crate::timings::{CallTimings, CurrentTime};
@@ -226,7 +225,6 @@ fn add_headers(
     } else {
         Some(body.body_mode())
     };
-    #[cfg(any(feature = "gzip", feature = "brotli"))]
     let has_header_accept_enc = headers.has_accept_encoding();
     let has_header_ua = headers.has_user_agent();
     let has_header_accept = headers.has_accept();
@@ -246,10 +244,9 @@ fn add_headers(
         }
     }
 
-    #[cfg(any(feature = "gzip", feature = "brotli"))]
     {
-        use once_cell::sync::Lazy;
         static ACCEPTS: Lazy<String> = Lazy::new(|| {
+            #[allow(unused_mut)]
             let mut value = String::with_capacity(10);
             #[cfg(feature = "gzip")]
             value.push_str("gzip");
@@ -259,10 +256,13 @@ fn add_headers(
             value.push_str("br");
             value
         });
-        // unwrap is ok because above ACCEPTS will produce a valid value
-        let value = HeaderValue::from_str(&ACCEPTS).unwrap();
         if !has_header_accept_enc {
-            flow.header(header::ACCEPT_ENCODING, value)?;
+            if let Some(v) = config.accept_encoding.as_str(&ACCEPTS) {
+                // unwrap is ok because above ACCEPTS will produce a valid value,
+                // or the value is user provided in which case it must be valid.
+                let value = HeaderValue::from_str(v).unwrap();
+                flow.header(header::ACCEPT_ENCODING, value)?;
+            }
         }
     }
 
@@ -282,14 +282,20 @@ fn add_headers(
 
     if !has_header_ua {
         // unwrap is ok because a user might override the agent, and if they
-        // set bad values, it's not really a big problem.
-        let value = HeaderValue::try_from(config.get_user_agent()).unwrap();
-        flow.header(header::USER_AGENT, value)?;
+        // set bad values, it's not really ureq's problem.
+        if let Some(v) = config.user_agent.as_str(DEFAULT_USER_AGENT) {
+            let value = HeaderValue::from_str(v).unwrap();
+            flow.header(header::USER_AGENT, value)?;
+        }
     }
 
     if !has_header_accept {
-        let value = HeaderValue::from_static("*/*");
-        flow.header(header::ACCEPT, value)?;
+        // unwrap is ok because a user might override accepts header, and if they
+        // set bad values, it's not really ureq's problem.
+        if let Some(v) = config.accept.as_str("*/*") {
+            let value = HeaderValue::from_str(v).unwrap();
+            flow.header(header::ACCEPT, value)?;
+        }
     }
 
     Ok(())

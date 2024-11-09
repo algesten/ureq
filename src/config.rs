@@ -1,6 +1,7 @@
 //! Agent configuration
 
 use std::fmt;
+use std::sync::Arc;
 use std::time::Duration;
 
 use http::Uri;
@@ -98,7 +99,9 @@ pub struct Config {
     pub(crate) no_delay: bool,
     pub(crate) max_redirects: u32,
     pub(crate) redirect_auth_headers: RedirectAuthHeaders,
-    pub(crate) user_agent: Option<String>,
+    pub(crate) user_agent: AutoHeaderValue,
+    pub(crate) accept: AutoHeaderValue,
+    pub(crate) accept_encoding: AutoHeaderValue,
     pub(crate) timeouts: Timeouts,
     pub(crate) max_response_header_size: usize,
     pub(crate) input_buffer_size: usize,
@@ -126,10 +129,6 @@ impl Config {
     /// Cloning the config does not incur heap allocations.
     pub fn new_agent(&self) -> Agent {
         self.clone().into()
-    }
-
-    pub(crate) fn get_user_agent(&self) -> &str {
-        self.user_agent.as_deref().unwrap_or(DEFAULT_USER_AGENT)
     }
 
     pub(crate) fn connect_proxy_uri(&self) -> Option<&Uri> {
@@ -261,15 +260,47 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
         self
     }
 
-    /// Value to use for the `User-Agent` field.
+    /// Value to use for the `User-Agent` header.
     ///
     /// This can be overridden by setting a `user-agent` header on the request
     /// object. The one difference is that a connection to a HTTP proxy server
     /// will receive this value, not the request-level one.
     ///
-    /// Defaults to `None`, which results in `ureq/<version>`
-    pub fn user_agent(mut self, v: Option<String>) -> Self {
+    /// Setting a value of `""` on the request or agent level will also not send a header.
+    ///
+    /// Defaults to `Default`, which results in `ureq/<version>`
+    pub fn user_agent(mut self, v: AutoHeaderValue) -> Self {
         self.config().user_agent = v;
+        self
+    }
+
+    /// Value to use for the `Accept` header.
+    ///
+    /// This agent configured value can be overriden per request by setting the header.
+    //
+    /// Setting a value of `""` on the request or agent level will also not send a header.
+    ///
+    /// Defaults to `Default`, which results in `*/*`
+    pub fn accept(mut self, v: AutoHeaderValue) -> Self {
+        self.config().accept = v;
+        self
+    }
+
+    /// Value to use for the `Accept-Encoding` header.
+    ///
+    /// Defaults to `Default`, which will add `gz` and `brotli` depending on
+    /// the feature flags **gzip** and **brotli** respectively. If neither
+    /// feature is enabled, the header is not added.
+    ///
+    /// This agent configured value can be overriden per request by setting the header.
+    ///
+    /// Setting a value of `""` on the request or agent level will also not send a header.
+    ///
+    /// This communicates capability to the server, however the triggering the
+    /// automatic decompression behavior is not affected since that only looks
+    /// at the `Content-Encoding` response header.
+    pub fn accept_encoding(mut self, v: AutoHeaderValue) -> Self {
+        self.config().accept_encoding = v;
         self
     }
 
@@ -433,6 +464,47 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
     }
 }
 
+/// Possible config values for headers.
+///
+/// * `None` no automatic header
+/// * `Default` default behavior. I.e. for user-agent something like `ureq/3.1.2`
+/// * `Provided` is a user provided header
+#[derive(Debug, Clone)]
+pub enum AutoHeaderValue {
+    /// No automatic header.
+    None,
+
+    /// Default behavior.
+    ///
+    /// I.e. for user-agent something like `ureq/3.1.2`.
+    Default,
+
+    /// User provided header value.
+    Provided(Arc<String>),
+}
+
+impl Default for AutoHeaderValue {
+    fn default() -> Self {
+        Self::Default
+    }
+}
+
+impl AutoHeaderValue {
+    pub(crate) fn as_str(&self, default: &'static str) -> Option<&str> {
+        let x = match self {
+            AutoHeaderValue::None => "",
+            AutoHeaderValue::Default => default,
+            AutoHeaderValue::Provided(v) => v.as_str(),
+        };
+
+        if x.is_empty() {
+            None
+        } else {
+            Some(x)
+        }
+    }
+}
+
 impl ConfigBuilder<AgentScope> {
     /// Finalize the config
     pub fn build(self) -> Config {
@@ -490,7 +562,8 @@ pub struct Timeouts {
 #[derive(Debug, Clone)]
 pub(crate) struct RequestLevelConfig(pub Config);
 
-static DEFAULT_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
+pub(crate) static DEFAULT_USER_AGENT: &str =
+    concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
 
 impl Default for Config {
     fn default() -> Self {
@@ -504,7 +577,9 @@ impl Default for Config {
             no_delay: true,
             max_redirects: 10,
             redirect_auth_headers: RedirectAuthHeaders::Never,
-            user_agent: None,
+            user_agent: AutoHeaderValue::default(),
+            accept: AutoHeaderValue::default(),
+            accept_encoding: AutoHeaderValue::default(),
             timeouts: Timeouts::default(),
             max_response_header_size: 64 * 1024,
             input_buffer_size: 128 * 1024,

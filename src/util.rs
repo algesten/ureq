@@ -320,7 +320,6 @@ pub(crate) trait HeaderMapExt {
     fn get_str(&self, k: &str) -> Option<&str>;
     fn is_chunked(&self) -> bool;
     fn content_length(&self) -> Option<u64>;
-    #[cfg(any(feature = "gzip", feature = "brotli"))]
     fn has_accept_encoding(&self) -> bool;
     fn has_user_agent(&self) -> bool;
     fn has_send_body_mode(&self) -> bool {
@@ -347,7 +346,6 @@ impl HeaderMapExt for HeaderMap {
         Some(len)
     }
 
-    #[cfg(any(feature = "gzip", feature = "brotli"))]
     fn has_accept_encoding(&self) -> bool {
         self.contains_key("accept-encoding")
     }
