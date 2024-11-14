@@ -43,7 +43,6 @@ testdeps = ["dep:hootbin"]
 base64 = "0.22"
 cookie = { version = "0.18", default-features = false, optional = true }
 once_cell = "1"
-url = "2"
 socks = { version = "0.3", optional = true }
 serde = { version = "1", optional = true }
 serde_json = { version = ">=1.0.97", optional = true }
@@ -62,6 +61,18 @@ http = { version = "1.1", optional = true }
 
 # This can't be in dev-dependencies due to doc tests.
 hootbin = { version = "0.1.5", optional = true }
+
+# Locked down due to MSRV changing, in a patch version(!)
+# This is fine because the time project's policy is to allow themselves
+# to cause that kind of breakage. https://github.com/time-rs/time/issues/551
+time = "=0.3.20"
+
+# Locked down because the url project bumped their MSRV in a patch version(!)
+# No problem: https://github.com/algesten/ureq/issues/877
+url = "<=2.5.0"
+
+# The MSRV fun continues: https://github.com/servo/rust-url/issues/939
+idna_adapter = "<=1.1"
 
 [dev-dependencies]
 env_logger = { version = "<=0.9", default-features = false, features = ["humantime"] }
