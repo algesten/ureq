@@ -502,6 +502,8 @@ mk_method!(trace, TRACE, WithoutBody);
 
 #[cfg(test)]
 pub(crate) mod test {
+    use std::io;
+
     use assert_no_alloc::AllocDisabler;
     use config::Config;
     use once_cell::sync::Lazy;
@@ -715,6 +717,16 @@ pub(crate) mod test {
         let err = result.unwrap_err();
         assert!(matches!(err, Error::Http(_)));
         assert_eq!(err.to_string(), "http: invalid uri character");
+    }
+
+    #[test]
+    fn post_big_body_chunked() {
+        // https://github.com/algesten/ureq/issues/879
+        let mut data = io::Cursor::new(vec![42; 153_600]);
+        post("http://httpbin.org/post")
+            .content_type("application/octet-stream")
+            .send(SendBody::from_reader(&mut data))
+            .expect("to send correctly");
     }
 
     #[test]

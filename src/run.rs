@@ -357,7 +357,12 @@ fn send_request(
     }
 
     timings.record_time(Timeout::SendRequest);
-    Ok(flow.proceed().unwrap())
+
+    // The request might be misconfigured.
+    let flow = flow.proceed()?;
+
+    // We checked can_proceed() above, this unwrap is fine.
+    Ok(flow.unwrap())
 }
 
 fn await_100(
@@ -396,7 +401,11 @@ fn await_100(
     }
 
     timings.record_time(Timeout::Await100);
-    Ok(flow.proceed())
+
+    // A misconfigured request might surface here.
+    let flow = flow.proceed()?;
+
+    Ok(flow)
 }
 
 fn send_body(
@@ -416,14 +425,12 @@ fn send_body(
 
         let input_len = tmp.len();
 
-        let overhead = flow.calculate_output_overhead(output.len())?;
-        assert!(input_len > overhead);
-        let max_input = input_len - overhead;
+        let input_fitting_in_output = flow.calculate_max_input(output.len());
+        let max_input = input_len.min(input_fitting_in_output);
 
-        let output_used = if overhead == 0 {
-            // overhead == 0 means we are not doing chunked transfer. The body can be written
-            // directly to the output. This optimizes away a memcopy if we were to go via
-            // flow.write().
+        let output_used = if !flow.is_chunked() {
+            // For non-chunked, The body can be written directly to the output.
+            // This optimizes away a memcopy if we were to go via flow.write().
             let output_used = body.read(output)?;
 
             // Size checking is still in the flow.
