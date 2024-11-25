@@ -6,12 +6,12 @@ use std::{io, thread};
 use socks::{Socks4Stream, Socks5Stream};
 
 use crate::proxy::{Proto, Proxy};
-use crate::resolver::ResolvedSocketAddrs;
-use crate::transport::tcp::TcpTransport;
-use crate::transport::LazyBuffers;
 use crate::Error;
 
-use super::{ConnectionDetails, Connector, NextTimeout, Transport};
+use super::ResolvedSocketAddrs;
+
+use super::tcp::TcpTransport;
+use super::{ConnectionDetails, Connector, LazyBuffers, NextTimeout, Transport};
 
 /// Connector for SOCKS proxies.
 ///

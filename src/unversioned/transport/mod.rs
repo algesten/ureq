@@ -1,5 +1,7 @@
 //! HTTP/1.1 data transport.
 //!
+//! **NOTE: transport does not (yet) [follow semver][super].**
+//!
 //! _NOTE: Transport is deep configuration of ureq and is not required for regular use._
 //!
 //! ureq provides a pluggable transport layer making it possible to write bespoke
@@ -29,8 +31,9 @@ use http::Uri;
 use crate::config::Config;
 use crate::http;
 use crate::proxy::Proto;
-use crate::resolver::{ResolvedSocketAddrs, Resolver};
 use crate::Error;
+
+use super::resolver::{ResolvedSocketAddrs, Resolver};
 
 pub use self::tcp::TcpConnector;
 use self::time::Instant;
