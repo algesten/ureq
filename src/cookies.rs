@@ -1,6 +1,5 @@
 use std::borrow::Cow;
 use std::fmt;
-use std::io;
 use std::sync::{Mutex, MutexGuard};
 
 use cookie_store::CookieStore;
@@ -9,6 +8,9 @@ use http::Uri;
 use crate::http;
 use crate::util::UriExt;
 use crate::Error;
+
+#[cfg(feature = "json")]
+use std::io;
 
 #[derive(Debug)]
 pub(crate) struct SharedCookieJar {
@@ -139,7 +141,7 @@ impl<'a> CookieJar<'a> {
     /// write them to `writer`
     #[cfg(feature = "json")]
     pub fn save_json<W: io::Write>(&self, writer: &mut W) -> Result<(), Error> {
-        Ok(self.0.save_json(writer)?)
+        Ok(cookie_store::serde::json::save(&self.0, writer)?)
     }
 
     /// Load JSON-formatted cookies from `reader`, skipping any __expired__ cookies
@@ -147,7 +149,7 @@ impl<'a> CookieJar<'a> {
     /// Replaces all the contents of the current cookie jar.
     #[cfg(feature = "json")]
     pub fn load_json<R: io::BufRead>(&mut self, reader: R) -> Result<(), Error> {
-        let store = CookieStore::load_json(reader)?;
+        let store = cookie_store::serde::json::load(reader)?;
         *self.0 = store;
         Ok(())
     }
