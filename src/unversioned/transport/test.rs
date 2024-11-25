@@ -290,13 +290,22 @@ fn setup_default_handlers(handlers: &mut Vec<TestHandler>) {
         TestHandler::new("/redirect-to", |_uri, _req, w| {
             write!(
                 w,
-                "HTTP/1.1 302 OK\r\n\
+                "HTTP/1.1 302 FOUND\r\n\
                 Location: /get\r\n\
                 Content-Length: 22\r\n\
                 \r\n\
                 You've been redirected\
                 ",
-            )
+            )?;
+            write!(
+                w,
+                "HTTP/1.1 200 OK\r\n\
+                Content-Type: application/json\r\n\
+                Content-Length: {}\r\n\
+                \r\n",
+                HTTPBIN_GET.as_bytes().len()
+            )?;
+            w.write_all(HTTPBIN_GET.as_bytes())
         }),
         handlers,
     );
