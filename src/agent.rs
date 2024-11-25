@@ -140,7 +140,9 @@ impl Agent {
     /// all clones of the same [`Agent`], meaning you must drop the CookieJar
     /// before using the agent, or end up with a deadlock.
     ///
-    /// ```no_run
+    /// ```rust
+    /// # #[cfg(feature = "json")]
+    /// # fn no_run() -> Result<(), ureq::Error> {
     /// use std::io::Write;
     /// use std::fs::File;
     ///
@@ -158,7 +160,8 @@ impl Agent {
     /// // Release the cookie jar to use agents again.
     /// jar.release();
     ///
-    /// # Ok::<_, ureq::Error>(())
+    /// # Ok(())
+    /// # }
     /// ```
     #[cfg(feature = "cookies")]
     pub fn cookie_jar_lock(&self) -> crate::cookies::CookieJar<'_> {
