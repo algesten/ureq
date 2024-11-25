@@ -1,5 +1,7 @@
 //! Name resolvers.
 //!
+//! **NOTE resolver does not (yet) [follow semver][super].**
+//!
 //! _NOTE: Resolver is deep configuration of ureq and is not required for regular use._
 //!
 //! Name resolving is pluggable. The resolver's duty is to take a URI and translate it

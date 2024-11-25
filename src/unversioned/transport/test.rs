@@ -10,9 +10,9 @@ use std::{fmt, io, thread};
 use http::{Method, Request, Uri};
 
 use crate::http;
-use crate::transport::time::Duration;
 use crate::Error;
 
+use super::time::Duration;
 use super::{Buffers, ConnectionDetails, Connector, LazyBuffers, NextTimeout, Transport};
 
 #[derive(Default)]

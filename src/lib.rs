@@ -446,9 +446,11 @@ mod send_body;
 mod timings;
 mod util;
 
+pub mod unversioned;
+use unversioned::resolver;
+use unversioned::transport;
+
 pub mod middleware;
-pub mod resolver;
-pub mod transport;
 
 #[cfg(feature = "_tls")]
 pub mod tls;

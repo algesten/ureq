@@ -1,8 +1,8 @@
 use std::io;
 
-use crate::transport::time::Duration;
 use crate::Timeout;
 
+use super::time::Duration;
 use super::{NextTimeout, Transport};
 
 /// Helper to turn a [`Transport`] into a std::io [`Read`](io::Read) and [`Write`](io::Write).
