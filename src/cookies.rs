@@ -137,6 +137,7 @@ impl<'a> CookieJar<'a> {
 
     /// Serialize any __unexpired__ and __persistent__ cookies in the jar to JSON format and
     /// write them to `writer`
+    #[cfg(feature = "json")]
     pub fn save_json<W: io::Write>(&self, writer: &mut W) -> Result<(), Error> {
         Ok(self.0.save_json(writer)?)
     }
@@ -144,6 +145,7 @@ impl<'a> CookieJar<'a> {
     /// Load JSON-formatted cookies from `reader`, skipping any __expired__ cookies
     ///
     /// Replaces all the contents of the current cookie jar.
+    #[cfg(feature = "json")]
     pub fn load_json<R: io::BufRead>(&mut self, reader: R) -> Result<(), Error> {
         let store = CookieStore::load_json(reader)?;
         *self.0 = store;
