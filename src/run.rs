@@ -14,6 +14,7 @@ use crate::body::ResponseInfo;
 use crate::config::{Config, RequestLevelConfig, DEFAULT_USER_AGENT};
 use crate::http;
 use crate::pool::Connection;
+use crate::response::ResponseUri;
 use crate::timings::{CallTimings, CurrentTime};
 use crate::transport::time::{Duration, Instant};
 use crate::transport::ConnectionDetails;
@@ -147,7 +148,7 @@ fn flow_run(
         SendRequestResult::RecvResponse(flow) => flow,
     };
 
-    let (response, response_result) = recv_response(flow, &mut connection, config, timings)?;
+    let (mut response, response_result) = recv_response(flow, &mut connection, config, timings)?;
 
     info!("{:?}", DebugResponse(&response));
 
@@ -164,6 +165,8 @@ fn flow_run(
 
         jar.store_response_cookies(iter, &uri);
     }
+
+    response.extensions_mut().insert(ResponseUri(uri));
 
     let ret = match response_result {
         RecvResponseResult::RecvBody(flow) => {

@@ -431,6 +431,7 @@ use http::{Request, Response, Uri};
 pub use proxy::Proxy;
 pub use request::RequestBuilder;
 use request::{WithBody, WithoutBody};
+pub use response::ResponseExt;
 pub use send_body::AsSendBody;
 
 mod agent;
@@ -441,6 +442,7 @@ mod pool;
 mod proxy;
 mod query;
 mod request;
+mod response;
 mod run;
 mod send_body;
 mod timings;
@@ -711,6 +713,15 @@ pub(crate) mod test {
         assert_eq!(txt, "You've been redirected");
         #[cfg(not(feature = "_test"))]
         assert_eq!(txt, "");
+    }
+
+    #[test]
+    fn redirect_follow() {
+        let res = get("http://httpbin.org/redirect-to?url=%2Fget")
+            .call()
+            .unwrap();
+        let response_uri = res.get_uri();
+        assert_eq!(response_uri.path(), "/get")
     }
 
     #[test]
