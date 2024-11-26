@@ -69,6 +69,8 @@ impl TestHandler {
 }
 
 /// Helper for **_test** feature tests.
+#[cfg(feature = "_test")]
+#[doc(hidden)]
 pub fn set_handler(pattern: &'static str, status: u16, headers: &[(&str, &str)], body: &[u8]) {
     // Convert headers to a big string
     let mut headers_s = String::new();
