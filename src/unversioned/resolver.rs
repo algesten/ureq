@@ -53,20 +53,6 @@ pub struct DefaultResolver {
     _private: (),
 }
 
-/// Configuration of IP family to use.
-///
-/// Used to limit the IP to either IPv4, IPv6 or any.
-// TODO(martin): make this configurable
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum IpFamily {
-    /// Both Ipv4 and Ipv6
-    Any,
-    /// Just Ipv4
-    Ipv4Only,
-    /// Just Ipv6
-    Ipv6Only,
-}
-
 impl DefaultResolver {
     /// Helper to combine scheme host and port to a single string.
     ///
@@ -158,24 +144,6 @@ fn resolve_async(addr: String, timeout: NextTimeout) -> Result<IntoIter<SocketAd
             // The sender going away is nonsensical. Did the thread just die?
             RecvTimeoutError::Disconnected => unreachable!("mpsc sender gone"),
         },
-    }
-}
-
-impl IpFamily {
-    /// Filter the socket addresses to the family of IP.
-    pub fn keep_wanted<'a>(
-        &'a self,
-        iter: impl Iterator<Item = SocketAddr> + 'a,
-    ) -> impl Iterator<Item = SocketAddr> + 'a {
-        iter.filter(move |a| self.is_wanted(a))
-    }
-
-    fn is_wanted(&self, addr: &SocketAddr) -> bool {
-        match self {
-            IpFamily::Any => true,
-            IpFamily::Ipv4Only => addr.is_ipv4(),
-            IpFamily::Ipv6Only => addr.is_ipv6(),
-        }
     }
 }
 

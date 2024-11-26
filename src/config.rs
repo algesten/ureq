@@ -1,6 +1,7 @@
 //! Agent configuration
 
 use std::fmt;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -8,7 +9,6 @@ use http::Uri;
 
 use crate::http;
 use crate::middleware::{Middleware, MiddlewareChain};
-use crate::resolver::IpFamily;
 use crate::{Agent, AsSendBody, Proxy, RequestBuilder};
 
 #[cfg(feature = "_tls")]
@@ -780,6 +780,38 @@ impl Default for Timeouts {
             send_body: None,
             recv_response: None,
             recv_body: None,
+        }
+    }
+}
+
+/// Configuration of IP family to use.
+///
+/// Used to limit the IP to either IPv4, IPv6 or any.
+// TODO(martin): make this configurable
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IpFamily {
+    /// Both Ipv4 and Ipv6
+    Any,
+    /// Just Ipv4
+    Ipv4Only,
+    /// Just Ipv6
+    Ipv6Only,
+}
+
+impl IpFamily {
+    /// Filter the socket addresses to the family of IP.
+    pub fn keep_wanted<'a>(
+        &'a self,
+        iter: impl Iterator<Item = SocketAddr> + 'a,
+    ) -> impl Iterator<Item = SocketAddr> + 'a {
+        iter.filter(move |a| self.is_wanted(a))
+    }
+
+    fn is_wanted(&self, addr: &SocketAddr) -> bool {
+        match self {
+            IpFamily::Any => true,
+            IpFamily::Ipv4Only => addr.is_ipv4(),
+            IpFamily::Ipv6Only => addr.is_ipv6(),
         }
     }
 }
