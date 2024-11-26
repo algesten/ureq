@@ -184,12 +184,22 @@ impl TlsConfigBuilder {
 
 /// A client certificate.
 #[derive(Debug, Clone)]
-pub struct ClientCert(pub Arc<(Vec<Certificate<'static>>, PrivateKey<'static>)>);
+pub struct ClientCert(Arc<(Vec<Certificate<'static>>, PrivateKey<'static>)>);
 
 impl ClientCert {
     /// Creates a new client certificate from a chain and a private key.
     pub fn new_with_certs(chain: &[Certificate<'static>], key: PrivateKey<'static>) -> Self {
         Self(Arc::new((chain.to_vec(), key)))
+    }
+
+    /// Client certificate chain.
+    pub fn certs(&self) -> &[Certificate<'static>] {
+        &self.0 .0
+    }
+
+    /// Client certificate private key.
+    pub fn private_key(&self) -> &PrivateKey<'static> {
+        &self.0 .1
     }
 }
 
