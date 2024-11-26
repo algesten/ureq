@@ -40,7 +40,7 @@ pub(crate) fn run(
         .map(Arc::new)
         .unwrap_or_else(|| agent.config.clone());
 
-    let timeouts = config.timeouts;
+    let timeouts = config.timeouts();
 
     let mut timings = CallTimings::new(timeouts, CurrentTime::default());
 
@@ -98,7 +98,7 @@ pub(crate) fn run(
     let status = response.status();
     let is_err = status.is_client_error() || status.is_server_error();
 
-    if config.http_status_as_error && is_err {
+    if config.http_status_as_error() && is_err {
         return Err(Error::StatusCode(status.as_u16()));
     }
 
@@ -116,7 +116,7 @@ fn flow_run(
     let uri = flow.uri().clone();
     info!("{} {:?}", flow.method(), &DebugUri(flow.uri()));
 
-    if config.https_only && uri.scheme() != Some(&Scheme::HTTPS) {
+    if config.https_only() && uri.scheme() != Some(&Scheme::HTTPS) {
         return Err(Error::RequireHttpsOnly(uri.to_string()));
     }
 
@@ -175,7 +175,7 @@ fn flow_run(
                 ..Default::default()
             };
 
-            if response.status().is_redirection() && redirect_count < config.max_redirects {
+            if response.status().is_redirection() && redirect_count < config.max_redirects() {
                 let flow = handler.consume_redirect_body()?;
 
                 FlowResult::Redirect(flow, handler.timings)
@@ -186,7 +186,7 @@ fn flow_run(
         RecvResponseResult::Redirect(flow) => {
             cleanup(connection, flow.must_close_connection(), timings.now());
 
-            if redirect_count >= config.max_redirects {
+            if redirect_count >= config.max_redirects() {
                 FlowResult::Response(response, BodyHandler::default())
             } else {
                 FlowResult::Redirect(flow, mem::take(timings))
@@ -257,7 +257,7 @@ fn add_headers(
             value
         });
         if !has_header_accept_enc {
-            if let Some(v) = config.accept_encoding.as_str(&ACCEPTS) {
+            if let Some(v) = config.accept_encoding().as_str(&ACCEPTS) {
                 // unwrap is ok because above ACCEPTS will produce a valid value,
                 // or the value is user provided in which case it must be valid.
                 let value = HeaderValue::from_str(v).unwrap();
@@ -283,7 +283,7 @@ fn add_headers(
     if !has_header_ua {
         // unwrap is ok because a user might override the agent, and if they
         // set bad values, it's not really ureq's problem.
-        if let Some(v) = config.user_agent.as_str(DEFAULT_USER_AGENT) {
+        if let Some(v) = config.user_agent().as_str(DEFAULT_USER_AGENT) {
             let value = HeaderValue::from_str(v).unwrap();
             flow.header(header::USER_AGENT, value)?;
         }
@@ -292,7 +292,7 @@ fn add_headers(
     if !has_header_accept {
         // unwrap is ok because a user might override accepts header, and if they
         // set bad values, it's not really ureq's problem.
-        if let Some(v) = config.accept.as_str("*/*") {
+        if let Some(v) = config.accept().as_str("*/*") {
             let value = HeaderValue::from_str(v).unwrap();
             flow.header(header::ACCEPT, value)?;
         }
@@ -333,7 +333,7 @@ fn connect(
         timeout: timings.next_timeout(Timeout::Connect),
     };
 
-    let connection = agent.pool.connect(&details, config.max_idle_age.into())?;
+    let connection = agent.pool.connect(&details, config.max_idle_age().into())?;
 
     timings.record_time(Timeout::Connect);
 
@@ -472,10 +472,10 @@ fn recv_response(
 
         let (amount, maybe_response) = flow.try_response(input)?;
 
-        if input.len() > config.max_response_header_size {
+        if input.len() > config.max_response_header_size() {
             return Err(Error::LargeResponseHeader(
                 input.len(),
-                config.max_response_header_size,
+                config.max_response_header_size(),
             ));
         }
 
@@ -494,7 +494,7 @@ fn recv_response(
 }
 
 fn handle_redirect(mut flow: Flow<Redirect>, config: &Config) -> Result<Flow<Prepare>, Error> {
-    let maybe_new_flow = flow.as_new_flow(config.redirect_auth_headers)?;
+    let maybe_new_flow = flow.as_new_flow(config.redirect_auth_headers())?;
     let status = flow.status();
 
     if let Some(flow) = maybe_new_flow {

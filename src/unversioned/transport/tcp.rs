@@ -31,7 +31,7 @@ impl Connector for TcpConnector {
         let config = &details.config;
         let stream = try_connect(&details.addrs, details.timeout, config)?;
 
-        let buffers = LazyBuffers::new(config.input_buffer_size, config.output_buffer_size);
+        let buffers = LazyBuffers::new(config.input_buffer_size(), config.output_buffer_size());
         let transport = TcpTransport::new(stream, buffers);
 
         Ok(Some(Box::new(transport)))
@@ -86,7 +86,7 @@ fn try_connect_single(
         Err(e) => return Err(e.into()),
     };
 
-    if config.no_delay {
+    if config.no_delay() {
         stream.set_nodelay(true)?;
     }
 

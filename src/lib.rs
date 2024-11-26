@@ -643,15 +643,15 @@ pub(crate) mod test {
         init_test_log();
         use crate::tls::{TlsConfig, TlsProvider};
 
-        let agent: Agent = Config {
-            tls_config: TlsConfig {
-                provider: TlsProvider::Rustls,
-                disable_verification: true,
-                ..Default::default()
-            },
-            ..Default::default()
-        }
-        .into();
+        let agent: Agent = Config::builder()
+            .tls_config(
+                TlsConfig::builder()
+                    .provider(TlsProvider::Rustls)
+                    .disable_verification(true)
+                    .build(),
+            )
+            .build()
+            .into();
 
         let res = agent.get("https://www.google.com/").call().unwrap();
         assert_eq!(

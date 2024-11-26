@@ -28,7 +28,7 @@ impl Connector for SocksConnector {
         details: &ConnectionDetails,
         chained: Option<Box<dyn Transport>>,
     ) -> Result<Option<Box<dyn Transport>>, Error> {
-        let proxy = match &details.config.proxy {
+        let proxy = match details.config.proxy() {
             Some(v) if v.proto().is_socks() => v,
             // If there is no proxy configured, or it isn't a SOCKS proxy, use whatever is chained.
             _ => {
@@ -48,13 +48,13 @@ impl Connector for SocksConnector {
 
         let stream = try_connect(&proxy_addrs, &details.addrs, proxy, details.timeout)?;
 
-        if details.config.no_delay {
+        if details.config.no_delay() {
             stream.set_nodelay(true)?;
         }
 
         let buffers = LazyBuffers::new(
-            details.config.input_buffer_size,
-            details.config.output_buffer_size,
+            details.config.input_buffer_size(),
+            details.config.output_buffer_size(),
         );
         let transport = Box::new(TcpTransport::new(stream, buffers));
 

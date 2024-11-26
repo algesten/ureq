@@ -69,34 +69,11 @@ impl TlsProvider {
 /// feature flags **rustls** and **native-tls**).
 #[derive(Clone)]
 pub struct TlsConfig {
-    /// The provider to use.
-    ///
-    /// Defaults to [`TlsProvider::Rustls`].
-    pub(crate) provider: TlsProvider,
-
-    /// Client certificate chain with corresponding private key.
-    ///
-    /// Defaults to `None`.
-    pub(crate) client_cert: Option<ClientCert>,
-
-    /// The set of trusted root certificates to use to validate server certificates.
-    ///
-    /// Defaults to `WebPki`.
-    pub(crate) root_certs: RootCerts,
-
-    /// Whether to send SNI (Server Name Indication) to the remote server.
-    ///
-    /// This is used by the server to determine which domain/certificate we are connecting
-    /// to for servers where multiple domains/sites are hosted on the same IP.
-    ///
-    /// Defaults to `true`.
-    pub(crate) use_sni: bool,
-
-    /// **WARNING** Disable all server certificate verification.
-    ///
-    /// This breaks encryption and leaks secrets. Must never be enabled for code where
-    /// any level of security is required.
-    pub(crate) disable_verification: bool,
+    provider: TlsProvider,
+    client_cert: Option<ClientCert>,
+    root_certs: RootCerts,
+    use_sni: bool,
+    disable_verification: bool,
 }
 
 impl TlsConfig {
@@ -105,6 +82,47 @@ impl TlsConfig {
         TlsConfigBuilder {
             config: TlsConfig::default(),
         }
+    }
+}
+
+impl TlsConfig {
+    /// The provider to use.
+    ///
+    /// Defaults to [`TlsProvider::Rustls`].
+    pub fn provider(&self) -> TlsProvider {
+        self.provider
+    }
+
+    /// Client certificate chain with corresponding private key.
+    ///
+    /// Defaults to `None`.
+    pub fn client_cert(&self) -> Option<&ClientCert> {
+        self.client_cert.as_ref()
+    }
+
+    /// The set of trusted root certificates to use to validate server certificates.
+    ///
+    /// Defaults to `WebPki`.
+    pub fn root_certs(&self) -> &RootCerts {
+        &self.root_certs
+    }
+
+    /// Whether to send SNI (Server Name Indication) to the remote server.
+    ///
+    /// This is used by the server to determine which domain/certificate we are connecting
+    /// to for servers where multiple domains/sites are hosted on the same IP.
+    ///
+    /// Defaults to `true`.
+    pub fn use_sni(&self) -> bool {
+        self.use_sni
+    }
+
+    /// **WARNING** Disable all server certificate verification.
+    ///
+    /// This breaks encryption and leaks secrets. Must never be enabled for code where
+    /// any level of security is required.
+    pub fn disable_verification(&self) -> bool {
+        self.disable_verification
     }
 }
 

@@ -90,25 +90,27 @@ use crate::tls::TlsConfig;
 ///
 #[derive(Clone)]
 pub struct Config {
-    pub(crate) http_status_as_error: bool,
-    pub(crate) https_only: bool,
-    pub(crate) ip_family: IpFamily,
+    http_status_as_error: bool,
+    https_only: bool,
+    ip_family: IpFamily,
     #[cfg(feature = "_tls")]
-    pub(crate) tls_config: TlsConfig,
-    pub(crate) proxy: Option<Proxy>,
-    pub(crate) no_delay: bool,
-    pub(crate) max_redirects: u32,
-    pub(crate) redirect_auth_headers: RedirectAuthHeaders,
-    pub(crate) user_agent: AutoHeaderValue,
-    pub(crate) accept: AutoHeaderValue,
-    pub(crate) accept_encoding: AutoHeaderValue,
-    pub(crate) timeouts: Timeouts,
-    pub(crate) max_response_header_size: usize,
-    pub(crate) input_buffer_size: usize,
-    pub(crate) output_buffer_size: usize,
-    pub(crate) max_idle_connections: usize,
-    pub(crate) max_idle_connections_per_host: usize,
-    pub(crate) max_idle_age: Duration,
+    tls_config: TlsConfig,
+    proxy: Option<Proxy>,
+    no_delay: bool,
+    max_redirects: u32,
+    redirect_auth_headers: RedirectAuthHeaders,
+    user_agent: AutoHeaderValue,
+    accept: AutoHeaderValue,
+    accept_encoding: AutoHeaderValue,
+    timeouts: Timeouts,
+    max_response_header_size: usize,
+    input_buffer_size: usize,
+    output_buffer_size: usize,
+    max_idle_connections: usize,
+    max_idle_connections_per_host: usize,
+    max_idle_age: Duration,
+
+    // Chain built for middleware.
     pub(crate) middleware: MiddlewareChain,
 
     // Techically not config, but here to pass as argument from
@@ -139,6 +141,178 @@ impl Config {
         }
 
         Some(proxy.uri())
+    }
+}
+
+impl Config {
+    /// Whether to treat 4xx and 5xx HTTP status codes as
+    /// [`Err(Error::StatusCode))`](crate::Error::StatusCode).
+    ///
+    /// Defaults to `true`.
+    pub fn http_status_as_error(&self) -> bool {
+        self.http_status_as_error
+    }
+
+    /// Whether to limit requests (including redirects) to https only
+    ///
+    /// Defaults to `false`.
+    pub fn https_only(&self) -> bool {
+        self.https_only
+    }
+
+    /// Configuration of IPv4/IPv6.
+    ///
+    /// This affects the resolver.
+    ///
+    /// Defaults to `IpFamily::Any`.
+    pub fn ip_family(&self) -> IpFamily {
+        self.ip_family
+    }
+
+    /// Config for TLS.
+    ///
+    /// This config is generic for all TLS connectors.
+    #[cfg(feature = "_tls")]
+    pub fn tls_config(&self) -> &TlsConfig {
+        &self.tls_config
+    }
+
+    /// Proxy configuration.
+    ///
+    /// Picked up from environment when using [`Config::default()`] or
+    pub fn proxy(&self) -> Option<&Proxy> {
+        self.proxy.as_ref()
+    }
+
+    /// Disable Nagle's algorithm
+    ///
+    /// Set TCP_NODELAY. It's up to the transport whether this flag is honored.
+    ///
+    /// Defaults to `true`.
+    pub fn no_delay(&self) -> bool {
+        self.no_delay
+    }
+
+    /// The max number of redirects to follow before giving up
+    ///
+    /// Defaults to 10
+    pub fn max_redirects(&self) -> u32 {
+        self.max_redirects
+    }
+
+    /// How to handle `Authorization` headers when following redirects
+    ///
+    /// * `Never` (the default) means the authorization header is never attached to a redirected call.
+    /// * `SameHost` will keep the header when the redirect is to the same host and under https.
+    ///
+    /// Defaults to `None`.
+    pub fn redirect_auth_headers(&self) -> RedirectAuthHeaders {
+        self.redirect_auth_headers
+    }
+
+    /// Value to use for the `User-Agent` header.
+    ///
+    /// This can be overridden by setting a `user-agent` header on the request
+    /// object. The one difference is that a connection to a HTTP proxy server
+    /// will receive this value, not the request-level one.
+    ///
+    /// Setting a value of `""` on the request or agent level will also not send a header.
+    ///
+    /// Defaults to `Default`, which results in `ureq/<version>`
+    pub fn user_agent(&self) -> &AutoHeaderValue {
+        &self.user_agent
+    }
+
+    /// Value to use for the `Accept` header.
+    ///
+    /// This agent configured value can be overriden per request by setting the header.
+    //
+    /// Setting a value of `""` on the request or agent level will also not send a header.
+    ///
+    /// Defaults to `Default`, which results in `*/*`
+    pub fn accept(&self) -> &AutoHeaderValue {
+        &self.accept
+    }
+
+    /// Value to use for the `Accept-Encoding` header.
+    ///
+    /// Defaults to `Default`, which will add `gz` and `brotli` depending on
+    /// the feature flags **gzip** and **brotli** respectively. If neither
+    /// feature is enabled, the header is not added.
+    ///
+    /// This agent configured value can be overriden per request by setting the header.
+    ///
+    /// Setting a value of `""` on the request or agent level will also not send a header.
+    ///
+    /// This communicates capability to the server, however the triggering the
+    /// automatic decompression behavior is not affected since that only looks
+    /// at the `Content-Encoding` response header.
+    pub fn accept_encoding(&self) -> &AutoHeaderValue {
+        &self.accept_encoding
+    }
+
+    /// All configured timeouts.
+    pub fn timeouts(&self) -> Timeouts {
+        self.timeouts
+    }
+
+    /// Max size of the HTTP response header.
+    ///
+    /// From the status, including all headers up until the body.
+    ///
+    /// Defaults to 64kb.
+    pub fn max_response_header_size(&self) -> usize {
+        self.max_response_header_size
+    }
+
+    /// Default size of the input buffer
+    ///
+    /// The default connectors use this setting.
+    ///
+    /// Defaults to 128kb.
+    pub fn input_buffer_size(&self) -> usize {
+        self.input_buffer_size
+    }
+
+    /// Default size of the output buffer.
+    ///
+    /// The default connectors use this setting.
+    ///
+    /// Defaults to 128kb.
+    pub fn output_buffer_size(&self) -> usize {
+        self.output_buffer_size
+    }
+
+    /// Max number of idle pooled connections overall.
+    ///
+    /// This setting has no effect when used per-request.
+    ///
+    /// Defaults to 10
+
+    pub fn max_idle_connections(&self) -> usize {
+        self.max_idle_connections
+    }
+
+    /// Max number of idle pooled connections per host/port combo.
+    ///
+    /// This setting has no effect when used per-request.
+    ///
+    /// Defaults to 3
+    pub fn max_idle_connections_per_host(&self) -> usize {
+        self.max_idle_connections_per_host
+    }
+
+    /// Max duration to keep an idle connection in the pool
+    ///
+    /// This can also be configured per-request to be shorter than the pool.
+    /// For example: if the pool is configured to 15 seconds and we have a
+    /// connection with an age of 10 seconds, a request setting this config
+    /// property to 3 seconds, would ignore the pooled connection (but still
+    /// leave it in the pool).
+    ///
+    /// Defaults to 15 seconds
+    pub fn max_idle_age(&self) -> Duration {
+        self.max_idle_age
     }
 }
 

@@ -42,14 +42,14 @@ impl Connector for RustlsConnector {
             return Ok(Some(transport));
         }
 
-        if details.config.tls_config.provider != TlsProvider::Rustls {
+        if details.config.tls_config().provider != TlsProvider::Rustls {
             debug!("Skip because config is not set to Rustls");
             return Ok(Some(transport));
         }
 
         trace!("Try wrap in TLS");
 
-        let tls_config = &details.config.tls_config;
+        let tls_config = details.config.tls_config();
 
         // Initialize the config on first run.
         let config_ref = self.config.get_or_init(|| build_config(tls_config));
@@ -75,8 +75,8 @@ impl Connector for RustlsConnector {
         };
 
         let buffers = LazyBuffers::new(
-            details.config.input_buffer_size,
-            details.config.output_buffer_size,
+            details.config.input_buffer_size(),
+            details.config.output_buffer_size(),
         );
 
         let transport = Box::new(RustlsTransport { buffers, stream });
