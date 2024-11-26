@@ -135,10 +135,12 @@ fn build_config(tls_config: &TlsConfig) -> Arc<ClientConfig> {
     };
 
     let mut config = if let Some(certs_and_key) = &tls_config.client_cert {
-        let (certs, key) = &*certs_and_key.0;
-        let cert_chain = certs
+        let cert_chain = certs_and_key
+            .certs()
             .iter()
             .map(|c| CertificateDer::from(c.der()).into_owned());
+
+        let key = certs_and_key.private_key();
 
         let key_der = match key.kind() {
             KeyKind::Pkcs1 => PrivateKeyDer::Pkcs1(PrivatePkcs1KeyDer::from(key.der())),
