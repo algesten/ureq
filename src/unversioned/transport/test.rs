@@ -35,7 +35,7 @@ impl Connector for TestConnector {
 
         let uri = details.uri.clone();
 
-        let buffers = LazyBuffers::new(config.input_buffer_size, config.output_buffer_size);
+        let buffers = LazyBuffers::new(config.input_buffer_size(), config.output_buffer_size());
 
         let (tx1, rx1) = mpsc::sync_channel(10);
         let (tx2, rx2) = mpsc::sync_channel(10);

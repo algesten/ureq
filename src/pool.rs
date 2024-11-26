@@ -31,7 +31,7 @@ impl ConnectionPool {
         details: &ConnectionDetails,
         max_idle_age: Duration,
     ) -> Result<Connection, Error> {
-        let key = PoolKey::new(details.uri, &details.config.proxy);
+        let key = PoolKey::new(details.uri, details.config.proxy());
 
         {
             let mut pool = self.pool.lock().unwrap();
@@ -165,11 +165,11 @@ impl Connection {
 struct PoolKey(Arc<PoolKeyInner>);
 
 impl PoolKey {
-    fn new(uri: &Uri, proxy: &Option<Proxy>) -> Self {
+    fn new(uri: &Uri, proxy: Option<&Proxy>) -> Self {
         let inner = PoolKeyInner(
             uri.scheme().expect("uri with scheme").clone(),
             uri.authority().expect("uri with authority").clone(),
-            proxy.clone(),
+            proxy.cloned(),
         );
 
         PoolKey(Arc::new(inner))
@@ -191,9 +191,9 @@ impl Pool {
     fn new(config: &Config) -> Self {
         Pool {
             lru: VecDeque::new(),
-            max_idle_connections: config.max_idle_connections,
-            max_idle_connections_per_host: config.max_idle_connections_per_host,
-            max_idle_age: config.max_idle_age.into(),
+            max_idle_connections: config.max_idle_connections(),
+            max_idle_connections_per_host: config.max_idle_connections_per_host(),
+            max_idle_age: config.max_idle_age().into(),
         }
     }
 
@@ -306,6 +306,6 @@ mod test {
     #[test]
     fn poolkey_new() {
         // Test that PoolKey::new() does not panic on unrecognized schemes.
-        PoolKey::new(&Uri::from_static("zzz://example.com"), &None);
+        PoolKey::new(&Uri::from_static("zzz://example.com"), None);
     }
 }

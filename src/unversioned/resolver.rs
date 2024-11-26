@@ -121,7 +121,8 @@ impl Resolver for DefaultResolver {
             resolve_async(addr, timeout)?
         };
 
-        let wanted = config.ip_family.keep_wanted(iter);
+        let ip_family = config.ip_family();
+        let wanted = ip_family.keep_wanted(iter);
 
         fn uninited_socketaddr() -> SocketAddr {
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0)

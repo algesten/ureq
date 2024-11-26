@@ -38,14 +38,14 @@ impl Connector for NativeTlsConnector {
             return Ok(Some(transport));
         }
 
-        if details.config.tls_config.provider != TlsProvider::NativeTls {
+        if details.config.tls_config().provider != TlsProvider::NativeTls {
             debug!("Skip because config is not set to Native TLS");
             return Ok(Some(transport));
         }
 
         trace!("Try wrap TLS");
 
-        let tls_config = &details.config.tls_config;
+        let tls_config = &details.config.tls_config();
 
         // Initialize the connector on first run.
         let connector_ref = match self.connector.get() {
@@ -71,8 +71,8 @@ impl Connector for NativeTlsConnector {
         let stream = LazyStream::Unstarted(Some((connector, domain, adapter)));
 
         let buffers = LazyBuffers::new(
-            details.config.input_buffer_size,
-            details.config.output_buffer_size,
+            details.config.input_buffer_size(),
+            details.config.output_buffer_size(),
         );
 
         let transport = Box::new(NativeTlsTransport { buffers, stream });

@@ -140,7 +140,7 @@ impl<'a> ConnectionDetails<'a> {
     /// This is (obviously) true for URLs starting `https`, but
     /// also in the case of using a CONNECT proxy over https.
     pub fn needs_tls(&self) -> bool {
-        if let Some(p) = &self.config.proxy {
+        if let Some(p) = self.config.proxy() {
             if p.proto() == Proto::Https {
                 return true;
             }
@@ -303,7 +303,7 @@ mod no_proxy {
             chained: Option<Box<dyn Transport>>,
         ) -> Result<Option<Box<dyn Transport>>, Error> {
             if chained.is_none() {
-                if let Some(proxy) = &details.config.proxy {
+                if let Some(proxy) = details.config.proxy() {
                     if proxy.proto().is_socks() {
                         if proxy.is_from_env() {
                             warn!(
@@ -347,9 +347,11 @@ mod no_tls {
                 return Ok(chained);
             }
 
-            let tls_config = &details.config.tls_config;
+            let tls_config = details.config.tls_config();
 
-            if details.needs_tls() && tls_config.provider == self.0 && !self.0.is_feature_enabled()
+            if details.needs_tls()
+                && tls_config.provider() == self.0
+                && !self.0.is_feature_enabled()
             {
                 panic!(
                     "uri scheme is https, provider is {:?} but feature is not enabled: {}",

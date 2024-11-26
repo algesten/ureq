@@ -202,7 +202,7 @@ impl Connector for ConnectProxyConnector {
 
         if is_connect_proxy {
             // unwrap is ok because connect_proxy_uri() above checks it.
-            let proxy = details.config.proxy.as_ref().unwrap();
+            let proxy = details.config.proxy().unwrap();
 
             let mut w = TransportAdapter::new(transport);
 
@@ -217,7 +217,7 @@ impl Connector for ConnectProxyConnector {
 
             write!(w, "CONNECT {}:{} HTTP/1.1\r\n", host, port)?;
             write!(w, "Host: {}:{}\r\n", host, port)?;
-            if let Some(v) = details.config.user_agent.as_str(DEFAULT_USER_AGENT) {
+            if let Some(v) = details.config.user_agent().as_str(DEFAULT_USER_AGENT) {
                 write!(w, "User-Agent: {}\r\n", v)?;
             }
             write!(w, "Proxy-Connection: Keep-Alive\r\n")?;
