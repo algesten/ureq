@@ -5,7 +5,8 @@ use std::sync::Arc;
 use http::{Method, Request, Response, Uri};
 
 use crate::body::Body;
-use crate::config::{AgentScope, Config, ConfigBuilder, HttpCrateScope, RequestLevelConfig};
+use crate::config::typestate::{AgentScope, HttpCrateScope};
+use crate::config::{Config, ConfigBuilder, RequestLevelConfig};
 use crate::http;
 use crate::middleware::MiddlewareNext;
 use crate::pool::ConnectionPool;

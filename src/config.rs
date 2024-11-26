@@ -16,6 +16,50 @@ use crate::tls::TlsConfig;
 
 pub use ureq_proto::client::flow::RedirectAuthHeaders;
 
+mod private {
+    use super::Config;
+
+    pub trait ConfigScope {
+        fn config(&mut self) -> &mut Config;
+    }
+}
+
+pub(crate) mod typestate {
+    use super::*;
+
+    /// Typestate for [`Config`] when configured for an [`Agent`].
+    pub struct AgentScope(pub(crate) Config);
+    /// Typestate for [`Config`] when configured on the [`RequestBuilder`] level.
+    pub struct RequestScope<Any>(pub(crate) RequestBuilder<Any>);
+    /// Typestate for for [`Config`] when configured via [`Agent::configure_request`].
+    pub struct HttpCrateScope<S: AsSendBody>(pub(crate) http::Request<S>);
+
+    impl private::ConfigScope for AgentScope {
+        fn config(&mut self) -> &mut Config {
+            &mut self.0
+        }
+    }
+
+    impl<Any> private::ConfigScope for RequestScope<Any> {
+        fn config(&mut self) -> &mut Config {
+            self.0.request_level_config()
+        }
+    }
+
+    impl<S: AsSendBody> private::ConfigScope for HttpCrateScope<S> {
+        fn config(&mut self) -> &mut Config {
+            // This unwrap is OK, because we should not construct an
+            // HttpCrateScope without first ensure it is there.
+            let req_level: &mut RequestLevelConfig = self.0.extensions_mut().get_mut().unwrap();
+            &mut req_level.0
+        }
+    }
+}
+
+use typestate::AgentScope;
+use typestate::HttpCrateScope;
+use typestate::RequestScope;
+
 /// Config primarily for the [`Agent`], but also per-request.
 ///
 /// Config objects are cheap to clone and should not incur any heap allocations.
@@ -319,42 +363,6 @@ impl Config {
 
 /// Builder of [`Config`]
 pub struct ConfigBuilder<Scope: private::ConfigScope>(pub(crate) Scope);
-
-#[doc(hidden)]
-pub struct AgentScope(Config);
-#[doc(hidden)]
-pub struct RequestScope<Any>(pub(crate) RequestBuilder<Any>);
-#[doc(hidden)]
-pub struct HttpCrateScope<S: AsSendBody>(pub(crate) http::Request<S>);
-
-impl private::ConfigScope for AgentScope {
-    fn config(&mut self) -> &mut Config {
-        &mut self.0
-    }
-}
-
-impl<Any> private::ConfigScope for RequestScope<Any> {
-    fn config(&mut self) -> &mut Config {
-        self.0.request_level_config()
-    }
-}
-
-impl<S: AsSendBody> private::ConfigScope for HttpCrateScope<S> {
-    fn config(&mut self) -> &mut Config {
-        // This unwrap is OK, because we should not construct an
-        // HttpCrateScope without first ensure it is there.
-        let req_level: &mut RequestLevelConfig = self.0.extensions_mut().get_mut().unwrap();
-        &mut req_level.0
-    }
-}
-
-mod private {
-    use super::Config;
-
-    pub trait ConfigScope {
-        fn config(&mut self) -> &mut Config;
-    }
-}
 
 impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
     fn config(&mut self) -> &mut Config {
