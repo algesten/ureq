@@ -12,8 +12,6 @@ use crate::http;
 use crate::proxy::Proto;
 use crate::Error;
 
-pub use ureq_proto::ArrayVec;
-
 pub(crate) mod private {
     pub trait Private {}
 }
