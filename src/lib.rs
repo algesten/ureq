@@ -367,16 +367,6 @@
 //!
 //! Proxies settings are configured on an [Agent]. All request sent through the agent will be proxied.
 //!
-//! [`HTTP`]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Proxy_servers_and_tunneling#http_tunneling
-//! [`CONNECT`]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods/CONNECT
-//! [`SOCKS4`]: https://en.wikipedia.org/wiki/SOCKS#SOCKS4
-//! [`SOCKS5`]: https://en.wikipedia.org/wiki/SOCKS#SOCKS5
-//! [`rustls` crate]: https://crates.io/crates/rustls
-//! [default provider]: https://docs.rs/rustls/latest/rustls/crypto/struct.CryptoProvider.html#method.install_default
-//! [`native-tls`]: https://crates.io/crates/native-tls
-//! [rustls-platform-verifier]: https://crates.io/crates/rustls-platform-verifier
-//! [webpki-roots]: https://crates.io/crates/webpki-roots
-//!
 //! ## Example using HTTP
 //!
 //! ```rust
@@ -412,6 +402,42 @@
 //! let resp = agent.get("http://cool.server").call()?;
 //! # Ok(())}
 //! ```
+//!
+//! # Versioning
+//!
+//! ## Semver and `unversioned`
+//!
+//! ureq follows semver. From ureq 3.x we strive to have a much closer adherence to semver than 2.x.
+//! The main mistake in 2.x was to re-export crates that were not yet semver 1.0. In ureq 3.x TLS and
+//! cookie configuration is shimmed using our own types.
+//!
+//! ureq 3.x is trying out two new traits that had no equivalent in 2.x,
+//! [`Transport`][unversioned::transport::Transport] and [`Resolver`][unversioned::resolver::Resolver].
+//! These allow the user write their own bespoke transports and (DNS name) resolver. The API:s for
+//! these parts are not yet solidified. They live under the [`unversioned`] module, and do not
+//! follow semver. See module doc for more info.
+//!
+//! ## Minimum Supported Rust Version (MSRV)
+//!
+//! From time to time we will need to update our minimum supported Rust version (MSRV). This is not
+//! something we do lightly; our ambition is to be as conservative with MSRV as possible.
+//!
+//! * For some dependencies, we will opt for pinning the version of the dep instead
+//!   of bumping our MSRV.
+//! * For important dependencies, like the TLS libraries, we cannot hold back our MSRV if they change.
+//! * We do not consider MSRV changes to be breaking for the purposes of semver.
+//! * We will not make MSRV changes in patch releases.
+//! * MSRV changes will get their own minor release, and not be co-mingled with other changes.
+//!
+//! [`HTTP`]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Proxy_servers_and_tunneling#http_tunneling
+//! [`CONNECT`]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods/CONNECT
+//! [`SOCKS4`]: https://en.wikipedia.org/wiki/SOCKS#SOCKS4
+//! [`SOCKS5`]: https://en.wikipedia.org/wiki/SOCKS#SOCKS5
+//! [`rustls` crate]: https://crates.io/crates/rustls
+//! [default provider]: https://docs.rs/rustls/latest/rustls/crypto/struct.CryptoProvider.html#method.install_default
+//! [`native-tls`]: https://crates.io/crates/native-tls
+//! [rustls-platform-verifier]: https://crates.io/crates/rustls-platform-verifier
+//! [webpki-roots]: https://crates.io/crates/webpki-roots
 
 #![forbid(unsafe_code)]
 #![warn(clippy::all)]
