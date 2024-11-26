@@ -5,7 +5,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use http::Uri;
-use ureq_proto::client::flow::RedirectAuthHeaders;
 
 use crate::http;
 use crate::middleware::{Middleware, MiddlewareChain};
@@ -14,6 +13,8 @@ use crate::{Agent, AsSendBody, Proxy, RequestBuilder};
 
 #[cfg(feature = "_tls")]
 use crate::tls::TlsConfig;
+
+pub use ureq_proto::client::flow::RedirectAuthHeaders;
 
 /// Config primarily for the [`Agent`], but also per-request.
 ///
