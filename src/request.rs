@@ -519,7 +519,7 @@ impl fmt::Debug for RequestBuilder<WithBody> {
 
 #[cfg(test)]
 mod test {
-    use std::time::Duration;
+    use web_time::Duration;
 
     use crate::get;
     use crate::test::init_test_log;

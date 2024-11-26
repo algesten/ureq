@@ -2,7 +2,7 @@
 
 use std::cmp::Ordering;
 use std::ops::{Add, Deref};
-use std::time;
+use web_time as time;
 
 /// Wrapper for [`std::time::Instant`] that provides additional time points in the past or future
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -128,8 +128,8 @@ impl Ord for Duration {
     }
 }
 
-impl From<std::time::Duration> for Duration {
-    fn from(value: std::time::Duration) -> Self {
+impl From<time::Duration> for Duration {
+    fn from(value: time::Duration) -> Self {
         Self::Exact(value)
     }
 }

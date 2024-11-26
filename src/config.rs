@@ -3,7 +3,7 @@
 use std::fmt;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Duration;
+use web_time::Duration;
 
 use http::Uri;
 
