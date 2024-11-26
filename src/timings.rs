@@ -1,9 +1,9 @@
 use std::fmt;
 use std::sync::Arc;
+use ureq_proto::ArrayVec;
 
 use crate::config::Timeouts;
 use crate::transport::time::{Duration, Instant};
-use crate::util::ArrayVec;
 
 /// The various timeouts.
 ///

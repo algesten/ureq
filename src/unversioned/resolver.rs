@@ -22,7 +22,7 @@ use http::Uri;
 use crate::config::Config;
 use crate::http;
 use crate::transport::NextTimeout;
-use crate::util::{ArrayVec, SchemeExt, UriExt};
+use crate::util::{SchemeExt, UriExt};
 use crate::Error;
 
 /// Trait for name resolvers.
@@ -40,6 +40,8 @@ pub trait Resolver: Debug + Send + Sync + 'static {
 
 /// Max number of socket addresses to keep from the resolver.
 const MAX_ADDRS: usize = 16;
+
+pub use ureq_proto::ArrayVec;
 
 /// Addresses as returned by the resolver.
 pub type ResolvedSocketAddrs = ArrayVec<SocketAddr, MAX_ADDRS>;
