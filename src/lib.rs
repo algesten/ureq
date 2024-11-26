@@ -493,6 +493,16 @@ pub use error::Error;
 pub use send_body::SendBody;
 pub use timings::Timeout;
 
+#[doc(hidden)]
+pub mod typestate {
+    pub use super::request::WithBody;
+    pub use super::request::WithoutBody;
+
+    pub use super::config::typestate::AgentScope;
+    pub use super::config::typestate::HttpCrateScope;
+    pub use super::config::typestate::RequestScope;
+}
+
 /// Run a [`http::Request<impl AsSendBody>`].
 pub fn run(request: Request<impl AsSendBody>) -> Result<Response<Body>, Error> {
     let agent = Agent::new_with_defaults();

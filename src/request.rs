@@ -6,7 +6,8 @@ use std::ops::{Deref, DerefMut};
 use http::{HeaderName, HeaderValue, Method, Request, Response, Uri, Version};
 
 use crate::body::Body;
-use crate::config::{Config, ConfigBuilder, RequestLevelConfig, RequestScope};
+use crate::config::typestate::RequestScope;
+use crate::config::{Config, ConfigBuilder, RequestLevelConfig};
 use crate::http;
 use crate::query::url_enc;
 use crate::query::{parse_query_params, QueryParam};
@@ -32,10 +33,20 @@ pub struct RequestBuilder<B> {
     _ph: PhantomData<B>,
 }
 
+/// Typestate when [`RequestBuilder`] has no send body.
+///
+/// `RequestBuilder<WithoutBody>`
+///
+/// Methods: GET, DELETE, HEAD, OPTIONS, CONNECT, TRACE
 #[derive(Debug)]
 pub struct WithoutBody(());
 impl Private for WithoutBody {}
 
+/// Typestate when [`RequestBuilder`] needs to a send body.
+///
+/// `RequestBuilder<WithBody>`
+///
+/// Methods: POST, PUT, PATCH
 #[derive(Debug)]
 pub struct WithBody(());
 impl Private for WithBody {}
