@@ -8,8 +8,8 @@ use super::{NextTimeout, Transport};
 /// Helper to turn a [`Transport`] into a std::io [`Read`](io::Read) and [`Write`](io::Write).
 ///
 /// This is useful when integrating with components that expect a regular `Read`/`Write`. In
-/// ureq this is used both for the [`RustlsConnector`](crate::tls::RustlsConnector) and the
-/// [`NativeTlsConnector`](crate::tls::NativeTlsConnector).
+/// ureq this is used both for the [`RustlsConnector`](crate::unversioned::transport::RustlsConnector) and the
+/// [`NativeTlsConnector`](crate::unversioned::transport::NativeTlsConnector).
 pub struct TransportAdapter {
     timeout: NextTimeout,
     transport: Box<dyn Transport>,

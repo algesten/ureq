@@ -7,14 +7,10 @@ mod cert;
 pub use cert::{parse_pem, Certificate, PemItem, PrivateKey};
 
 #[cfg(feature = "rustls")]
-mod rustls;
-#[cfg(feature = "rustls")]
-pub use self::rustls::RustlsConnector;
+pub(crate) mod rustls;
 
 #[cfg(feature = "native-tls")]
-mod native_tls;
-#[cfg(feature = "native-tls")]
-pub use self::native_tls::NativeTlsConnector;
+pub(crate) mod native_tls;
 
 /// Setting for which TLS provider to use.
 ///

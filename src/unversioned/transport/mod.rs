@@ -61,6 +61,12 @@ pub use self::socks::SocksConnector;
 
 pub use crate::proxy::ConnectProxyConnector;
 
+#[cfg(feature = "rustls")]
+pub use crate::tls::rustls::RustlsConnector;
+
+#[cfg(feature = "native-tls")]
+pub use crate::tls::native_tls::NativeTlsConnector;
+
 pub mod time;
 
 pub use crate::timings::NextTimeout;
@@ -73,7 +79,7 @@ pub use crate::timings::NextTimeout;
 /// A connector can be part of a chain of connectors. The [`DefaultConnector`] provides a chain that
 /// first tries to make a concrete socket connection (using [`TcpConnector`]) and then pass the
 /// resulting [`Transport`] to a TLS wrapping connector
-/// (see [`RustlsConnector`](crate::tls::RustlsConnector)). This makes it possible combine connectors
+/// (see [`RustlsConnector`]). This makes it possible combine connectors
 /// in new ways. A user of ureq could implement bespoke connector (such as SCTP) and still use
 /// the `RustlsConnector` to wrap the underlying transport in TLS.
 ///
@@ -212,11 +218,11 @@ pub trait Transport: Debug + Send + Sync {
 ///
 /// 1. [`SocksConnector`] to handle proxy settings if set.
 /// 2. [`TcpConnector`] to open a socket directly if a proxy is not used.
-/// 3. [`RustlsConnector`](crate::tls::RustlsConnector) which wraps the
+/// 3. [`RustlsConnector`] which wraps the
 ///    connection from 1 or 2 in TLS if the scheme is `https` and the
 ///    [`TlsConfig`](crate::tls::TlsConfig) indicate we are using **rustls**.
 ///    This is the default TLS provider.
-/// 4. [`NativeTlsConnector`](crate::tls::NativeTlsConnector) which wraps
+/// 4. [`NativeTlsConnector`] which wraps
 ///    the connection from 1 or 2 in TLS if the scheme is `https` and
 ///    [`TlsConfig`](crate::tls::TlsConfig) indicate we are using **native-tls**.
 ///
@@ -255,7 +261,7 @@ impl Default for DefaultConnector {
             //
             // If rustls is enabled, prefer that
             #[cfg(feature = "rustls")]
-            crate::tls::RustlsConnector::default().boxed(),
+            RustlsConnector::default().boxed(),
             //
             // Panic if the config calls for rustls, the uri scheme is https and that
             // TLS provider is not enabled by feature flags.
@@ -264,7 +270,7 @@ impl Default for DefaultConnector {
             //
             // As a fallback if rustls isn't enabled, use native-tls
             #[cfg(feature = "native-tls")]
-            crate::tls::NativeTlsConnector::default().boxed(),
+            NativeTlsConnector::default().boxed(),
             //
             // Panic if the config calls for native-tls, the uri scheme is https and that
             // TLS provider is not enabled by feature flags.
