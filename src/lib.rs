@@ -743,6 +743,7 @@ pub(crate) mod test {
 
     #[test]
     fn redirect_follow() {
+        init_test_log();
         let res = get("http://httpbin.org/redirect-to?url=%2Fget")
             .call()
             .unwrap();
