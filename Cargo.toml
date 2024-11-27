@@ -60,7 +60,7 @@ http = { version = "1.1", optional = true }
 url = "2.5.0"
 
 # These are locked down for MSRV 1.67
-rustls = { version = "=0.23.17", optional = true, default-features = false, features = ["ring", "logging", "std", "tls12"] }
+rustls = { version = "=0.23.19", optional = true, default-features = false, features = ["ring", "logging", "std", "tls12"] }
 yoke = "=0.7.4"
 litemap = "=0.7.3"
 zerofrom = "=0.1.4"
