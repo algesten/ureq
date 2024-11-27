@@ -23,8 +23,6 @@ targets = [
 ]
 
 [advisories]
-vulnerability = "deny"
-unmaintained = "warn"
 yanked = "deny"
 ignore = []
 
@@ -35,16 +33,14 @@ deny = []
 
 skip = [
   { name = "bitflags" }, # Unfortunate duplicate dependency due to old version beeing pulled in by `security-framework`
+  { name = "http" },     # We deliberately have two.
 ]
 skip-tree = []
 
 
 [licenses]
 private = { ignore = true }
-unlicensed = "deny"
-allow-osi-fsf-free = "neither"
 confidence-threshold = 0.92 # We want really high confidence when inferring licenses from text
-copyleft = "deny"
 allow = [
   "Apache-2.0 WITH LLVM-exception", # https://spdx.org/licenses/LLVM-exception.html
   "Apache-2.0",                     # https://tldrlegal.com/license/apache-license-2.0-(apache-2.0)
