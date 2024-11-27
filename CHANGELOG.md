@@ -1,5 +1,23 @@
 # Unreleased
 
+# 3.0.0-rc3
+
+  * Re-export ureq_proto::ArrayVec (#891)
+  * Expose typestate variables, but #[doc(hidden)] (#889)
+  * Clarify versioning and MSRV policy (#887)
+  * Get last used uri via `ResponseExt::get_uri()` (#884)
+  * Expose more things for 3rd party Transport impls (#886)
+  * Make accessor fn for `Config` and `TlsConfig` (#886)
+  * Move `Transport` and `Resolver` traits to `unversioned` (#881)
+  * Upgrade deps (#885)
+  * MSRV 1.71.1 to follow rustls (#885)
+  * Fix bug in chunked overhead calculation (#880)
+  * Make it possible to disable all automatic headers (#876)
+  * Rename `hoot` -> `ureq_proto`(#872) 
+  * Fix `disable_verification` for TLS (#871)
+  * `vendored` feature flag to get vendored native-tls (#866)
+  * Fix incorrect handling of expect-100 (#867)
+
 # 3.0.0-rc2
   * Remove pub-field config structs in favor of builders (#848)
   * BodyBuilder to create a response Body for test/middleware (#847)
