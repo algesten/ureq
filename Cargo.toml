@@ -13,15 +13,14 @@ exclude = ["/cargo_deny.sh", "/deny.toml", "/test.sh"]
 
 
 # MSRV
-rust-version = "1.63"
+rust-version = "1.67"
 
 [package.metadata.docs.rs]
 features = ["tls", "native-tls", "json", "charset", "cookies", "socks-proxy", "gzip", "brotli", "http-interop", "http-crate"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
-# default = ["tls", "gzip"]
-default = ["tls", "native-tls", "json", "charset", "cookies", "socks-proxy", "gzip", "brotli", "http-interop", "http-crate"]
+default = ["tls", "gzip"]
 tls = ["dep:webpki-roots", "dep:rustls", "dep:rustls-pki-types"]
 native-certs = ["dep:rustls-native-certs"]
 native-tls = ["dep:native-tls"]
@@ -48,10 +47,9 @@ socks = { version = "0.3", optional = true }
 serde = { version = "1", optional = true }
 serde_json = { version = ">=1.0.97", optional = true }
 encoding_rs = { version = "0.8", optional = true }
-cookie_store = { version = "0.21.1", optional = true, default-features = false, features = ["preserve_order"] }
+cookie_store = { version = "0.21.1", optional = true, default-features = false, features = ["preserve_order", "serde_json"] }
 log = "0.4"
 webpki-roots = { version = "0.26", optional = true }
-rustls = { version = "0.23.5", optional = true, default-features = false, features = ["ring", "logging", "std", "tls12"] }
 rustls-pki-types = { version = "1", optional = true }
 rustls-native-certs = { version = "0.7", optional = true }
 native-tls = { version = "0.2", optional = true }
@@ -59,27 +57,16 @@ flate2 = { version = "1.0.22", optional = true }
 brotli-decompressor = { version = "4.0.0", optional = true }
 http-02 = { package = "http", version = "0.2", optional = true }
 http = { version = "1.1", optional = true }
+url = "2.5.0"
+
+# These are locked down for MSRV 1.67
+rustls = { version = "=0.23.17", optional = true, default-features = false, features = ["ring", "logging", "std", "tls12"] }
+yoke = "=0.7.4"
+litemap = "=0.7.3"
+zerofrom = "=0.1.4"
 
 # This can't be in dev-dependencies due to doc tests.
 hootbin = { version = "0.1.5", optional = true }
-
-# Locked down due to MSRV changing, in a patch version(!)
-# This is fine because the time project's policy is to allow themselves
-# to cause that kind of breakage. https://github.com/time-rs/time/issues/551
-time = "=0.3.20"
-
-# Locked down because the url project bumped their MSRV in a patch version(!)
-# No problem: https://github.com/algesten/ureq/issues/877
-url = "=2.5.0"
-
-# The MSRV fun continues: https://github.com/servo/rust-url/issues/939
-idna_adapter = "=1.1"
-
-# Locked for MSRV
-hashbrown = { version = "=0.15.0", optional = false }
-
-# Locked for MSRV
-security-framework-sys = "=2.11.1"
 
 [dev-dependencies]
 env_logger = { version = "<=0.9", default-features = false, features = ["humantime"] }
