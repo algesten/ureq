@@ -1,4 +1,4 @@
-#[cfg(all(feature = "json", any(feature = "tls", feature = "tls-native")))]
+#[cfg(all(feature = "json", feature = "tls"))]
 // test temporarily disabled because httpbin is down / we need to figure out
 // how to eliminate the external dependency.
 // #[test]
@@ -24,7 +24,7 @@
 //     assert_eq!("value", json.headers.get("Header").unwrap());
 // }
 #[test]
-#[cfg(any(feature = "tls", feature = "tls-native"))]
+#[cfg(feature = "tls")]
 // From here https://badssl.com/download/
 // Decrypt key with: openssl rsa -in ./badssl.com-client.pem
 fn tls_client_certificate() {
@@ -147,7 +147,7 @@ m0Wqhhi8/24Sy934t5Txgkfoltg8ahkx934WjP6WWRnSAu+cf+vW
 // This tests that IPv6 addresses as host names work.
 // This is a regression test for passing the host name to `rustls::ServerName::try_from(host_name)`
 #[test]
-#[cfg(any(feature = "tls", feature = "tls-native"))]
+#[cfg(feature = "tls")]
 fn ipv6_addr_in_dns_name() {
     let root_store = rustls::RootCertStore {
         roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
