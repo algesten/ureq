@@ -689,6 +689,7 @@ mod tests {
         // This prepares a cookie store with a cookie that isn't legal
         // according to the relevant rfcs. ureq should not send this.
         let empty = b"";
+        #[allow(deprecated)]
         let mut store = CookieStore::load_json(&empty[..]).unwrap();
         let url = Url::parse("https://mydomain.com").unwrap();
         let cookie = Cookie::new("borked///", "illegal<>//");
