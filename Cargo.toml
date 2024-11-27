@@ -20,7 +20,8 @@ features = ["tls", "native-tls", "json", "charset", "cookies", "socks-proxy", "g
 rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
-default = ["tls", "gzip"]
+# default = ["tls", "gzip"]
+default = ["tls", "native-tls", "json", "charset", "cookies", "socks-proxy", "gzip", "brotli", "http-interop", "http-crate"]
 tls = ["dep:webpki-roots", "dep:rustls", "dep:rustls-pki-types"]
 native-certs = ["dep:rustls-native-certs"]
 native-tls = ["dep:native-tls"]
@@ -47,7 +48,7 @@ socks = { version = "0.3", optional = true }
 serde = { version = "1", optional = true }
 serde_json = { version = ">=1.0.97", optional = true }
 encoding_rs = { version = "0.8", optional = true }
-cookie_store = { version = "0.21", optional = true, default-features = false, features = ["preserve_order"] }
+cookie_store = { version = "0.21.1", optional = true, default-features = false, features = ["preserve_order"] }
 log = "0.4"
 webpki-roots = { version = "0.26", optional = true }
 rustls = { version = "0.23.5", optional = true, default-features = false, features = ["ring", "logging", "std", "tls12"] }
@@ -69,10 +70,16 @@ time = "=0.3.20"
 
 # Locked down because the url project bumped their MSRV in a patch version(!)
 # No problem: https://github.com/algesten/ureq/issues/877
-url = "<=2.5.0"
+url = "=2.5.0"
 
 # The MSRV fun continues: https://github.com/servo/rust-url/issues/939
-idna_adapter = "<=1.1"
+idna_adapter = "=1.1"
+
+# Locked for MSRV
+hashbrown = { version = "=0.15.0", optional = false }
+
+# Locked for MSRV
+security-framework-sys = "=2.11.1"
 
 [dev-dependencies]
 env_logger = { version = "<=0.9", default-features = false, features = ["humantime"] }
