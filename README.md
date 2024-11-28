@@ -22,6 +22,14 @@
 
 A simple, safe HTTP client.
 
+> [!NOTE]
+> ureq version 2.11.0 was forced to bump MSRV from 1.63 -> 1.67. The problem is that the
+> `time` crate 0.3.20, the last 1.63 compatible version, stopped compiling with Rust
+> [1.80 and above](https://github.com/algesten/ureq/pull/878#issuecomment-2503176155).
+> To release a 2.x version that is possible to compile on the latest Rust we were
+> forced to bump MSRV.
+
+
 
 Ureq's first priority is being easy for you to use. It's great for
 anyone who wants a low-overhead HTTP client that just gets the job done. Works
@@ -82,7 +90,7 @@ Ureq supports sending and receiving json, if you enable the "json" feature:
 
 ```rust
   // Requires the `json` feature enabled.
-  let resp: String = ureq::post("http://myapi.example.com/ingest")
+  let resp: String = ureq::post("http://myapi.example.com/post/ingest")
       .set("X-My-Header", "Secret")
       .send_json(ureq::json!({
           "name": "martin",
@@ -247,7 +255,8 @@ be manually configured using [`AgentBuilder::tls_connector`].
 
 You might want to use native-tls if you need to interoperate with servers that
 only support less-secure TLS configurations (rustls doesn't support TLS 1.0 and 1.1, for
-instance).
+instance). You might also want to use it if you need to validate certificates for IP addresses,
+which are not currently supported in rustls.
 
 Here's an example of constructing an Agent that uses native-tls. It requires the
 "native-tls" feature to be enabled.
@@ -319,6 +328,7 @@ If ureq is not what you're looking for, check out these other Rust HTTP clients:
 [std::sync::Arc]: https://doc.rust-lang.org/stable/alloc/sync/struct.Arc.html
 [std::io::Read]: https://doc.rust-lang.org/stable/std/io/trait.Read.html
 [Agent]: https://docs.rs/ureq/latest/ureq/struct.Agent.html
+[AgentBuilder]: https://docs.rs/ureq/latest/ureq/struct.AgentBuilder.html
 [get()]: https://docs.rs/ureq/latest/ureq/fn.get.html
 [post()]: https://docs.rs/ureq/latest/ureq/fn.post.html
 [put()]: https://docs.rs/ureq/latest/ureq/fn.put.html

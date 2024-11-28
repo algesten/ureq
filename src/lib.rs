@@ -36,6 +36,14 @@
 //!
 //! A simple, safe HTTP client.
 //!
+//! > [!NOTE]
+//! > ureq version 2.11.0 was forced to bump MSRV from 1.63 -> 1.67. The problem is that the
+//! > `time` crate 0.3.20, the last 1.63 compatible version, stopped compiling with Rust
+//! > [1.80 and above](https://github.com/algesten/ureq/pull/878#issuecomment-2503176155).
+//! > To release a 2.x version that is possible to compile on the latest Rust we were
+//! > forced to bump MSRV.
+//!
+//!
 //!
 //! Ureq's first priority is being easy for you to use. It's great for
 //! anyone who wants a low-overhead HTTP client that just gets the job done. Works
