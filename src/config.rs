@@ -451,8 +451,8 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
     /// Setting a value of `""` on the request or agent level will also not send a header.
     ///
     /// Defaults to `Default`, which results in `ureq/<version>`
-    pub fn user_agent(mut self, v: AutoHeaderValue) -> Self {
-        self.config().user_agent = v;
+    pub fn user_agent(mut self, v: impl Into<AutoHeaderValue>) -> Self {
+        self.config().user_agent = v.into();
         self
     }
 
@@ -463,8 +463,8 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
     /// Setting a value of `""` on the request or agent level will also not send a header.
     ///
     /// Defaults to `Default`, which results in `*/*`
-    pub fn accept(mut self, v: AutoHeaderValue) -> Self {
-        self.config().accept = v;
+    pub fn accept(mut self, v: impl Into<AutoHeaderValue>) -> Self {
+        self.config().accept = v.into();
         self
     }
 
@@ -481,8 +481,8 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
     /// This communicates capability to the server, however the triggering the
     /// automatic decompression behavior is not affected since that only looks
     /// at the `Content-Encoding` response header.
-    pub fn accept_encoding(mut self, v: AutoHeaderValue) -> Self {
-        self.config().accept_encoding = v;
+    pub fn accept_encoding(mut self, v: impl Into<AutoHeaderValue>) -> Self {
+        self.config().accept_encoding = v.into();
         self
     }
 
@@ -683,6 +683,15 @@ impl AutoHeaderValue {
             None
         } else {
             Some(x)
+        }
+    }
+}
+
+impl<S: AsRef<str>> From<S> for AutoHeaderValue {
+    fn from(value: S) -> Self {
+        match value.as_ref() {
+            "" => Self::None,
+            _ => Self::Provided(Arc::new(value.as_ref().to_owned())),
         }
     }
 }
