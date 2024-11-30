@@ -19,6 +19,7 @@ rust-version = "1.71.1"
 features = ["rustls", "platform-verifier", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset", "json", "_test"]
 
 [features]
+#default = ["rustls", "gzip", "json", "std"]
 default = ["rustls", "gzip", "json"]
 rustls = ["dep:rustls", "_tls", "dep:webpki-roots"]
 platform-verifier = ["dep:rustls-platform-verifier"]
@@ -30,6 +31,7 @@ brotli = ["dep:brotli-decompressor"]
 charset = ["dep:encoding_rs"]
 json = ["dep:serde", "dep:serde_json", "cookie_store?/serde_json"]
 vendored = ["native-tls?/vendored"]
+std = ["ureq-proto/std"]
 
 # Underscore prefixed features are internal
 _url = ["dep:url"]
@@ -38,7 +40,7 @@ _test = []
 
 [dependencies]
 base64 = "0.22.1"
-ureq-proto = { git = "https://github.com/algesten/ureq-proto.git", rev = "baf0cd4" }
+ureq-proto = { git = "https://github.com/algesten/ureq-proto.git", rev = "baf0cd4", default-features = false }
 # ureq-proto = { path = "../ureq-proto" }
 log = "0.4.22"
 once_cell = "1.19.0"
