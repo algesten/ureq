@@ -277,6 +277,7 @@ impl From<Config> for Agent {
 
 #[cfg(test)]
 impl Agent {
+    /// Exposed for testing the pool count.
     pub fn pool_count(&self) -> usize {
         self.pool.pool_count()
     }

@@ -60,6 +60,7 @@ impl ConnectionPool {
     }
 
     #[cfg(test)]
+    /// Exposed for testing the pool count.
     pub fn pool_count(&self) -> usize {
         let lock = self.pool.lock().unwrap();
         lock.lru.len()
