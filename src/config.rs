@@ -333,7 +333,6 @@ impl Config {
     /// This setting has no effect when used per-request.
     ///
     /// Defaults to 10
-
     pub fn max_idle_connections(&self) -> usize {
         self.max_idle_connections
     }

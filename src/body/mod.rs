@@ -48,7 +48,6 @@ const MAX_BODY_SIZE: u64 = 10 * 1024 * 1024;
 /// assert_eq!(bytes.len(), len);
 /// # Ok::<_, ureq::Error>(())
 /// ```
-
 pub struct Body {
     source: BodyDataSource,
     info: Arc<ResponseInfo>,
