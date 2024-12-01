@@ -620,7 +620,7 @@ enum MaybeLossyDecoder<R> {
 }
 
 impl<R: io::Read> io::Read for MaybeLossyDecoder<R> {
-    fn read(&mut self, buf: &mut [u8]) -> core::result::Result<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> anyhow::Result<usize> {
         match self {
             MaybeLossyDecoder::Lossy(r) => r.read(buf),
             MaybeLossyDecoder::PassThrough(r) => r.read(buf),
@@ -629,7 +629,7 @@ impl<R: io::Read> io::Read for MaybeLossyDecoder<R> {
 }
 
 impl<'a> io::Read for BodyReader<'a> {
-    fn read(&mut self, buf: &mut [u8]) -> core::result::Result<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> anyhow::Result<usize> {
         self.reader.read(buf)
     }
 }
@@ -641,7 +641,7 @@ enum CharsetDecoder<R> {
 }
 
 impl<R: io::Read> io::Read for CharsetDecoder<R> {
-    fn read(&mut self, buf: &mut [u8]) -> core::result::Result<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> anyhow::Result<usize> {
         match self {
             #[cfg(feature = "charset")]
             CharsetDecoder::Decoder(v) => v.read(buf),
@@ -659,7 +659,7 @@ enum ContentDecoder<R: io::Read> {
 }
 
 impl<R: io::Read> io::Read for ContentDecoder<R> {
-    fn read(&mut self, buf: &mut [u8]) -> core::result::Result<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> anyhow::Result<usize> {
         match self {
             #[cfg(feature = "gzip")]
             ContentDecoder::Gzip(v) => v.read(buf),
@@ -714,7 +714,7 @@ pub(crate) enum BodySourceRef<'a> {
 }
 
 impl<'a> io::Read for BodySourceRef<'a> {
-    fn read(&mut self, buf: &mut [u8]) -> core::result::Result<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> anyhow::Result<usize> {
         match self {
             BodySourceRef::HandlerShared(v) => v.read(buf),
             BodySourceRef::HandlerOwned(v) => v.read(buf),

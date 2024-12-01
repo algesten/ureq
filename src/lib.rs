@@ -440,6 +440,7 @@
 //! [webpki-roots]: https://crates.io/crates/webpki-roots
 
 #![no_std]
+//#![feature(core_io_borrowed_buf)] // TODO: requires nightly?
 #![forbid(unsafe_code)]
 #![warn(clippy::all)]
 #![deny(missing_docs)]

@@ -52,7 +52,7 @@ impl Connector for TestConnector {
 impl TestHandler {
     fn new(
         pattern: &'static str,
-        handler: impl Fn(Uri, Request<()>, &mut dyn Write) -> core::result::Result<()> + Send + Sync + 'static,
+        handler: impl Fn(Uri, Request<()>, &mut dyn Write) -> anyhow::Result<()> + Send + Sync + 'static,
     ) -> Self {
         TestHandler {
             pattern,
@@ -91,7 +91,7 @@ pub fn set_handler(pattern: &'static str, status: u16, headers: &[(&str, &str)],
 #[derive(Clone)]
 struct TestHandler {
     pattern: &'static str,
-    handler: Arc<dyn Fn(Uri, Request<()>, &mut dyn Write) -> core::result::Result<()> + Sync + Send>,
+    handler: Arc<dyn Fn(Uri, Request<()>, &mut dyn Write) -> anyhow::Result<()> + Sync + Send>,
 }
 
 fn test_run(
@@ -395,7 +395,7 @@ const HTTPBIN_JSON: &str = r#"
 struct RxRead(Receiver<Vec<u8>>);
 
 impl io::Read for RxRead {
-    fn read(&mut self, buf: &mut [u8]) -> core::result::Result<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> anyhow::Result<usize> {
         let v = match self.0.recv() {
             Ok(v) => v,
             Err(_) => return Ok(0), // remote side is gone
@@ -410,14 +410,14 @@ impl io::Read for RxRead {
 struct TxWrite(mpsc::SyncSender<Vec<u8>>);
 
 impl io::Write for TxWrite {
-    fn write(&mut self, buf: &[u8]) -> core::result::Result<usize> {
+    fn write(&mut self, buf: &[u8]) -> anyhow::Result<usize> {
         self.0
             .send(buf.to_vec())
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
         Ok(buf.len())
     }
 
-    fn flush(&mut self) -> core::result::Result<()> {
+    fn flush(&mut self) -> anyhow::Result<()> {
         Ok(())
     }
 }

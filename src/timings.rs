@@ -1,3 +1,4 @@
+use alloc::fmt;
 use alloc::sync::Arc;
 use ureq_proto::ArrayVec;
 

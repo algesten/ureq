@@ -119,8 +119,8 @@ fn maybe_update_timeout(
     timeout: NextTimeout,
     previous: &mut Option<Duration>,
     stream: &TcpStream,
-    f: impl Fn(&TcpStream, Option<web_time::Duration>) -> core::result::Result<()>,
-) -> core::result::Result<()> {
+    f: impl Fn(&TcpStream, Option<web_time::Duration>) -> anyhow::Result<()>,
+) -> anyhow::Result<()> {
     let maybe_timeout = timeout.not_zero();
 
     if maybe_timeout != *previous {

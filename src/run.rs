@@ -1,3 +1,4 @@
+use alloc::string::String;
 use alloc::sync::Arc;
 use http::uri::Scheme;
 use http::{header, HeaderValue, Request, Response, Uri};
@@ -168,7 +169,7 @@ fn flow_run(
 
     let ret = match response_result {
         RecvResponseResult::RecvBody(flow) => {
-            let timings = mem::take(timings);
+            let timings = core::mem::take(timings);
             let mut handler = BodyHandler {
                 flow: Some(flow),
                 connection: Some(connection),
@@ -190,7 +191,7 @@ fn flow_run(
             if redirect_count >= config.max_redirects() {
                 FlowResult::Response(response, BodyHandler::default())
             } else {
-                FlowResult::Redirect(flow, mem::take(timings))
+                FlowResult::Redirect(flow, core::mem::take(timings))
             }
         }
         RecvResponseResult::Cleanup(flow) => {
@@ -656,7 +657,7 @@ impl BodyHandler {
 }
 
 impl io::Read for BodyHandler {
-    fn read(&mut self, buf: &mut [u8]) -> core::result::Result<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> anyhow::Result<usize> {
         self.do_read(buf).map_err(|e| e.into_io())
     }
 }

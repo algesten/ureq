@@ -119,7 +119,7 @@ impl Proxy {
         macro_rules! try_env {
             ($($env:literal),+) => {
                 $(
-                    if let Ok(env) = std::env::var($env) {
+                    if let Ok(env) = std::env::var($env) { // TODO: no_std?
                         if let Ok(proxy) = Self::new_with_flag(&env, true) {
                             return Some(proxy);
                         }

@@ -1,3 +1,5 @@
+use core::io;
+
 use crate::Error;
 
 pub(crate) struct LimitReader<R> {
@@ -17,7 +19,7 @@ impl<R> LimitReader<R> {
 }
 
 impl<R: io::Read> io::Read for LimitReader<R> {
-    fn read(&mut self, buf: &mut [u8]) -> core::result::Result<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> anyhow::Result<usize> {
         if self.left == 0 {
             return Err(Error::BodyExceedsLimit(self.limit).into_io());
         }
