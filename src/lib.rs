@@ -440,7 +440,6 @@
 //! [webpki-roots]: https://crates.io/crates/webpki-roots
 
 #![no_std]
-//#![feature(core_io_borrowed_buf)] // TODO: requires nightly?
 #![forbid(unsafe_code)]
 #![warn(clippy::all)]
 #![deny(missing_docs)]
@@ -553,6 +552,7 @@ mk_method!(trace, TRACE, WithoutBody);
 pub(crate) mod test {
     use assert_no_alloc::AllocDisabler;
     use config::Config;
+    use no_std_io::io;
     use once_cell::sync::Lazy;
 
     use super::*;
@@ -779,7 +779,7 @@ pub(crate) mod test {
     #[test]
     fn post_big_body_chunked() {
         // https://github.com/algesten/ureq/issues/879
-        let mut data = io::Cursor::new(vec![42; 153_600]);
+        let mut data = io::Cursor::new(alloc::vec![42; 153_600]);
         post("http://httpbin.org/post")
             .content_type("application/octet-stream")
             .send(SendBody::from_reader(&mut data))

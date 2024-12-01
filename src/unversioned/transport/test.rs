@@ -1,5 +1,7 @@
 #![allow(clippy::type_complexity)]
 
+use no_std_io::io;
+
 use http::{Method, Request, Uri};
 
 use crate::http;

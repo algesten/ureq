@@ -1,3 +1,4 @@
+use no_std_io::io;
 use crate::body::{Body, BodyReader};
 use crate::http;
 use crate::util::private::Private;
@@ -24,12 +25,12 @@ impl<'a> SendBody<'a> {
     }
 
     /// Creates a body from a shared [`Read`] impl.
-    pub fn from_reader(reader: &'a mut dyn Read) -> SendBody<'a> {
+    pub fn from_reader(reader: &'a mut dyn io::Read) -> SendBody<'a> {
         BodyInner::Reader(reader).into()
     }
 
     /// Creates a body from an owned [`Read]` impl.
-    pub fn from_owned_reader(reader: impl Read + 'static) -> SendBody<'static> {
+    pub fn from_owned_reader(reader: impl io::Read + 'static) -> SendBody<'static> {
         BodyInner::OwnedReader(Box::new(reader)).into()
     }
 
@@ -152,8 +153,8 @@ pub(crate) enum BodyInner<'a> {
     None,
     ByteSlice(&'a [u8]),
     Body(BodyReader<'a>),
-    Reader(&'a mut dyn Read),
-    OwnedReader(Box<dyn Read>),
+    Reader(&'a mut dyn io::Read),
+    OwnedReader(Box<dyn io::Read>),
 }
 
 impl<'a> BodyInner<'a> {

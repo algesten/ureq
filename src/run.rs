@@ -1,4 +1,6 @@
-use alloc::string::String;
+use no_std_io::io;
+
+use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use http::uri::Scheme;
 use http::{header, HeaderValue, Request, Response, Uri};

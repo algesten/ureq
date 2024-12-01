@@ -606,7 +606,7 @@ mod test {
 
         let amended = amend_request_query(
             request,
-            vec![QueryParam::new_key_value("å ", "i åa ä e ö")].into_iter(),
+            alloc::vec![QueryParam::new_key_value("å ", "i åa ä e ö")].into_iter(),
         );
 
         assert_eq!(

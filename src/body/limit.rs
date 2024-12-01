@@ -1,4 +1,4 @@
-use core::io;
+use no_std_io::io;
 
 use crate::Error;
 

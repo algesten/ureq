@@ -1,5 +1,6 @@
 use alloc::fmt;
 use alloc::string::String;
+use no_std_io::io;
 
 use crate::http;
 use crate::Timeout;

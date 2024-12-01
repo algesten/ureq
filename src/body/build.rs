@@ -119,7 +119,7 @@ impl BodyBuilder {
     ///
     /// The reader can be limited by using `.limit()` or that the reader
     /// reaches the end.
-    pub fn reader(self, data: impl io::Read + Send + Sync + 'static) -> Body {
+    pub fn reader(self, data: impl no_std_io::io::Read + Send + Sync + 'static) -> Body {
         Body {
             source: BodyDataSource::Reader(Box::new(data)),
             info: Arc::new(self.info),

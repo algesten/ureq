@@ -2,6 +2,7 @@ use core::convert::TryFrom;
 
 use alloc::boxed::Box;
 use alloc::fmt;
+use alloc::string::ToString;
 use alloc::sync::Arc;
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;

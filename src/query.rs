@@ -105,7 +105,7 @@ impl<'a> PartialEq for QueryParam<'a> {
 
 #[cfg(test)]
 mod test {
-    use alloc::vec::Vec;
+    use alloc::{string::ToString, vec::Vec};
 
     use super::*;
 

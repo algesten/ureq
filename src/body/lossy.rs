@@ -1,3 +1,5 @@
+use no_std_io::io;
+
 use utf8::DecodeError;
 
 use crate::util::ConsumeBuf;
@@ -97,7 +99,7 @@ impl<R: io::Read> io::Read for LossyUtf8Reader<R> {
 
 #[cfg(test)]
 mod test {
-    use std::io::Read;
+    use no_std_io::io;
 
     use alloc::string::String;
 

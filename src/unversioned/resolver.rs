@@ -157,6 +157,8 @@ impl fmt::Debug for DefaultResolver {
 
 #[cfg(test)]
 mod test {
+    use alloc::string::ToString;
+
     use crate::transport::time::Duration;
 
     use super::*;
