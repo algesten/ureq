@@ -33,7 +33,7 @@ where
 }
 
 impl<R: io::Read> io::Read for CharCodec<R> {
-    fn read(&mut self, buf: &mut [u8]) -> anyhow::Result<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         if self.reached_end && self.buf.unconsumed().is_empty() {
             return Ok(0);
         }

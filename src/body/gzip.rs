@@ -1,37 +1,22 @@
+use no_std_io::io;
+
 use flate2::read::MultiGzDecoder;
 
 use crate::Error;
 
-#[cfg(not(feature = "std"))]
-use core::result;
-#[cfg(not(feature = "std"))]
-use core::convert::From;
-#[cfg(feature = "std")]
-use std::io;
-
-// Replace io::Read with a custom trait for no_std
-pub trait Read {
-    fn read(&mut self, buf: &mut [u8]) -> result::Result<usize, Error>;
-}
-
-#[cfg(feature = "std")]
-impl<R: io::Read> Read for R {
-    fn read(&mut self, buf: &mut [u8]) -> result::Result<usize, Error> {
-        io::Read::read(self, buf).map_err(|e| Error::Decompress("gzip", e))
-    }
-}
-
 pub(crate) struct GzipDecoder<R>(MultiGzDecoder<R>);
 
-impl<R: Read> GzipDecoder<R> {
+impl<R: io::Read> GzipDecoder<R> {
     pub fn new(reader: R) -> Self {
         GzipDecoder(MultiGzDecoder::new(reader))
     }
 }
 
-impl<R: Read> Read for GzipDecoder<R> {
-    fn read(&mut self, buf: &mut [u8]) -> result::Result<usize, Error> {
-        self.0.read(buf)
+impl<R: io::Read> io::Read for GzipDecoder<R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.0
+            .read(buf)
+            .map_err(|e| Error::Decompress("gzip", e).into_io())
     }
 }
 

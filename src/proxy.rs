@@ -1,4 +1,4 @@
-use core::convert::TryFrom;
+use core::convert::{TryFrom, TryInto};
 
 use alloc::boxed::Box;
 use alloc::fmt;
@@ -6,6 +6,7 @@ use alloc::string::ToString;
 use alloc::sync::Arc;
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
+use no_std_io::io::Write as _;
 use ureq_proto::parser::try_parse_response;
 
 use http::{StatusCode, Uri};
@@ -116,6 +117,7 @@ impl Proxy {
     /// * `HTTP_PROXY`
     ///
     /// Returns `None` if no environment variable is set or the URI is invalid.
+    #[cfg(feature = "std")]
     pub fn try_from_env() -> Option<Self> {
         macro_rules! try_env {
             ($($env:literal),+) => {
@@ -137,6 +139,11 @@ impl Proxy {
             "HTTP_PROXY",
             "http_proxy"
         );
+        None
+    }
+
+    #[cfg(not(feature = "std"))]
+    pub fn try_from_env() -> Option<Self> {
         None
     }
 

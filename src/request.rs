@@ -4,7 +4,7 @@ use core::ops::{Deref, DerefMut};
 
 use alloc::boxed::Box;
 use alloc::fmt;
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use http::{HeaderName, HeaderValue, Method, Request, Response, Uri, Version};
 
@@ -523,6 +523,8 @@ impl fmt::Debug for RequestBuilder<WithBody> {
 #[cfg(test)]
 mod test {
     use core::time::Duration;
+
+    use alloc::string::ToString;
 
     use crate::get;
     use crate::test::init_test_log;

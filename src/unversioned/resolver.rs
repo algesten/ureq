@@ -14,6 +14,7 @@
 use core::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};
 
 use alloc::fmt;
+use alloc::vec::IntoIter;
 use alloc::string::String;
 use http::uri::{Authority, Scheme};
 use http::Uri;
@@ -102,7 +103,7 @@ impl Resolver for DefaultResolver {
         let iter = if use_sync {
             trace!("Resolve: {}", addr);
             // When timeout is not set, we do not spawn any threads.
-            addr.to_socket_addrs()?
+            addr.to_socket_addrs()? // TODO: no_std?
         } else {
             trace!("Resolve with timeout ({:?}): {} ", timeout, addr);
             resolve_async(addr, timeout)?
@@ -130,7 +131,12 @@ impl Resolver for DefaultResolver {
     }
 }
 
-// TODO: very no_std unfriendly function?
+#[cfg(not(feature = "std"))]
+fn resolve_async(addr: String, timeout: NextTimeout) -> Result<IntoIter<SocketAddr>, Error> {
+    unimplemented!()
+}
+
+#[cfg(feature = "std")]
 fn resolve_async(addr: String, timeout: NextTimeout) -> Result<IntoIter<SocketAddr>, Error> {
     // TODO(martin): On Linux we have getaddrinfo_a which is a libc async way of
     // doing host lookup. We should make a subcrate that uses a native async method

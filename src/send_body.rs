@@ -1,4 +1,5 @@
 use no_std_io::io;
+use no_std_io::io::Read as _;
 use crate::body::{Body, BodyReader};
 use crate::http;
 use crate::util::private::Private;
@@ -43,7 +44,7 @@ impl<'a> SendBody<'a> {
         Ok(Self::from_owned_reader(io::Cursor::new(json)))
     }
 
-    pub(crate) fn read(&mut self, buf: &mut [u8]) -> anyhow::Result<usize> {
+    pub(crate) fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let n = match &mut self.inner {
             BodyInner::None => {
                 return Ok(0);

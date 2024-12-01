@@ -2,6 +2,7 @@ use core::net::SocketAddr;
 
 use alloc::boxed::Box;
 use alloc::fmt;
+use no_std_io::io;
 
 use crate::config::Config;
 use crate::util::IoResultExt;
@@ -119,8 +120,8 @@ fn maybe_update_timeout(
     timeout: NextTimeout,
     previous: &mut Option<Duration>,
     stream: &TcpStream,
-    f: impl Fn(&TcpStream, Option<web_time::Duration>) -> anyhow::Result<()>,
-) -> anyhow::Result<()> {
+    f: impl Fn(&TcpStream, Option<web_time::Duration>) -> io::Result<()>,
+) -> io::Result<()> {
     let maybe_timeout = timeout.not_zero();
 
     if maybe_timeout != *previous {

@@ -1,3 +1,5 @@
+use core::convert::TryFrom;
+
 use alloc::fmt;
 use alloc::vec::Vec;
 use http::header::{ACCEPT, ACCEPT_CHARSET, ACCEPT_ENCODING};
@@ -5,6 +7,7 @@ use http::header::{CONNECTION, CONTENT_ENCODING, CONTENT_LENGTH, CONTENT_TYPE};
 use http::header::{DATE, HOST, LOCATION, SERVER, TRANSFER_ENCODING, USER_AGENT};
 use http::uri::{Authority, Scheme};
 use http::{HeaderMap, HeaderName, HeaderValue, Method, Response, Uri, Version};
+use no_std_io::io;
 
 use crate::http;
 use crate::proxy::Proto;
@@ -64,12 +67,12 @@ pub(crate) trait IoResultExt {
     fn normalize_would_block(self) -> Self;
 }
 
-impl<T> IoResultExt for anyhow::Result<T> {
+impl<T> IoResultExt for io::Result<T> {
     fn normalize_would_block(self) -> Self {
         match self {
             Ok(v) => Ok(v),
-            Err(e) if e.kind() == ErrorKind::WouldBlock => {
-                Err(io::Error::new(ErrorKind::TimedOut, e))
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                Err(io::Error::new(io::ErrorKind::TimedOut, e))
             }
             Err(e) => Err(e),
         }

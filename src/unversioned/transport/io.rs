@@ -55,7 +55,7 @@ impl TransportAdapter {
 }
 
 impl io::Read for TransportAdapter {
-    fn read(&mut self, buf: &mut [u8]) -> anyhow::Result<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.transport
             .await_input(self.timeout)
             .map_err(|e| e.into_io())?;
@@ -70,7 +70,7 @@ impl io::Read for TransportAdapter {
 }
 
 impl io::Write for TransportAdapter {
-    fn write(&mut self, buf: &[u8]) -> anyhow::Result<usize> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         let output = self.transport.buffers().output();
 
         let max = buf.len().min(output.len());
@@ -82,7 +82,7 @@ impl io::Write for TransportAdapter {
         Ok(max)
     }
 
-    fn flush(&mut self) -> anyhow::Result<()> {
+    fn flush(&mut self) -> io::Result<()> {
         Ok(())
     }
 }

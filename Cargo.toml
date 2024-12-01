@@ -19,7 +19,7 @@ features = ["rustls", "platform-verifier", "native-tls", "socks-proxy", "cookies
 
 [features]
 #default = ["rustls", "gzip", "json", "std"]
-default = ["rustls", "gzip", "json"]
+default = ["rustls", "json"]
 rustls = ["dep:rustls", "_tls", "dep:webpki-roots"]
 platform-verifier = ["dep:rustls-platform-verifier"]
 native-tls = ["dep:native-tls", "dep:der", "_tls", "dep:webpki-root-certs"]
@@ -77,7 +77,6 @@ serde_json = { version = "1.0.120", optional = true, default-features = false, f
 # TODO: no_std?
 spin = "0.9.8"
 web-time = "1.1.0"
-anyhow = "1.0.93"
 no_std_io = "0.6.0"
 
 [build-dependencies]
