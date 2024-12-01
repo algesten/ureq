@@ -1,9 +1,5 @@
 //! Internal time wrappers
 
-use std::cmp::Ordering;
-use std::ops::{Add, Deref};
-use std::time;
-
 /// Wrapper for [`std::time::Instant`] that provides additional time points in the past or future
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Instant {

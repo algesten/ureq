@@ -1,9 +1,6 @@
+use alloc::boxed::Box;
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
-use std::convert::{TryFrom, TryInto};
-use std::fmt;
-use std::io::Write;
-use std::sync::Arc;
 use ureq_proto::parser::try_parse_response;
 
 use http::{StatusCode, Uri};

@@ -1,5 +1,3 @@
-use std::io;
-
 use crate::Timeout;
 
 use super::time::Duration;

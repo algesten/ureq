@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+
 use crate::util::ConsumeBuf;
 
 /// Abstraction over input/output buffers.
@@ -85,7 +87,7 @@ impl LazyBuffers {
 
             // Vectors don't allocate until they get a size.
             input: ConsumeBuf::new(0),
-            output: vec![],
+            output: alloc::vec![],
 
             progress: false,
         }

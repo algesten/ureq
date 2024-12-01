@@ -1,4 +1,4 @@
-use std::{fmt, io};
+use alloc::string::String;
 
 use crate::http;
 use crate::Timeout;

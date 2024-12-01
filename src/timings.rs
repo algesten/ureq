@@ -1,5 +1,3 @@
-use std::fmt;
-use std::sync::Arc;
 use ureq_proto::ArrayVec;
 
 use crate::config::Timeouts;

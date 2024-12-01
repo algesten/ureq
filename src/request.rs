@@ -1,8 +1,8 @@
-use std::convert::TryFrom;
-use std::fmt;
-use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut};
+use core::convert::TryFrom;
+use core::marker::PhantomData;
 
+use alloc::boxed::Box;
+use alloc::vec::Vec;
 use http::{HeaderName, HeaderValue, Method, Request, Response, Uri, Version};
 
 use crate::body::Body;
@@ -222,7 +222,7 @@ impl RequestBuilder<WithoutBody> {
         Self {
             agent,
             builder: Request::builder().method(method).uri(uri),
-            query_extra: vec![],
+            query_extra: alloc::vec![],
             dummy_config: None,
             _ph: PhantomData,
         }
@@ -284,7 +284,7 @@ impl RequestBuilder<WithBody> {
         Self {
             agent,
             builder: Request::builder().method(method).uri(uri),
-            query_extra: vec![],
+            query_extra: alloc::vec![],
             dummy_config: None,
             _ph: PhantomData,
         }
@@ -569,7 +569,7 @@ mod test {
 
         let amended = amend_request_query(
             request,
-            vec![
+            alloc::vec![
                 QueryParam::new_key_value("x", "z"),
                 QueryParam::new_key_value("ab", "cde"),
             ]
@@ -588,7 +588,7 @@ mod test {
 
         let amended = amend_request_query(
             request,
-            vec![QueryParam::new_key_value("ab", "cde")].into_iter(),
+            alloc::vec![QueryParam::new_key_value("ab", "cde")].into_iter(),
         );
 
         assert_eq!(amended.uri(), "https://foo.bar/path?x=z&ab=cde");

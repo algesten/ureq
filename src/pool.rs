@@ -1,7 +1,6 @@
-use std::collections::VecDeque;
-use std::fmt;
-use std::sync::{Arc, Mutex, Weak};
-
+use alloc::boxed::Box;
+use alloc::collections::vec_deque::VecDeque;
+use alloc::sync::Arc;
 use http::uri::{Authority, Scheme};
 use http::Uri;
 

@@ -1,5 +1,3 @@
-use std::io;
-
 use brotli_decompressor::Decompressor;
 
 use crate::Error;

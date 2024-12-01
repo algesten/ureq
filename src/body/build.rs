@@ -1,5 +1,4 @@
-use std::io::{self, Cursor};
-use std::sync::Arc;
+use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 
 use ureq_proto::BodyMode;
 
@@ -112,7 +111,8 @@ impl BodyBuilder {
         let len = self.limit.unwrap_or(data.len() as u64);
         self.info.body_mode = BodyMode::LengthDelimited(len);
 
-        self.reader(Cursor::new(data))
+        //self.reader(Cursor::new(data))
+        todo!()
     }
 
     /// Creates a body from a streaming reader.

@@ -1,6 +1,3 @@
-use std::sync::Arc;
-use std::{io, mem};
-
 use http::uri::Scheme;
 use http::{header, HeaderValue, Request, Response, Uri};
 use once_cell::sync::Lazy;
@@ -642,7 +639,7 @@ impl BodyHandler {
     }
 
     fn consume_redirect_body(&mut self) -> Result<Flow<Redirect>, Error> {
-        let mut buf = vec![0; 1024];
+        let mut buf = alloc::vec![0; 1024];
         loop {
             let amount = self.do_read(&mut buf)?;
             if amount == 0 {

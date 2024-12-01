@@ -1,9 +1,4 @@
-use std::borrow::Cow;
-use std::fmt;
-use std::iter::Enumerate;
-use std::ops::Deref;
-use std::str::Chars;
-
+use alloc::{borrow::Cow, string::String};
 use percent_encoding::utf8_percent_encode;
 
 #[derive(Clone)]
@@ -108,6 +103,8 @@ impl<'a> PartialEq for QueryParam<'a> {
 
 #[cfg(test)]
 mod test {
+    use alloc::vec::Vec;
+
     use super::*;
 
     use crate::http::Uri;
@@ -137,11 +134,11 @@ mod test {
     #[test]
     fn parse_query_string() {
         assert_eq!(parse_query_params("").next(), None);
-        assert_eq!(p("&"), vec![""]);
-        assert_eq!(p("="), vec!["="]);
-        assert_eq!(p("&="), vec!["", "="]);
-        assert_eq!(p("foo=bar"), vec!["foo=bar"]);
-        assert_eq!(p("foo=bar&"), vec!["foo=bar"]);
-        assert_eq!(p("foo=bar&foo2=bar2"), vec!["foo=bar", "foo2=bar2"]);
+        assert_eq!(p("&"), alloc::vec![""]);
+        assert_eq!(p("="), alloc::vec!["="]);
+        assert_eq!(p("&="), alloc::vec!["", "="]);
+        assert_eq!(p("foo=bar"), alloc::vec!["foo=bar"]);
+        assert_eq!(p("foo=bar&"), alloc::vec!["foo=bar"]);
+        assert_eq!(p("foo=bar&foo2=bar2"), alloc::vec!["foo=bar", "foo2=bar2"]);
     }
 }

@@ -1,3 +1,5 @@
+use alloc::{boxed::Box, vec::Vec};
+
 use crate::Error;
 
 use super::{ConnectionDetails, Connector, Transport};

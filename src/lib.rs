@@ -439,16 +439,22 @@
 //! [rustls-platform-verifier]: https://crates.io/crates/rustls-platform-verifier
 //! [webpki-roots]: https://crates.io/crates/webpki-roots
 
+#![no_std]
 #![forbid(unsafe_code)]
 #![warn(clippy::all)]
 #![deny(missing_docs)]
 // I don't think elided lifetimes help in understanding the code.
 #![allow(clippy::needless_lifetimes)]
 
+extern crate alloc;
+
+#[cfg(feature = "std")]
+extern crate std;
+
 #[macro_use]
 extern crate log;
 
-use std::convert::TryFrom;
+use core::convert::TryFrom;
 
 /// Re-exported http-crate.
 pub use ureq_proto::http;
@@ -544,8 +550,6 @@ mk_method!(trace, TRACE, WithoutBody);
 
 #[cfg(test)]
 pub(crate) mod test {
-    use std::io;
-
     use assert_no_alloc::AllocDisabler;
     use config::Config;
     use once_cell::sync::Lazy;
@@ -833,7 +837,7 @@ pub(crate) mod test {
         is_send(get("https://example.test"));
         is_sync(get("https://example.test"));
 
-        let data = vec![0_u8, 1, 2, 3, 4];
+        let data = alloc::vec![0_u8, 1, 2, 3, 4];
 
         // Response<Body> via ResponseBuilder
         is_send(post("https://example.test").send(&data));

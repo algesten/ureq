@@ -23,7 +23,7 @@
 //! using these schemes. See [`ChainedConnector`] for a helper connector that aids setting
 //! up a chain of concrete connectors.
 
-use std::fmt::Debug;
+use alloc::fmt::Debug;
 
 use http::uri::Scheme;
 use http::Uri;

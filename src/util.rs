@@ -1,7 +1,4 @@
-use std::convert::TryFrom;
-use std::fmt;
-use std::io::{self, ErrorKind};
-
+use alloc::vec::Vec;
 use http::header::{ACCEPT, ACCEPT_CHARSET, ACCEPT_ENCODING};
 use http::header::{CONNECTION, CONTENT_ENCODING, CONTENT_LENGTH, CONTENT_TYPE};
 use http::header::{DATE, HOST, LOCATION, SERVER, TRANSFER_ENCODING, USER_AGENT};
@@ -87,7 +84,7 @@ pub(crate) struct ConsumeBuf {
 impl ConsumeBuf {
     pub fn new(size: usize) -> Self {
         ConsumeBuf {
-            buf: vec![0; size],
+            buf: alloc::vec![0; size],
             filled: 0,
             consumed: 0,
         }

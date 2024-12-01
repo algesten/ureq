@@ -1,5 +1,3 @@
-use std::io;
-
 use crate::Error;
 
 pub(crate) struct LimitReader<R> {

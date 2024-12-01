@@ -1,7 +1,3 @@
-use std::fs::File;
-use std::io::{self, Read, Stdin};
-use std::net::TcpStream;
-
 use crate::body::{Body, BodyReader};
 use crate::http;
 use crate::util::private::Private;
@@ -76,6 +72,9 @@ impl<'a> SendBody<'a> {
     }
 }
 
+use alloc::boxed::Box;
+use alloc::string::String;
+use alloc::vec::Vec;
 use http::Response;
 use ureq_proto::BodyMode;
 

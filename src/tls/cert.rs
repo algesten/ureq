@@ -1,6 +1,3 @@
-use std::borrow::Cow;
-use std::fmt;
-
 use crate::Error;
 
 /// An X509 certificate for a server or a client.

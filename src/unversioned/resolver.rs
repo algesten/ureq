@@ -10,12 +10,10 @@
 //!
 //! In some situations it might be desirable to not do this lookup, or to use another system
 //! than DNS for it.
-use std::fmt::{self, Debug};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4, ToSocketAddrs};
-use std::sync::mpsc::{self, RecvTimeoutError};
-use std::thread::{self};
-use std::vec::IntoIter;
 
+use core::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};
+
+use alloc::string::String;
 use http::uri::{Authority, Scheme};
 use http::Uri;
 

@@ -1,12 +1,5 @@
 #![allow(clippy::type_complexity)]
 
-use std::cell::RefCell;
-use std::io::Write;
-use std::io::{BufRead, BufReader};
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
-use std::sync::{Arc, Mutex};
-use std::{fmt, io, thread};
-
 use http::{Method, Request, Uri};
 
 use crate::http;

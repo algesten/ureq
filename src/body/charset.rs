@@ -1,6 +1,4 @@
 use encoding_rs::{Decoder, Encoder, Encoding};
-use std::fmt;
-use std::io::{self, BufRead, BufReader};
 
 use crate::util::ConsumeBuf;
 
