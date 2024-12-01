@@ -204,9 +204,7 @@ impl_into_body!(&TcpStream, Reader);
 impl_into_body!(File, Reader);
 impl_into_body!(TcpStream, Reader);
 impl_into_body!(Stdin, Reader);
-
-// MSRV 1.78
-// impl_into_body!(&Stdin, Reader);
+impl_into_body!(&Stdin, Reader);
 
 #[cfg(target_family = "unix")]
 use std::os::unix::net::UnixStream;

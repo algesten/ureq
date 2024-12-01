@@ -484,7 +484,12 @@ mod util;
 
 pub mod unversioned;
 use unversioned::resolver;
+
+#[cfg(feature = "std")]
 use unversioned::transport;
+
+#[cfg(not(feature = "std"))]
+use unversioned::no_std_transport as transport;
 
 pub mod middleware;
 
