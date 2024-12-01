@@ -10,12 +10,12 @@
 //!
 //! In some situations it might be desirable to not do this lookup, or to use another system
 //! than DNS for it.
-use std::fmt::{self, Debug};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4, ToSocketAddrs};
-use std::sync::mpsc::{self, RecvTimeoutError};
-use std::thread::{self};
-use std::vec::IntoIter;
 
+use core::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};
+
+use alloc::fmt;
+use alloc::vec::IntoIter;
+use alloc::string::String;
 use http::uri::{Authority, Scheme};
 use http::Uri;
 
@@ -26,7 +26,7 @@ use crate::util::{SchemeExt, UriExt};
 use crate::Error;
 
 /// Trait for name resolvers.
-pub trait Resolver: Debug + Send + Sync + 'static {
+pub trait Resolver: fmt::Debug + Send + Sync + 'static {
     /// Resolve the URI to a socket address.
     ///
     /// The implementation should resolve within the given _timeout_.
@@ -63,7 +63,7 @@ impl DefaultResolver {
     pub fn host_and_port(scheme: &Scheme, authority: &Authority) -> Option<String> {
         let port = authority.port_u16().or_else(|| scheme.default_port())?;
 
-        Some(format!("{}:{}", authority.host(), port))
+        Some(alloc::format!("{}:{}", authority.host(), port))
     }
 }
 
@@ -103,7 +103,7 @@ impl Resolver for DefaultResolver {
         let iter = if use_sync {
             trace!("Resolve: {}", addr);
             // When timeout is not set, we do not spawn any threads.
-            addr.to_socket_addrs()?
+            addr.to_socket_addrs()? // TODO: no_std?
         } else {
             trace!("Resolve with timeout ({:?}): {} ", timeout, addr);
             resolve_async(addr, timeout)?
@@ -131,6 +131,12 @@ impl Resolver for DefaultResolver {
     }
 }
 
+#[cfg(not(feature = "std"))]
+fn resolve_async(addr: String, timeout: NextTimeout) -> Result<IntoIter<SocketAddr>, Error> {
+    unimplemented!()
+}
+
+#[cfg(feature = "std")]
 fn resolve_async(addr: String, timeout: NextTimeout) -> Result<IntoIter<SocketAddr>, Error> {
     // TODO(martin): On Linux we have getaddrinfo_a which is a libc async way of
     // doing host lookup. We should make a subcrate that uses a native async method
@@ -157,6 +163,8 @@ impl fmt::Debug for DefaultResolver {
 
 #[cfg(test)]
 mod test {
+    use alloc::string::ToString;
+
     use crate::transport::time::Duration;
 
     use super::*;

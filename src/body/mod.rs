@@ -1,7 +1,11 @@
-use std::fmt;
-use std::io;
-use std::sync::Arc;
+use no_std_io::io;
+use core::fmt;
 
+use alloc::boxed::Box;
+use alloc::string::{String, ToString};
+use alloc::sync::Arc;
+
+use alloc::vec::Vec;
 pub use build::BodyBuilder;
 use ureq_proto::BodyMode;
 
@@ -392,7 +396,6 @@ impl<'a> BodyWithConfig<'a> {
 
     /// Read into string.
     pub fn read_to_string(self) -> Result<String, Error> {
-        use std::io::Read;
         let mut reader = self.do_build();
         let mut buf = String::new();
         reader.read_to_string(&mut buf)?;
@@ -401,7 +404,6 @@ impl<'a> BodyWithConfig<'a> {
 
     /// Read into vector.
     pub fn read_to_vec(self) -> Result<Vec<u8>, Error> {
-        use std::io::Read;
         let mut reader = self.do_build();
         let mut buf = Vec::new();
         reader.read_to_end(&mut buf)?;

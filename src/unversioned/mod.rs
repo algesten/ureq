@@ -10,4 +10,9 @@
 //! is no set timeline for this.
 
 pub mod resolver;
+
+#[cfg(feature = "std")]
 pub mod transport;
+
+#[cfg(not(feature = "std"))]
+pub mod no_std_transport;

@@ -1,7 +1,9 @@
 //! Chained interception to modify the request or response.
 
-use std::fmt;
-use std::sync::Arc;
+use alloc::boxed::Box;
+use alloc::fmt;
+use alloc::sync::Arc;
+use alloc::vec::Vec;
 
 use crate::http;
 use crate::run::run;

@@ -1,9 +1,6 @@
-use std::borrow::Cow;
-use std::fmt;
-use std::iter::Enumerate;
-use std::ops::Deref;
-use std::str::Chars;
+use core::{iter::Enumerate, ops::Deref, str::Chars};
 
+use alloc::{borrow::Cow, fmt, string::String};
 use percent_encoding::utf8_percent_encode;
 
 #[derive(Clone)]
@@ -23,7 +20,7 @@ pub fn url_enc(i: &str) -> Cow<str> {
 
 impl<'a> QueryParam<'a> {
     pub fn new_key_value(param: &str, value: &str) -> QueryParam<'static> {
-        let s = format!("{}={}", url_enc(param), url_enc(value));
+        let s = alloc::format!("{}={}", url_enc(param), url_enc(value));
         QueryParam {
             source: Source::Owned(s),
         }
@@ -108,6 +105,8 @@ impl<'a> PartialEq for QueryParam<'a> {
 
 #[cfg(test)]
 mod test {
+    use alloc::{string::ToString, vec::Vec};
+
     use super::*;
 
     use crate::http::Uri;
@@ -137,11 +136,11 @@ mod test {
     #[test]
     fn parse_query_string() {
         assert_eq!(parse_query_params("").next(), None);
-        assert_eq!(p("&"), vec![""]);
-        assert_eq!(p("="), vec!["="]);
-        assert_eq!(p("&="), vec!["", "="]);
-        assert_eq!(p("foo=bar"), vec!["foo=bar"]);
-        assert_eq!(p("foo=bar&"), vec!["foo=bar"]);
-        assert_eq!(p("foo=bar&foo2=bar2"), vec!["foo=bar", "foo2=bar2"]);
+        assert_eq!(p("&"), alloc::vec![""]);
+        assert_eq!(p("="), alloc::vec!["="]);
+        assert_eq!(p("&="), alloc::vec!["", "="]);
+        assert_eq!(p("foo=bar"), alloc::vec!["foo=bar"]);
+        assert_eq!(p("foo=bar&"), alloc::vec!["foo=bar"]);
+        assert_eq!(p("foo=bar&foo2=bar2"), alloc::vec!["foo=bar", "foo2=bar2"]);
     }
 }

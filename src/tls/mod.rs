@@ -1,9 +1,7 @@
 //! TLS for handling `https`.
 
-use std::fmt;
-use std::sync::Arc;
-
 mod cert;
+use alloc::{fmt, sync::Arc, vec::Vec};
 pub use cert::{parse_pem, Certificate, PemItem, PrivateKey};
 
 #[cfg(feature = "rustls")]
@@ -255,7 +253,7 @@ impl Default for TlsProvider {
 }
 
 impl fmt::Debug for TlsConfig {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("TlsConfig")
             .field("provider", &self.provider)
             .field("client_cert", &self.client_cert)

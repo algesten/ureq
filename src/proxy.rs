@@ -1,9 +1,12 @@
+use core::convert::{TryFrom, TryInto};
+
+use alloc::boxed::Box;
+use alloc::fmt;
+use alloc::string::ToString;
+use alloc::sync::Arc;
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
-use std::convert::{TryFrom, TryInto};
-use std::fmt;
-use std::io::Write;
-use std::sync::Arc;
+use no_std_io::io::Write as _;
 use ureq_proto::parser::try_parse_response;
 
 use http::{StatusCode, Uri};
@@ -114,11 +117,12 @@ impl Proxy {
     /// * `HTTP_PROXY`
     ///
     /// Returns `None` if no environment variable is set or the URI is invalid.
+    #[cfg(feature = "std")]
     pub fn try_from_env() -> Option<Self> {
         macro_rules! try_env {
             ($($env:literal),+) => {
                 $(
-                    if let Ok(env) = std::env::var($env) {
+                    if let Ok(env) = std::env::var($env) { // TODO: no_std?
                         if let Ok(proxy) = Self::new_with_flag(&env, true) {
                             return Some(proxy);
                         }
@@ -135,6 +139,11 @@ impl Proxy {
             "HTTP_PROXY",
             "http_proxy"
         );
+        None
+    }
+
+    #[cfg(not(feature = "std"))]
+    pub fn try_from_env() -> Option<Self> {
         None
     }
 
@@ -227,7 +236,7 @@ impl Connector for ConnectProxyConnector {
             if use_creds {
                 let user = proxy.username().unwrap_or_default();
                 let pass = proxy.password().unwrap_or_default();
-                let creds = BASE64_STANDARD.encode(format!("{}:{}", user, pass));
+                let creds = BASE64_STANDARD.encode(alloc::format!("{}:{}", user, pass));
                 write!(w, "Proxy-Authorization: basic {}\r\n", creds)?;
             }
 
@@ -256,7 +265,7 @@ impl Connector for ConnectProxyConnector {
                     trace!("CONNECT proxy connected");
                 }
                 x => {
-                    let reason = format!("proxy server responded {}/{}", x.as_u16(), x.as_str());
+                    let reason = alloc::format!("proxy server responded {}/{}", x.as_u16(), x.as_str());
                     return Err(Error::ConnectProxyFailed(reason));
                 }
             }

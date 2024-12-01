@@ -1,9 +1,10 @@
-use std::collections::VecDeque;
-use std::fmt;
-use std::sync::{Arc, Mutex, Weak};
-
+use alloc::boxed::Box;
+use alloc::collections::vec_deque::VecDeque;
+use alloc::fmt;
+use alloc::sync::{Arc, Weak};
 use http::uri::{Authority, Scheme};
 use http::Uri;
+use spin::Mutex;
 
 use crate::config::Config;
 use crate::http;
@@ -71,7 +72,7 @@ pub(crate) struct Connection {
     transport: Box<dyn Transport>,
     key: PoolKey,
     last_use: Instant,
-    pool: Weak<Mutex<Pool>>,
+    pool: Weak<Mutex<Pool>>, // TODO: not alloc::rc::Weak?
 
     /// Used to prune max_idle_connections_by_host.
     ///

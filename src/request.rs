@@ -1,8 +1,11 @@
-use std::convert::TryFrom;
-use std::fmt;
-use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut};
+use core::convert::TryFrom;
+use core::marker::PhantomData;
+use core::ops::{Deref, DerefMut};
 
+use alloc::boxed::Box;
+use alloc::fmt;
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
 use http::{HeaderName, HeaderValue, Method, Request, Response, Uri, Version};
 
 use crate::body::Body;
@@ -222,7 +225,7 @@ impl RequestBuilder<WithoutBody> {
         Self {
             agent,
             builder: Request::builder().method(method).uri(uri),
-            query_extra: vec![],
+            query_extra: alloc::vec![],
             dummy_config: None,
             _ph: PhantomData,
         }
@@ -284,7 +287,7 @@ impl RequestBuilder<WithBody> {
         Self {
             agent,
             builder: Request::builder().method(method).uri(uri),
-            query_extra: vec![],
+            query_extra: alloc::vec![],
             dummy_config: None,
             _ph: PhantomData,
         }
@@ -519,7 +522,9 @@ impl fmt::Debug for RequestBuilder<WithBody> {
 
 #[cfg(test)]
 mod test {
-    use std::time::Duration;
+    use core::time::Duration;
+
+    use alloc::string::ToString;
 
     use crate::get;
     use crate::test::init_test_log;
@@ -537,7 +542,7 @@ mod test {
     fn debug_print_without_body() {
         let call = crate::get("https://foo/bar");
         assert_eq!(
-            format!("{:?}", call),
+            alloc::format!("{:?}", call),
             "RequestBuilder<WithoutBody> { method: GET, uri: https://foo/bar }"
         );
     }
@@ -546,7 +551,7 @@ mod test {
     fn debug_print_with_body() {
         let call = crate::post("https://foo/bar");
         assert_eq!(
-            format!("{:?}", call),
+            alloc::format!("{:?}", call),
             "RequestBuilder<WithBody> { method: POST, uri: https://foo/bar }"
         );
     }
@@ -569,7 +574,7 @@ mod test {
 
         let amended = amend_request_query(
             request,
-            vec![
+            alloc::vec![
                 QueryParam::new_key_value("x", "z"),
                 QueryParam::new_key_value("ab", "cde"),
             ]
@@ -588,7 +593,7 @@ mod test {
 
         let amended = amend_request_query(
             request,
-            vec![QueryParam::new_key_value("ab", "cde")].into_iter(),
+            alloc::vec![QueryParam::new_key_value("ab", "cde")].into_iter(),
         );
 
         assert_eq!(amended.uri(), "https://foo.bar/path?x=z&ab=cde");
@@ -603,7 +608,7 @@ mod test {
 
         let amended = amend_request_query(
             request,
-            vec![QueryParam::new_key_value("å ", "i åa ä e ö")].into_iter(),
+            alloc::vec![QueryParam::new_key_value("å ", "i åa ä e ö")].into_iter(),
         );
 
         assert_eq!(

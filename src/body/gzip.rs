@@ -1,4 +1,4 @@
-use std::io;
+use no_std_io::io;
 
 use flate2::read::MultiGzDecoder;
 

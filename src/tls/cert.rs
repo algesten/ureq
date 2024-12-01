@@ -1,5 +1,4 @@
-use std::borrow::Cow;
-use std::fmt;
+use alloc::{borrow::Cow, fmt, vec::Vec};
 
 use crate::Error;
 

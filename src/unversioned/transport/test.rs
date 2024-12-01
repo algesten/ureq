@@ -1,11 +1,6 @@
 #![allow(clippy::type_complexity)]
 
-use std::cell::RefCell;
-use std::io::Write;
-use std::io::{BufRead, BufReader};
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
-use std::sync::{Arc, Mutex};
-use std::{fmt, io, thread};
+use no_std_io::io;
 
 use http::{Method, Request, Uri};
 
@@ -75,7 +70,7 @@ pub fn set_handler(pattern: &'static str, status: u16, headers: &[(&str, &str)],
     // Convert headers to a big string
     let mut headers_s = String::new();
     for (k, v) in headers {
-        headers_s.push_str(&format!("{}: {}\r\n", k, v));
+        headers_s.push_str(&alloc::format!("{}: {}\r\n", k, v));
     }
 
     // Convert body to an owned vec

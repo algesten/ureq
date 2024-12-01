@@ -1,8 +1,3 @@
-use std::fmt;
-use std::net::{SocketAddr, TcpStream};
-use std::sync::mpsc::{self, RecvTimeoutError};
-use std::{io, thread};
-
 use socks::{Socks4Stream, Socks5Stream};
 
 use crate::proxy::{Proto, Proxy};

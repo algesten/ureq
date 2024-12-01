@@ -1,8 +1,6 @@
 //! Internal time wrappers
 
-use std::cmp::Ordering;
-use std::ops::{Add, Deref};
-use std::time;
+use core::{cmp::Ordering, ops::{Add, Deref}, time};
 
 /// Wrapper for [`std::time::Instant`] that provides additional time points in the past or future
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -10,7 +8,7 @@ pub enum Instant {
     /// A time in the past that already happened.
     AlreadyHappened,
     /// An exact instant.
-    Exact(time::Instant),
+    Exact(web_time::Instant),
     /// A time in the future that will never happen.
     NotHappening,
 }
@@ -54,7 +52,7 @@ impl Deref for Duration {
 impl Instant {
     /// Current time.
     pub fn now() -> Self {
-        Instant::Exact(time::Instant::now())
+        Instant::Exact(web_time::Instant::now())
     }
 
     pub(crate) fn duration_since(&self, earlier: Instant) -> Duration {
@@ -128,8 +126,8 @@ impl Ord for Duration {
     }
 }
 
-impl From<std::time::Duration> for Duration {
-    fn from(value: std::time::Duration) -> Self {
+impl From<time::Duration> for Duration {
+    fn from(value: time::Duration) -> Self {
         Self::Exact(value)
     }
 }

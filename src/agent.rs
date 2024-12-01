@@ -1,8 +1,6 @@
-use std::convert::TryFrom;
-use std::fmt::Debug;
-use std::sync::Arc;
-
+use alloc::sync::Arc;
 use http::{Method, Request, Response, Uri};
+use core::convert::TryFrom;
 
 use crate::body::Body;
 use crate::config::typestate::{AgentScope, HttpCrateScope};

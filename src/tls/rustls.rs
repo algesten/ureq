@@ -1,8 +1,9 @@
-use std::convert::TryInto;
-use std::fmt;
-use std::io::{Read, Write};
-use std::sync::Arc;
+use core::convert::TryInto;
+use core::fmt;
 
+use alloc::boxed::Box;
+use alloc::sync::Arc;
+use alloc::vec::Vec;
 use once_cell::sync::OnceCell;
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::{ClientConfig, ClientConnection, RootCertStore, StreamOwned, ALL_VERSIONS};
@@ -242,7 +243,7 @@ impl ServerCertVerifier for DisabledVerifier {
     }
 
     fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-        vec![
+        alloc::vec![
             rustls::SignatureScheme::RSA_PKCS1_SHA1,
             rustls::SignatureScheme::RSA_PKCS1_SHA256,
             rustls::SignatureScheme::RSA_PKCS1_SHA384,

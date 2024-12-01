@@ -1,4 +1,5 @@
-use std::io;
+use no_std_io::io;
+use alloc::boxed::Box;
 
 use crate::Timeout;
 

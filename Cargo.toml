@@ -11,16 +11,15 @@ categories = ["web-programming::http-client"]
 edition = "2018"
 exclude = ["/cargo_deny.sh", "/deny.toml", "/test.sh"]
 
-
 # MSRV
-rust-version = "1.71.1"
+rust-version = "1.83.0"
 
 [package.metadata.docs.rs]
 features = ["rustls", "platform-verifier", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset", "json", "_test"]
 
 [features]
 #default = ["rustls", "gzip", "json", "std"]
-default = ["rustls", "gzip", "json"]
+default = ["rustls", "json"]
 rustls = ["dep:rustls", "_tls", "dep:webpki-roots"]
 platform-verifier = ["dep:rustls-platform-verifier"]
 native-tls = ["dep:native-tls", "dep:der", "_tls", "dep:webpki-root-certs"]
@@ -75,6 +74,11 @@ encoding_rs = { version = "0.8.34", optional = true }
 serde = { version = "1.0.204", optional = true, default-features = false, features = ["std"] }
 serde_json = { version = "1.0.120", optional = true, default-features = false, features = ["std"] }
 
+# TODO: no_std?
+spin = "0.9.8"
+web-time = "1.1.0"
+no_std_io = "0.6.0"
+
 [build-dependencies]
 cc = "1.0.106"
 
@@ -83,7 +87,6 @@ env_logger = "=0.11"
 auto-args = "0.3.0"
 serde = { version = "1.0.204", features = ["std", "derive"] }
 assert_no_alloc = "1.1.2"
-
 
 [[example]]
 name = "cureq"
