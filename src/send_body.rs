@@ -42,7 +42,7 @@ impl<'a> SendBody<'a> {
         Ok(Self::from_owned_reader(io::Cursor::new(json)))
     }
 
-    pub(crate) fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+    pub(crate) fn read(&mut self, buf: &mut [u8]) -> core::result::Result<usize> {
         let n = match &mut self.inner {
             BodyInner::None => {
                 return Ok(0);

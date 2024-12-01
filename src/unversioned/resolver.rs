@@ -130,6 +130,7 @@ impl Resolver for DefaultResolver {
     }
 }
 
+// TODO: very no_std unfriendly function?
 fn resolve_async(addr: String, timeout: NextTimeout) -> Result<IntoIter<SocketAddr>, Error> {
     // TODO(martin): On Linux we have getaddrinfo_a which is a libc async way of
     // doing host lookup. We should make a subcrate that uses a native async method

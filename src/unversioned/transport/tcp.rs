@@ -1,3 +1,5 @@
+use core::net::SocketAddr;
+
 use alloc::boxed::Box;
 use alloc::fmt;
 
@@ -117,8 +119,8 @@ fn maybe_update_timeout(
     timeout: NextTimeout,
     previous: &mut Option<Duration>,
     stream: &TcpStream,
-    f: impl Fn(&TcpStream, Option<time::Duration>) -> io::Result<()>,
-) -> io::Result<()> {
+    f: impl Fn(&TcpStream, Option<web_time::Duration>) -> core::result::Result<()>,
+) -> core::result::Result<()> {
     let maybe_timeout = timeout.not_zero();
 
     if maybe_timeout != *previous {

@@ -656,7 +656,7 @@ impl BodyHandler {
 }
 
 impl io::Read for BodyHandler {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> core::result::Result<usize> {
         self.do_read(buf).map_err(|e| e.into_io())
     }
 }

@@ -1,4 +1,4 @@
-use alloc::{fmt, vec::Vec};
+use alloc::{borrow::Cow, fmt, vec::Vec};
 
 use crate::Error;
 

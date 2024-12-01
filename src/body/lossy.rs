@@ -21,7 +21,7 @@ impl<R> LossyUtf8Reader<R> {
 }
 
 impl<R: io::Read> io::Read for LossyUtf8Reader<R> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> core::result::Result<usize> {
         // Match the input buffer size
         if !self.ended {
             let total_len = self.input.unconsumed().len() + self.input.free_mut().len();
@@ -153,7 +153,7 @@ mod test {
     struct TestReader<'a>(&'a mut [&'a [u8]]);
 
     impl<'a> io::Read for TestReader<'a> {
-        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        fn read(&mut self, buf: &mut [u8]) -> core::result::Result<usize> {
             if self.0.iter().all(|c| c.is_empty()) {
                 return Ok(0);
             }

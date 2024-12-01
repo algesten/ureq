@@ -17,7 +17,7 @@ impl<R> LimitReader<R> {
 }
 
 impl<R: io::Read> io::Read for LimitReader<R> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> core::result::Result<usize> {
         if self.left == 0 {
             return Err(Error::BodyExceedsLimit(self.limit).into_io());
         }

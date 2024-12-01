@@ -64,7 +64,7 @@ pub(crate) trait IoResultExt {
     fn normalize_would_block(self) -> Self;
 }
 
-impl<T> IoResultExt for io::Result<T> {
+impl<T> IoResultExt for core::result::Result<T> {
     fn normalize_would_block(self) -> Self {
         match self {
             Ok(v) => Ok(v),
