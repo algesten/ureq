@@ -1,7 +1,10 @@
 use core::convert::TryFrom;
 use core::marker::PhantomData;
+use core::ops::{Deref, DerefMut};
 
 use alloc::boxed::Box;
+use alloc::fmt;
+use alloc::string::String;
 use alloc::vec::Vec;
 use http::{HeaderName, HeaderValue, Method, Request, Response, Uri, Version};
 
@@ -519,7 +522,7 @@ impl fmt::Debug for RequestBuilder<WithBody> {
 
 #[cfg(test)]
 mod test {
-    use std::time::Duration;
+    use core::time::Duration;
 
     use crate::get;
     use crate::test::init_test_log;
@@ -537,7 +540,7 @@ mod test {
     fn debug_print_without_body() {
         let call = crate::get("https://foo/bar");
         assert_eq!(
-            format!("{:?}", call),
+            alloc::format!("{:?}", call),
             "RequestBuilder<WithoutBody> { method: GET, uri: https://foo/bar }"
         );
     }
@@ -546,7 +549,7 @@ mod test {
     fn debug_print_with_body() {
         let call = crate::post("https://foo/bar");
         assert_eq!(
-            format!("{:?}", call),
+            alloc::format!("{:?}", call),
             "RequestBuilder<WithBody> { method: POST, uri: https://foo/bar }"
         );
     }

@@ -1,3 +1,4 @@
+use alloc::sync::Arc;
 use ureq_proto::ArrayVec;
 
 use crate::config::Timeouts;

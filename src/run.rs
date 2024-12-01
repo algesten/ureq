@@ -1,3 +1,4 @@
+use alloc::sync::Arc;
 use http::uri::Scheme;
 use http::{header, HeaderValue, Request, Response, Uri};
 use once_cell::sync::Lazy;

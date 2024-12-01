@@ -23,7 +23,7 @@
 //! using these schemes. See [`ChainedConnector`] for a helper connector that aids setting
 //! up a chain of concrete connectors.
 
-use alloc::fmt::Debug;
+use alloc::{boxed::Box, fmt::Debug};
 
 use http::uri::Scheme;
 use http::Uri;
@@ -297,6 +297,8 @@ impl Connector for DefaultConnector {
 
 #[cfg(not(feature = "socks-proxy"))]
 mod no_proxy {
+    use alloc::boxed::Box;
+
     use super::{ConnectionDetails, Connector, Debug, Error, Transport};
 
     #[derive(Debug)]
@@ -334,6 +336,8 @@ mod no_proxy {
 
 #[cfg(feature = "_tls")]
 mod no_tls {
+    use alloc::boxed::Box;
+
     use crate::tls::TlsProvider;
 
     use super::{ConnectionDetails, Connector, Debug, Error, Transport};

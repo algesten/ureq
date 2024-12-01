@@ -1,3 +1,5 @@
+use alloc::boxed::Box;
+
 use crate::Timeout;
 
 use super::time::Duration;

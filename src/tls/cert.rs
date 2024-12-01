@@ -1,3 +1,5 @@
+use alloc::{fmt, vec::Vec};
+
 use crate::Error;
 
 /// An X509 certificate for a server or a client.

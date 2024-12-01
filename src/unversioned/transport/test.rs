@@ -68,7 +68,7 @@ pub fn set_handler(pattern: &'static str, status: u16, headers: &[(&str, &str)],
     // Convert headers to a big string
     let mut headers_s = String::new();
     for (k, v) in headers {
-        headers_s.push_str(&format!("{}: {}\r\n", k, v));
+        headers_s.push_str(&alloc::format!("{}: {}\r\n", k, v));
     }
 
     // Convert body to an owned vec

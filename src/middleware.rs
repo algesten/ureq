@@ -1,6 +1,7 @@
 //! Chained interception to modify the request or response.
 
 use alloc::boxed::Box;
+use alloc::fmt;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 

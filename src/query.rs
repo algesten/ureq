@@ -1,4 +1,6 @@
-use alloc::{borrow::Cow, string::String};
+use core::{iter::Enumerate, ops::Deref, str::Chars};
+
+use alloc::{borrow::Cow, fmt, string::String};
 use percent_encoding::utf8_percent_encode;
 
 #[derive(Clone)]
@@ -18,7 +20,7 @@ pub fn url_enc(i: &str) -> Cow<str> {
 
 impl<'a> QueryParam<'a> {
     pub fn new_key_value(param: &str, value: &str) -> QueryParam<'static> {
-        let s = format!("{}={}", url_enc(param), url_enc(value));
+        let s = alloc::format!("{}={}", url_enc(param), url_enc(value));
         QueryParam {
             source: Source::Owned(s),
         }

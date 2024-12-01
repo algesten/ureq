@@ -74,6 +74,7 @@ encoding_rs = { version = "0.8.34", optional = true }
 
 serde = { version = "1.0.204", optional = true, default-features = false, features = ["std"] }
 serde_json = { version = "1.0.120", optional = true, default-features = false, features = ["std"] }
+spin = "0.9.8"
 
 [build-dependencies]
 cc = "1.0.106"

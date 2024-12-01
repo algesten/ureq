@@ -1,7 +1,9 @@
 //! Agent configuration
 
+use core::net::SocketAddr;
 use core::time::Duration;
 
+use alloc::fmt;
 use alloc::string::String;
 use alloc::sync::Arc;
 use http::Uri;

@@ -1,8 +1,10 @@
 use alloc::boxed::Box;
 use alloc::collections::vec_deque::VecDeque;
+use alloc::fmt;
 use alloc::sync::Arc;
 use http::uri::{Authority, Scheme};
 use http::Uri;
+use spin::Mutex;
 
 use crate::config::Config;
 use crate::http;

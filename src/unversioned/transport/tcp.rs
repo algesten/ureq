@@ -1,3 +1,6 @@
+use alloc::boxed::Box;
+use alloc::fmt;
+
 use crate::config::Config;
 use crate::util::IoResultExt;
 use crate::Error;

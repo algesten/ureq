@@ -1,4 +1,8 @@
+use core::convert::TryFrom;
+
 use alloc::boxed::Box;
+use alloc::fmt;
+use alloc::sync::Arc;
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use ureq_proto::parser::try_parse_response;
@@ -224,7 +228,7 @@ impl Connector for ConnectProxyConnector {
             if use_creds {
                 let user = proxy.username().unwrap_or_default();
                 let pass = proxy.password().unwrap_or_default();
-                let creds = BASE64_STANDARD.encode(format!("{}:{}", user, pass));
+                let creds = BASE64_STANDARD.encode(alloc::format!("{}:{}", user, pass));
                 write!(w, "Proxy-Authorization: basic {}\r\n", creds)?;
             }
 
@@ -253,7 +257,7 @@ impl Connector for ConnectProxyConnector {
                     trace!("CONNECT proxy connected");
                 }
                 x => {
-                    let reason = format!("proxy server responded {}/{}", x.as_u16(), x.as_str());
+                    let reason = alloc::format!("proxy server responded {}/{}", x.as_u16(), x.as_str());
                     return Err(Error::ConnectProxyFailed(reason));
                 }
             }

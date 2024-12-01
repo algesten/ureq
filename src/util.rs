@@ -1,3 +1,4 @@
+use alloc::fmt;
 use alloc::vec::Vec;
 use http::header::{ACCEPT, ACCEPT_CHARSET, ACCEPT_ENCODING};
 use http::header::{CONNECTION, CONTENT_ENCODING, CONTENT_LENGTH, CONTENT_TYPE};
@@ -215,7 +216,7 @@ impl<'a> fmt::Debug for DebugHeaders<'a> {
         if redact_count > 0 {
             debug.entry(
                 &"<NOTICE>",
-                &format!("{} HEADERS ARE REDACTED", redact_count),
+                &alloc::format!("{} HEADERS ARE REDACTED", redact_count),
             );
         }
 
@@ -287,14 +288,14 @@ impl UriExt for Uri {
     fn ensure_valid_url(&self) -> Result<(), Error> {
         let scheme = self
             .scheme()
-            .ok_or_else(|| Error::BadUri(format!("{} is missing scheme", self)))?;
+            .ok_or_else(|| Error::BadUri(alloc::format!("{} is missing scheme", self)))?;
 
         scheme
             .default_port()
-            .ok_or_else(|| Error::BadUri(format!("unknown scheme: {}", scheme)))?;
+            .ok_or_else(|| Error::BadUri(alloc::format!("unknown scheme: {}", scheme)))?;
 
         self.authority()
-            .ok_or_else(|| Error::BadUri(format!("{} is missing host", self)))?;
+            .ok_or_else(|| Error::BadUri(alloc::format!("{} is missing host", self)))?;
 
         Ok(())
     }

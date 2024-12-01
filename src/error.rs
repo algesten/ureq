@@ -1,3 +1,4 @@
+use alloc::fmt;
 use alloc::string::String;
 
 use crate::http;
@@ -139,6 +140,7 @@ pub enum Error {
     BodyStalled,
 }
 
+#[cfg(feature = "std")]
 impl std::error::Error for Error {}
 
 impl Error {
@@ -309,7 +311,7 @@ mod test {
     #[test]
     fn ensure_error_size() {
         // This is platform dependent, so we can't be too strict or precise.
-        let size = std::mem::size_of::<Error>();
+        let size = core::mem::size_of::<Error>();
         assert!(size < 100); // 40 on Macbook M1
     }
 }
