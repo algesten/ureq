@@ -34,6 +34,13 @@
 # 3.0.0-rc1
   * Ground up rewrite based on the http crate API.
 
+# 2.11.0
+
+ * Fixes for changes to cargo-deny (#882)
+ * Pin rustls dep on 0.23.19 to keep MSRV 1.67 (#878)
+ * Bump MSRV 1.63 -> 1.67 due to time crate (#878)
+ * Re-export rustls (#813)
+
 # 2.10.1
   * default `ureq` Rustls tls config updated to avoid panic for applications
     that activate the default Rustls `aws-lc-rs` feature without setting
