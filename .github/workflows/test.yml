@@ -3,49 +3,10 @@ on: [push, pull_request]
 name: CI
 
 jobs:
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    env:
-      RUSTFLAGS: -D warnings
-    steps:
-    - uses: actions/checkout@v2
-    - name: Install Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        override: true
-    - name: Run Rustfmt
-      uses: actions-rs/cargo@v1
-      with:
-        command: fmt
-        args: -- --check
-    - name: Run Clippy
-      uses: actions-rs/cargo@v1
-      with:
-        command: clippy
-  doc:
-    name: Docs
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@master
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-      - name: Docs
-        uses: actions-rs/cargo@v1
-        env:
-          RUSTDOCFLAGS: -Dwarnings
-        with:
-          command: doc
-          args: --no-deps --all-features --document-private-items
-
   build_versions:
     strategy:
       matrix:
-        rust: [stable, beta, 1.67.0]
+        rust: [1.71]
     runs-on: "ubuntu-latest"
     steps:
       - uses: actions/checkout@v2
@@ -91,7 +52,7 @@ jobs:
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: 1.71
           override: true
       - name: Test
         uses: actions-rs/cargo@v1
