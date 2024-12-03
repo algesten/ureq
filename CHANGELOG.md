@@ -2,8 +2,8 @@
 
 # 2.12.0
 
-  * Bump MSRV 1.67 -> 1.71 because rustls will soon adopt it (#883)
-  * Unpin rustls dep (>=0.23.19) (#883)
+  * Bump MSRV 1.67 -> 1.71 because rustls will soon adopt it (#905)
+  * Unpin rustls dep (>=0.23.19) (#905)
 
 # 2.11.0
 
