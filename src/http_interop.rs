@@ -279,11 +279,10 @@ impl From<Request> for http::request::Builder {
 #[cfg(test)]
 mod tests {
     use crate::header::{add_header, get_header_raw, HeaderLine};
-    use http_02 as http;
 
     #[test]
     fn convert_http_response() {
-        use http::{Response, StatusCode, Version};
+        use http_02::{Response, StatusCode, Version};
 
         let http_response_body = vec![0xaa; 10240];
         let http_response = Response::builder()
@@ -310,7 +309,7 @@ mod tests {
 
     #[test]
     fn convert_http_response_string() {
-        use http::{Response, StatusCode, Version};
+        use http_02::{Response, StatusCode, Version};
 
         let http_response_body = "Some body string".to_string();
         let http_response = Response::builder()
@@ -327,7 +326,7 @@ mod tests {
 
     #[test]
     fn convert_http_response_bad_header() {
-        use http::{Response, StatusCode, Version};
+        use http_02::{Response, StatusCode, Version};
 
         let http_response = Response::builder()
             .version(Version::HTTP_11)
@@ -344,7 +343,7 @@ mod tests {
 
     #[test]
     fn convert_to_http_response_string() {
-        use http::Response;
+        use http_02::Response;
 
         let mut response = super::Response::new(418, "I'm a teapot", "some body text").unwrap();
         response.headers.push(
@@ -371,7 +370,7 @@ mod tests {
 
     #[test]
     fn convert_to_http_response_bytes() {
-        use http::Response;
+        use http_02::Response;
         use std::io::Cursor;
 
         let mut response = super::Response::new(200, "OK", "tbr").unwrap();
@@ -388,7 +387,7 @@ mod tests {
 
     #[test]
     fn convert_http_response_builder_with_invalid_utf8_header() {
-        use http::Response;
+        use http_02::Response;
 
         let http_response = Response::builder()
             .header("Some-Key", b"some\xff\xffvalue".as_slice())
@@ -412,7 +411,7 @@ mod tests {
                 .unwrap(),
         );
         dbg!(&response);
-        let http_response: http::Response<Vec<u8>> = response.into();
+        let http_response: http_02::Response<Vec<u8>> = response.into();
 
         assert_eq!(
             http_response
@@ -425,7 +424,7 @@ mod tests {
 
     #[test]
     fn convert_http_request_builder() {
-        use http::Request;
+        use http_02::Request;
 
         let http_request = Request::builder()
             .method("PUT")
@@ -440,7 +439,7 @@ mod tests {
 
     #[test]
     fn convert_to_http_request_builder() {
-        use http::request::Builder;
+        use http_02::request::Builder;
 
         let request = crate::agent()
             .head("http://some-website.com")
@@ -456,12 +455,12 @@ mod tests {
             Some("some value")
         );
         assert_eq!(http_request.uri(), "http://some-website.com");
-        assert_eq!(http_request.version(), http::Version::HTTP_11);
+        assert_eq!(http_request.version(), http_02::Version::HTTP_11);
     }
 
     #[test]
     fn convert_http_request_builder_with_invalid_utf8_header() {
-        use http::Request;
+        use http_02::Request;
 
         let http_request = Request::builder()
             .method("PUT")
@@ -479,7 +478,7 @@ mod tests {
 
     #[test]
     fn convert_to_http_request_builder_with_invalid_utf8_header() {
-        use http::request::Builder;
+        use http_02::request::Builder;
 
         let mut request = crate::agent().head("http://some-website.com");
         add_header(
@@ -497,6 +496,6 @@ mod tests {
             Some(b"some\xff\xffvalue".as_slice())
         );
         assert_eq!(http_request.uri(), "http://some-website.com");
-        assert_eq!(http_request.version(), http::Version::HTTP_11);
+        assert_eq!(http_request.version(), http_02::Version::HTTP_11);
     }
 }
