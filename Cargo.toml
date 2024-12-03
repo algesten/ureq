@@ -13,7 +13,7 @@ exclude = ["/cargo_deny.sh", "/deny.toml", "/test.sh"]
 
 
 # MSRV
-rust-version = "1.67"
+rust-version = "1.71"
 
 [package.metadata.docs.rs]
 features = ["tls", "native-tls", "json", "charset", "cookies", "socks-proxy", "gzip", "brotli", "http-interop", "http-crate"]
@@ -58,12 +58,7 @@ brotli-decompressor = { version = "4.0.0", optional = true }
 http-02 = { package = "http", version = "0.2", optional = true }
 http = { version = "1.1", optional = true }
 url = "2.5.0"
-
-# These are locked down for MSRV 1.67
-rustls = { version = "=0.23.19", optional = true, default-features = false, features = ["ring", "logging", "std", "tls12"] }
-yoke = "=0.7.4"
-litemap = "=0.7.3"
-zerofrom = "=0.1.4"
+rustls = { version = ">=0.23.19", optional = true, default-features = false, features = ["ring", "logging", "std", "tls12"] }
 
 # This can't be in dev-dependencies due to doc tests.
 hootbin = { version = "0.1.5", optional = true }

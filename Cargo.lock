@@ -934,7 +934,6 @@ dependencies = [
  "hootbin",
  "http 0.2.12",
  "http 1.1.0",
- "litemap",
  "log",
  "native-tls",
  "once_cell",
@@ -947,8 +946,6 @@ dependencies = [
  "socks",
  "url",
  "webpki-roots",
- "yoke",
- "zerofrom",
 ]
 
 [[package]]
