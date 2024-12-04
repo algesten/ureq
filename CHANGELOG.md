@@ -1,5 +1,9 @@
 # Unreleased
 
+# 2.12.1
+
+  * Do not use multi-version deps (>=x.x.x) (#907)
+
 # 2.12.0
 
   * Bump MSRV 1.67 -> 1.71 because rustls will soon adopt it (#905)
