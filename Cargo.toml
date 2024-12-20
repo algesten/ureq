@@ -64,7 +64,7 @@ socks = { version = "0.3.4", optional = true }
 # cookie_store uses Url, while http-crate has its own Uri.
 # Keep url crate in lockstep with cookie_store.
 cookie_store = { version = "0.21.1", optional = true, default-features = false, features = ["preserve_order"] }
-url = { version = "2.3.1", optional = true, default-features = false }
+url = { version = "2.5.4", optional = true, default-features = false }
 
 flate2 = { version = "1.0.30", optional = true }
 brotli-decompressor = { version = "4.0.1", optional = true }
