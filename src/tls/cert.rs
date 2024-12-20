@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::fmt;
 
 use crate::Error;
@@ -18,6 +17,7 @@ pub struct Certificate<'a> {
 enum CertDer<'a> {
     Borrowed(&'a [u8]),
     Owned(Vec<u8>),
+    Rustls(rustls_pki_types::CertificateDer<'static>),
 }
 
 impl<'a> AsRef<[u8]> for CertDer<'a> {
@@ -25,6 +25,7 @@ impl<'a> AsRef<[u8]> for CertDer<'a> {
         match self {
             CertDer::Borrowed(v) => v,
             CertDer::Owned(v) => v,
+            CertDer::Rustls(v) => v,
         }
     }
 }
@@ -45,7 +46,7 @@ impl<'a> Certificate<'a> {
     /// Fails with an error if there is no certificate found in the PEM given.
     ///
     /// Translates to DER format internally.
-    pub fn from_pem(pem: &'a [u8]) -> Result<Self, Error> {
+    pub fn from_pem(pem: &'a [u8]) -> Result<Certificate<'static>, Error> {
         let item = parse_pem(pem)
             .find(|p| matches!(p, Err(_) | Ok(PemItem::Certificate(_))))
             // None means there were no matches in the PEM chain
@@ -79,7 +80,23 @@ impl<'a> Certificate<'a> {
 /// Deliberately not `Clone` to avoid accidental copies in memory.
 pub struct PrivateKey<'a> {
     kind: KeyKind,
-    der: Cow<'a, [u8]>,
+    der: PrivateKeyDer<'a>,
+}
+
+enum PrivateKeyDer<'a> {
+    Borrowed(&'a [u8]),
+    Owned(Vec<u8>),
+    Rustls(rustls_pki_types::PrivateKeyDer<'static>),
+}
+
+impl<'a> AsRef<[u8]> for PrivateKey<'a> {
+    fn as_ref(&self) -> &[u8] {
+        match &self.der {
+            PrivateKeyDer::Borrowed(v) => v,
+            PrivateKeyDer::Owned(v) => v,
+            PrivateKeyDer::Rustls(v) => v.secret_der(),
+        }
+    }
 }
 
 /// The kind of private key.
@@ -105,7 +122,7 @@ impl<'a> PrivateKey<'a> {
     /// Does not immediately validate whether the data provided is a valid DER.
     /// That validation is the responsibility of the TLS provider.
     pub fn from_der(kind: KeyKind, der: &'a [u8]) -> Self {
-        let der = Cow::Borrowed(der);
+        let der = PrivateKeyDer::Borrowed(der);
         PrivateKey { kind, der }
     }
 
@@ -115,7 +132,7 @@ impl<'a> PrivateKey<'a> {
     /// Fails with an error if there are no keys found in the PEM given.
     ///
     /// Translates to DER format internally.
-    pub fn from_pem(pem: &'a [u8]) -> Result<Self, Error> {
+    pub fn from_pem(pem: &'a [u8]) -> Result<PrivateKey<'static>, Error> {
         let item = parse_pem(pem)
             .find(|p| matches!(p, Err(_) | Ok(PemItem::PrivateKey(_))))
             // None means there were no matches in the PEM chain
@@ -135,14 +152,18 @@ impl<'a> PrivateKey<'a> {
 
     /// This private key in DER (the internal) format.
     pub fn der(&self) -> &[u8] {
-        &self.der
+        self.as_ref()
     }
 
     /// Clones (allocates) to produce a static copy.
     pub fn to_owned(&self) -> PrivateKey<'static> {
         PrivateKey {
             kind: self.kind,
-            der: Cow::Owned(self.der.to_vec()),
+            der: match &self.der {
+                PrivateKeyDer::Borrowed(v) => PrivateKeyDer::Owned(v.to_vec()),
+                PrivateKeyDer::Owned(v) => PrivateKeyDer::Owned(v.to_vec()),
+                PrivateKeyDer::Rustls(v) => PrivateKeyDer::Rustls(v.clone_key()),
+            },
         }
     }
 }
@@ -151,7 +172,7 @@ impl<'a> PrivateKey<'a> {
 ///
 /// The data may contain one or many PEM items. The iterator produces the recognized PEM
 /// items and skip others.
-pub fn parse_pem(pem: &[u8]) -> impl Iterator<Item = Result<PemItem, Error>> + '_ {
+pub fn parse_pem(pem: &[u8]) -> impl Iterator<Item = Result<PemItem<'static>, Error>> + '_ {
     PemIter(pem)
 }
 
@@ -168,33 +189,42 @@ pub enum PemItem<'a> {
 struct PemIter<'a>(&'a [u8]);
 
 impl<'a> Iterator for PemIter<'a> {
-    type Item = Result<PemItem<'a>, Error>;
+    type Item = Result<PemItem<'static>, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             match rustls_pemfile::read_one_from_slice(self.0) {
                 Ok(Some((cert, rest))) => {
-                    // A bit backwards engineering to figure out which part of the input
-                    // was parsed to an complete item.
-                    let remaining = rest.len();
-                    let parsed_len = self.0.len() - remaining;
-                    let der = &self.0[..parsed_len];
-
                     // Move slice along for next iterator next()
                     self.0 = rest;
 
                     match cert {
-                        rustls_pemfile::Item::X509Certificate(_) => {
-                            return Some(Ok(Certificate::from_der(der).into()));
+                        rustls_pemfile::Item::X509Certificate(der) => {
+                            return Some(Ok(Certificate {
+                                der: CertDer::Rustls(der),
+                            }
+                            .into()));
                         }
-                        rustls_pemfile::Item::Pkcs1Key(_) => {
-                            return Some(Ok(PrivateKey::from_der(KeyKind::Pkcs1, der).into()));
+                        rustls_pemfile::Item::Pkcs1Key(der) => {
+                            return Some(Ok(PrivateKey {
+                                kind: KeyKind::Pkcs1,
+                                der: PrivateKeyDer::Rustls(der.into()),
+                            }
+                            .into()));
                         }
-                        rustls_pemfile::Item::Pkcs8Key(_) => {
-                            return Some(Ok(PrivateKey::from_der(KeyKind::Pkcs8, der).into()));
+                        rustls_pemfile::Item::Pkcs8Key(der) => {
+                            return Some(Ok(PrivateKey {
+                                kind: KeyKind::Pkcs8,
+                                der: PrivateKeyDer::Rustls(der.into()),
+                            }
+                            .into()));
                         }
-                        rustls_pemfile::Item::Sec1Key(_) => {
-                            return Some(Ok(PrivateKey::from_der(KeyKind::Sec1, der).into()));
+                        rustls_pemfile::Item::Sec1Key(der) => {
+                            return Some(Ok(PrivateKey {
+                                kind: KeyKind::Sec1,
+                                der: PrivateKeyDer::Rustls(der.into()),
+                            }
+                            .into()));
                         }
 
                         // Skip unhandled item type (CSR etc)

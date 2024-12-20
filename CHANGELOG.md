@@ -1,5 +1,7 @@
 # Unreleased
 
+  * Fix completely broken PEM parsing (#912)
+
 # 3.0.0-rc3
 
   * Re-export ureq_proto::ArrayVec (#891)
