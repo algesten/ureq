@@ -2,6 +2,7 @@
 
   * Add new `SendBody::into_reader()` (#914)
   * Fix completely broken PEM parsing (#912)
+  * Improve ergonomics for `AutoHeaderValue` (#896)
 
 # 3.0.0-rc3
 
