@@ -74,6 +74,48 @@ impl<'a> SendBody<'a> {
     pub(crate) fn body_mode(&self) -> BodyMode {
         self.inner.body_mode()
     }
+
+    /// Turn this `SendBody` into a reader.
+    ///
+    /// This is useful in [`Middleware`][crate::middleware::Middleware] to make changes to the
+    /// body before sending it.
+    ///
+    /// ```
+    /// use ureq::{SendBody, Body};
+    /// use ureq::middleware::MiddlewareNext;
+    /// use ureq::http::{Request, Response, header::HeaderValue};
+    /// use std::io::Read;
+    ///
+    /// fn my_middleware(req: Request<SendBody>, next: MiddlewareNext)
+    ///     -> Result<Response<Body>, ureq::Error> {
+    ///
+    ///     // Take apart the request.
+    ///     let (parts, body) = req.into_parts();
+    ///
+    ///     // Take the first 100 bytes of the incoming send body.
+    ///     let mut reader = body.into_reader().take(100);
+    ///
+    ///     // Create a new SendBody.
+    ///     let new_body = SendBody::from_reader(&mut reader);
+    ///
+    ///     // Reconstitute the request.
+    ///     let req = Request::from_parts(parts, new_body);
+    ///
+    ///     // set my bespoke header and continue the chain
+    ///     next.handle(req)
+    /// }
+    /// ```
+    pub fn into_reader(self) -> impl Sized + io::Read + 'a {
+        ReadAdapter(self)
+    }
+}
+
+struct ReadAdapter<'a>(SendBody<'a>);
+
+impl<'a> io::Read for ReadAdapter<'a> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.0.read(buf)
+    }
 }
 
 use http::Response;
