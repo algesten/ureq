@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Add new `SendBody::into_reader()` (#914)
   * Fix completely broken PEM parsing (#912)
 
 # 3.0.0-rc3
