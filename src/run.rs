@@ -189,10 +189,10 @@ fn flow_run(
         RecvResponseResult::Redirect(flow) => {
             cleanup(connection, flow.must_close_connection(), timings.now());
 
-            if redirect_count >= config.max_redirects() {
-                FlowResult::Response(response, BodyHandler::default())
-            } else {
+            if redirect_count < config.max_redirects() {
                 FlowResult::Redirect(flow, mem::take(timings))
+            } else {
+                FlowResult::Response(response, BodyHandler::default())
             }
         }
         RecvResponseResult::Cleanup(flow) => {
