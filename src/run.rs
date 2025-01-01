@@ -178,10 +178,16 @@ fn flow_run(
                 ..Default::default()
             };
 
-            if response.status().is_redirection() && redirect_count < config.max_redirects() {
-                let flow = handler.consume_redirect_body()?;
+            if response.status().is_redirection() {
+                if redirect_count < config.max_redirects() {
+                    let flow = handler.consume_redirect_body()?;
 
-                FlowResult::Redirect(flow, handler.timings)
+                    FlowResult::Redirect(flow, handler.timings)
+                } else if config.max_redirects_do_error() {
+                    return Err(Error::TooManyRedirects);
+                } else {
+                    FlowResult::Response(response, handler)
+                }
             } else {
                 FlowResult::Response(response, handler)
             }
@@ -191,6 +197,8 @@ fn flow_run(
 
             if redirect_count < config.max_redirects() {
                 FlowResult::Redirect(flow, mem::take(timings))
+            } else if config.max_redirects_do_error() {
+                return Err(Error::TooManyRedirects);
             } else {
                 FlowResult::Response(response, BodyHandler::default())
             }

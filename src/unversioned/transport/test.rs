@@ -289,16 +289,23 @@ fn setup_default_handlers(handlers: &mut Vec<TestHandler>) {
     );
 
     maybe_add(
-        TestHandler::new("/redirect-to", |_uri, _req, w| {
+        TestHandler::new("/redirect-to", |uri, _req, w| {
+            let location = uri.query().unwrap();
+            assert!(location.starts_with("url="));
+            let location = &location[4..];
+            let location = percent_encoding::percent_decode_str(location)
+                .decode_utf8()
+                .unwrap();
             write!(
                 w,
                 "HTTP/1.1 302 FOUND\r\n\
-                Location: /get\r\n\
+                Location: {}\r\n\
                 Content-Length: 22\r\n\
                 Connection: close\r\n\
                 \r\n\
                 You've been redirected\
                 ",
+                location
             )
         }),
         handlers,
