@@ -143,6 +143,7 @@ pub struct Config {
     proxy: Option<Proxy>,
     no_delay: bool,
     max_redirects: u32,
+    max_redirects_will_error: bool,
     redirect_auth_headers: RedirectAuthHeaders,
     user_agent: AutoHeaderValue,
     accept: AutoHeaderValue,
@@ -186,6 +187,10 @@ impl Config {
         }
 
         Some(proxy.uri())
+    }
+
+    pub(crate) fn max_redirects_do_error(&self) -> bool {
+        self.max_redirects > 0 && self.max_redirects_will_error
     }
 }
 
@@ -238,11 +243,28 @@ impl Config {
         self.no_delay
     }
 
-    /// The max number of redirects to follow before giving up
+    /// The max number of redirects to follow before giving up.
+    ///
+    /// Whe max redirects are reached, the behavior is controlled by the
+    /// `max_redirects_will_error` setting. Set to `true` (which
+    /// is the default) the result is a `TooManyRedirects` error. Set
+    /// to `false`, the response is returned as is.
+    ///
+    /// If `max_redirects` is 0, no redirects are followed and the response
+    /// is always returned (never a `TooManyRedirects` error).
     ///
     /// Defaults to 10
     pub fn max_redirects(&self) -> u32 {
         self.max_redirects
+    }
+
+    /// If we should error when max redirects are reached.
+    ///
+    /// This has no meaning if `max_redirects` is 0.
+    ///
+    /// Defaults to true
+    pub fn max_redirects_will_error(&self) -> bool {
+        self.max_redirects_will_error
     }
 
     /// How to handle `Authorization` headers when following redirects
@@ -423,11 +445,29 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
         self
     }
 
-    /// The max number of redirects to follow before giving up
+    /// The max number of redirects to follow before giving up.
+    ///
+    /// Whe max redirects are reached, the behavior is controlled by the
+    /// `max_redirects_will_error` setting. Set to `true` (which
+    /// is the default) the result is a `TooManyRedirects` error. Set
+    /// to `false`, the response is returned as is.
+    ///
+    /// If `max_redirects` is 0, no redirects are followed and the response
+    /// is always returned (never a `TooManyRedirects` error).
     ///
     /// Defaults to 10
     pub fn max_redirects(mut self, v: u32) -> Self {
         self.config().max_redirects = v;
+        self
+    }
+
+    /// If we should error when max redirects are reached.
+    ///
+    /// This has no meaning if `max_redirects` is 0.
+    ///
+    /// Defaults to true
+    pub fn max_redirects_will_error(mut self, v: bool) -> Self {
+        self.config().max_redirects_will_error = v;
         self
     }
 
@@ -767,6 +807,7 @@ impl Default for Config {
             proxy: Proxy::try_from_env(),
             no_delay: true,
             max_redirects: 10,
+            max_redirects_will_error: true,
             redirect_auth_headers: RedirectAuthHeaders::Never,
             user_agent: AutoHeaderValue::default(),
             accept: AutoHeaderValue::default(),

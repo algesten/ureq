@@ -754,6 +754,38 @@ pub(crate) mod test {
     }
 
     #[test]
+    fn redirect_max_with_error() {
+        init_test_log();
+        let agent: Agent = Config::builder().max_redirects(3).build().into();
+        let res = agent
+            .get(
+                "http://httpbin.org/redirect-to?url=%2Fredirect-to%3F\
+                url%3D%2Fredirect-to%3Furl%3D%252Fredirect-to%253Furl%253D",
+            )
+            .call();
+        let err = res.unwrap_err();
+        assert_eq!(err.to_string(), "too many redirects");
+    }
+
+    #[test]
+    fn redirect_max_without_error() {
+        init_test_log();
+        let agent: Agent = Config::builder()
+            .max_redirects(3)
+            .max_redirects_will_error(false)
+            .build()
+            .into();
+        let res = agent
+            .get(
+                "http://httpbin.org/redirect-to?url=%2Fredirect-to%3F\
+                url%3D%2Fredirect-to%3Furl%3D%252Fredirect-to%253Furl%253D",
+            )
+            .call()
+            .unwrap();
+        assert_eq!(res.status(), 302);
+    }
+
+    #[test]
     fn redirect_follow() {
         init_test_log();
         let res = get("http://httpbin.org/redirect-to?url=%2Fget")

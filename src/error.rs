@@ -54,6 +54,16 @@ pub enum Error {
     /// A send body (Such as `&str`) is larger than the `content-length` header.
     BodyExceedsLimit(u64),
 
+    /// Too many redirects.
+    ///
+    /// The error can be turned off by setting
+    /// [`max_redirects_will_error()`](crate::config::ConfigBuilder::max_redirects_will_error)
+    /// to false. When turned off, the last response will be returned instead of causing
+    /// an error, even if it is a redirect.
+    ///
+    /// The number of redirects is limited to 10 by default.
+    TooManyRedirects,
+
     /// Some error with TLS.
     #[cfg(feature = "_tls")]
     Tls(&'static str),
@@ -190,6 +200,7 @@ impl fmt::Display for Error {
             Error::BodyExceedsLimit(v) => {
                 write!(f, "the response body is larger than request limit: {}", v)
             }
+            Error::TooManyRedirects => write!(f, "too many redirects"),
             #[cfg(feature = "_tls")]
             Error::Tls(v) => write!(f, "{}", v),
             #[cfg(feature = "_tls")]
