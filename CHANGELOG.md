@@ -1,5 +1,7 @@
 # Unreleased
 
+  * Default to `TooManyRedirects` error (#916)
+  * Add `ConfigBuilder::max_redirects_will_error()` (#916)
   * Add new `SendBody::into_reader()` (#914)
   * Fix completely broken PEM parsing (#912)
   * Improve ergonomics for `AutoHeaderValue` (#896)
