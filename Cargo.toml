@@ -49,7 +49,7 @@ percent-encoding = "2.3.1"
 rustls-pemfile = { version = "2.1.2", optional = true, default-features = false, features = ["std"] }
 rustls-pki-types = { version = "1.7.0", optional = true, default-features = false, features = ["std"] }
 # rustls-platform-verifier held back due to 0.4.0 causing a double
-# depedendency on windows-sys (0.59.0 and 0.52.0)
+# depedendency on windows-sys (0.59.0, 0.52.0) and security-framework (2.11.1, 3.1.0)
 rustls-platform-verifier = { version = "0.3.4", optional = true, default-features = false }
 webpki-roots = { version = "0.26.3", optional = true, default-features = false }
 webpki-root-certs = { version = "0.26.4", optional = true, default-features = false }
@@ -77,7 +77,7 @@ serde_json = { version = "1.0.120", optional = true, default-features = false, f
 cc = "1.0.106"
 
 [dev-dependencies]
-env_logger = "=0.11"
+env_logger = "0.11.6"
 auto-args = "0.3.0"
 serde = { version = "1.0.204", features = ["std", "derive"] }
 assert_no_alloc = "1.1.2"
