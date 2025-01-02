@@ -19,7 +19,7 @@
   * MSRV 1.71.1 to follow rustls (#885)
   * Fix bug in chunked overhead calculation (#880)
   * Make it possible to disable all automatic headers (#876)
-  * Rename `hoot` -> `ureq_proto`(#872) 
+  * Rename `hoot` -> `ureq_proto`(#872)
   * Fix `disable_verification` for TLS (#871)
   * `vendored` feature flag to get vendored native-tls (#866)
   * Fix incorrect handling of expect-100 (#867)
@@ -68,13 +68,13 @@
   * Refork frewsxcv/rust-chunked-transfer to fix MIT/Apache2.0 license (#761)
   * Enable http-crate feature for docs (#755)
   * Update Rustls from 0.22 to 0.23 - this may be a breaking change if your
-    application depends on Rustls 0.22 (e.g. to provide a custom 
+    application depends on Rustls 0.22 (e.g. to provide a custom
     `rustls::ClientConfig` to `ureq`). See the [Rustls 0.23.0][rustls-0.23.0]
     changelog for a list of breaking API changes (#753)
   * Rustls dep to default to ring backend. If your project uses the
     default `ureq` TLS config, or constructs its own `rustls::ClientConfig`
-    with `rustls::ClientConfig::builder()` you must ensure the Rustls 
-    `aws-lc-rs` feature is not activated, or set the process default 
+    with `rustls::ClientConfig::builder()` you must ensure the Rustls
+    `aws-lc-rs` feature is not activated, or set the process default
     cryptography provider before constructing any configs. See the Rustls
     [CryptoProvider][CryptoProvider] docs for more information (#753)
   * Remove direct dep rustls-webpki (#752)
