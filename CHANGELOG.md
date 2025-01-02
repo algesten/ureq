@@ -1,5 +1,7 @@
 # Unreleased
 
+# 3.0.0-rc4
+
   * Default to `TooManyRedirects` error (#916)
   * Add `ConfigBuilder::max_redirects_will_error()` (#916)
   * Add new `SendBody::into_reader()` (#914)
