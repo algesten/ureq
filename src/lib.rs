@@ -814,6 +814,15 @@ pub(crate) mod test {
     }
 
     #[test]
+    #[cfg(not(feature = "_test"))]
+    fn username_password_from_uri() {
+        init_test_log();
+        let mut res = get("https://martin:secret@httpbin.org/get").call().unwrap();
+        let body = res.body_mut().read_to_string().unwrap();
+        assert!(body.contains("Basic bWFydGluOnNlY3JldA=="));
+    }
+
+    #[test]
     #[cfg(all(feature = "cookies", feature = "_test"))]
     fn store_response_cookies() {
         let agent = Agent::new_with_defaults();
