@@ -188,12 +188,14 @@ impl Proxy {
 /// wrapped in TLS.
 pub struct ConnectProxyConnector;
 
-impl Connector for ConnectProxyConnector {
+impl<In: Transport> Connector<In> for ConnectProxyConnector {
+    type Out = In;
+
     fn connect(
         &self,
         details: &ConnectionDetails,
-        chained: Option<Box<dyn Transport>>,
-    ) -> Result<Option<Box<dyn Transport>>, Error> {
+        chained: Option<In>,
+    ) -> Result<Option<Self::Out>, Error> {
         let Some(transport) = chained else {
             return Ok(None);
         };

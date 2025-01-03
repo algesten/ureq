@@ -12,7 +12,7 @@ use rustls_pki_types::{PrivateSec1KeyDer, ServerName};
 use crate::tls::cert::KeyKind;
 use crate::tls::{RootCerts, TlsProvider};
 use crate::transport::{Buffers, ConnectionDetails, Connector, LazyBuffers};
-use crate::transport::{NextTimeout, Transport, TransportAdapter};
+use crate::transport::{Either, NextTimeout, Transport, TransportAdapter};
 use crate::Error;
 
 use super::TlsConfig;
@@ -25,12 +25,14 @@ pub struct RustlsConnector {
     config: OnceCell<Arc<ClientConfig>>,
 }
 
-impl Connector for RustlsConnector {
+impl<In: Transport> Connector<In> for RustlsConnector {
+    type Out = Either<In, RustlsTransport>;
+
     fn connect(
         &self,
         details: &ConnectionDetails,
-        chained: Option<Box<dyn Transport>>,
-    ) -> Result<Option<Box<dyn Transport>>, Error> {
+        chained: Option<In>,
+    ) -> Result<Option<Self::Out>, Error> {
         let Some(transport) = chained else {
             panic!("RustlConnector requires a chained transport");
         };
@@ -39,12 +41,12 @@ impl Connector for RustlsConnector {
         // already, otherwise use chained transport as is.
         if !details.needs_tls() || transport.is_tls() {
             trace!("Skip");
-            return Ok(Some(transport));
+            return Ok(Some(Either::A(transport)));
         }
 
         if details.config.tls_config().provider != TlsProvider::Rustls {
             debug!("Skip because config is not set to Rustls");
-            return Ok(Some(transport));
+            return Ok(Some(Either::A(transport)));
         }
 
         trace!("Try wrap in TLS");
@@ -71,7 +73,7 @@ impl Connector for RustlsConnector {
         let conn = ClientConnection::new(config, name)?;
         let stream = StreamOwned {
             conn,
-            sock: TransportAdapter::new(transport),
+            sock: TransportAdapter::new(transport.boxed()),
         };
 
         let buffers = LazyBuffers::new(
@@ -79,11 +81,11 @@ impl Connector for RustlsConnector {
             details.config.output_buffer_size(),
         );
 
-        let transport = Box::new(RustlsTransport { buffers, stream });
+        let transport = RustlsTransport { buffers, stream };
 
         debug!("Wrapped TLS");
 
-        Ok(Some(transport))
+        Ok(Some(Either::B(transport)))
     }
 }
 
@@ -166,7 +168,7 @@ fn build_config(tls_config: &TlsConfig) -> Arc<ClientConfig> {
     Arc::new(config)
 }
 
-struct RustlsTransport {
+pub struct RustlsTransport {
     buffers: LazyBuffers,
     stream: StreamOwned<ClientConnection, TransportAdapter>,
 }

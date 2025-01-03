@@ -8,6 +8,7 @@ use socks::{Socks4Stream, Socks5Stream};
 use crate::proxy::{Proto, Proxy};
 use crate::Error;
 
+use super::chain::Either;
 use super::ResolvedSocketAddrs;
 
 use super::tcp::TcpTransport;
@@ -20,26 +21,28 @@ use super::{ConnectionDetails, Connector, LazyBuffers, NextTimeout, Transport};
 /// The connector looks at the proxy settings in [`proxy`](crate::config::ConfigBuilder::proxy) to
 /// determine whether to attempt a proxy connection or not.
 #[derive(Default)]
-pub struct SocksConnector {}
+pub struct SocksConnector(());
 
-impl Connector for SocksConnector {
+impl<In: Transport> Connector<In> for SocksConnector {
+    type Out = Either<In, TcpTransport>;
+
     fn connect(
         &self,
         details: &ConnectionDetails,
-        chained: Option<Box<dyn Transport>>,
-    ) -> Result<Option<Box<dyn Transport>>, Error> {
+        chained: Option<In>,
+    ) -> Result<Option<Self::Out>, Error> {
         let proxy = match details.config.proxy() {
             Some(v) if v.proto().is_socks() => v,
             // If there is no proxy configured, or it isn't a SOCKS proxy, use whatever is chained.
             _ => {
                 trace!("SOCKS not configured");
-                return Ok(chained);
+                return Ok(chained.map(Either::A));
             }
         };
 
         if chained.is_some() {
             trace!("Skip");
-            return Ok(chained);
+            return Ok(chained.map(Either::A));
         }
 
         let proxy_addrs = details
@@ -56,9 +59,9 @@ impl Connector for SocksConnector {
             details.config.input_buffer_size(),
             details.config.output_buffer_size(),
         );
-        let transport = Box::new(TcpTransport::new(stream, buffers));
+        let transport = TcpTransport::new(stream, buffers);
 
-        Ok(Some(transport))
+        Ok(Some(Either::B(transport)))
     }
 }
 
