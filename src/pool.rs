@@ -14,14 +14,14 @@ use crate::util::DebugAuthority;
 use crate::Error;
 
 pub(crate) struct ConnectionPool {
-    connector: Box<dyn Connector>,
+    connector: Box<dyn Connector<Out = Box<dyn Transport>>>,
     pool: Arc<Mutex<Pool>>,
 }
 
 impl ConnectionPool {
-    pub fn new(connector: impl Connector, config: &Config) -> Self {
+    pub fn new(connector: Box<dyn Connector<Out = Box<dyn Transport>>>, config: &Config) -> Self {
         ConnectionPool {
-            connector: Box::new(connector),
+            connector,
             pool: Arc::new(Mutex::new(Pool::new(config))),
         }
     }
