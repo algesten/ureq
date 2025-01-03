@@ -1,5 +1,7 @@
 # Unreleased
 
+  * Handle Authorization: Basic from URI (#923)
+
 # 3.0.0-rc4
 
   * Default to `TooManyRedirects` error (#916)
