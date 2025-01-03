@@ -19,9 +19,7 @@
 //!
 //! The [`Connector`] trait anticipates a chain of connectors that each decide
 //! whether to help perform the connection or not. It is for instance possible to make a
-//! connector handling other schemes than `http`/`https` without affecting "regular" connections
-//! using these schemes. See [`ChainedConnector`] for a helper connector that aids setting
-//! up a chain of concrete connectors.
+//! connector handling other schemes than `http`/`https` without affecting "regular" connections.
 
 use std::fmt::Debug;
 
@@ -47,7 +45,7 @@ mod io;
 pub use io::TransportAdapter;
 
 mod chain;
-pub use chain::ChainedConnector;
+pub use chain::{ChainedConnector, Either};
 
 #[cfg(feature = "_test")]
 mod test;
@@ -83,18 +81,38 @@ pub use crate::timings::NextTimeout;
 /// in new ways. A user of ureq could implement bespoke connector (such as SCTP) and still use
 /// the `RustlsConnector` to wrap the underlying transport in TLS.
 ///
-/// The built-in connectors provide SOCKS, TCP sockets and TLS wrapping.
-pub trait Connector: Debug + Send + Sync + 'static {
-    /// Helper to quickly box a transport.
-    #[doc(hidden)]
-    fn boxed(self) -> Box<dyn Connector>
-    where
-        Self: Sized,
-    {
-        Box::new(self)
-    }
+/// The built-in [`DefaultConnector`] provides SOCKS, TCP sockets and TLS wrapping.
+///
+/// # Example
+///
+/// ```
+/// # #[cfg(all(feature = "rustls", not(feature = "_test")))] {
+/// use ureq::{Agent, config::Config};
+///
+/// // These types are not covered by the promises of semver (yet)
+/// use ureq::unversioned::transport::{Connector, TcpConnector, RustlsConnector};
+/// use ureq::unversioned::resolver::DefaultResolver;
+///
+/// // A connector chain that opens a TCP transport, then wraps it in a TLS.
+/// let connector = ()
+///     .chain(TcpConnector::default())
+///     .chain(RustlsConnector::default());
+///
+/// let config = Config::default();
+/// let resolver = DefaultResolver::default();
+///
+/// // Creates an agent with a bespoke connector
+/// let agent = Agent::with_parts(config, connector, resolver);
+///
+/// let mut res = agent.get("https://httpbin.org/get").call().unwrap();
+/// let body = res.body_mut().read_to_string().unwrap();
+/// # }
+/// ```
+pub trait Connector<In: Transport = ()>: Debug + Send + Sync + 'static {
+    /// The type of transport produced by this connector.
+    type Out: Transport;
 
-    /// Try to use this connector
+    /// Use this connector to make a [`Transport`].
     ///
     /// * The [`ConnectionDetails`] parameter encapsulates config and the specific details of
     ///   the connection being made currently (such as the [`Uri`]).
@@ -103,13 +121,53 @@ pub trait Connector: Debug + Send + Sync + 'static {
     ///   can decide whether they want to pass this `Transport` along as is, wrap it in something
     ///   like TLS or even ignore it to provide some other connection instead.
     ///
-    /// Return the `Transport` as produced by this connector, which could be just
+    /// Returns the [`Transport`] as produced by this connector, which could be just
     /// the incoming `chained` argument.
     fn connect(
         &self,
         details: &ConnectionDetails,
-        chained: Option<Box<dyn Transport>>,
-    ) -> Result<Option<Box<dyn Transport>>, Error>;
+        chained: Option<In>,
+    ) -> Result<Option<Self::Out>, Error>;
+
+    /// Chain this connector to another connector.
+    ///
+    /// This connector will be called first, and the output goes into the next connector.
+    fn chain<Next: Connector<Self::Out>>(self, next: Next) -> ChainedConnector<In, Self, Next>
+    where
+        Self: Sized,
+    {
+        ChainedConnector::new(self, next)
+    }
+}
+
+/// Box a connector to erase the types.
+///
+/// This is typically used after the chain of connectors is set up.
+pub(crate) fn boxed_connector<In, C>(c: C) -> Box<dyn Connector<In, Out = Box<dyn Transport>>>
+where
+    In: Transport,
+    C: Connector<In>,
+{
+    #[derive(Debug)]
+    struct BoxingConnector;
+
+    impl<In: Transport> Connector<In> for BoxingConnector {
+        type Out = Box<dyn Transport>;
+
+        fn connect(
+            &self,
+            _: &ConnectionDetails,
+            chained: Option<In>,
+        ) -> Result<Option<Self::Out>, Error> {
+            if let Some(transport) = chained {
+                Ok(Some(Box::new(transport)))
+            } else {
+                Ok(None)
+            }
+        }
+    }
+
+    Box::new(c.chain(BoxingConnector))
 }
 
 /// The parameters needed to create a [`Transport`].
@@ -183,7 +241,7 @@ impl<'a> ConnectionDetails<'a> {
 ///    It's important to call [`Buffers::input_consume()`] also with 0 consumed bytes since that's
 ///    how we keep track of whether the input is making progress.
 ///
-pub trait Transport: Debug + Send + Sync {
+pub trait Transport: Debug + Send + Sync + 'static {
     /// Provide buffers for this transport.
     fn buffers(&mut self) -> &mut dyn Buffers;
 
@@ -210,11 +268,21 @@ pub trait Transport: Debug + Send + Sync {
     fn is_tls(&self) -> bool {
         false
     }
+
+    /// Turn this transport in a boxed version.
+    // TODO(martin): is is complicating the public API?
+    #[doc(hidden)]
+    fn boxed(self) -> Box<dyn Transport>
+    where
+        Self: Sized + 'static,
+    {
+        Box::new(self)
+    }
 }
 
 /// Default connector providing TCP sockets, TLS and SOCKS proxy.
 ///
-/// This connector is a [`ChainedConnector`] with the following chain:
+/// This connector is the following chain:
 ///
 /// 1. [`SocksConnector`] to handle proxy settings if set.
 /// 2. [`TcpConnector`] to open a socket directly if a proxy is not used.
@@ -228,7 +296,7 @@ pub trait Transport: Debug + Send + Sync {
 ///
 #[derive(Debug)]
 pub struct DefaultConnector {
-    chain: ChainedConnector,
+    inner: Box<dyn Connector<(), Out = Box<dyn Transport>>>,
 }
 
 impl DefaultConnector {
@@ -240,58 +308,62 @@ impl DefaultConnector {
 
 impl Default for DefaultConnector {
     fn default() -> Self {
-        let chain = ChainedConnector::new([
-            //
-            // When enabled, all tests are connected to a dummy server and will not
-            // make requests to the internet.
-            #[cfg(feature = "_test")]
-            test::TestConnector.boxed(),
-            //
-            // If we are using socks-proxy, that takes precedence over TcpConnector.
-            #[cfg(feature = "socks-proxy")]
-            SocksConnector::default().boxed(),
-            //
-            // If the config indicates we ought to use a socks proxy
-            // and the feature flag isn't enabled, we should warn the user.
-            #[cfg(not(feature = "socks-proxy"))]
-            no_proxy::WarnOnNoSocksConnector.boxed(),
-            //
-            // If we didn't get a socks-proxy, open a Tcp connection
-            TcpConnector::default().boxed(),
-            //
-            // If rustls is enabled, prefer that
-            #[cfg(feature = "rustls")]
-            RustlsConnector::default().boxed(),
-            //
-            // Panic if the config calls for rustls, the uri scheme is https and that
-            // TLS provider is not enabled by feature flags.
-            #[cfg(feature = "_tls")]
-            no_tls::WarnOnMissingTlsProvider(crate::tls::TlsProvider::Rustls).boxed(),
-            //
-            // As a fallback if rustls isn't enabled, use native-tls
-            #[cfg(feature = "native-tls")]
-            NativeTlsConnector::default().boxed(),
-            //
-            // Panic if the config calls for native-tls, the uri scheme is https and that
-            // TLS provider is not enabled by feature flags.
-            #[cfg(feature = "_tls")]
-            no_tls::WarnOnMissingTlsProvider(crate::tls::TlsProvider::NativeTls).boxed(),
-            //
-            // Do the final CONNECT proxy on top of the connection if indicated by config.
-            ConnectProxyConnector.boxed(),
-        ]);
+        let inner = ();
 
-        DefaultConnector { chain }
+        // When enabled, all tests are connected to a dummy server and will not
+        // make requests to the internet.
+        #[cfg(feature = "_test")]
+        let inner = inner.chain(test::TestConnector);
+
+        // If we are using socks-proxy, that takes precedence over TcpConnector.
+        #[cfg(feature = "socks-proxy")]
+        let inner = inner.chain(SocksConnector::default());
+
+        // If the config indicates we ought to use a socks proxy
+        // and the feature flag isn't enabled, we should warn the user.
+        #[cfg(not(feature = "socks-proxy"))]
+        let inner = inner.chain(no_proxy::WarnOnNoSocksConnector);
+
+        // If we didn't get a socks-proxy, open a Tcp connection
+        let inner = inner.chain(TcpConnector::default());
+
+        // If rustls is enabled, prefer that
+        #[cfg(feature = "rustls")]
+        let inner = inner.chain(RustlsConnector::default());
+
+        // Panic if the config calls for rustls, the uri scheme is https and that
+        // TLS provider is not enabled by feature flags.
+        #[cfg(feature = "_tls")]
+        let inner = inner.chain(no_tls::WarnOnMissingTlsProvider(
+            crate::tls::TlsProvider::Rustls,
+        ));
+
+        // As a fallback if rustls isn't enabled, use native-tls
+        #[cfg(feature = "native-tls")]
+        let inner = inner.chain(NativeTlsConnector::default());
+
+        // Panic if the config calls for native-tls, the uri scheme is https and that
+        // TLS provider is not enabled by feature flags.
+        #[cfg(feature = "_tls")]
+        let inner = inner.chain(no_tls::WarnOnMissingTlsProvider(
+            crate::tls::TlsProvider::NativeTls,
+        ));
+
+        DefaultConnector {
+            inner: boxed_connector(inner),
+        }
     }
 }
 
-impl Connector for DefaultConnector {
+impl Connector<()> for DefaultConnector {
+    type Out = Box<dyn Transport>;
+
     fn connect(
         &self,
         details: &ConnectionDetails,
-        chained: Option<Box<dyn Transport>>,
-    ) -> Result<Option<Box<dyn Transport>>, Error> {
-        self.chain.connect(details, chained)
+        chained: Option<()>,
+    ) -> Result<Option<Self::Out>, Error> {
+        self.inner.connect(details, chained)
     }
 }
 
@@ -302,12 +374,14 @@ mod no_proxy {
     #[derive(Debug)]
     pub(crate) struct WarnOnNoSocksConnector;
 
-    impl Connector for WarnOnNoSocksConnector {
+    impl<In: Transport> Connector<In> for WarnOnNoSocksConnector {
+        type Out = In;
+
         fn connect(
             &self,
             details: &ConnectionDetails,
-            chained: Option<Box<dyn Transport>>,
-        ) -> Result<Option<Box<dyn Transport>>, Error> {
+            chained: Option<In>,
+        ) -> Result<Option<Self::Out>, Error> {
             if chained.is_none() {
                 if let Some(proxy) = details.config.proxy() {
                     if proxy.proto().is_socks() {
@@ -341,12 +415,14 @@ mod no_tls {
     #[derive(Debug)]
     pub(crate) struct WarnOnMissingTlsProvider(pub TlsProvider);
 
-    impl Connector for WarnOnMissingTlsProvider {
+    impl<In: Transport> Connector<In> for WarnOnMissingTlsProvider {
+        type Out = In;
+
         fn connect(
             &self,
             details: &ConnectionDetails,
-            chained: Option<Box<dyn Transport>>,
-        ) -> Result<Option<Box<dyn Transport>>, Error> {
+            chained: Option<In>,
+        ) -> Result<Option<Self::Out>, Error> {
             let already_tls = chained.as_ref().map(|c| c.is_tls()).unwrap_or(false);
 
             if already_tls {
@@ -368,5 +444,26 @@ mod no_tls {
 
             Ok(chained)
         }
+    }
+}
+
+impl<T: Transport> Transport for Box<T>
+where
+    T: ?Sized,
+{
+    fn buffers(&mut self) -> &mut dyn Buffers {
+        (**self).buffers()
+    }
+
+    fn transmit_output(&mut self, amount: usize, timeout: NextTimeout) -> Result<(), Error> {
+        (**self).transmit_output(amount, timeout)
+    }
+
+    fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
+        (**self).await_input(timeout)
+    }
+
+    fn is_open(&mut self) -> bool {
+        (**self).is_open()
     }
 }

@@ -10,14 +10,14 @@ use super::{NextTimeout, Transport};
 /// This is useful when integrating with components that expect a regular `Read`/`Write`. In
 /// ureq this is used both for the [`RustlsConnector`](crate::unversioned::transport::RustlsConnector) and the
 /// [`NativeTlsConnector`](crate::unversioned::transport::NativeTlsConnector).
-pub struct TransportAdapter {
+pub struct TransportAdapter<T: Transport = Box<dyn Transport>> {
     timeout: NextTimeout,
-    transport: Box<dyn Transport>,
+    transport: T,
 }
 
-impl TransportAdapter {
+impl<T: Transport> TransportAdapter<T> {
     /// Creates a new adapter
-    pub fn new(transport: Box<dyn Transport>) -> Self {
+    pub fn new(transport: T) -> Self {
         Self {
             timeout: NextTimeout {
                 after: Duration::NotHappening,
@@ -34,26 +34,26 @@ impl TransportAdapter {
 
     /// Reference to the adapted transport
     pub fn get_ref(&self) -> &dyn Transport {
-        &*self.transport
+        &self.transport
     }
 
     /// Mut reference to the adapted transport
     pub fn get_mut(&mut self) -> &mut dyn Transport {
-        &mut *self.transport
+        &mut self.transport
     }
 
     /// Reference to the inner transport.
     pub fn inner(&self) -> &dyn Transport {
-        &*self.transport
+        &self.transport
     }
 
     /// Turn the adapter back into the wrapped transport
-    pub fn into_inner(self) -> Box<dyn Transport> {
+    pub fn into_inner(self) -> T {
         self.transport
     }
 }
 
-impl io::Read for TransportAdapter {
+impl<T: Transport> io::Read for TransportAdapter<T> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.transport
             .await_input(self.timeout)
@@ -68,7 +68,7 @@ impl io::Read for TransportAdapter {
     }
 }
 
-impl io::Write for TransportAdapter {
+impl<T: Transport> io::Write for TransportAdapter<T> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         let output = self.transport.buffers().output();
 

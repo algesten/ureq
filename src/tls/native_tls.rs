@@ -21,12 +21,14 @@ pub struct NativeTlsConnector {
     connector: OnceCell<Arc<TlsConnector>>,
 }
 
-impl Connector for NativeTlsConnector {
+impl<In: Transport> Connector<In> for NativeTlsConnector {
+    type Out = Either<In, NativeTlsTransport>;
+
     fn connect(
         &self,
         details: &ConnectionDetails,
-        chained: Option<Box<dyn Transport>>,
-    ) -> Result<Option<Box<dyn Transport>>, Error> {
+        chained: Option<In>,
+    ) -> Result<Option<Self::Out>, Error> {
         let Some(transport) = chained else {
             panic!("NativeTlsConnector requires a chained transport");
         };
@@ -35,12 +37,12 @@ impl Connector for NativeTlsConnector {
         // already, otherwise use chained transport as is.
         if !details.needs_tls() || transport.is_tls() {
             trace!("Skip");
-            return Ok(Some(transport));
+            return Ok(Some(Either::A(transport)));
         }
 
         if details.config.tls_config().provider != TlsProvider::NativeTls {
             debug!("Skip because config is not set to Native TLS");
-            return Ok(Some(transport));
+            return Ok(Some(Either::A(transport)));
         }
 
         trace!("Try wrap TLS");
@@ -67,7 +69,7 @@ impl Connector for NativeTlsConnector {
             .host()
             .to_string();
 
-        let adapter = TransportAdapter::new(transport);
+        let adapter = TransportAdapter::new(transport.boxed());
         let stream = LazyStream::Unstarted(Some((connector, domain, adapter)));
 
         let buffers = LazyBuffers::new(
@@ -75,11 +77,11 @@ impl Connector for NativeTlsConnector {
             details.config.output_buffer_size(),
         );
 
-        let transport = Box::new(NativeTlsTransport { buffers, stream });
+        let transport = NativeTlsTransport { buffers, stream };
 
         debug!("Wrapped TLS");
 
-        Ok(Some(transport))
+        Ok(Some(Either::B(transport)))
     }
 }
 
@@ -167,7 +169,7 @@ fn pemify(der: &[u8], label: &'static str) -> Result<String, Error> {
     Ok(pem)
 }
 
-struct NativeTlsTransport {
+pub struct NativeTlsTransport {
     buffers: LazyBuffers,
     stream: LazyStream,
 }

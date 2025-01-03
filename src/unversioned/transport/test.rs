@@ -12,6 +12,7 @@ use http::{Method, Request, Uri};
 use crate::http;
 use crate::Error;
 
+use super::chain::Either;
 use super::time::Duration;
 use super::{Buffers, ConnectionDetails, Connector, LazyBuffers, NextTimeout, Transport};
 
@@ -20,16 +21,18 @@ pub(crate) struct TestConnector;
 
 thread_local!(static HANDLERS: RefCell<Vec<TestHandler>> = const { RefCell::new(Vec::new()) });
 
-impl Connector for TestConnector {
+impl<In: Transport> Connector<In> for TestConnector {
+    type Out = Either<In, TestTransport>;
+
     fn connect(
         &self,
         details: &ConnectionDetails,
-        chained: Option<Box<dyn Transport>>,
-    ) -> Result<Option<Box<dyn Transport>>, Error> {
+        chained: Option<In>,
+    ) -> Result<Option<Self::Out>, Error> {
         if chained.is_some() {
             // The chained connection overrides whatever we were to open here.
             trace!("Skip");
-            return Ok(chained);
+            return Ok(chained.map(Either::A));
         }
         let config = details.config;
 
@@ -52,7 +55,7 @@ impl Connector for TestConnector {
             connected: true,
         };
 
-        Ok(Some(Box::new(transport)))
+        Ok(Some(Either::B(transport)))
     }
 }
 
@@ -436,7 +439,7 @@ impl io::Write for TxWrite {
     }
 }
 
-struct TestTransport {
+pub(crate) struct TestTransport {
     buffers: LazyBuffers,
     tx: mpsc::SyncSender<Vec<u8>>,
     rx: SyncReceiver<Vec<u8>>,

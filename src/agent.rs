@@ -12,7 +12,7 @@ use crate::middleware::MiddlewareNext;
 use crate::pool::ConnectionPool;
 use crate::resolver::{DefaultResolver, Resolver};
 use crate::send_body::AsSendBody;
-use crate::transport::{Connector, DefaultConnector};
+use crate::transport::{boxed_connector, Connector, DefaultConnector, Transport};
 use crate::{Error, RequestBuilder, SendBody};
 use crate::{WithBody, WithoutBody};
 
@@ -96,18 +96,18 @@ pub struct Agent {
 impl Agent {
     /// Creates an agent with defaults.
     pub fn new_with_defaults() -> Self {
-        Self::with_parts(
+        Self::with_parts_inner(
             Config::default(),
-            DefaultConnector::default(),
+            Box::new(DefaultConnector::default()),
             DefaultResolver::default(),
         )
     }
 
     /// Creates an agent with config.
     pub fn new_with_config(config: Config) -> Self {
-        Self::with_parts(
+        Self::with_parts_inner(
             config,
-            DefaultConnector::default(),
+            Box::new(DefaultConnector::default()),
             DefaultResolver::default(),
         )
     }
@@ -123,6 +123,16 @@ impl Agent {
     ///
     /// _This is low level API that isn't for regular use of ureq._
     pub fn with_parts(config: Config, connector: impl Connector, resolver: impl Resolver) -> Self {
+        let boxed = boxed_connector(connector);
+        Self::with_parts_inner(config, boxed, resolver)
+    }
+
+    /// Inner helper to avoid additional boxing of the [`DefaultConnector`].
+    fn with_parts_inner(
+        config: Config,
+        connector: Box<dyn Connector<(), Out = Box<dyn Transport>>>,
+        resolver: impl Resolver,
+    ) -> Self {
         let pool = Arc::new(ConnectionPool::new(connector, &config));
 
         Agent {

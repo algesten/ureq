@@ -6,6 +6,7 @@ use crate::config::Config;
 use crate::util::IoResultExt;
 use crate::Error;
 
+use super::chain::Either;
 use super::ResolvedSocketAddrs;
 
 use super::time::Duration;
@@ -15,17 +16,19 @@ use super::{Buffers, ConnectionDetails, Connector, LazyBuffers, NextTimeout, Tra
 /// Connector for regular TCP sockets.
 pub struct TcpConnector(());
 
-impl Connector for TcpConnector {
+impl<In: Transport> Connector<In> for TcpConnector {
+    type Out = Either<In, TcpTransport>;
+
     fn connect(
         &self,
         details: &ConnectionDetails,
-        chained: Option<Box<dyn Transport>>,
-    ) -> Result<Option<Box<dyn Transport>>, crate::Error> {
+        chained: Option<In>,
+    ) -> Result<Option<Self::Out>, Error> {
         if chained.is_some() {
             // The chained connection overrides whatever we were to open here.
             // In the DefaultConnector chain this would be a SOCKS proxy connection.
             trace!("Skip");
-            return Ok(chained);
+            return Ok(chained.map(Either::A));
         }
 
         let config = &details.config;
@@ -34,7 +37,7 @@ impl Connector for TcpConnector {
         let buffers = LazyBuffers::new(config.input_buffer_size(), config.output_buffer_size());
         let transport = TcpTransport::new(stream, buffers);
 
-        Ok(Some(Box::new(transport)))
+        Ok(Some(Either::B(transport)))
     }
 }
 

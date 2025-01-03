@@ -1,50 +1,133 @@
-use crate::Error;
+use std::fmt;
+use std::marker::PhantomData;
 
-use super::{ConnectionDetails, Connector, Transport};
+use super::{Connector, Transport};
 
-/// Helper for a chain of connectors.
+/// Two chained connectors called one after another.
 ///
-/// Each step of the chain, can decide whether to:
-///
-/// * _Keep_ previous [`Transport`]
-/// * _Wrap_ previous [`Transport`]
-/// * _Ignore_ previous [`Transport`] in favor of some other connection.
-///
-/// For each new connection, the chain will be called one by one and the previously chained
-/// transport will be provided to the next as an argument in [`Connector::connect()`].
-///
-/// The chain is always looped fully. There is no early return.
-#[derive(Debug)]
-pub struct ChainedConnector {
-    chain: Vec<Box<dyn Connector>>,
+/// Created by calling [`Connector::chain`] on the first connector.
+pub struct ChainedConnector<In, First, Second>(First, Second, PhantomData<In>);
+
+impl<In, First, Second> Connector<In> for ChainedConnector<In, First, Second>
+where
+    In: Transport,
+    First: Connector<In>,
+    Second: Connector<First::Out>,
+{
+    type Out = Second::Out;
+
+    fn connect(
+        &self,
+        details: &super::ConnectionDetails,
+        chained: Option<In>,
+    ) -> Result<Option<Self::Out>, crate::Error> {
+        let f_out = self.0.connect(details, chained)?;
+        self.1.connect(details, f_out)
+    }
 }
 
-impl ChainedConnector {
-    /// Creates a new chain of connectors.
-    ///
-    /// For each connection, the chain will be called one by one and the previously chained
-    /// transport will be provided to the next as an argument in [`Connector::connect()`].
-    ///
-    /// The chain is always looped fully. There is no early return.
-    pub fn new(chain: impl IntoIterator<Item = Box<dyn Connector>>) -> Self {
-        Self {
-            chain: chain.into_iter().collect(),
+impl<In, First, Second> ChainedConnector<In, First, Second> {
+    pub(crate) fn new(first: First, second: Second) -> Self {
+        ChainedConnector(first, second, PhantomData)
+    }
+}
+
+impl<In, First, Second> fmt::Debug for ChainedConnector<In, First, Second>
+where
+    In: Transport,
+    First: Connector<In>,
+    Second: Connector<First::Out>,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("ChainedConnector")
+            .field(&self.0)
+            .field(&self.1)
+            .finish()
+    }
+}
+
+/// A selection between two transports.
+#[derive(Debug)]
+pub enum Either<A, B> {
+    /// The first transport.
+    A(A),
+    /// The second transport.
+    B(B),
+}
+
+impl<A: Transport, B: Transport> Transport for Either<A, B> {
+    fn buffers(&mut self) -> &mut dyn super::Buffers {
+        match self {
+            Either::A(a) => a.buffers(),
+            Either::B(b) => b.buffers(),
+        }
+    }
+
+    fn transmit_output(
+        &mut self,
+        amount: usize,
+        timeout: super::NextTimeout,
+    ) -> Result<(), crate::Error> {
+        match self {
+            Either::A(a) => a.transmit_output(amount, timeout),
+            Either::B(b) => b.transmit_output(amount, timeout),
+        }
+    }
+
+    fn await_input(&mut self, timeout: super::NextTimeout) -> Result<bool, crate::Error> {
+        match self {
+            Either::A(a) => a.await_input(timeout),
+            Either::B(b) => b.await_input(timeout),
+        }
+    }
+
+    fn is_open(&mut self) -> bool {
+        match self {
+            Either::A(a) => a.is_open(),
+            Either::B(b) => b.is_open(),
+        }
+    }
+
+    fn is_tls(&self) -> bool {
+        match self {
+            Either::A(a) => a.is_tls(),
+            Either::B(b) => b.is_tls(),
         }
     }
 }
 
-impl Connector for ChainedConnector {
+// Connector is implemented for () to start a chain of connectors.
+//
+// The `Out` transport is supposedly `()`, but this is never instantiated.
+impl Connector<()> for () {
+    type Out = ();
+
     fn connect(
         &self,
-        details: &ConnectionDetails,
-        chained: Option<Box<dyn Transport>>,
-    ) -> Result<Option<Box<dyn Transport>>, Error> {
-        let mut conn = chained;
+        _: &super::ConnectionDetails,
+        _: Option<()>,
+    ) -> Result<Option<Self::Out>, crate::Error> {
+        Ok(None)
+    }
+}
 
-        for connector in &self.chain {
-            conn = connector.connect(details, conn)?;
-        }
+// () is a valid Transport for type reasons.
+//
+// It should never be instantiated as an actual transport.
+impl Transport for () {
+    fn buffers(&mut self) -> &mut dyn super::Buffers {
+        panic!("Unit transport is not valid")
+    }
 
-        Ok(conn)
+    fn transmit_output(&mut self, _: usize, _: super::NextTimeout) -> Result<(), crate::Error> {
+        panic!("Unit transport is not valid")
+    }
+
+    fn await_input(&mut self, _: super::NextTimeout) -> Result<bool, crate::Error> {
+        panic!("Unit transport is not valid")
+    }
+
+    fn is_open(&mut self) -> bool {
+        panic!("Unit transport is not valid")
     }
 }
