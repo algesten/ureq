@@ -3,6 +3,7 @@ use std::io;
 use std::sync::Arc;
 
 pub use build::BodyBuilder;
+use ureq_proto::http::header;
 use ureq_proto::BodyMode;
 
 use crate::http;
@@ -428,13 +429,13 @@ enum ContentEncoding {
 impl ResponseInfo {
     pub fn new(headers: &http::HeaderMap, body_mode: BodyMode) -> Self {
         let content_encoding = headers
-            .get("content-encoding")
+            .get(header::CONTENT_ENCODING)
             .and_then(|v| v.to_str().ok())
             .map(ContentEncoding::from)
             .unwrap_or(ContentEncoding::None);
 
         let (mime_type, charset) = headers
-            .get("content-type")
+            .get(header::CONTENT_TYPE)
             .and_then(|v| v.to_str().ok())
             .map(split_content_type)
             .unwrap_or((None, None));
