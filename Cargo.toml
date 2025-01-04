@@ -33,10 +33,10 @@ features = [
 ]
 
 [features]
-default = ["rustls-aws-lc-rs", "gzip", "json"]
-rustls = ["dep:rustls", "_tls", "dep:webpki-roots"]
+default = ["rustls-ring", "gzip", "json"]
 rustls-ring = ["rustls", "rustls/ring"]
 rustls-aws-lc-rs = ["rustls", "rustls/aws-lc-rs"]
+rustls = ["dep:rustls", "_tls", "dep:webpki-roots"]
 platform-verifier = ["dep:rustls-platform-verifier"]
 native-tls = ["dep:native-tls", "dep:der", "_tls", "dep:webpki-root-certs"]
 socks-proxy = ["dep:socks"]
