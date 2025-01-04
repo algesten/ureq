@@ -131,6 +131,16 @@ impl Body {
     /// responses (`Transfer-Encoding: chunked`) , this will be `None`. Similarly for
     /// HTTP/1.0 without a `Content-Length` header, the response is close delimited,
     /// which means the length is unknown.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let res = ureq::get("https://httpbin.org/bytes/100")
+    ///     .call()?;
+    ///
+    /// assert_eq!(res.body().content_length(), Some(100));
+    /// # Ok::<_, ureq::Error>(())
+    /// ```
     pub fn content_length(&self) -> Option<u64> {
         match self.info.body_mode {
             BodyMode::NoBody => None,
@@ -325,6 +335,18 @@ impl Body {
     ///
     /// Before calling this you can check the body size using [`Body::content_length()`]. However
     /// if the body is chunked or close delimited, the size is unknown.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let (_, body) = ureq::get("http://httpbin.org/bytes/100")
+    ///     .call()?
+    ///     .into_parts();
+    ///
+    /// // This discards up to 1000 bytes.
+    /// body.discard(1000)?;
+    /// # Ok::<_, ureq::Error>(())
+    /// ```
     pub fn discard(mut self, max: u64) -> Result<(), Error> {
         self.as_reader().discard(max)?;
         Ok(())
