@@ -1,6 +1,7 @@
 # Unreleased
 
   * Handle Authorization: Basic from URI (#923)
+  * Remove many uses of Box::new() from Connector chain (#919)
 
 # 3.0.0-rc4
 
