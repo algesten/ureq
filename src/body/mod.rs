@@ -6,6 +6,7 @@ pub use build::BodyBuilder;
 use ureq_proto::http::header;
 use ureq_proto::BodyMode;
 
+use crate::config::Config;
 use crate::http;
 use crate::run::BodyHandler;
 use crate::Error;
@@ -65,6 +66,7 @@ pub(crate) struct ResponseInfo {
     mime_type: Option<String>,
     charset: Option<String>,
     body_mode: BodyMode,
+    consume_on_drop: Option<u64>,
 }
 
 impl Body {
@@ -383,7 +385,7 @@ impl<'a> BodyWithConfig<'a> {
     fn do_build(self) -> BodyReader<'a> {
         BodyReader::new(
             LimitReader::new(self.handler, self.limit),
-            &self.info,
+            self.info.clone(),
             self.info.body_mode,
             self.lossy_utf8,
         )
@@ -458,7 +460,7 @@ enum ContentEncoding {
 }
 
 impl ResponseInfo {
-    pub fn new(headers: &http::HeaderMap, body_mode: BodyMode) -> Self {
+    pub fn new(headers: &http::HeaderMap, body_mode: BodyMode, config: &Config) -> Self {
         let content_encoding = headers
             .get(header::CONTENT_ENCODING)
             .and_then(|v| v.to_str().ok())
@@ -476,6 +478,7 @@ impl ResponseInfo {
             mime_type,
             charset,
             body_mode,
+            consume_on_drop: config.consume_body_on_drop(),
         }
     }
 
@@ -549,6 +552,7 @@ fn split_content_type(content_type: &str) -> (Option<String>, Option<String>) {
 /// ```
 pub struct BodyReader<'a> {
     reader: MaybeLossyDecoder<CharsetDecoder<ContentDecoder<LimitReader<BodySourceRef<'a>>>>>,
+    info: Arc<ResponseInfo>,
     // If this reader is used as SendBody for another request, this
     // body mode can indiciate the content-length. Gzip, charset etc
     // would mean input is not same as output.
@@ -558,7 +562,7 @@ pub struct BodyReader<'a> {
 impl<'a> BodyReader<'a> {
     fn new(
         reader: LimitReader<BodySourceRef<'a>>,
-        info: &ResponseInfo,
+        info: Arc<ResponseInfo>,
         incoming_body_mode: BodyMode,
         lossy_utf8: bool,
     ) -> BodyReader<'a> {
@@ -604,8 +608,9 @@ impl<'a> BodyReader<'a> {
         };
 
         BodyReader {
-            outgoing_body_mode,
             reader,
+            info,
+            outgoing_body_mode,
         }
     }
 
@@ -675,6 +680,14 @@ impl<R: io::Read> io::Read for MaybeLossyDecoder<R> {
 impl<'a> io::Read for BodyReader<'a> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.reader.read(buf)
+    }
+}
+
+impl<'a> Drop for BodyReader<'a> {
+    fn drop(&mut self) {
+        if let Some(max) = self.info.consume_on_drop {
+            let _ = self.discard(max);
+        }
     }
 }
 

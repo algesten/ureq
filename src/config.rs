@@ -155,6 +155,7 @@ pub struct Config {
     max_idle_connections: usize,
     max_idle_connections_per_host: usize,
     max_idle_age: Duration,
+    consume_body_on_drop: Option<u64>,
 
     // Chain built for middleware.
     pub(crate) middleware: MiddlewareChain,
@@ -380,6 +381,29 @@ impl Config {
     pub fn max_idle_age(&self) -> Duration {
         self.max_idle_age
     }
+
+    /// Whether to auto-consume unread body data.
+    ///
+    /// The max number of bytes to automatically consume if the [`Body`] is dropped
+    /// without being fully read. This is useful for returning connections to the
+    /// pool. There is a trade-off between how much data that is reasonable to consume
+    /// versus dropping the connection and opening a new one.
+    ///
+    /// The amount set here is in addition to what has already been read. I.e. it is possible
+    /// to peek at the body and then drop it without consuming the rest.
+    ///
+    /// This setting has no effect if the body has already been fully read.
+    ///
+    /// **Note**: ureq is sync and dropping the [`Body`][crate::Body]/[`BodyReader`][crate::BodyReader]
+    /// with this option set will block until the amount is consumed. This can lead to potentially
+    /// confusing situations where your code is randomly freezing. For example: if this is set to
+    /// something big, like 1GB, the point where the body is dropped could block until 1GB
+    /// is read.
+    ///
+    /// Defaults to `None`.
+    pub fn consume_body_on_drop(&self) -> Option<u64> {
+        self.consume_body_on_drop
+    }
 }
 
 /// Builder of [`Config`]
@@ -587,6 +611,30 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
     /// Defaults to 15 seconds
     pub fn max_idle_age(mut self, v: Duration) -> Self {
         self.config().max_idle_age = v;
+        self
+    }
+
+    /// Whether to auto-consume unread body data.
+    ///
+    /// The max number of bytes to automatically consume if the [`Body`] is dropped
+    /// without being fully read. This is useful for returning connections to the
+    /// pool. There is a trade-off between how much data that is reasonable to consume
+    /// versus dropping the connection and opening a new one.
+    ///
+    /// The amount set here is in addition to what has already been read. I.e. it is possible
+    /// to peek at the body and then drop it without consuming the rest.
+    ///
+    /// This setting has no effect if the body has already been fully read.
+    ///
+    /// **Note**: ureq is sync and dropping the [`Body`][crate::Body]/[`BodyReader`][crate::BodyReader]
+    /// with this option set will block until the amount is consumed. This can lead to potentially
+    /// confusing situations where your code is randomly freezing. For example: if this is set to
+    /// something big, like 1GB, the point where the body is dropped could block until 1GB
+    /// is read.
+    ///
+    /// Defaults to `None`.
+    pub fn consume_body_on_drop(mut self, max: Option<u64>) -> Self {
+        self.config().consume_body_on_drop = max;
         self
     }
 
@@ -819,6 +867,7 @@ impl Default for Config {
             max_idle_connections: 10,
             max_idle_connections_per_host: 3,
             max_idle_age: Duration::from_secs(15),
+            consume_body_on_drop: None,
             middleware: MiddlewareChain::default(),
             force_send_body: false,
         }

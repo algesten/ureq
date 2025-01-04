@@ -46,6 +46,7 @@ impl BodyBuilder {
                 mime_type: None,
                 charset: None,
                 body_mode: BodyMode::NoBody,
+                consume_on_drop: None,
             },
             limit: None,
         }

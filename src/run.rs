@@ -90,7 +90,7 @@ pub(crate) fn run(
         .map(|f| f.body_mode())
         .unwrap_or(BodyMode::NoBody);
 
-    let info = ResponseInfo::new(&parts.headers, recv_body_mode);
+    let info = ResponseInfo::new(&parts.headers, recv_body_mode, &config);
 
     let body = Body::new(handler, info);
 
