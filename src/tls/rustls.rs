@@ -87,12 +87,23 @@ impl Connector for RustlsConnector {
     }
 }
 
+#[allow(unreachable_code)]
+fn default_crypto_provider() -> rustls::crypto::CryptoProvider {
+    #[cfg(feature = "rustls-ring")]
+    return rustls::crypto::ring::default_provider();
+    #[cfg(feature = "rustls-aws-lc-rs")]
+    return rustls::crypto::aws_lc_rs::default_provider();
+    unreachable!(
+        "Ureq cannot select a default crypto provider, please enable either feature 'rustls-ring' or 'rustls-aws-lc-rs'"
+    )
+}
+
 fn build_config(tls_config: &TlsConfig) -> Arc<ClientConfig> {
     // Improve chances of ureq working out-of-the-box by not requiring the user
     // to select a default crypto provider.
     let provider = rustls::crypto::CryptoProvider::get_default()
         .cloned()
-        .unwrap_or(Arc::new(rustls::crypto::ring::default_provider()));
+        .unwrap_or(Arc::new(default_crypto_provider()));
 
     let builder = ClientConfig::builder_with_provider(provider.clone())
         .with_protocol_versions(ALL_VERSIONS)
