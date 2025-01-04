@@ -1,5 +1,5 @@
 use std::fmt;
-use std::io::{self, Read};
+use std::io;
 use std::sync::Arc;
 
 pub use build::BodyBuilder;
@@ -325,32 +325,6 @@ impl Body {
         let handler = self.source.into();
         BodyWithConfig::new(handler, self.info.clone())
     }
-
-    /// Discards the body up to `max` bytes.
-    ///
-    /// This is useful if you want to discard the body without reading it. The connection
-    /// will be returned to the pool (if applicable) and ureq will be able to reuse it.
-    ///
-    /// If the body is bigger than `max`, the connection can't be reused and will be closed.
-    ///
-    /// Before calling this you can check the body size using [`Body::content_length()`]. However
-    /// if the body is chunked or close delimited, the size is unknown.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// let (_, body) = ureq::get("http://httpbin.org/bytes/100")
-    ///     .call()?
-    ///     .into_parts();
-    ///
-    /// // This discards up to 1000 bytes.
-    /// body.discard(1000)?;
-    /// # Ok::<_, ureq::Error>(())
-    /// ```
-    pub fn discard(mut self, max: u64) -> Result<(), Error> {
-        self.as_reader().discard(max)?;
-        Ok(())
-    }
 }
 
 /// Configuration of how to read the body.
@@ -631,19 +605,6 @@ impl<'a> BodyReader<'a> {
 
     pub(crate) fn body_mode(&self) -> BodyMode {
         self.outgoing_body_mode
-    }
-
-    fn discard(&mut self, max: u64) -> Result<(), Error> {
-        let mut buf = [0; 10 * 1024];
-        let mut n = 0;
-        while n < max {
-            let read = self.reader.read(&mut buf)?;
-            if read == 0 {
-                break;
-            }
-            n += read as u64;
-        }
-        Ok(())
     }
 }
 
