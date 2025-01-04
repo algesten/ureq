@@ -64,6 +64,7 @@ socks = { version = "0.3.4", optional = true }
 # cookie_store uses Url, while http-crate has its own Uri.
 # Keep url crate in lockstep with cookie_store.
 cookie_store = { version = "0.21.1", optional = true, default-features = false, features = ["preserve_order"] }
+# ureq-proto forces url=2.5.4. This optional dep documents the situation in cookie_store.
 url = { version = "2.3.1", optional = true, default-features = false }
 
 flate2 = { version = "1.0.30", optional = true }
