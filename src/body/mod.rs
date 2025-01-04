@@ -1,5 +1,5 @@
 use std::fmt;
-use std::io;
+use std::io::{self, Read};
 use std::sync::Arc;
 
 pub use build::BodyBuilder;
@@ -123,6 +123,21 @@ impl Body {
     /// ```
     pub fn charset(&self) -> Option<&str> {
         self.info.charset.as_deref()
+    }
+
+    /// The content length of the body.
+    ///
+    /// This is the value of the `Content-Length` header, if there is one. For chunked
+    /// responses (`Transfer-Encoding: chunked`) , this will be `None`. Similarly for
+    /// HTTP/1.0 without a `Content-Length` header, the response is close delimited,
+    /// which means the length is unknown.
+    pub fn content_length(&self) -> Option<u64> {
+        match self.info.body_mode {
+            BodyMode::NoBody => None,
+            BodyMode::LengthDelimited(v) => Some(v),
+            BodyMode::Chunked => None,
+            BodyMode::CloseDelimited => None,
+        }
     }
 
     /// Handle this body as a shared `impl Read` of the body.
