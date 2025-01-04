@@ -1,5 +1,7 @@
 # Unreleased
 
+  * Body::content_length (#927)
+  * Body::discard() (#927)
   * Handle Authorization: Basic from URI (#923)
   * Remove many uses of Box::new() from Connector chain (#919)
 
