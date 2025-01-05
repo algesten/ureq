@@ -6,7 +6,7 @@ use std::sync::Arc;
 mod cert;
 pub use cert::{parse_pem, Certificate, PemItem, PrivateKey};
 
-#[cfg(feature = "rustls")]
+#[cfg(feature = "_rustls")]
 pub(crate) mod rustls;
 
 #[cfg(feature = "native-tls")]
@@ -43,7 +43,7 @@ impl TlsProvider {
     pub(crate) fn is_feature_enabled(&self) -> bool {
         match self {
             TlsProvider::Rustls => {
-                cfg!(feature = "rustls")
+                cfg!(feature = "_rustls")
             }
             TlsProvider::NativeTls => {
                 cfg!(feature = "native-tls")
@@ -70,6 +70,8 @@ pub struct TlsConfig {
     root_certs: RootCerts,
     use_sni: bool,
     disable_verification: bool,
+    #[cfg(feature = "_rustls")]
+    rustls_crypto_provider: Option<Arc<::rustls::crypto::CryptoProvider>>,
 }
 
 impl TlsConfig {
@@ -120,6 +122,24 @@ impl TlsConfig {
     pub fn disable_verification(&self) -> bool {
         self.disable_verification
     }
+
+    /// Specific `CryptoProvider` to use for `rustls`.
+    ///
+    /// # UNSTABLE API
+    ///
+    /// **NOTE: This API is not guaranteed for semver.**
+    ///
+    /// `rustls` is not (yet) semver 1.x and ureq can't promise that this API is upheld.
+    /// If `rustls` makes a breaking change regarding `CryptoProvider` their configuration,
+    /// or incompatible data types between rustls versions, ureq will _NOT_ bump a major version.
+    ///
+    /// ureq will update to the latest `rustls` minor version using ureq minor versions.
+    #[cfg(feature = "_rustls")]
+    pub fn unversioned_rustls_crypto_provider(
+        &self,
+    ) -> &Option<Arc<::rustls::crypto::CryptoProvider>> {
+        &self.rustls_crypto_provider
+    }
 }
 
 /// Builder of [`TlsConfig`]
@@ -169,6 +189,66 @@ impl TlsConfigBuilder {
     /// any level of security is required.
     pub fn disable_verification(mut self, v: bool) -> Self {
         self.config.disable_verification = v;
+        self
+    }
+
+    /// Specific `CryptoProvider` to use for `rustls`.
+    ///
+    /// # UNSTABLE API
+    ///
+    /// **NOTE: This API is not guaranteed for semver.**
+    ///
+    /// `rustls` is not (yet) semver 1.x and ureq can't promise that this API is upheld.
+    /// If `rustls` makes a breaking change regarding `CryptoProvider` their configuration,
+    /// or incompatible data types between rustls versions, ureq will _NOT_ bump a major version.
+    ///
+    /// ureq will update to the latest `rustls` minor version using ureq minor versions.
+    ///
+    /// # Feature flags
+    ///
+    /// This requires either feature **rustls** or **rustls-no-provider**, you probably
+    /// want the latter when configuring an explicit crypto provider since
+    /// **rustls** compiles with `ring`, while **rustls-no-provider** does not.
+    ///
+    /// # Example
+    ///
+    /// This example uses `aws-lc-rs` for the [`Agent`][crate::Agent]. The following
+    /// depdendencies would compile ureq without `ring` and only aws-lc-rs.
+    ///
+    /// * `Cargo.toml`
+    ///
+    /// ```text
+    /// ureq = { version = "3", default-features = false, features = ["rustls-no-provider"] }
+    /// rustls = { version = "0.23", features = ["aws-lc-rs"] }
+    /// ```
+    ///
+    /// * Agent
+    ///
+    /// ```
+    /// use std::sync::Arc;
+    /// use ureq::{Agent};
+    /// use ureq::tls::{TlsConfig, TlsProvider};
+    /// use rustls::crypto;
+    ///
+    /// let crypto = Arc::new(crypto::aws_lc_rs::default_provider());
+    ///
+    /// let agent = Agent::config_builder()
+    ///     .tls_config(
+    ///         TlsConfig::builder()
+    ///             .provider(TlsProvider::Rustls)
+    ///             // requires rustls or rustls-no-provider feature
+    ///             .unversioned_rustls_crypto_provider(crypto)
+    ///             .build()
+    ///    )
+    ///    .build()
+    ///    .new_agent();
+    /// ```
+    #[cfg(feature = "_rustls")]
+    pub fn unversioned_rustls_crypto_provider(
+        mut self,
+        v: Arc<::rustls::crypto::CryptoProvider>,
+    ) -> Self {
+        self.config.rustls_crypto_provider = Some(v);
         self
     }
 
@@ -244,6 +324,8 @@ impl Default for TlsConfig {
             root_certs: RootCerts::WebPki,
             use_sni: true,
             disable_verification: false,
+            #[cfg(feature = "_rustls")]
+            rustls_crypto_provider: None,
         }
     }
 }

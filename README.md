@@ -134,8 +134,8 @@ You can control them when including ureq as a dependency.
 
 The default enabled features are: **rustls**, **gzip** and **json**.
 
-* **rustls** enabled the rustls TLS implementation. This is the default for the the crate level
-  convenience calls (`ureq::get` etc)
+* **rustls** enables the rustls TLS implementation. This is the default for the the crate level
+  convenience calls (`ureq::get` etc). It currently uses `ring` as the TLS provider.
 * **native-tls** enables the native tls backend for TLS. Due to the risk of diamond dependencies
   accidentally switching on an unwanted TLS implementation, `native-tls` is never picked up as
   a default or used by the crate level convenience calls (`ureq::get` etc) – it must be configured
@@ -151,6 +151,15 @@ The default enabled features are: **rustls**, **gzip** and **json**.
    (e.g.  `Content-Type: text/plain; charset=iso-8859-1`). Without this, the
    library defaults to Rust's built in `utf-8`
 * **json** enables JSON sending and receiving via serde_json
+
+#### Unstable
+
+These features are unstable and might change in a minor version.
+
+* **rustls-no-provider** Enables rustls, but does not enable any [`CryptoProvider`] such as `ring`.
+  Providers other than the default (currently `ring`) are never picked up from feature flags alone.
+  It must be configured on the agent.
+
 * **vendored** compiles and statically links to a copy of non-Rust vendors (e.g. OpenSSL from `native-tls`)
 
 ## TLS (https)
@@ -159,12 +168,25 @@ The default enabled features are: **rustls**, **gzip** and **json**.
 
 By default, ureq uses [`rustls` crate] with the `ring` cryptographic provider.
 As of Sep 2024, the `ring` provider has a higher chance of compiling successfully. If the user
-installs another [default provider], that choice is respected.
+installs another process [default provider], that choice is respected.
+
+ureq does not guarantee to default to ring indefinitely. `rustls` as a feature flag will always
+work, but the specific crypto backend might change in a minor version.
 
 ```rust
 // This uses rustls
 ureq::get("https://www.google.com/").call().unwrap();
 ```
+
+#### rustls without ring
+
+ureq never changes TLS backend from feature flags alone. It is possible to compile ureq
+without ring, but it requires specific feature flags and configuring the [`Agent`].
+
+Since rustls is not semver 1.x, this requires non-semver-guaranteed API. I.e. ureq might
+change this behavior without a major version bump.
+
+Read more at [`TlsConfigBuilder::unversioned_rustls_crypto_provider`][crate::tls::TlsConfigBuilder::unversioned_rustls_crypto_provider].
 
 ### native-tls
 
@@ -393,6 +415,17 @@ These allow the user write their own bespoke transports and (DNS name) resolver.
 these parts are not yet solidified. They live under the [`unversioned`] module, and do not
 follow semver. See module doc for more info.
 
+### Breaking changes in dependencies
+
+ureq relies on non-semver 1.x crates such as `rustls` and `native-tls`. Some scenarios, such
+as configuring `rustls` to not use `ring`, a user of ureq might need to interact with these
+crates directly instead of going via ureq's provided API.
+
+Such changes can break when ureq updates dependencies. This is not considered a breaking change
+for ureq and will not be reflected by a major version bump.
+
+We strive to mark ureq's API with the word "unversioned" to identify places where this risk arises.
+
 ### Minimum Supported Rust Version (MSRV)
 
 From time to time we will need to update our minimum supported Rust version (MSRV). This is not
@@ -436,3 +469,4 @@ something we do lightly; our ambition is to be as conservative with MSRV as poss
 [`Transport`]: https://docs.rs/ureq/3.0.0-rc4/ureq/unversioned/transport/trait.Transport.html
 [`Resolver`]: https://docs.rs/ureq/3.0.0-rc4/ureq/unversioned/resolver/trait.Resolver.html
 [`unversioned`]: https://docs.rs/ureq/3.0.0-rc4/ureq/unversioned/index.html
+[`CryptoProvider`]: https://docs.rs/rustls/latest/rustls/crypto/struct.CryptoProvider.html

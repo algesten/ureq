@@ -81,7 +81,7 @@ pub enum Error {
     /// *Note:* The wrapped error struct is not considered part of ureq API.
     /// Breaking changes in that struct will not be reflected in ureq
     /// major versions.
-    #[cfg(feature = "rustls")]
+    #[cfg(feature = "_rustls")]
     Rustls(rustls::Error),
 
     /// An error originating in Native-TLS.
@@ -205,7 +205,7 @@ impl fmt::Display for Error {
             Error::Tls(v) => write!(f, "{}", v),
             #[cfg(feature = "_tls")]
             Error::Pem(v) => write!(f, "PEM: {:?}", v),
-            #[cfg(feature = "rustls")]
+            #[cfg(feature = "_rustls")]
             Error::Rustls(v) => write!(f, "rustls: {}", v),
             #[cfg(feature = "native-tls")]
             Error::NativeTls(v) => write!(f, "native-tls: {}", v),
@@ -245,7 +245,7 @@ impl From<ureq_proto::Error> for Error {
     }
 }
 
-#[cfg(feature = "rustls")]
+#[cfg(feature = "_rustls")]
 impl From<rustls::Error> for Error {
     fn from(value: rustls::Error) -> Self {
         Self::Rustls(value)
