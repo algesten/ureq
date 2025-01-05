@@ -220,7 +220,7 @@ impl<In: Transport> Connector<In> for ConnectProxyConnector {
             .unwrap_or(uri.scheme().unwrap().default_port().unwrap());
 
         write!(w, "CONNECT {}:{} HTTP/1.1\r\n", host, port)?;
-        write!(w, "Host: {}:{}\r\n", host, port)?;
+        write!(w, "Host: {}:{}\r\n", proxy.host(), proxy.port())?;
         if let Some(v) = details.config.user_agent().as_str(DEFAULT_USER_AGENT) {
             write!(w, "User-Agent: {}\r\n", v)?;
         }
