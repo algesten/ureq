@@ -349,6 +349,8 @@ impl Default for DefaultConnector {
             crate::tls::TlsProvider::NativeTls,
         ));
 
+        let inner = inner.chain(ConnectProxyConnector::default());
+
         DefaultConnector {
             inner: boxed_connector(inner),
         }
