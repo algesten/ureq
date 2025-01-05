@@ -45,10 +45,10 @@
 //! # Ok::<(), ureq::Error>(())
 //! ```
 //!
-//! For more involved tasks, you'll want to create an [Agent]. An Agent
+//! For more involved tasks, you'll want to create an [`Agent`]. An Agent
 //! holds a connection pool for reuse, and a cookie store if you use the
 //! **cookies** feature. An Agent can be cheaply cloned due to internal
-//! [Arc](std::sync::Arc) and all clones of an Agent share state among each other. Creating
+//! [`Arc`] and all clones of an Agent share state among each other. Creating
 //! an Agent also allows setting options like the TLS configuration.
 //!
 //! ```rust
@@ -110,10 +110,9 @@
 //!
 //! ureq returns errors via `Result<T, ureq::Error>`. That includes I/O errors,
 //! protocol errors. By default, also HTTP status code errors (when the
-//! server responded 4xx or 5xx) results in `Error`.
+//! server responded 4xx or 5xx) results in [`Error`].
 //!
-//! This behavior can be turned off via
-//! [`http_status_as_error()`][crate::config::ConfigBuilder::http_status_as_error].
+//! This behavior can be turned off via [`http_status_as_error()`]
 //!
 //! ```rust
 //! use ureq::Error;
@@ -210,13 +209,11 @@
 //! By default, ureq uses Mozilla's root certificates via the [webpki-roots] crate. This is a static
 //! bundle of root certificates that do not update automatically. It also circumvents whatever root
 //! certificates are installed on the host running ureq, which might be a good or a bad thing depending
-//! on your perspective. There is also no mechanism for
-//! [SCT](https://en.wikipedia.org/wiki/Certificate_Transparency),
-//! [CRLs](https://en.wikipedia.org/wiki/Certificate_revocation_list) or other revocations.
+//! on your perspective. There is also no mechanism for [SCT], [CRL]s or other revocations.
 //! To maintain a "fresh" list of root certs, you need to bump the ureq dependency from time to time.
 //!
 //! The main reason for chosing this as the default is to minimize the number of dependencies. More
-//! details about this decision can be found at [PR 818](https://github.com/algesten/ureq/pull/818)
+//! details about this decision can be found at [PR 818].
 //!
 //! If your use case for ureq is talking to a limited number of servers with high trust, the
 //! default setting is likely sufficient. If you use ureq with a high number of servers, or servers
@@ -257,8 +254,8 @@
 //!
 //! This is enabled by default.
 //!
-//! * [`request.send_json()`][RequestBuilder::send_json()] send body as json.
-//! * [`body.read_json()`][Body::read_json()] transform response to json.
+//! * [`request.send_json()`] send body as json.
+//! * [`body.read_json()`] transform response to json.
 //!
 //! # Sending body data
 //!
@@ -283,7 +280,7 @@
 //! * `&String`
 //! * `Vec<u8>`
 //! * `&Vec<u8>)`
-//! * [`SendBody::from_json()`] (implicitly via [`RequestBuilder::send_json()`])
+//! * [`SendBody::from_json()`] (implicitly via [`request.send_json()`])
 //!
 //! ## Transfer-Encoding: chunked
 //!
@@ -317,7 +314,7 @@
 //!
 //! ## Sending form data
 //!
-//! [`RequestBuilder::send_form()`] provides a way to send `application/x-www-form-urlencoded`
+//! [`request.send_form()`] provides a way to send `application/x-www-form-urlencoded`
 //! encoded data. The key/values provided will be URL encoded.
 //!
 //! ## Overriding
@@ -365,7 +362,7 @@
 //! the former is always available while the latter must be enabled using the feature
 //! **socks-proxy**.
 //!
-//! Proxies settings are configured on an [Agent]. All request sent through the agent will be proxied.
+//! Proxies settings are configured on an [`Agent`]. All request sent through the agent will be proxied.
 //!
 //! ## Example using HTTP
 //!
@@ -411,8 +408,7 @@
 //! The main mistake in 2.x was to re-export crates that were not yet semver 1.0. In ureq 3.x TLS and
 //! cookie configuration is shimmed using our own types.
 //!
-//! ureq 3.x is trying out two new traits that had no equivalent in 2.x,
-//! [`Transport`][unversioned::transport::Transport] and [`Resolver`][unversioned::resolver::Resolver].
+//! ureq 3.x is trying out two new traits that had no equivalent in 2.x, [`Transport`] and [`Resolver`].
 //! These allow the user write their own bespoke transports and (DNS name) resolver. The API:s for
 //! these parts are not yet solidified. They live under the [`unversioned`] module, and do not
 //! follow semver. See module doc for more info.
@@ -438,6 +434,28 @@
 //! [`native-tls`]: https://crates.io/crates/native-tls
 //! [rustls-platform-verifier]: https://crates.io/crates/rustls-platform-verifier
 //! [webpki-roots]: https://crates.io/crates/webpki-roots
+//! [`Arc`]: https://doc.rust-lang.org/std/sync/struct.Arc.html
+//! [`Agent`]: https://docs.rs/ureq/3.0.0-rc4/ureq/struct.Agent.html
+//! [`Error`]: https://docs.rs/ureq/3.0.0-rc4/ureq/enum.Error.html
+//! [`http_status_as_error()`]: https://docs.rs/ureq/3.0.0-rc4/ureq/config/struct.ConfigBuilder.html#method.http_status_as_error
+//! [SCT]: https://en.wikipedia.org/wiki/Certificate_Transparency
+//! [CRL]: https://en.wikipedia.org/wiki/Certificate_revocation_list
+//! [PR818]: https://github.com/algesten/ureq/pull/818
+//! [`request.send_json()`]: https://docs.rs/ureq/3.0.0-rc4/ureq/struct.RequestBuilder.html#method.send_json
+//! [`body.read_json()`]: https://docs.rs/ureq/3.0.0-rc4/ureq/struct.Body.html#method.read_json
+//! [`AsSendBody`]: https://docs.rs/ureq/3.0.0-rc4/ureq/trait.AsSendBody.html
+//! [`SendBody::from_json()`]: https://docs.rs/ureq/3.0.0-rc4/ureq/struct.SendBody.html#method.from_json
+//! [`std::io::Read`]: https://doc.rust-lang.org/std/io/trait.Read.html
+//! [`SendBody::from_reader()`]: https://docs.rs/ureq/3.0.0-rc4/ureq/struct.SendBody.html#method.from_reader
+//! [`SendBody::from_owned_reader()`]: https://docs.rs/ureq/3.0.0-rc4/ureq/struct.SendBody.html#method.from_owned_reader
+//! [`Body`]: https://docs.rs/ureq/3.0.0-rc4/ureq/struct.Body.html
+//! [`request.send_form()`]: https://docs.rs/ureq/3.0.0-rc4/ureq/struct.RequestBuilder.html#method.send_form
+//! [`Body::read_to_string()`]: https://docs.rs/ureq/3.0.0-rc4/ureq/struct.Body.html#method.read_to_string
+//! [`Body::as_reader()`]: https://docs.rs/ureq/3.0.0-rc4/ureq/struct.Body.html#method.as_reader
+//! [`Body::with_config()`]: https://docs.rs/ureq/3.0.0-rc4/ureq/struct.Body.html#method.with_config
+//! [`Transport`]: https://docs.rs/ureq/3.0.0-rc4/ureq/unversioned/transport/trait.Transport.html
+//! [`Resolver`]: https://docs.rs/ureq/3.0.0-rc4/ureq/unversioned/resolver/trait.Resolver.html
+//! [`unversioned`]: https://docs.rs/ureq/3.0.0-rc4/ureq/unversioned/index.html
 
 #![forbid(unsafe_code)]
 #![warn(clippy::all)]
