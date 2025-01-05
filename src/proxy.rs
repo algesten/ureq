@@ -201,72 +201,71 @@ impl<In: Transport> Connector<In> for ConnectProxyConnector {
         };
 
         let is_connect_proxy = details.config.connect_proxy_uri().is_some();
+        if !is_connect_proxy {
+            return Ok(Some(transport));
+        }
 
-        if is_connect_proxy {
-            // unwrap is ok because connect_proxy_uri() above checks it.
-            let proxy = details.config.proxy().unwrap();
+        // unwrap is ok because connect_proxy_uri() above checks it.
+        let proxy = details.config.proxy().unwrap();
 
-            let mut w = TransportAdapter::new(transport);
+        let mut w = TransportAdapter::new(transport);
 
-            let uri = &details.uri;
-            uri.ensure_valid_url()?;
+        let uri = &details.uri;
+        uri.ensure_valid_url()?;
 
-            // All these unwrap() are ok because ensure_valid_uri() above checks them.
-            let host = uri.host().unwrap();
-            let port = uri
-                .port_u16()
-                .unwrap_or(uri.scheme().unwrap().default_port().unwrap());
+        // All these unwrap() are ok because ensure_valid_uri() above checks them.
+        let host = uri.host().unwrap();
+        let port = uri
+            .port_u16()
+            .unwrap_or(uri.scheme().unwrap().default_port().unwrap());
 
-            write!(w, "CONNECT {}:{} HTTP/1.1\r\n", host, port)?;
-            write!(w, "Host: {}:{}\r\n", host, port)?;
-            if let Some(v) = details.config.user_agent().as_str(DEFAULT_USER_AGENT) {
-                write!(w, "User-Agent: {}\r\n", v)?;
-            }
-            write!(w, "Proxy-Connection: Keep-Alive\r\n")?;
+        write!(w, "CONNECT {}:{} HTTP/1.1\r\n", host, port)?;
+        write!(w, "Host: {}:{}\r\n", host, port)?;
+        if let Some(v) = details.config.user_agent().as_str(DEFAULT_USER_AGENT) {
+            write!(w, "User-Agent: {}\r\n", v)?;
+        }
+        write!(w, "Proxy-Connection: Keep-Alive\r\n")?;
 
-            let use_creds = proxy.username().is_some() || proxy.password().is_some();
+        let use_creds = proxy.username().is_some() || proxy.password().is_some();
 
-            if use_creds {
-                let user = proxy.username().unwrap_or_default();
-                let pass = proxy.password().unwrap_or_default();
-                let creds = BASE64_STANDARD.encode(format!("{}:{}", user, pass));
-                write!(w, "Proxy-Authorization: basic {}\r\n", creds)?;
-            }
+        if use_creds {
+            let user = proxy.username().unwrap_or_default();
+            let pass = proxy.password().unwrap_or_default();
+            let creds = BASE64_STANDARD.encode(format!("{}:{}", user, pass));
+            write!(w, "Proxy-Authorization: basic {}\r\n", creds)?;
+        }
 
-            write!(w, "\r\n")?;
-            w.flush()?;
+        write!(w, "\r\n")?;
+        w.flush()?;
 
-            let mut transport = w.into_inner();
+        let mut transport = w.into_inner();
 
-            let response = loop {
-                let made_progress = transport.await_input(details.timeout)?;
-                let buffers = transport.buffers();
-                let input = buffers.input();
-                let Some((used_input, response)) = try_parse_response::<20>(input)? else {
-                    if !made_progress {
-                        let reason = "proxy server did not respond".to_string();
-                        return Err(Error::ConnectProxyFailed(reason));
-                    }
-                    continue;
-                };
-                buffers.input_consume(used_input);
-                break response;
-            };
-
-            match response.status() {
-                StatusCode::OK => {
-                    trace!("CONNECT proxy connected");
-                }
-                x => {
-                    let reason = format!("proxy server responded {}/{}", x.as_u16(), x.as_str());
+        let response = loop {
+            let made_progress = transport.await_input(details.timeout)?;
+            let buffers = transport.buffers();
+            let input = buffers.input();
+            let Some((used_input, response)) = try_parse_response::<20>(input)? else {
+                if !made_progress {
+                    let reason = "proxy server did not respond".to_string();
                     return Err(Error::ConnectProxyFailed(reason));
                 }
-            }
+                continue;
+            };
+            buffers.input_consume(used_input);
+            break response;
+        };
 
-            Ok(Some(transport))
-        } else {
-            Ok(Some(transport))
+        match response.status() {
+            StatusCode::OK => {
+                trace!("CONNECT proxy connected");
+            }
+            x => {
+                let reason = format!("proxy server responded {}/{}", x.as_u16(), x.as_str());
+                return Err(Error::ConnectProxyFailed(reason));
+            }
         }
+
+        Ok(Some(transport))
     }
 }
 
