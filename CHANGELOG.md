@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Re-enable CONNECT proxy support (#932)
   * Body::content_length (#927)
   * Handle Authorization: Basic from URI (#923)
   * Remove many uses of Box::new() from Connector chain (#919)
