@@ -186,7 +186,8 @@ impl Proxy {
 ///
 /// This operates on the previous chained transport typically a TcpConnector optionally
 /// wrapped in TLS.
-pub struct ConnectProxyConnector;
+#[derive(Default)]
+pub struct ConnectProxyConnector(());
 
 impl<In: Transport> Connector<In> for ConnectProxyConnector {
     type Out = In;
