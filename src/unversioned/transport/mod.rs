@@ -328,7 +328,7 @@ impl Default for DefaultConnector {
         let inner = inner.chain(TcpConnector::default());
 
         // If rustls is enabled, prefer that
-        #[cfg(feature = "rustls")]
+        #[cfg(feature = "_rustls")]
         let inner = inner.chain(RustlsConnector::default());
 
         // Panic if the config calls for rustls, the uri scheme is https and that

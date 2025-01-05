@@ -234,7 +234,7 @@ impl LazyStream {
                 })?;
                 *self = LazyStream::Started(stream);
                 // Next time we hit the other match arm
-                return self.handshaken();
+                self.handshaken()
             }
             LazyStream::Started(v) => Ok(v),
         }

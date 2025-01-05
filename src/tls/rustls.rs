@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use once_cell::sync::OnceCell;
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
+use rustls::crypto::CryptoProvider;
 use rustls::{ClientConfig, ClientConnection, RootCertStore, StreamOwned, ALL_VERSIONS};
 use rustls_pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs1KeyDer, PrivatePkcs8KeyDer};
 use rustls_pki_types::{PrivateSec1KeyDer, ServerName};
@@ -90,11 +91,25 @@ impl<In: Transport> Connector<In> for RustlsConnector {
 }
 
 fn build_config(tls_config: &TlsConfig) -> Arc<ClientConfig> {
-    // Improve chances of ureq working out-of-the-box by not requiring the user
-    // to select a default crypto provider.
-    let provider = rustls::crypto::CryptoProvider::get_default()
-        .cloned()
-        .unwrap_or(Arc::new(rustls::crypto::ring::default_provider()));
+    // 1. Prefer provider set by TlsConfig.
+    // 2. Use process wide default set in rustls library.
+    // 3. Pick ring, if it is enabled (the default behavior).
+    // 4. Error (never pick up a default from feature flags alone).
+    let provider = tls_config
+        .rustls_crypto_provider
+        .clone()
+        .or(rustls::crypto::CryptoProvider::get_default().cloned())
+        .unwrap_or(ring_if_enabled());
+
+    #[cfg(feature = "_ring")]
+    fn ring_if_enabled() -> Arc<CryptoProvider> {
+        Arc::new(rustls::crypto::ring::default_provider())
+    }
+
+    #[cfg(not(feature = "_ring"))]
+    fn ring_if_enabled() -> Arc<CryptoProvider> {
+        panic!("No CryptoProvider for Rustls. Enable the feature `ring` or configure the Agent.");
+    }
 
     let builder = ClientConfig::builder_with_provider(provider.clone())
         .with_protocol_versions(ALL_VERSIONS)
