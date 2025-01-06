@@ -338,6 +338,25 @@ fn setup_default_handlers(handlers: &mut Vec<TestHandler>) {
         handlers,
     );
 
+    maybe_add(
+        TestHandler::new("/connect-proxy", |_uri, req, w| {
+            assert_eq!(req.uri(), "httpbin.org:80");
+            write!(
+                w,
+                "HTTP/1.1 200 OK\r\n\
+                \r\n\
+                HTTP/1.1 200 OK\r\n\
+                Content-Type: application/json\r\n\
+                Content-Length: {}\r\n\
+                \r\n",
+                HTTPBIN_GET.as_bytes().len()
+            )?;
+            w.write_all(HTTPBIN_GET.as_bytes())?;
+            Ok(())
+        }),
+        handlers,
+    );
+
     #[cfg(feature = "charset")]
     {
         let (cow, _, _) =
