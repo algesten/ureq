@@ -59,7 +59,7 @@ pub use self::socks::SocksConnector;
 
 pub use crate::proxy::ConnectProxyConnector;
 
-#[cfg(feature = "rustls")]
+#[cfg(feature = "_rustls")]
 pub use crate::tls::rustls::RustlsConnector;
 
 #[cfg(feature = "native-tls")]
