@@ -173,6 +173,9 @@ where
 /// The parameters needed to create a [`Transport`].
 pub struct ConnectionDetails<'a> {
     /// Full uri that is being requested.
+    ///
+    /// In the case of CONNECT (HTTP) proxy, this is the URI of the
+    /// proxy, and the actual URI is in the `proxied` field.
     pub uri: &'a Uri,
 
     /// The resolved IP address + port for the uri being requested. See [`Resolver`].
@@ -196,6 +199,14 @@ pub struct ConnectionDetails<'a> {
     /// The next timeout for making the connection.
     // TODO(martin): Make mechanism to lower duration for each step in the connector chain.
     pub timeout: NextTimeout,
+
+    /// In case of CONNECT (HTTP) proxy, this is the actual requested
+    /// uri that will go through the proxy.
+    ///
+    /// This ends up in the connect line like `CONNECT host:port HTTP/1.1`.
+    ///
+    /// For socks proxy it is `None`.
+    pub proxied: Option<&'a Uri>,
 }
 
 impl<'a> ConnectionDetails<'a> {
@@ -349,6 +360,8 @@ impl Default for DefaultConnector {
             crate::tls::TlsProvider::NativeTls,
         ));
 
+        // If this is a CONNECT proxy, we must "prepare" the socket
+        // by sending the `CONNECT host:port` line.
         let inner = inner.chain(ConnectProxyConnector::default());
 
         DefaultConnector {

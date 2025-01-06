@@ -315,23 +315,25 @@ fn add_headers(
 fn connect(
     agent: &Agent,
     config: &Config,
-    uri: &Uri,
+    wanted_uri: &Uri,
     timings: &mut CallTimings,
 ) -> Result<Connection, Error> {
     // If we're using a CONNECT proxy, we need to resolve that hostname.
     let maybe_connect_uri = config.connect_proxy_uri();
 
-    let effective_uri = maybe_connect_uri.unwrap_or(uri);
+    let (uri, proxied) = if let Some(connect_uri) = maybe_connect_uri {
+        (connect_uri, Some(wanted_uri))
+    } else {
+        (wanted_uri, None)
+    };
 
     // Before resolving the URI we need to ensure it is a full URI. We
     // cannot make requests with partial uri like "/path".
-    effective_uri.ensure_valid_url()?;
+    uri.ensure_valid_url()?;
 
-    let addrs = agent.resolver.resolve(
-        effective_uri,
-        config,
-        timings.next_timeout(Timeout::Resolve),
-    )?;
+    let addrs = agent
+        .resolver
+        .resolve(uri, config, timings.next_timeout(Timeout::Resolve))?;
 
     timings.record_time(Timeout::Resolve);
 
@@ -342,6 +344,7 @@ fn connect(
         config,
         now: timings.now(),
         timeout: timings.next_timeout(Timeout::Connect),
+        proxied,
     };
 
     let connection = agent.pool.connect(&details, config.max_idle_age().into())?;

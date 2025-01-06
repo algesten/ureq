@@ -2,6 +2,7 @@
 
   * `TlsConfig::unversioned_rustls_crypto_provider()` (#931)
   * Feature `rustls-no-provider` to compile without ring (#931)
+  * Fix CONNECT proxy Host header (#936)
   * Re-enable CONNECT proxy support (#932)
   * Body::content_length (#927)
   * Handle Authorization: Basic from URI (#923)
