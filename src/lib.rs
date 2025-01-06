@@ -913,6 +913,22 @@ pub(crate) mod test {
         let _ = agent.get("http://cookie.test/cookie-test").call().unwrap();
     }
 
+    #[test]
+    #[cfg(feature = "_test")]
+    fn http_connect_proxy() {
+        init_test_log();
+
+        let proxy = Proxy::new("http://my_proxy:1234/connect-proxy").unwrap();
+
+        let agent = Agent::config_builder()
+            .proxy(Some(proxy))
+            .build()
+            .new_agent();
+
+        let mut res = agent.get("http://httpbin.org/get").call().unwrap();
+        res.body_mut().read_to_string().unwrap();
+    }
+
     // This doesn't need to run, just compile.
     fn _ensure_send_sync() {
         fn is_send(_t: impl Send) {}
