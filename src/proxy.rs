@@ -211,16 +211,17 @@ impl<In: Transport> Connector<In> for ConnectProxyConnector {
 
         let mut w = TransportAdapter::new(transport);
 
-        let uri = &details.uri;
-        uri.ensure_valid_url()?;
+        // unwrap is ok because run.rs will construct the ConnectionDetails
+        // such that CONNECT proxy _must_ have the `proxied` field set.
+        let proxied = details.proxied.unwrap();
+        proxied.ensure_valid_url()?;
 
-        // All these unwrap() are ok because ensure_valid_uri() above checks them.
-        let host = uri.host().unwrap();
-        let port = uri
+        let proxied_host = proxied.host().unwrap();
+        let proxied_port = proxied
             .port_u16()
-            .unwrap_or(uri.scheme().unwrap().default_port().unwrap());
+            .unwrap_or(proxied.scheme().unwrap().default_port().unwrap());
 
-        write!(w, "CONNECT {}:{} HTTP/1.1\r\n", host, port)?;
+        write!(w, "CONNECT {}:{} HTTP/1.1\r\n", proxied_host, proxied_port)?;
         write!(w, "Host: {}:{}\r\n", proxy.host(), proxy.port())?;
         if let Some(v) = details.config.user_agent().as_str(DEFAULT_USER_AGENT) {
             write!(w, "User-Agent: {}\r\n", v)?;
