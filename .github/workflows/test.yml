@@ -110,6 +110,7 @@ jobs:
           - brotli
           - json
           - native-tls
+          - rustls-no-provider
     env:
       RUST_BACKTRACE: "1"
       RUSTFLAGS: "-D dead_code -D unused-variables -D unused"
