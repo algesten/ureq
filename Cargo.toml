@@ -100,7 +100,7 @@ auto-args = "0.3.0"
 serde = { version = "1.0.204", features = ["std", "derive"] }
 assert_no_alloc = "1.1.2"
 # Enable aws-lc-rs for tests so we can demonstrate using ureq without compiling ring.
-rustls = { version = "*", features = ["aws-lc-rs"] }
+rustls = { version = "0.23", features = ["aws-lc-rs"] }
 
 [[example]]
 name = "cureq"
