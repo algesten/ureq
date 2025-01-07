@@ -1,5 +1,7 @@
 # Unreleased
 
+# 3.0.0-rc5
+
   * `TlsConfig::unversioned_rustls_crypto_provider()` (#931)
   * Feature `rustls-no-provider` to compile without ring (#931)
   * Fix CONNECT proxy Host header (#936)
