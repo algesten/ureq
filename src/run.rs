@@ -14,7 +14,7 @@ use crate::body::ResponseInfo;
 use crate::config::{Config, RequestLevelConfig, DEFAULT_USER_AGENT};
 use crate::http;
 use crate::pool::Connection;
-use crate::response::ResponseUri;
+use crate::response::{RedirectHistory, ResponseUri};
 use crate::timings::{CallTimings, CurrentTime};
 use crate::transport::time::{Duration, Instant};
 use crate::transport::ConnectionDetails;
@@ -40,6 +40,9 @@ pub(crate) fn run(
         .map(|rl| rl.0)
         .map(Arc::new)
         .unwrap_or_else(|| agent.config.clone());
+
+    let mut redirect_history: Option<Vec<Uri>> =
+        config.save_redirect_history().then_some(Vec::new());
 
     let timeouts = config.timeouts();
 
@@ -67,6 +70,7 @@ pub(crate) fn run(
             flow,
             &mut body,
             redirect_count,
+            &mut redirect_history,
             &mut timings,
         )? {
             // Follow redirect
@@ -112,6 +116,7 @@ fn flow_run(
     mut flow: Flow<Prepare>,
     body: &mut SendBody,
     redirect_count: u32,
+    redirect_history: &mut Option<Vec<Uri>>,
     timings: &mut CallTimings,
 ) -> Result<FlowResult, Error> {
     let uri = flow.uri().clone();
@@ -166,6 +171,12 @@ fn flow_run(
         jar.store_response_cookies(iter, &uri);
     }
 
+    if let Some(history) = redirect_history.as_mut() {
+        history.push(uri.clone());
+        response
+            .extensions_mut()
+            .insert(RedirectHistory(history.clone()));
+    }
     response.extensions_mut().insert(ResponseUri(uri));
 
     let ret = match response_result {

@@ -848,6 +848,65 @@ pub(crate) mod test {
     }
 
     #[test]
+    fn redirect_history_none() {
+        init_test_log();
+        let res = get("http://httpbin.org/redirect-to?url=%2Fget")
+            .call()
+            .unwrap();
+        let redirect_history = res.get_redirect_history();
+        assert_eq!(redirect_history, None)
+    }
+
+    #[test]
+    fn redirect_history_some() {
+        init_test_log();
+        let agent: Agent = Config::builder()
+            .max_redirects(3)
+            .max_redirects_will_error(false)
+            .save_redirect_history(true)
+            .build()
+            .into();
+        let res = agent
+            .get("http://httpbin.org/redirect-to?url=%2Fget")
+            .call()
+            .unwrap();
+        let redirect_history = res.get_redirect_history();
+        assert_eq!(
+            redirect_history,
+            Some(
+                vec![
+                    "http://httpbin.org/redirect-to?url=%2Fget".parse().unwrap(),
+                    "http://httpbin.org/get".parse().unwrap()
+                ]
+                .as_ref()
+            )
+        );
+        let res = agent
+            .get(
+                "http://httpbin.org/redirect-to?url=%2Fredirect-to%3F\
+                url%3D%2Fredirect-to%3Furl%3D%252Fredirect-to%253Furl%253D",
+            )
+            .call()
+            .unwrap();
+        let redirect_history = res.get_redirect_history();
+        assert_eq!(
+            redirect_history,
+            Some(vec![
+                "http://httpbin.org/redirect-to?url=%2Fredirect-to%3Furl%3D%2Fredirect-to%3Furl%3D%252Fredirect-to%253Furl%253D".parse().unwrap(),
+                "http://httpbin.org/redirect-to?url=/redirect-to?url=%2Fredirect-to%3Furl%3D".parse().unwrap(),
+                "http://httpbin.org/redirect-to?url=/redirect-to?url=".parse().unwrap(),
+                "http://httpbin.org/redirect-to?url=".parse().unwrap(),
+            ].as_ref())
+        );
+        let res = agent.get("https://www.google.com/").call().unwrap();
+        let redirect_history = res.get_redirect_history();
+        assert_eq!(
+            redirect_history,
+            Some(vec!["https://www.google.com/".parse().unwrap()].as_ref())
+        );
+    }
+
+    #[test]
     fn connect_https_invalid_name() {
         let result = get("https://example.com{REQUEST_URI}/").call();
         let err = result.unwrap_err();
