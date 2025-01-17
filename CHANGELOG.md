@@ -2,6 +2,7 @@
 
 # 3.0.0-rc5
 
+  * Feature `Config::save_redirect_history` (#939)
   * `TlsConfig::unversioned_rustls_crypto_provider()` (#931)
   * Feature `rustls-no-provider` to compile without ring (#931)
   * Fix CONNECT proxy Host header (#936)
