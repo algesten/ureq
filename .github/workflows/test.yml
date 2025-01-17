@@ -6,6 +6,8 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions: {}
+
 jobs:
   lint:
     name: Lint
@@ -13,38 +15,32 @@ jobs:
     env:
       RUSTFLAGS: -D warnings
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
     - name: Install Rust
-      uses: actions-rs/toolchain@v1
+      id: toolchain
+      uses: dtolnay/rust-toolchain@stable
       with:
-        toolchain: stable
-        override: true
+        components: rustfmt, clippy
     - name: Run Rustfmt
-      uses: actions-rs/cargo@v1
-      with:
-        command: fmt
-        args: -- --check
+      run: cargo +${{steps.toolchain.outputs.name}} fmt --check
     - name: Run Clippy
-      uses: actions-rs/cargo@v1
-      with:
-        command: clippy
+      run: cargo +${{steps.toolchain.outputs.name}} clippy
   doc:
     name: Docs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@master
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
         with:
-          toolchain: stable
-          override: true
+          persist-credentials: false
+      - name: Install Rust
+        id: toolchain
+        uses: dtolnay/rust-toolchain@stable
       - name: Docs
-        uses: actions-rs/cargo@v1
         env:
           RUSTDOCFLAGS: -Dwarnings
-        with:
-          command: doc
-          args: --no-deps --all-features --document-private-items
+        run: cargo +${{steps.toolchain.outputs.name}} doc --no-deps --all-features --document-private-items
 
   build_versions:
     strategy:
@@ -52,19 +48,18 @@ jobs:
         rust: [stable, beta, 1.71.1]
     runs-on: "ubuntu-latest"
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
         with:
-          profile: minimal
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@master
+        id: toolchain
+        with:
           toolchain: ${{ matrix.rust }}
-          override: true
-      - uses: Swatinem/rust-cache@v1
-      - uses: actions-rs/cargo@v1
-        with:
-          command: build
-      - uses: actions-rs/cargo@v1
-        with:
-          command: build
+      - uses: Swatinem/rust-cache@v2
+      - name: Build 1
+        run: cargo +${{steps.toolchain.outputs.name}} build
+      - name: Build 2
+        run: cargo +${{steps.toolchain.outputs.name}} build
 
   build_and_test:
     name: Test
@@ -84,17 +79,16 @@ jobs:
       RUST_BACKTRACE: "1"
       RUSTFLAGS: "-D dead_code -D unused-variables -D unused"
     steps:
-      - uses: actions/checkout@master
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
+        id: toolchain
+        uses: dtolnay/rust-toolchain@stable
       - name: Test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --no-default-features --features "_test rustls ${{ matrix.feature }}"
+        run: |
+          cargo +${{steps.toolchain.outputs.name}} test \
+          --no-default-features --features "_test rustls ${{ matrix.feature }}"
 
   build_without_rustls:
     name: Test
@@ -115,17 +109,16 @@ jobs:
       RUST_BACKTRACE: "1"
       RUSTFLAGS: "-D dead_code -D unused-variables -D unused"
     steps:
-      - uses: actions/checkout@master
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
+        id: toolchain
+        uses: dtolnay/rust-toolchain@stable
       - name: Test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --no-default-features --features "_test ${{ matrix.feature }}"
+        run: |
+          cargo +${{steps.toolchain.outputs.name}} test \
+          --no-default-features --features "_test ${{ matrix.feature }}"
 
   cargo-deny:
     name: cargo-deny
@@ -150,8 +143,10 @@ jobs:
 
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - uses: EmbarkStudios/cargo-deny-action@v1
+    - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
+    - uses: EmbarkStudios/cargo-deny-action@v2
       with:
         command: check
         log-level: error
