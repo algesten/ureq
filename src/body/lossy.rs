@@ -58,7 +58,7 @@ impl<R: io::Read> io::Read for LossyUtf8Reader<R> {
                     invalid_sequence,
                     ..
                 } => {
-                    let valid_len = valid_prefix.as_bytes().len();
+                    let valid_len = valid_prefix.len();
                     let invalid_len = invalid_sequence.len();
 
                     // Switch out the problem input chars
