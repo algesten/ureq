@@ -281,10 +281,12 @@ impl Config {
     /// If we should record a history of every redirect location,
     /// including the request and final locations.
     ///
-    /// Comes at the cost of allocating/retaining the Uri for
+    /// Comes at the cost of allocating/retaining the `Uri` for
     /// every redirect loop.
     ///
-    /// Defaults to false
+    /// See [`ResponseExt::get_redirect_history()`][crate::ResponseExt::get_redirect_history].
+    ///
+    /// Defaults to `false`.
     pub fn save_redirect_history(&self) -> bool {
         self.save_redirect_history
     }
@@ -497,10 +499,12 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
     /// If we should record a history of every redirect location,
     /// including the request and final locations.
     ///
-    /// Comes at the cost of allocating/retaining the Uri for
+    /// Comes at the cost of allocating/retaining the `Uri` for
     /// every redirect loop.
     ///
-    /// Defaults to false
+    /// See [`ResponseExt::get_redirect_history()`][crate::ResponseExt::get_redirect_history].
+    ///
+    /// Defaults to `false`.
     pub fn save_redirect_history(mut self, v: bool) -> Self {
         self.config().save_redirect_history = v;
         self
