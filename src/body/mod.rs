@@ -31,6 +31,30 @@ const MAX_BODY_SIZE: u64 = 10 * 1024 * 1024;
 
 /// A response body returned as [`http::Response<Body>`].
 ///
+/// # Body lengths
+///
+/// HTTP/1.1 has two major modes of transfering body data. Either a `Content-Length`
+/// header defines exactly how many bytes to transfer, or `Transfer-Encoding: chunked`
+/// facilitates a streaming style when the size is not known up front.
+///
+/// To protect against a problem called [request smuggling], ureq has heuristics for
+/// how to interpret a server sending both `Transfer-Encoding` and `Content-Length` headers.
+///
+/// 1. `chunked` takes precedence if there both headers are present (not for HTTP/1.0)
+/// 2. `content-length` is used if there is no chunked
+/// 3. If there are no headers, fall back on "close delimited" meaning the socket
+///    must close to end the body
+///
+/// When a `Content-Length` header is used, ureq will ensure the received body is _EXACTLY_
+/// as many bytes as declared (it cannot be less). This mechanic is in `ureq-proto`
+/// and is different to the [`BodyWithConfig::limit()`] below.
+///
+/// # Pool reuse
+///
+/// To return a connection (aka [`Transport`][crate::unversioned::transport::Transport])
+/// to the Agent's pool, the body must be read to end. If [`BodyWithConfig::limit()`] is set
+/// shorter size than the actual response body, the connection will not be reused.
+///
 /// # Example
 ///
 /// ```
@@ -49,6 +73,8 @@ const MAX_BODY_SIZE: u64 = 10 * 1024 * 1024;
 /// assert_eq!(bytes.len(), len);
 /// # Ok::<_, ureq::Error>(())
 /// ```
+///
+/// [request smuggling]: https://en.wikipedia.org/wiki/HTTP_request_smuggling
 pub struct Body {
     source: BodyDataSource,
     info: Arc<ResponseInfo>,
@@ -91,6 +117,9 @@ impl Body {
     ///     Content-Type: text/plain; charset=iso-8859-1
     /// ```
     ///
+    /// *Caution:* A bad server might set `Content-Type` to one thing and send
+    /// something else. There is no way ureq can verify this.
+    ///
     /// # Example
     ///
     /// ```
@@ -112,6 +141,9 @@ impl Body {
     ///     Content-Type: text/plain; charset=iso-8859-1
     /// ```
     ///
+    /// *Caution:* A bad server might set `Content-Type` to one thing and send
+    /// something else. There is no way ureq can verify this.
+    ///
     /// # Example
     ///
     /// ```
@@ -131,6 +163,9 @@ impl Body {
     /// responses (`Transfer-Encoding: chunked`) , this will be `None`. Similarly for
     /// HTTP/1.0 without a `Content-Length` header, the response is close delimited,
     /// which means the length is unknown.
+    ///
+    /// A bad server might set `Content-Length` to one thing and send something else.
+    /// ureq will double check this, see section on body length heuristics.
     ///
     /// # Example
     ///
@@ -247,7 +282,7 @@ impl Body {
     ///
     /// * Response is limited to 10MB.
     ///
-    /// To change this default use [`Body::as_reader()`] and deserialize JSON manually.
+    /// To change this default use [`Body::with_config()`].
     ///
     /// The returned value is something that derives [`Deserialize`](serde::Deserialize).
     /// You might need to be explicit with which type you want. See example below.
@@ -387,7 +422,7 @@ impl<'a> BodyWithConfig<'a> {
     ///
     /// The reader is either shared or owned, depending on `with_config` or `into_with_config`.
     ///
-    /// Consider:
+    /// # Example of owned vs shared
     ///
     /// ```
     /// // Creates an owned reader.
@@ -417,6 +452,23 @@ impl<'a> BodyWithConfig<'a> {
     }
 
     /// Read into string.
+    ///
+    /// *Caution:* without a preceeding [`limit()`][BodyWithConfig::limit], this
+    /// becomes an unbounded sized `String`. A bad server could exhaust your memory.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// // Reads max 10k to a String.
+    /// let string = ureq::get("https://httpbin.org/get")
+    ///     .call()?
+    ///     .body_mut()
+    ///     .with_config()
+    ///     // Important. Limits body to 10k
+    ///     .limit(10_000)
+    ///     .read_to_string()?;
+    /// # Ok::<_, ureq::Error>(())
+    /// ```
     pub fn read_to_string(self) -> Result<String, Error> {
         use std::io::Read;
         let mut reader = self.do_build();
@@ -426,6 +478,23 @@ impl<'a> BodyWithConfig<'a> {
     }
 
     /// Read into vector.
+    ///
+    /// *Caution:* without a preceeding [`limit()`][BodyWithConfig::limit], this
+    /// becomes an unbounded sized `Vec`. A bad server could exhaust your memory.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// // Reads max 10k to a Vec.
+    /// let myvec = ureq::get("https://httpbin.org/get")
+    ///     .call()?
+    ///     .body_mut()
+    ///     .with_config()
+    ///     // Important. Limits body to 10k
+    ///     .limit(10_000)
+    ///     .read_to_vec()?;
+    /// # Ok::<_, ureq::Error>(())
+    /// ```
     pub fn read_to_vec(self) -> Result<Vec<u8>, Error> {
         use std::io::Read;
         let mut reader = self.do_build();
@@ -435,6 +504,25 @@ impl<'a> BodyWithConfig<'a> {
     }
 
     /// Read JSON body.
+    ///
+    /// *Caution:* without a preceeding [`limit()`][BodyWithConfig::limit], this
+    /// becomes an unbounded sized `String`. A bad server could exhaust your memory.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use serde_json::Value;
+    ///
+    /// // Reads max 10k as a JSON value.
+    /// let json: Value  = ureq::get("https://httpbin.org/get")
+    ///     .call()?
+    ///     .body_mut()
+    ///     .with_config()
+    ///     // Important. Limits body to 10k
+    ///     .limit(10_000)
+    ///     .read_json()?;
+    /// # Ok::<_, ureq::Error>(())
+    /// ```
     #[cfg(feature = "json")]
     pub fn read_json<T: serde::de::DeserializeOwned>(self) -> Result<T, Error> {
         let reader = self.do_build();
