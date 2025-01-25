@@ -1,9 +1,9 @@
 use std::convert::TryFrom;
 use std::fmt;
 use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut};
 
-use http::{HeaderName, HeaderValue, Method, Request, Response, Uri, Version};
+use http::{Extensions, HeaderMap, HeaderName, HeaderValue};
+use http::{Method, Request, Response, Uri, Version};
 
 use crate::body::Body;
 use crate::config::typestate::RequestScope;
@@ -20,7 +20,8 @@ use crate::{Agent, Error, SendBody};
 /// Transparent wrapper around [`http::request::Builder`].
 ///
 /// The purpose is to provide the [`.call()`][RequestBuilder::call] and [`.send()`][RequestBuilder::send]
-/// functions to make a simpler API for sending requests.
+/// and additional helpers for query parameters like [`.query()`][RequestBuilder::query] functions to
+/// make an API for sending requests.
 pub struct RequestBuilder<B> {
     agent: Agent,
     builder: http::request::Builder,
@@ -52,6 +53,25 @@ pub struct WithBody(());
 impl Private for WithBody {}
 
 impl<Any> RequestBuilder<Any> {
+    /// Get the HTTP Method for this request.
+    ///
+    /// By default this is `GET`. If builder has error, returns None.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ureq::http::Method;
+    ///
+    /// let req = ureq::get("http://httpbin.org/get");
+    /// assert_eq!(req.method_ref(),Some(&Method::GET));
+    ///
+    /// let req = ureq::post("http://httpbin.org/post");
+    /// assert_eq!(req.method_ref(),Some(&Method::POST));
+    /// ```
+    pub fn method_ref(&self) -> Option<&Method> {
+        self.builder.method_ref()
+    }
+
     /// Appends a header to this request builder.
     ///
     /// This function will append the provided key/value as a header to the
@@ -72,6 +92,46 @@ impl<Any> RequestBuilder<Any> {
     {
         self.builder = self.builder.header(key, value);
         self
+    }
+
+    /// Get header on this request builder.
+    ///
+    /// When builder has error returns `None`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let req = ureq::get("http://httpbin.org/get")
+    ///     .header("Accept", "text/html")
+    ///     .header("X-Custom-Foo", "bar");
+    /// let headers = req.headers_ref().unwrap();
+    /// assert_eq!( headers["Accept"], "text/html" );
+    /// assert_eq!( headers["X-Custom-Foo"], "bar" );
+    /// ```
+    pub fn headers_ref(&self) -> Option<&HeaderMap<HeaderValue>> {
+        self.builder.headers_ref()
+    }
+
+    /// Get headers on this request builder.
+    ///
+    /// When builder has error returns `None`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use ureq::http::header::HeaderValue;
+    /// let mut req =  ureq::get("http://httpbin.org/get");
+    /// {
+    ///   let headers = req.headers_mut().unwrap();
+    ///   headers.insert("Accept", HeaderValue::from_static("text/html"));
+    ///   headers.insert("X-Custom-Foo", HeaderValue::from_static("bar"));
+    /// }
+    /// let headers = req.headers_ref().unwrap();
+    /// assert_eq!( headers["Accept"], "text/html" );
+    /// assert_eq!( headers["X-Custom-Foo"], "bar" );
+    /// ```
+    pub fn headers_mut(&mut self) -> Option<&mut HeaderMap<HeaderValue>> {
+        self.builder.headers_mut()
     }
 
     /// Add a query parameter to the URL.
@@ -143,6 +203,20 @@ impl<Any> RequestBuilder<Any> {
         self
     }
 
+    /// Get the URI for this request
+    ///
+    /// By default this is `/`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let req = ureq::get("http://httpbin.org/get");
+    /// assert_eq!(req.uri_ref().unwrap(), "http://httpbin.org/get");
+    /// ```
+    pub fn uri_ref(&self) -> Option<&Uri> {
+        self.builder.uri_ref()
+    }
+
     /// Set the HTTP version for this request.
     ///
     /// By default this is HTTP/1.1.
@@ -159,6 +233,22 @@ impl<Any> RequestBuilder<Any> {
     pub fn version(mut self, version: Version) -> Self {
         self.builder = self.builder.version(version);
         self
+    }
+
+    /// Get the HTTP version for this request
+    ///
+    /// By default this is HTTP/1.1.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ureq::http::Version;
+    ///
+    /// let req = ureq::get("http://httpbin.org/get");
+    /// assert_eq!(req.version_ref().unwrap(), &Version::HTTP_11);
+    /// ```
+    pub fn version_ref(&self) -> Option<&Version> {
+        self.builder.version_ref()
     }
 
     /// Override agent level config on the request level.
@@ -190,6 +280,58 @@ impl<Any> RequestBuilder<Any> {
     /// ```
     pub fn config(self) -> ConfigBuilder<RequestScope<Any>> {
         ConfigBuilder(RequestScope(self))
+    }
+
+    /// Adds an extension to this builder
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let req = ureq::get("http://httpbin.org/get")
+    ///     .extension("My Extension");
+    ///
+    /// assert_eq!(req.extensions_ref().unwrap().get::<&'static str>(),
+    ///            Some(&"My Extension"));
+    /// ```
+    pub fn extension<T>(mut self, extension: T) -> Self
+    where
+        T: Clone + std::any::Any + Send + Sync + 'static,
+    {
+        self.builder = self.builder.extension(extension);
+        self
+    }
+
+    /// Get a reference to the extensions for this request builder.
+    ///
+    /// If the builder has an error, this returns `None`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let req = ureq::get("http://httpbin.org/get")
+    ///     .extension("My Extension").extension(5u32);
+    /// let extensions = req.extensions_ref().unwrap();
+    /// assert_eq!(extensions.get::<&'static str>(), Some(&"My Extension"));
+    /// assert_eq!(extensions.get::<u32>(), Some(&5u32));
+    /// ```
+    pub fn extensions_ref(&self) -> Option<&Extensions> {
+        self.builder.extensions_ref()
+    }
+
+    /// Get a mutable reference to the extensions for this request builder.
+    ///
+    /// If the builder has an error, this returns `None`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let mut req = ureq::get("http://httpbin.org/get");
+    /// let mut extensions = req.extensions_mut().unwrap();
+    /// extensions.insert(5u32);
+    /// assert_eq!(extensions.get::<u32>(), Some(&5u32));
+    /// ```
+    pub fn extensions_mut(&mut self) -> Option<&mut Extensions> {
+        self.builder.extensions_mut()
     }
 
     pub(crate) fn request_level_config(&mut self) -> &mut Config {
@@ -481,20 +623,6 @@ fn amend_request_query(
     parts.uri = rebuild;
 
     Request::from_parts(parts, body)
-}
-
-impl<MethodLimit> Deref for RequestBuilder<MethodLimit> {
-    type Target = http::request::Builder;
-
-    fn deref(&self) -> &Self::Target {
-        &self.builder
-    }
-}
-
-impl<MethodLimit> DerefMut for RequestBuilder<MethodLimit> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.builder
-    }
 }
 
 impl fmt::Debug for RequestBuilder<WithoutBody> {
