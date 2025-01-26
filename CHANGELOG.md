@@ -1,5 +1,7 @@
 # Unreleased
 
+# 3.0.0
+
   * Replace RequestBuilder Deref with explicit wrappers (#944)
   * Remove dependency on `url` crate (#943)
   * Feature `Config::save_redirect_history` (#939)
