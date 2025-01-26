@@ -15,7 +15,7 @@ exclude = ["/cargo_deny.sh", "/deny.toml", "/test.sh"]
 rust-version = "1.71.1"
 
 [features]
-default = ["rustls", "gzip", "json"]
+default = ["rustls", "gzip"]
 
 ######## SUPPORTED FEATURES
 

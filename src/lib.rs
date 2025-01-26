@@ -136,7 +136,7 @@
 //!
 //! `ureq = { version = "3", features = ["socks-proxy", "charset"] }`
 //!
-//! The default enabled features are: **rustls**, **gzip** and **json**.
+//! The default enabled features are: **rustls** and **gzip**.
 //!
 //! * **rustls** enables the rustls TLS implementation. This is the default for the the crate level
 //!   convenience calls (`ureq::get` etc). It currently uses `ring` as the TLS provider.
