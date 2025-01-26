@@ -3,6 +3,19 @@
 This is not an exhaustive list of changes. Most tweaks to the API are clear by looking
 at the docs. If anything is unclear, please open a PR and we can clarify further.
 
+## Rewrite
+
+ureq 3.x is a ground up complete rewrite of ureq 2.x. The HTTP protocol is re-engineered
+to a Sans-IO style implementation living in the `ureq-proto` crate. Both protocol and ureq
+main crate remain `#![forbid(unsafe_code)]`.
+
+The goals of the project remain largely the same: A simple, sync, HTTP/1.1 client with
+a minimum number of dependencies.
+
+With Sans-IO the user can now implement their own `Transport` thus providing alternative
+TLS or non-socket based communication in crates mainitained outside the ureq project. The
+same goes for `Resolver`.
+
 ## HTTP Crate
 
 In 2.x ureq implemented it's own `Request` and `Response` structs. In 3.x, we
@@ -10,15 +23,6 @@ drop our own impl in favor of the [http crate]. The http crate presents a unifie
 API and can be found as a dependency of a number of big [http-related crates] in the
 Rust ecosystem. The idea is that presenting a well-known API towards users of ureq
 will make it easier to use.
-
-* .set -> .header
-
-```
-// ureq2.x
-ureq::get("https://httpbin.org/get").set("foo", "bar").call();
-// ureq3.x
-ureq::get("https://httpbin.org/get").header("foo", "bar").call();
-```
 
 ## Re-exported crates must be semver 1.x (stable)
 
@@ -31,8 +35,6 @@ major version). In ureq 3.x we will strive to re-export as few crates as possibl
 * No re-exported json macro
 
 Instead we made our own TLS config and Cookie API, and drop the json macro.
-
-
 
 ## No retry idempotent
 
