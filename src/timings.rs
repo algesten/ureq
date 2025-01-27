@@ -81,21 +81,11 @@ impl Timeout {
     }
 }
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub(crate) struct CallTimings {
     timeouts: Box<Timeouts>,
     current_time: CurrentTime,
     times: Vec<(Timeout, Instant)>,
-}
-
-impl Default for CallTimings {
-    fn default() -> Self {
-        Self {
-            timeouts: Default::default(),
-            current_time: Default::default(),
-            times: vec![],
-        }
-    }
 }
 
 impl CallTimings {
