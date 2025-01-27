@@ -1,5 +1,7 @@
 # Unreleased
 
+  * Expose typestate variables (#956)
+
 # 3.0.1
 
   * Fix excessive stack sizes (#950)
