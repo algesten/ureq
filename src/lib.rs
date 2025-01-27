@@ -547,7 +547,7 @@ pub use error::Error;
 pub use send_body::SendBody;
 pub use timings::Timeout;
 
-#[doc(hidden)]
+/// Typestate variables.
 pub mod typestate {
     pub use super::request::WithBody;
     pub use super::request::WithoutBody;
