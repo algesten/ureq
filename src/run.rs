@@ -153,7 +153,15 @@ fn flow_run(
         SendRequestResult::RecvResponse(flow) => flow,
     };
 
-    let (mut response, response_result) = recv_response(flow, &mut connection, config, timings)?;
+    let is_following_redirects = redirect_count < config.max_redirects();
+
+    let (mut response, response_result) = recv_response(
+        flow,
+        &mut connection,
+        config,
+        timings,
+        is_following_redirects,
+    )?;
 
     info!("{:?}", DebugResponse(&response));
 
@@ -190,7 +198,7 @@ fn flow_run(
             };
 
             if response.status().is_redirection() {
-                if redirect_count < config.max_redirects() {
+                if is_following_redirects {
                     let flow = handler.consume_redirect_body()?;
 
                     FlowResult::Redirect(flow, handler.timings)
@@ -206,7 +214,7 @@ fn flow_run(
         RecvResponseResult::Redirect(flow) => {
             cleanup(connection, flow.must_close_connection(), timings.now());
 
-            if redirect_count < config.max_redirects() {
+            if is_following_redirects {
                 FlowResult::Redirect(flow, mem::take(timings))
             } else if config.max_redirects_do_error() {
                 return Err(Error::TooManyRedirects);
@@ -488,6 +496,7 @@ fn recv_response(
     connection: &mut Connection,
     config: &Config,
     timings: &mut CallTimings,
+    is_following_redirects: bool,
 ) -> Result<(Response<()>, RecvResponseResult<()>), Error> {
     let response = loop {
         let timeout = timings.next_timeout(Timeout::RecvResponse);
@@ -495,7 +504,21 @@ fn recv_response(
 
         let input = connection.buffers().input();
 
-        let (amount, maybe_response) = flow.try_response(input)?;
+        // If cookies are disabled, we can allow ourselves to follow
+        // the redirect as soon as we discover the `Location` header.
+        // There are plenty of broken servers out there that don't send
+        // the finishing \r\n on redirects. With cookies off, we can
+        // handle that situation.
+        //
+        // If cookies are enabled, we risk mising a `Set-Cookie` header
+        // with such a strategy.
+        let cookies_enabled = cfg!(feature = "cookies");
+
+        // If we are not following redirects, do not allow partial returned
+        // 302 responses.
+        let allow_partial_redirect = !cookies_enabled && is_following_redirects;
+
+        let (amount, maybe_response) = flow.try_response(input, allow_partial_redirect)?;
 
         if input.len() > config.max_response_header_size() {
             return Err(Error::LargeResponseHeader(

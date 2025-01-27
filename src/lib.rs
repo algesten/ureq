@@ -974,6 +974,28 @@ pub(crate) mod test {
     }
 
     #[test]
+    #[cfg(all(feature = "_test", not(feature = "cookies")))]
+    fn partial_redirect_when_following() {
+        init_test_log();
+        // this should work because we follow the redirect and go to /get
+        get("http://my-host.com/partial-redirect").call().unwrap();
+    }
+
+    #[test]
+    #[cfg(feature = "_test")]
+    fn partial_redirect_when_not_following() {
+        init_test_log();
+        // this should fail because we are not following redirects, and the
+        // response is partial before the server is hanging up
+        get("http://my-host.com/partial-redirect")
+            .config()
+            .max_redirects(0)
+            .build()
+            .call()
+            .unwrap_err();
+    }
+
+    #[test]
     #[cfg(feature = "_test")]
     fn http_connect_proxy() {
         init_test_log();
