@@ -599,8 +599,9 @@ pub(crate) mod test {
     use std::io;
 
     use assert_no_alloc::AllocDisabler;
-    use config::Config;
+    use config::{Config, ConfigBuilder};
     use once_cell::sync::Lazy;
+    use typestate::AgentScope;
 
     use super::*;
 
@@ -986,6 +987,30 @@ pub(crate) mod test {
 
         let mut res = agent.get("http://httpbin.org/get").call().unwrap();
         res.body_mut().read_to_string().unwrap();
+    }
+
+    #[test]
+    fn ensure_reasonable_stack_sizes() {
+        macro_rules! ensure {
+            ($type:ty, $size:tt) => {
+                let sz = std::mem::size_of::<$type>();
+                // println!("{}: {}", stringify!($type), sz);
+                assert!(
+                    sz <= $size,
+                    "Stack size of {} is too big {} > {}",
+                    stringify!($type),
+                    sz,
+                    $size
+                );
+            };
+        }
+
+        ensure!(RequestBuilder<WithoutBody>, 400); // 288
+        ensure!(Agent, 100); // 32
+        ensure!(Config, 400); // 320
+        ensure!(ConfigBuilder<AgentScope>, 400); // 320
+        ensure!(Response<Body>, 800); // 760
+        ensure!(Body, 700); // 648
     }
 
     // This doesn't need to run, just compile.
