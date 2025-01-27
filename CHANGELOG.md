@@ -1,5 +1,7 @@
 # Unreleased
 
+# 3.0.1
+
   * Fix excessive stack sizes (#950)
   * Do not enable **json** by default (breaking, but it was a mistake) (#948)
 
