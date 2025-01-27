@@ -1,6 +1,5 @@
 use std::fmt;
 use std::sync::Arc;
-use ureq_proto::ArrayVec;
 
 use crate::config::Timeouts;
 use crate::transport::time::{Duration, Instant};
@@ -84,9 +83,9 @@ impl Timeout {
 
 #[derive(Debug)]
 pub(crate) struct CallTimings {
-    timeouts: Timeouts,
+    timeouts: Box<Timeouts>,
     current_time: CurrentTime,
-    times: ArrayVec<(Timeout, Instant), 8>,
+    times: Vec<(Timeout, Instant)>,
 }
 
 impl Default for CallTimings {
@@ -94,25 +93,21 @@ impl Default for CallTimings {
         Self {
             timeouts: Default::default(),
             current_time: Default::default(),
-            times: empty_times(),
+            times: vec![],
         }
     }
 }
 
-fn empty_times() -> ArrayVec<(Timeout, Instant), 8> {
-    ArrayVec::from_fn(|_| (Timeout::Global, Instant::AlreadyHappened))
-}
-
 impl CallTimings {
     pub(crate) fn new(timeouts: Timeouts, current_time: CurrentTime) -> Self {
-        let mut times = empty_times();
+        let mut times = Vec::with_capacity(8);
 
         let now = current_time.now();
         times.push((Timeout::Global, now));
         times.push((Timeout::PerCall, now));
 
         CallTimings {
-            timeouts,
+            timeouts: Box::new(timeouts),
             current_time,
             times,
         }

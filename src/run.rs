@@ -550,7 +550,7 @@ pub(crate) struct BodyHandler {
     connection: Option<Connection>,
     timings: CallTimings,
     remote_closed: bool,
-    redirect: Option<Flow<Redirect>>,
+    redirect: Option<Box<Flow<Redirect>>>,
 }
 
 impl BodyHandler {
@@ -651,7 +651,7 @@ impl BodyHandler {
         let must_close_connection = match flow.proceed().unwrap() {
             RecvBodyResult::Redirect(flow) => {
                 let c = flow.must_close_connection();
-                self.redirect = Some(flow);
+                self.redirect = Some(Box::new(flow));
                 c
             }
             RecvBodyResult::Cleanup(v) => v.must_close_connection(),
@@ -674,7 +674,7 @@ impl BodyHandler {
 
         // Unwrap is OK, because we are only consuming the redirect body if
         // such a body was signalled by the remote.
-        let redirect = self.redirect.take();
+        let redirect = self.redirect.take().map(|b| *b);
         Ok(redirect.expect("remote to have signaled redirect"))
     }
 }
