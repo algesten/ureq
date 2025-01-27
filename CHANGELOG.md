@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Fix bug parsing partial redirects (#958)
   * Expose typestate variables (#956)
 
 # 3.0.1

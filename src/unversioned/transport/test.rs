@@ -315,6 +315,21 @@ fn setup_default_handlers(handlers: &mut Vec<TestHandler>) {
     );
 
     maybe_add(
+        TestHandler::new("/partial-redirect", |_uri, _req, w| {
+            write!(
+                w,
+                "HTTP/1.1 302 OK\r\n\
+                Location: /get\r\n\
+                set-cookie: AEC=AVYB7cpadYFS8ZgaioQ17NnxHl1QcSQ_2aH2WEIg1KGDXD5kjk2HhpGVhfk; \
+                    expires=Mon, 14-Apr-2025 17:23:39 GMT; path=/; domain=.google.com; \
+                    Secure; HttpOnly; SameSite=lax\r\n\
+                " // deliberately omit final \r\n
+            )
+        }),
+        handlers,
+    );
+
+    maybe_add(
         TestHandler::new("/cookie-test", |_uri, req, w| {
             let mut all: Vec<_> = req
                 .headers()
