@@ -1,6 +1,6 @@
 use std::convert::TryFrom;
-use std::fmt;
 use std::io::{self, ErrorKind};
+use std::{fmt, iter};
 
 use http::header::{ACCEPT, ACCEPT_CHARSET, ACCEPT_ENCODING};
 use http::header::{CONNECTION, CONTENT_ENCODING, CONTENT_LENGTH, CONTENT_TYPE};
@@ -187,7 +187,6 @@ const NON_SENSITIVE_HEADERS: &[HeaderName] = &[
     CONTENT_LENGTH,
     TRANSFER_ENCODING,
     CONNECTION,
-    LOCATION,
     CONTENT_ENCODING,
     HOST,
     ACCEPT,
@@ -195,16 +194,31 @@ const NON_SENSITIVE_HEADERS: &[HeaderName] = &[
     ACCEPT_CHARSET,
     SERVER,
     USER_AGENT,
+    // LOCATION is also logged in a redacted form
 ];
 
 impl<'a> fmt::Debug for DebugHeaders<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut debug = f.debug_map();
-        debug.entries(
-            self.0
-                .iter()
-                .filter(|(name, _)| NON_SENSITIVE_HEADERS.contains(name)),
-        );
+
+        static REDACTED_LOCATION: HeaderValue = HeaderValue::from_static("******");
+        let has_location = self.0.has_location();
+
+        let filtered_headers = self
+            .0
+            .iter()
+            .filter(|(name, _)| NON_SENSITIVE_HEADERS.contains(name));
+
+        if has_location {
+            let location_header = if log_enabled!(log::Level::Trace) {
+                iter::once((&LOCATION, self.0.get(LOCATION).unwrap()))
+            } else {
+                iter::once((&LOCATION, &REDACTED_LOCATION))
+            };
+            debug.entries(filtered_headers.chain(location_header));
+        } else {
+            debug.entries(filtered_headers);
+        }
 
         let redact_count = self
             .0
@@ -213,7 +227,9 @@ impl<'a> fmt::Debug for DebugHeaders<'a> {
                 // println!("{}", name);
                 !NON_SENSITIVE_HEADERS.contains(name)
             })
-            .count();
+            .count()
+            // location is logged, but redacted, so do not include in the count
+            - if has_location { 1 } else { 0 };
 
         if redact_count > 0 {
             debug.entry(
@@ -240,7 +256,11 @@ impl<'a> fmt::Debug for DebugUri<'a> {
         }
 
         if let Some(q) = self.0.path_and_query() {
-            write!(f, "{}", q)?;
+            if log_enabled!(log::Level::Trace) {
+                write!(f, "{}", q)?;
+            } else {
+                write!(f, "/******")?;
+            }
         }
 
         Ok(())
@@ -325,6 +345,7 @@ pub(crate) trait HeaderMapExt {
     }
     fn has_accept(&self) -> bool;
     fn has_content_type(&self) -> bool;
+    fn has_location(&self) -> bool;
 }
 
 impl HeaderMapExt for HeaderMap {
@@ -358,5 +379,9 @@ impl HeaderMapExt for HeaderMap {
 
     fn has_content_type(&self) -> bool {
         self.contains_key("content-type")
+    }
+
+    fn has_location(&self) -> bool {
+        self.contains_key("location")
     }
 }
