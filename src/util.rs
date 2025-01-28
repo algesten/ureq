@@ -335,7 +335,7 @@ impl UriExt for Uri {
 }
 
 pub(crate) trait HeaderMapExt {
-    fn get_str(&self, k: &str) -> Option<&str>;
+    fn get_str(&self, k: HeaderName) -> Option<&str>;
     fn is_chunked(&self) -> bool;
     fn content_length(&self) -> Option<u64>;
     fn has_accept_encoding(&self) -> bool;
@@ -349,39 +349,39 @@ pub(crate) trait HeaderMapExt {
 }
 
 impl HeaderMapExt for HeaderMap {
-    fn get_str(&self, k: &str) -> Option<&str> {
+    fn get_str(&self, k: HeaderName) -> Option<&str> {
         self.get(k).and_then(|v| v.to_str().ok())
     }
 
     fn is_chunked(&self) -> bool {
-        self.get_str("transfer-encoding")
+        self.get_str(TRANSFER_ENCODING)
             .map(|v| v.contains("chunked"))
             .unwrap_or(false)
     }
 
     fn content_length(&self) -> Option<u64> {
-        let h = self.get_str("content-length")?;
+        let h = self.get_str(CONTENT_LENGTH)?;
         let len: u64 = h.parse().ok()?;
         Some(len)
     }
 
     fn has_accept_encoding(&self) -> bool {
-        self.contains_key("accept-encoding")
+        self.contains_key(ACCEPT_ENCODING)
     }
 
     fn has_user_agent(&self) -> bool {
-        self.contains_key("user-agent")
+        self.contains_key(USER_AGENT)
     }
 
     fn has_accept(&self) -> bool {
-        self.contains_key("accept")
+        self.contains_key(ACCEPT)
     }
 
     fn has_content_type(&self) -> bool {
-        self.contains_key("content-type")
+        self.contains_key(CONTENT_TYPE)
     }
 
     fn has_location(&self) -> bool {
-        self.contains_key("location")
+        self.contains_key(LOCATION)
     }
 }
