@@ -1418,7 +1418,6 @@ dependencies = [
  "flate2",
  "log",
  "native-tls",
- "once_cell",
  "percent-encoding",
  "rustls",
  "rustls-pemfile",

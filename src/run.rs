@@ -1,9 +1,8 @@
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::{io, mem};
 
 use http::uri::Scheme;
 use http::{header, HeaderValue, Request, Response, Uri};
-use once_cell::sync::Lazy;
 use ureq_proto::client::flow::state::{Await100, RecvBody, RecvResponse, Redirect, SendRequest};
 use ureq_proto::client::flow::state::{Prepare, SendBody as SendBodyState};
 use ureq_proto::client::flow::{Await100Result, RecvBodyResult};
@@ -275,7 +274,9 @@ fn add_headers(
     }
 
     {
-        static ACCEPTS: Lazy<String> = Lazy::new(|| {
+        static ACCEPTS: OnceLock<String> = OnceLock::new();
+
+        let accepts = ACCEPTS.get_or_init(|| {
             #[allow(unused_mut)]
             let mut value = String::with_capacity(10);
             #[cfg(feature = "gzip")]
@@ -286,8 +287,9 @@ fn add_headers(
             value.push_str("br");
             value
         });
+
         if !has_header_accept_enc {
-            if let Some(v) = config.accept_encoding().as_str(&ACCEPTS) {
+            if let Some(v) = config.accept_encoding().as_str(accepts) {
                 // unwrap is ok because above ACCEPTS will produce a valid value,
                 // or the value is user provided in which case it must be valid.
                 let value = HeaderValue::from_str(v).unwrap();

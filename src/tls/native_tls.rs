@@ -1,7 +1,7 @@
 use std::convert::TryFrom;
 use std::fmt;
 use std::io::{Read, Write};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use crate::tls::{RootCerts, TlsProvider};
 use crate::{transport::*, Error};
@@ -9,7 +9,6 @@ use der::pem::LineEnding;
 use der::Document;
 use native_tls::{Certificate, HandshakeError, Identity, TlsConnector};
 use native_tls::{TlsConnectorBuilder, TlsStream};
-use once_cell::sync::OnceCell;
 
 use super::TlsConfig;
 
@@ -18,7 +17,7 @@ use super::TlsConfig;
 /// Requires feature flag **native-tls**.
 #[derive(Default)]
 pub struct NativeTlsConnector {
-    connector: OnceCell<Arc<TlsConnector>>,
+    connector: OnceLock<Arc<TlsConnector>>,
 }
 
 impl<In: Transport> Connector<In> for NativeTlsConnector {
