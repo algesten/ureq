@@ -596,11 +596,10 @@ mk_method!(trace, TRACE, WithoutBody);
 
 #[cfg(test)]
 pub(crate) mod test {
-    use std::io;
+    use std::{io, sync::OnceLock};
 
     use assert_no_alloc::AllocDisabler;
     use config::{Config, ConfigBuilder};
-    use once_cell::sync::Lazy;
     use typestate::AgentScope;
 
     use super::*;
@@ -610,8 +609,8 @@ pub(crate) mod test {
     static A: AllocDisabler = AllocDisabler;
 
     pub fn init_test_log() {
-        static INIT_LOG: Lazy<()> = Lazy::new(env_logger::init);
-        *INIT_LOG
+        static INIT_LOG: OnceLock<()> = OnceLock::new();
+        INIT_LOG.get_or_init(|| env_logger::init());
     }
 
     #[test]
