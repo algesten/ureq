@@ -1,5 +1,8 @@
 # Unreleased
 
+  * Redact URI and Location header on debug level (#964)
+  * Downgrade all logging to debug and below (#964)
+
 # 3.0.2
 
   * Remove dependency on once_cell (#959)
