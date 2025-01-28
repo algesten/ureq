@@ -1,5 +1,8 @@
 # Unreleased
 
+# 3.0.2
+
+  * Remove dependency on once_cell (#959)
   * Fix bug parsing partial redirects (#958)
   * Expose typestate variables (#956)
 
