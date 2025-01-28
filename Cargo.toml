@@ -56,7 +56,7 @@ features = ["rustls", "platform-verifier", "native-tls", "socks-proxy", "cookies
 
 [dependencies]
 base64 = "0.22.1"
-ureq-proto = "0.2.6"
+ureq-proto = "0.3.0"
 # ureq-proto = { path = "../ureq-proto" }
 log = "0.4.22"
 utf-8 = "0.7.6"
