@@ -141,7 +141,7 @@ fn connect_proxy(
     let stream = match proxy.proto() {
         Proto::Socks4 | Proto::Socks4A => {
             if proxy.username().is_some() {
-                warn!("SOCKS4 does not support username/password");
+                debug!("SOCKS4 does not support username/password");
             }
 
             Socks4Stream::connect(proxy_addr, target_addr, "")?.into_inner()
