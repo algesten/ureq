@@ -402,6 +402,20 @@ let agent: Agent = Agent::config_builder()
 let resp = agent.get("http://cool.server").call()?;
 ```
 
+## Log levels
+
+ureq uses the log crate. These are the definitions of the log levels, however we
+do not guarantee anything for dependencies such as `http` and `rustls`.
+
+* `ERROR` - nothing
+* `WARN` - if we detect a user configuration problem.
+* `INFO` - nothing
+* `DEBUG` - uri, state changes, transport, resolver and selected request/response headers
+* `TRACE` - wire level debug. NOT REDACTED!
+
+The request/response headers on DEBUG levels are allow-listed to only include headers that
+are considered safe. The code has the [allow list](https://github.com/algesten/ureq/blob/4173dd49d76df3c8e61cb1a866a4f7eccc4f6879/src/util.rs#L184-L198).
+
 ## Versioning
 
 ### Semver and `unversioned`

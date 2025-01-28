@@ -54,7 +54,7 @@ impl SchemeExt for Scheme {
         } else if let Ok(proxy) = Proto::try_from(self.as_str()) {
             Some(proxy.default_port())
         } else {
-            info!("Unknown scheme: {}", self);
+            debug!("Unknown scheme: {}", self);
             None
         }
     }

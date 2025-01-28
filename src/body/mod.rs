@@ -795,7 +795,7 @@ impl From<&str> for ContentEncoding {
             "gzip" => ContentEncoding::Gzip,
             "br" => ContentEncoding::Brotli,
             _ => {
-                info!("Unknown content-encoding: {}", s);
+                debug!("Unknown content-encoding: {}", s);
                 ContentEncoding::Unknown
             }
         }
