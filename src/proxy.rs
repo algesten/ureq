@@ -4,6 +4,7 @@ use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::io::Write;
 use std::sync::Arc;
+use ureq_proto::http::uri::{PathAndQuery, Scheme};
 use ureq_proto::parser::try_parse_response;
 
 use http::{StatusCode, Uri};
@@ -83,14 +84,21 @@ impl Proxy {
     }
 
     fn new_with_flag(proxy: &str, from_env: bool) -> Result<Self, Error> {
-        let uri = proxy.parse::<Uri>().unwrap();
+        let mut uri = proxy.parse::<Uri>().unwrap();
 
         // The uri must have an authority part (with the host), or
         // it is invalid.
         let _ = uri.authority().ok_or(Error::InvalidProxyUrl)?;
 
-        // The default protocol is Proto::HTTP
-        let scheme = uri.scheme_str().unwrap_or("http");
+        let scheme = match uri.scheme_str() {
+            Some(v) => v,
+            None => {
+                // The default protocol is Proto::HTTP, and it is missing in
+                // the uri. Let's put it in place.
+                uri = insert_default_scheme(uri);
+                "http"
+            }
+        };
         let proto = scheme.try_into()?;
 
         let inner = ProxyInner {
@@ -180,6 +188,20 @@ impl Proxy {
     pub fn is_from_env(&self) -> bool {
         self.inner.from_env
     }
+}
+
+fn insert_default_scheme(uri: Uri) -> Uri {
+    let mut parts = uri.into_parts();
+
+    parts.scheme = Some(Scheme::HTTP);
+
+    // For some reason uri.into_parts can produce None for
+    // the path, but Uri::from_parts does not accept that.
+    parts.path_and_query = parts
+        .path_and_query
+        .or_else(|| Some(PathAndQuery::from_static("/")));
+
+    Uri::from_parts(parts).unwrap()
 }
 
 /// Connector for CONNECT proxy settings.
@@ -424,5 +446,12 @@ mod test {
     fn proxy_clone_does_not_allocate() {
         let c = Proxy::new("socks://1.2.3.4").unwrap();
         assert_no_alloc(|| c.clone());
+    }
+
+    #[test]
+    fn proxy_new_default_scheme() {
+        let c = Proxy::new("localhost:1234").unwrap();
+        assert_eq!(c.proto(), Proto::Http);
+        assert_eq!(c.uri(), "http://localhost:1234");
     }
 }

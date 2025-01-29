@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Set default scheme in proxy uri (#966)
   * Redact URI and Location header on debug level (#964)
   * Downgrade all logging to debug and below (#964)
 
