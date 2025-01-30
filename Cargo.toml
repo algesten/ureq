@@ -1,6 +1,6 @@
 [package]
 name = "ureq"
-version = "3.0.2"
+version = "3.0.3"
 authors = ["Martin Algesten <martin@algesten.se>", "Jacob Hoffman-Andrews <ureq@hoffman-andrews.com>"]
 description = "Simple, safe HTTP client"
 license = "MIT OR Apache-2.0"
@@ -13,6 +13,9 @@ exclude = ["/cargo_deny.sh", "/deny.toml", "/test.sh"]
 
 # MSRV
 rust-version = "1.71.1"
+
+[package.metadata.docs.rs]
+features = ["rustls", "platform-verifier", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset", "json", "_test", "_doc"]
 
 [features]
 default = ["rustls", "gzip"]
@@ -50,9 +53,6 @@ _tls = ["dep:rustls-pemfile", "dep:rustls-pki-types"]
 _test = []
 _rustls = []
 _doc = ["rustls?/aws-lc-rs"]
-
-[package.metadata.docs.rs]
-features = ["rustls", "platform-verifier", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset", "json", "_test", "_doc"]
 
 [dependencies]
 base64 = "0.22.1"
