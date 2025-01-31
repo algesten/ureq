@@ -107,7 +107,7 @@ fn build_config(tls_config: &TlsConfig) -> Arc<ClientConfig> {
 
     #[cfg(not(feature = "_ring"))]
     fn ring_if_enabled() -> Arc<CryptoProvider> {
-        panic!("No CryptoProvider for Rustls. Enable the feature `ring` or configure the Agent.");
+        panic!("No CryptoProvider for Rustls. Enable feature `rustls` or configure the Agent mangually.");
     }
 
     let builder = ClientConfig::builder_with_provider(provider.clone())
