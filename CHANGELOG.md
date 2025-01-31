@@ -1,5 +1,7 @@
 # Unreleased
 
+  * Fix bug in `rustls-no-provider` when disabling ring (#973)
+
 # 3.0.3
 
   * Use the same data in CONNECT and Host header for proxied requests (#967)
