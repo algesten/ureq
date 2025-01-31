@@ -98,7 +98,7 @@ fn build_config(tls_config: &TlsConfig) -> Arc<ClientConfig> {
         .rustls_crypto_provider
         .clone()
         .or(rustls::crypto::CryptoProvider::get_default().cloned())
-        .unwrap_or(ring_if_enabled());
+        .unwrap_or_else(ring_if_enabled);
 
     #[cfg(feature = "_ring")]
     fn ring_if_enabled() -> Arc<CryptoProvider> {
