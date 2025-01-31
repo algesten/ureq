@@ -180,7 +180,10 @@ pub struct NextTimeout {
 }
 
 impl NextTimeout {
-    pub(crate) fn not_zero(&self) -> Option<Duration> {
+    /// Returns the duration of the timeout if the timeout must happen, but avoid instant timeouts
+    ///
+    /// If the timeout must happen but is zero, returns 1 second
+    pub fn not_zero(&self) -> Option<Duration> {
         if self.after.is_not_happening() {
             None
         } else if self.after.is_zero() {
