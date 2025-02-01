@@ -319,50 +319,38 @@ impl DefaultConnector {
 
 impl Default for DefaultConnector {
     fn default() -> Self {
-        let inner = ();
-
-        // When enabled, all tests are connected to a dummy server and will not
-        // make requests to the internet.
-        #[cfg(feature = "_test")]
-        let inner = inner.chain(test::TestConnector);
-
-        // If we are using socks-proxy, that takes precedence over TcpConnector.
-        #[cfg(feature = "socks-proxy")]
-        let inner = inner.chain(SocksConnector::default());
-
-        // If the config indicates we ought to use a socks proxy
-        // and the feature flag isn't enabled, we should warn the user.
-        #[cfg(not(feature = "socks-proxy"))]
-        let inner = inner.chain(no_proxy::WarnOnNoSocksConnector);
-
-        // If we didn't get a socks-proxy, open a Tcp connection
-        let inner = inner.chain(TcpConnector::default());
-
-        // If rustls is enabled, prefer that
-        #[cfg(feature = "_rustls")]
-        let inner = inner.chain(RustlsConnector::default());
-
-        // Panic if the config calls for rustls, the uri scheme is https and that
-        // TLS provider is not enabled by feature flags.
-        #[cfg(feature = "_tls")]
-        let inner = inner.chain(no_tls::WarnOnMissingTlsProvider(
-            crate::tls::TlsProvider::Rustls,
+        let inner = ChainedConnector::new((
+            // When enabled, all tests are connected to a dummy server and will not
+            // make requests to the internet.
+            #[cfg(feature = "_test")]
+            test::TestConnector,
+            // If we are using socks-proxy, that takes precedence over TcpConnector.
+            #[cfg(feature = "socks-proxy")]
+            SocksConnector::default(),
+            // If the config indicates we ought to use a socks proxy
+            // and the feature flag isn't enabled, we should warn the user.
+            #[cfg(not(feature = "socks-proxy"))]
+            no_proxy::WarnOnNoSocksConnector,
+            // If we didn't get a socks-proxy, open a Tcp connection
+            TcpConnector::default(),
+            // If rustls is enabled, prefer that
+            #[cfg(feature = "_rustls")]
+            RustlsConnector::default(),
+            // Panic if the config calls for rustls, the uri scheme is https and that
+            // TLS provider is not enabled by feature flags.
+            #[cfg(feature = "_tls")]
+            no_tls::WarnOnMissingTlsProvider(crate::tls::TlsProvider::Rustls),
+            // As a fallback if rustls isn't enabled, use native-tls
+            #[cfg(feature = "native-tls")]
+            NativeTlsConnector::default(),
+            // Panic if the config calls for native-tls, the uri scheme is https and that
+            // TLS provider is not enabled by feature flags.
+            #[cfg(feature = "_tls")]
+            no_tls::WarnOnMissingTlsProvider(crate::tls::TlsProvider::NativeTls),
+            // If this is a CONNECT proxy, we must "prepare" the socket
+            // by sending the `CONNECT host:port` line.
+            ConnectProxyConnector::default(),
         ));
-
-        // As a fallback if rustls isn't enabled, use native-tls
-        #[cfg(feature = "native-tls")]
-        let inner = inner.chain(NativeTlsConnector::default());
-
-        // Panic if the config calls for native-tls, the uri scheme is https and that
-        // TLS provider is not enabled by feature flags.
-        #[cfg(feature = "_tls")]
-        let inner = inner.chain(no_tls::WarnOnMissingTlsProvider(
-            crate::tls::TlsProvider::NativeTls,
-        ));
-
-        // If this is a CONNECT proxy, we must "prepare" the socket
-        // by sending the `CONNECT host:port` line.
-        let inner = inner.chain(ConnectProxyConnector::default());
 
         DefaultConnector {
             inner: boxed_connector(inner),

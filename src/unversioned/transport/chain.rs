@@ -61,6 +61,31 @@ impl_chained_connectors!(
     (D, d, C),
     (E, e, D),
     (F, f, E),
+    (G, g, F),
+    (H, h, G);
+    (I, i, H)
+);
+
+impl_chained_connectors!(
+    (A, a) ;
+    (B, b, A),
+    (C, c, B),
+    (D, d, C),
+    (E, e, D),
+    (F, f, E),
+    (G, g, F),
+    (H, h, G),
+    (I, i, H);
+    (J, j, I)
+);
+
+impl_chained_connectors!(
+    (A, a) ;
+    (B, b, A),
+    (C, c, B),
+    (D, d, C),
+    (E, e, D),
+    (F, f, E),
     (G, g, F);
     (H, h, G)
 );
