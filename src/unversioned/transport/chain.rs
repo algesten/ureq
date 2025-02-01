@@ -1,59 +1,134 @@
-use std::fmt;
 use std::marker::PhantomData;
 
 use super::{Connector, Transport};
 
-/// Two chained connectors called one after another.
+/// Chain of up to 8 connectors
 ///
-/// Created by calling [`Connector::chain`] on the first connector.
-pub struct ChainedConnector<In, First, Second>(First, Second, PhantomData<In>);
+/// Can be created manually from a tuple of connectors through `ChainedConnector::new`
+#[derive(Debug)]
+pub struct ChainedConnector<In, Connectors>(Connectors, PhantomData<In>);
 
-impl<In, First, Second> Connector<In> for ChainedConnector<In, First, Second>
-where
-    In: Transport,
-    First: Connector<In>,
-    Second: Connector<First::Out>,
-{
-    type Out = Second::Out;
-
-    fn connect(
-        &self,
-        details: &super::ConnectionDetails,
-        chained: Option<In>,
-    ) -> Result<Option<Self::Out>, crate::Error> {
-        let f_out = self.0.connect(details, chained)?;
-        self.1.connect(details, f_out)
+impl<In, Connectors> ChainedConnector<In, Connectors> {
+    /// Create a new chained connector that chains a tuple of connectors
+    ///
+    /// ```rust
+    /// # use ureq::unversioned::transport::{ChainedConnector, SocsConnector, TcpConnector, RustlsConnector, ConnectProxyConnector};
+    /// let connector: ChainedConnector<(), (SocsConnector, TcpConnector, RustlsConnector, ConnectProxyConnector)> = ChainedConnector::new(SocsConnector::default(), TcpConnector::default(), RustlsConnector::default(), ConnectProxyConnector::default());
+    /// ```
+    pub fn new(connectors: Connectors) -> Self {
+        Self(connectors, PhantomData)
     }
 }
 
-impl<In, First, Second> ChainedConnector<In, First, Second> {
-    pub(crate) fn new(first: First, second: Second) -> Self {
-        ChainedConnector(first, second, PhantomData)
-    }
+macro_rules! impl_chained_connectors {
+    (($first_ty:ident, $first_name: ident) ; $(($ty:ident, $name:ident, $prev_ty:ident)),* ; ($final_ty:ident, $final_name: ident, $pre_final_ty:ident)) => {
+        impl<In, $first_ty, $($ty,)* $final_ty> Connector<In> for ChainedConnector<In, ($first_ty, $($ty,)* $final_ty)>
+        where
+            In: Transport,
+            $first_ty: Connector<In>,
+            $($ty: Connector<$prev_ty::Out>,)*
+            $final_ty: Connector<$pre_final_ty::Out>,
+        {
+            type Out = $final_ty::Out;
+            fn connect(
+                &self,
+                details: &super::ConnectionDetails,
+                chained: Option<In>,
+            ) -> Result<Option<Self::Out>, crate::Error> {
+                let ChainedConnector((
+                    ref $first_name,
+                    $(ref $name,)*
+                    ref $final_name,
+                ), _) = self;
+
+                let out = $first_name.connect(details, chained)?;
+                $(
+                    let out = $name.connect(details, out)?;
+                )*
+                $final_name.connect(details,out)
+            }
+        }
+
+    };
 }
 
-impl<In, First, Second> fmt::Debug for ChainedConnector<In, First, Second>
-where
-    In: Transport,
-    First: Connector<In>,
-    Second: Connector<First::Out>,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("ChainedConnector")
-            .field(&self.0)
-            .field(&self.1)
-            .finish()
-    }
-}
+impl_chained_connectors!(
+    (A, a) ;
+    (B, b, A),
+    (C, c, B),
+    (D, d, C),
+    (E, e, D),
+    (F, f, E),
+    (G, g, F);
+    (H, h, G)
+);
 
-impl<In, First, Second> Clone for ChainedConnector<In, First, Second>
+impl_chained_connectors!(
+    (A, a) ;
+    (B, b, A),
+    (C, c, B),
+    (D, d, C),
+    (E, e, D),
+    (F, f, E);
+    (G, g, F)
+);
+
+impl_chained_connectors!(
+    (A, a) ;
+    (B, b, A),
+    (C, c, B),
+    (D, d, C),
+    (E, e, D);
+    (F, f, E)
+);
+
+impl_chained_connectors!(
+    (A, a) ;
+    (B, b, A),
+    (C, c, B),
+    (D, d, C);
+    (E, e, D)
+);
+impl_chained_connectors!(
+    (A, a) ;
+    (B, b, A),
+    (C, c, B);
+    (D, d, C)
+);
+impl_chained_connectors!(
+    (A, a) ;
+    (B, b, A);
+    (C, c, B)
+);
+impl_chained_connectors!(
+    (A, a) ;;
+    (B, b, A)
+);
+// impl<In, First, Second> Connector<In> for ChainedConnector<In, First, Second>
+// where
+//     In: Transport,
+//     First: Connector<In>,
+//     Second: Connector<First::Out>,
+// {
+//     type Out = Second::Out;
+
+//     fn connect(
+//         &self,
+//         details: &super::ConnectionDetails,
+//         chained: Option<In>,
+//     ) -> Result<Option<Self::Out>, crate::Error> {
+//         let f_out = self.0.connect(details, chained)?;
+//         self.1.connect(details, f_out)
+//     }
+// }
+
+impl<In, Connectors> Clone for ChainedConnector<In, Connectors>
 where
     In: Transport,
-    First: Connector<In> + Clone,
-    Second: Connector<First::Out> + Clone,
+    Connectors: Clone,
 {
     fn clone(&self) -> Self {
-        ChainedConnector(self.0.clone(), self.1.clone(), PhantomData)
+        ChainedConnector(self.0.clone(), PhantomData)
     }
 }
 

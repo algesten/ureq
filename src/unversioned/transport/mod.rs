@@ -132,11 +132,11 @@ pub trait Connector<In: Transport = ()>: Debug + Send + Sync + 'static {
     /// Chain this connector to another connector.
     ///
     /// This connector will be called first, and the output goes into the next connector.
-    fn chain<Next: Connector<Self::Out>>(self, next: Next) -> ChainedConnector<In, Self, Next>
+    fn chain<Next: Connector<Self::Out>>(self, next: Next) -> ChainedConnector<In, (Self, Next)>
     where
         Self: Sized,
     {
-        ChainedConnector::new(self, next)
+        ChainedConnector::new((self, next))
     }
 }
 
