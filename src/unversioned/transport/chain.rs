@@ -46,6 +46,17 @@ where
     }
 }
 
+impl<In, First, Second> Clone for ChainedConnector<In, First, Second>
+where
+    In: Transport,
+    First: Connector<In> + Clone,
+    Second: Connector<First::Out> + Clone,
+{
+    fn clone(&self) -> Self {
+        ChainedConnector(self.0.clone(), self.1.clone(), PhantomData)
+    }
+}
+
 /// A selection between two transports.
 #[derive(Debug)]
 pub enum Either<A, B> {
