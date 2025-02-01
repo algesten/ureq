@@ -10,8 +10,12 @@ impl<Connectors> ChainedConnector<Connectors> {
     /// Create a new chained connector that chains a tuple of connectors
     ///
     /// ```rust
-    /// # use ureq::unversioned::transport::{ChainedConnector, SocsConnector, TcpConnector, RustlsConnector, ConnectProxyConnector};
-    /// let connector: ChainedConnector<(), (SocsConnector, TcpConnector, RustlsConnector, ConnectProxyConnector)> = ChainedConnector::new(SocsConnector::default(), TcpConnector::default(), RustlsConnector::default(), ConnectProxyConnector::default());
+    /// # use ureq::unversioned::transport::{ChainedConnector, TcpConnector, ConnectProxyConnector};
+    /// let connector: ChainedConnector<(TcpConnector, ConnectProxyConnector)> =
+    ///     ChainedConnector::new((
+    ///         TcpConnector::default(),
+    ///         ConnectProxyConnector::default()
+    ///     ));
     /// ```
     pub fn new(connectors: Connectors) -> Self {
         Self(connectors)
