@@ -584,29 +584,113 @@ pub fn agent() -> Agent {
     Agent::new_with_defaults()
 }
 
-macro_rules! mk_method {
-    ($f:tt, $m:tt, $b:ty) => {
-        #[doc = concat!("Make a ", stringify!($m), " request.\n\nRun on a use-once [`Agent`].")]
-        #[must_use]
-        pub fn $f<T>(uri: T) -> RequestBuilder<$b>
-        where
-            Uri: TryFrom<T>,
-            <Uri as TryFrom<T>>::Error: Into<http::Error>,
-        {
-            RequestBuilder::<$b>::new(Agent::new_with_defaults(), Method::$m, uri)
-        }
-    };
+/// Make a GET request.
+///
+/// Run on a use-once [`Agent`].
+#[must_use]
+pub fn get<T>(uri: T) -> RequestBuilder<WithoutBody>
+where
+    Uri: TryFrom<T>,
+    <Uri as TryFrom<T>>::Error: Into<http::Error>,
+{
+    RequestBuilder::<WithoutBody>::new(Agent::new_with_defaults(), Method::GET, uri)
 }
 
-mk_method!(get, GET, WithoutBody);
-mk_method!(post, POST, WithBody);
-mk_method!(put, PUT, WithBody);
-mk_method!(delete, DELETE, WithoutBody);
-mk_method!(head, HEAD, WithoutBody);
-mk_method!(options, OPTIONS, WithoutBody);
-mk_method!(connect, CONNECT, WithoutBody);
-mk_method!(patch, PATCH, WithBody);
-mk_method!(trace, TRACE, WithoutBody);
+/// Make a POST request.
+///
+/// Run on a use-once [`Agent`].
+#[must_use]
+pub fn post<T>(uri: T) -> RequestBuilder<WithBody>
+where
+    Uri: TryFrom<T>,
+    <Uri as TryFrom<T>>::Error: Into<http::Error>,
+{
+    RequestBuilder::<WithBody>::new(Agent::new_with_defaults(), Method::POST, uri)
+}
+
+/// Make a PUT request.
+///
+/// Run on a use-once [`Agent`].
+#[must_use]
+pub fn put<T>(uri: T) -> RequestBuilder<WithBody>
+where
+    Uri: TryFrom<T>,
+    <Uri as TryFrom<T>>::Error: Into<http::Error>,
+{
+    RequestBuilder::<WithBody>::new(Agent::new_with_defaults(), Method::PUT, uri)
+}
+
+/// Make a DELETE request.
+///
+/// Run on a use-once [`Agent`].
+#[must_use]
+pub fn delete<T>(uri: T) -> RequestBuilder<WithoutBody>
+where
+    Uri: TryFrom<T>,
+    <Uri as TryFrom<T>>::Error: Into<http::Error>,
+{
+    RequestBuilder::<WithoutBody>::new(Agent::new_with_defaults(), Method::DELETE, uri)
+}
+
+/// Make a HEAD request.
+///
+/// Run on a use-once [`Agent`].
+#[must_use]
+pub fn head<T>(uri: T) -> RequestBuilder<WithoutBody>
+where
+    Uri: TryFrom<T>,
+    <Uri as TryFrom<T>>::Error: Into<http::Error>,
+{
+    RequestBuilder::<WithoutBody>::new(Agent::new_with_defaults(), Method::HEAD, uri)
+}
+
+/// Make an OPTIONS request.
+///
+/// Run on a use-once [`Agent`].
+#[must_use]
+pub fn options<T>(uri: T) -> RequestBuilder<WithoutBody>
+where
+    Uri: TryFrom<T>,
+    <Uri as TryFrom<T>>::Error: Into<http::Error>,
+{
+    RequestBuilder::<WithoutBody>::new(Agent::new_with_defaults(), Method::OPTIONS, uri)
+}
+
+/// Make a CONNECT request.
+///
+/// Run on a use-once [`Agent`].
+#[must_use]
+pub fn connect<T>(uri: T) -> RequestBuilder<WithoutBody>
+where
+    Uri: TryFrom<T>,
+    <Uri as TryFrom<T>>::Error: Into<http::Error>,
+{
+    RequestBuilder::<WithoutBody>::new(Agent::new_with_defaults(), Method::CONNECT, uri)
+}
+
+/// Make a PATCH request.
+///
+/// Run on a use-once [`Agent`].
+#[must_use]
+pub fn patch<T>(uri: T) -> RequestBuilder<WithBody>
+where
+    Uri: TryFrom<T>,
+    <Uri as TryFrom<T>>::Error: Into<http::Error>,
+{
+    RequestBuilder::<WithBody>::new(Agent::new_with_defaults(), Method::PATCH, uri)
+}
+
+/// Make a TRACE request.
+///
+/// Run on a use-once [`Agent`].
+#[must_use]
+pub fn trace<T>(uri: T) -> RequestBuilder<WithoutBody>
+where
+    Uri: TryFrom<T>,
+    <Uri as TryFrom<T>>::Error: Into<http::Error>,
+{
+    RequestBuilder::<WithoutBody>::new(Agent::new_with_defaults(), Method::TRACE, uri)
+}
 
 #[cfg(test)]
 pub(crate) mod test {

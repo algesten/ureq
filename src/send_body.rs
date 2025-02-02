@@ -211,40 +211,82 @@ impl<'a> BodyInner<'a> {
     }
 }
 
-macro_rules! impl_into_body_slice {
-    ($t:ty) => {
-        impl Private for $t {}
-        impl AsSendBody for $t {
-            fn as_body(&mut self) -> SendBody {
-                BodyInner::ByteSlice((*self).as_ref()).into()
-            }
-        }
-    };
+impl Private for &[u8] {}
+impl AsSendBody for &[u8] {
+    fn as_body(&mut self) -> SendBody {
+        BodyInner::ByteSlice(self).into()
+    }
 }
 
-impl_into_body_slice!(&[u8]);
-impl_into_body_slice!(&str);
-impl_into_body_slice!(String);
-impl_into_body_slice!(Vec<u8>);
-impl_into_body_slice!(&String);
-impl_into_body_slice!(&Vec<u8>);
-
-macro_rules! impl_into_body {
-    ($t:ty, $s:tt) => {
-        impl Private for $t {}
-        impl AsSendBody for $t {
-            fn as_body(&mut self) -> SendBody {
-                BodyInner::$s(self).into()
-            }
-        }
-    };
+impl Private for &str {}
+impl AsSendBody for &str {
+    fn as_body(&mut self) -> SendBody {
+        BodyInner::ByteSlice((*self).as_ref()).into()
+    }
 }
 
-impl_into_body!(&File, Reader);
-impl_into_body!(&TcpStream, Reader);
-impl_into_body!(File, Reader);
-impl_into_body!(TcpStream, Reader);
-impl_into_body!(Stdin, Reader);
+impl Private for String {}
+impl AsSendBody for String {
+    fn as_body(&mut self) -> SendBody {
+        BodyInner::ByteSlice((*self).as_ref()).into()
+    }
+}
+
+impl Private for Vec<u8> {}
+impl AsSendBody for Vec<u8> {
+    fn as_body(&mut self) -> SendBody {
+        BodyInner::ByteSlice((*self).as_ref()).into()
+    }
+}
+
+impl Private for &String {}
+impl AsSendBody for &String {
+    fn as_body(&mut self) -> SendBody {
+        BodyInner::ByteSlice((*self).as_ref()).into()
+    }
+}
+
+impl Private for &Vec<u8> {}
+impl AsSendBody for &Vec<u8> {
+    fn as_body(&mut self) -> SendBody {
+        BodyInner::ByteSlice((*self).as_ref()).into()
+    }
+}
+
+impl Private for &File {}
+impl AsSendBody for &File {
+    fn as_body(&mut self) -> SendBody {
+        BodyInner::Reader(self).into()
+    }
+}
+
+impl Private for &TcpStream {}
+impl AsSendBody for &TcpStream {
+    fn as_body(&mut self) -> SendBody {
+        BodyInner::Reader(self).into()
+    }
+}
+
+impl Private for File {}
+impl AsSendBody for File {
+    fn as_body(&mut self) -> SendBody {
+        BodyInner::Reader(self).into()
+    }
+}
+
+impl Private for TcpStream {}
+impl AsSendBody for TcpStream {
+    fn as_body(&mut self) -> SendBody {
+        BodyInner::Reader(self).into()
+    }
+}
+
+impl Private for Stdin {}
+impl AsSendBody for Stdin {
+    fn as_body(&mut self) -> SendBody {
+        BodyInner::Reader(self).into()
+    }
+}
 
 // MSRV 1.78
 // impl_into_body!(&Stdin, Reader);
@@ -253,7 +295,13 @@ impl_into_body!(Stdin, Reader);
 use std::os::unix::net::UnixStream;
 
 #[cfg(target_family = "unix")]
-impl_into_body!(UnixStream, Reader);
+impl Private for UnixStream {}
+#[cfg(target_family = "unix")]
+impl AsSendBody for UnixStream {
+    fn as_body(&mut self) -> SendBody {
+        BodyInner::Reader(self).into()
+    }
+}
 
 impl<'a> From<BodyInner<'a>> for SendBody<'a> {
     fn from(inner: BodyInner<'a>) -> Self {

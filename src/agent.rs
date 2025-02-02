@@ -247,37 +247,97 @@ impl Agent {
     pub(crate) fn new_request_level_config(&self) -> RequestLevelConfig {
         RequestLevelConfig(self.config.as_ref().clone())
     }
-}
 
-macro_rules! mk_method {
-    ($(($f:tt, $m:tt, $b:ty)),*) => {
-        impl Agent {
-            $(
-                #[doc = concat!("Make a ", stringify!($m), " request using this agent.")]
-                #[must_use]
-                pub fn $f<T>(&self, uri: T) -> RequestBuilder<$b>
-                where
-                    Uri: TryFrom<T>,
-                    <Uri as TryFrom<T>>::Error: Into<http::Error>,
-                {
-                    RequestBuilder::<$b>::new(self.clone(), Method::$m, uri)
-                }
-            )*
-        }
-    };
-}
+    /// Make a GET request using this agent.
+    #[must_use]
+    pub fn get<T>(&self, uri: T) -> RequestBuilder<WithoutBody>
+    where
+        Uri: TryFrom<T>,
+        <Uri as TryFrom<T>>::Error: Into<http::Error>,
+    {
+        RequestBuilder::<WithoutBody>::new(self.clone(), Method::GET, uri)
+    }
 
-mk_method!(
-    (get, GET, WithoutBody),
-    (post, POST, WithBody),
-    (put, PUT, WithBody),
-    (delete, DELETE, WithoutBody),
-    (head, HEAD, WithoutBody),
-    (options, OPTIONS, WithoutBody),
-    (connect, CONNECT, WithoutBody),
-    (patch, PATCH, WithBody),
-    (trace, TRACE, WithoutBody)
-);
+    /// Make a POST request using this agent.
+    #[must_use]
+    pub fn post<T>(&self, uri: T) -> RequestBuilder<WithBody>
+    where
+        Uri: TryFrom<T>,
+        <Uri as TryFrom<T>>::Error: Into<http::Error>,
+    {
+        RequestBuilder::<WithBody>::new(self.clone(), Method::POST, uri)
+    }
+
+    /// Make a PUT request using this agent.
+    #[must_use]
+    pub fn put<T>(&self, uri: T) -> RequestBuilder<WithBody>
+    where
+        Uri: TryFrom<T>,
+        <Uri as TryFrom<T>>::Error: Into<http::Error>,
+    {
+        RequestBuilder::<WithBody>::new(self.clone(), Method::PUT, uri)
+    }
+
+    /// Make a DELETE request using this agent.
+    #[must_use]
+    pub fn delete<T>(&self, uri: T) -> RequestBuilder<WithoutBody>
+    where
+        Uri: TryFrom<T>,
+        <Uri as TryFrom<T>>::Error: Into<http::Error>,
+    {
+        RequestBuilder::<WithoutBody>::new(self.clone(), Method::DELETE, uri)
+    }
+
+    /// Make a HEAD request using this agent.
+    #[must_use]
+    pub fn head<T>(&self, uri: T) -> RequestBuilder<WithoutBody>
+    where
+        Uri: TryFrom<T>,
+        <Uri as TryFrom<T>>::Error: Into<http::Error>,
+    {
+        RequestBuilder::<WithoutBody>::new(self.clone(), Method::HEAD, uri)
+    }
+
+    /// Make an OPTIONS request using this agent.
+    #[must_use]
+    pub fn options<T>(&self, uri: T) -> RequestBuilder<WithoutBody>
+    where
+        Uri: TryFrom<T>,
+        <Uri as TryFrom<T>>::Error: Into<http::Error>,
+    {
+        RequestBuilder::<WithoutBody>::new(self.clone(), Method::OPTIONS, uri)
+    }
+
+    /// Make a CONNECT request using this agent.
+    #[must_use]
+    pub fn connect<T>(&self, uri: T) -> RequestBuilder<WithoutBody>
+    where
+        Uri: TryFrom<T>,
+        <Uri as TryFrom<T>>::Error: Into<http::Error>,
+    {
+        RequestBuilder::<WithoutBody>::new(self.clone(), Method::CONNECT, uri)
+    }
+
+    /// Make a PATCH request using this agent.
+    #[must_use]
+    pub fn patch<T>(&self, uri: T) -> RequestBuilder<WithBody>
+    where
+        Uri: TryFrom<T>,
+        <Uri as TryFrom<T>>::Error: Into<http::Error>,
+    {
+        RequestBuilder::<WithBody>::new(self.clone(), Method::PATCH, uri)
+    }
+
+    /// Make a TRACE request using this agent.
+    #[must_use]
+    pub fn trace<T>(&self, uri: T) -> RequestBuilder<WithoutBody>
+    where
+        Uri: TryFrom<T>,
+        <Uri as TryFrom<T>>::Error: Into<http::Error>,
+    {
+        RequestBuilder::<WithoutBody>::new(self.clone(), Method::TRACE, uri)
+    }
+}
 
 impl From<Config> for Agent {
     fn from(value: Config) -> Self {
