@@ -123,26 +123,41 @@ impl Proxy {
     ///
     /// Returns `None` if no environment variable is set or the URI is invalid.
     pub fn try_from_env() -> Option<Self> {
-        macro_rules! try_env {
-            ($($env:literal),+) => {
-                $(
-                    if let Ok(env) = std::env::var($env) {
-                        if let Ok(proxy) = Self::new_with_flag(&env, true) {
-                            return Some(proxy);
-                        }
-                    }
-                )+
-            };
+        if let Ok(env) = std::env::var("ALL_PROXY") {
+            if let Ok(proxy) = Self::new_with_flag(&env, true) {
+                return Some(proxy);
+            }
         }
 
-        try_env!(
-            "ALL_PROXY",
-            "all_proxy",
-            "HTTPS_PROXY",
-            "https_proxy",
-            "HTTP_PROXY",
-            "http_proxy"
-        );
+        if let Ok(env) = std::env::var("all_proxy") {
+            if let Ok(proxy) = Self::new_with_flag(&env, true) {
+                return Some(proxy);
+            }
+        }
+
+        if let Ok(env) = std::env::var("HTTPS_PROXY") {
+            if let Ok(proxy) = Self::new_with_flag(&env, true) {
+                return Some(proxy);
+            }
+        }
+
+        if let Ok(env) = std::env::var("https_proxy") {
+            if let Ok(proxy) = Self::new_with_flag(&env, true) {
+                return Some(proxy);
+            }
+        }
+
+        if let Ok(env) = std::env::var("HTTP_PROXY") {
+            if let Ok(proxy) = Self::new_with_flag(&env, true) {
+                return Some(proxy);
+            }
+        }
+
+        if let Ok(env) = std::env::var("http_proxy") {
+            if let Ok(proxy) = Self::new_with_flag(&env, true) {
+                return Some(proxy);
+            }
+        }
         None
     }
 
