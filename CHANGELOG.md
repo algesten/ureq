@@ -1,6 +1,7 @@
 # Unreleased
 
- * send_json should set content-length header (#983)
+  * ureq::Error wrapped as io::Error should pass through body chain (#984)
+  * send_json should set content-length header (#983)
 
 # 3.0.4
 

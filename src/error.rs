@@ -169,11 +169,13 @@ impl Error {
     }
 }
 
+pub(crate) fn is_wrapped_ureq_error(e: &io::Error) -> bool {
+    e.get_ref().map(|x| x.is::<Error>()).unwrap_or(false)
+}
+
 impl From<io::Error> for Error {
     fn from(e: io::Error) -> Self {
-        let is_wrapped_ureq_error = e.get_ref().map(|x| x.is::<Error>()).unwrap_or(false);
-
-        if is_wrapped_ureq_error {
+        if is_wrapped_ureq_error(&e) {
             // unwraps are ok, see above.
             let boxed = e.into_inner().unwrap();
             let ureq = boxed.downcast::<Error>().unwrap();
