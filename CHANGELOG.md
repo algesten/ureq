@@ -1,5 +1,8 @@
 # Unreleased
 
+# 3.0.4
+
+  * Manually unroll some macros to regular code (#978)
   * Fix bug in `rustls-no-provider` when disabling ring (#973)
 
 # 3.0.3
