@@ -2,6 +2,7 @@ use std::io;
 
 use flate2::read::MultiGzDecoder;
 
+use crate::error::is_wrapped_ureq_error;
 use crate::Error;
 
 pub(crate) struct GzipDecoder<R>(MultiGzDecoder<R>);
@@ -14,9 +15,14 @@ impl<R: io::Read> GzipDecoder<R> {
 
 impl<R: io::Read> io::Read for GzipDecoder<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.0
-            .read(buf)
-            .map_err(|e| Error::Decompress("gzip", e).into_io())
+        self.0.read(buf).map_err(|e| {
+            if is_wrapped_ureq_error(&e) {
+                // If this already is a ureq::Error, like Timeout, pass it along.
+                e
+            } else {
+                Error::Decompress("gzip", e).into_io()
+            }
+        })
     }
 }
 

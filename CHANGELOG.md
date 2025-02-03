@@ -1,5 +1,7 @@
 # Unreleased
 
+  * ureq::Error wrapped as io::Error should pass through body chain (#984)
+
 # 3.0.4
 
   * Manually unroll some macros to regular code (#978)
