@@ -43,7 +43,7 @@ impl<'a> SendBody<'a> {
         value: &impl serde::ser::Serialize,
     ) -> Result<SendBody<'static>, crate::Error> {
         let json = serde_json::to_vec_pretty(value)?;
-        Ok(Self::from_owned_reader(io::Cursor::new(json)))
+        Ok(BodyInner::ByteVec(io::Cursor::new(json)).into())
     }
 
     pub(crate) fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
@@ -59,6 +59,8 @@ impl<'a> SendBody<'a> {
 
                 Ok(max)
             }
+            #[cfg(feature = "json")]
+            BodyInner::ByteVec(v) => v.read(buf),
             BodyInner::Reader(v) => v.read(buf),
             BodyInner::OwnedReader(v) => v.read(buf),
             BodyInner::Body(v) => v.read(buf),
@@ -182,6 +184,8 @@ impl<'a> AsSendBody for SendBody<'a> {
             inner: match &mut self.inner {
                 BodyInner::None => BodyInner::None,
                 BodyInner::ByteSlice(v) => BodyInner::ByteSlice(v),
+                #[cfg(feature = "json")]
+                BodyInner::ByteVec(v) => BodyInner::ByteSlice(v.get_ref()),
                 BodyInner::Reader(v) => BodyInner::Reader(v),
                 BodyInner::Body(v) => BodyInner::Reader(v),
                 BodyInner::OwnedReader(v) => BodyInner::Reader(v),
@@ -194,6 +198,8 @@ impl<'a> AsSendBody for SendBody<'a> {
 pub(crate) enum BodyInner<'a> {
     None,
     ByteSlice(&'a [u8]),
+    #[cfg(feature = "json")]
+    ByteVec(io::Cursor<Vec<u8>>),
     Body(BodyReader<'a>),
     Reader(&'a mut dyn Read),
     OwnedReader(Box<dyn Read>),
@@ -204,6 +210,8 @@ impl<'a> BodyInner<'a> {
         match self {
             BodyInner::None => BodyMode::NoBody,
             BodyInner::ByteSlice(v) => BodyMode::LengthDelimited(v.len() as u64),
+            #[cfg(feature = "json")]
+            BodyInner::ByteVec(v) => BodyMode::LengthDelimited(v.get_ref().len() as u64),
             BodyInner::Body(v) => v.body_mode(),
             BodyInner::Reader(_) => BodyMode::Chunked,
             BodyInner::OwnedReader(_) => BodyMode::Chunked,
