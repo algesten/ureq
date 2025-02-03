@@ -1,5 +1,7 @@
 # Unreleased
 
+ * send_json should set content-length header (#983)
+
 # 3.0.4
 
   * Manually unroll some macros to regular code (#978)
