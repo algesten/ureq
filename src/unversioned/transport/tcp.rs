@@ -33,12 +33,28 @@ impl<In: Transport> Connector<In> for TcpConnector {
 
         let config = &details.config;
         let stream = try_connect(&details.addrs, details.timeout, config)?;
+        #[cfg(feature = "keepalive")]
+        let stream = set_keepalive(stream, details.config.tcp_keepalive().as_ref())?;
 
         let buffers = LazyBuffers::new(config.input_buffer_size(), config.output_buffer_size());
         let transport = TcpTransport::new(stream, buffers);
 
         Ok(Some(Either::B(transport)))
     }
+}
+
+#[cfg(feature = "keepalive")]
+fn set_keepalive(
+    stream: TcpStream,
+    keepalive: Option<&socket2::TcpKeepalive>,
+) -> Result<TcpStream, crate::Error> {
+    use socket2::Socket;
+    let socket: Socket = stream.into();
+    if let Some(keepalive) = keepalive {
+        socket.set_keepalive(true)?;
+        socket.set_tcp_keepalive(keepalive)?;
+    }
+    Ok(socket.into())
 }
 
 fn try_connect(
