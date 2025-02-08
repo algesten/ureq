@@ -481,5 +481,4 @@ mod test {
         let result = Proxy::new_with_flag("r32/?//52:**", false);
         assert!(result.is_err());
     }
-
 }
