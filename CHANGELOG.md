@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Fix incorrect reading of valid utf8 (#992)
   * Fix panic when parsing malformed proxy URI (#990)
   * ureq::Error wrapped as io::Error should pass through body chain (#984)
   * send_json should set content-length header (#983)
