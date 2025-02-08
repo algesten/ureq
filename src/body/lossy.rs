@@ -11,6 +11,7 @@ pub struct LossyUtf8Reader<R> {
     reader: R,
     ended: bool,
     input: ConsumeBuf,
+    valid_len: usize,
 }
 impl<R> LossyUtf8Reader<R> {
     pub(crate) fn new(reader: R) -> Self {
@@ -18,36 +19,12 @@ impl<R> LossyUtf8Reader<R> {
             reader,
             ended: false,
             input: ConsumeBuf::new(8),
+            valid_len: 0,
         }
     }
-}
 
-impl<R: io::Read> io::Read for LossyUtf8Reader<R> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        // Match the input buffer size
-        if !self.ended {
-            let total_len = self.input.unconsumed().len() + self.input.free_mut().len();
-            let wanted_len = buf.len().max(MIN_BUF);
-            if wanted_len < total_len {
-                self.input.add_space(total_len - wanted_len);
-            }
-        }
-
-        // Fill up to a point where we definitely will make progress.
-        while !self.ended && self.input.unconsumed().len() < MIN_BUF {
-            let amount = self.reader.read(self.input.free_mut())?;
-            self.input.add_filled(amount);
-
-            if amount == 0 {
-                self.ended = true;
-            }
-        }
-
-        if self.ended && self.input.unconsumed().is_empty() {
-            return Ok(0);
-        }
-
-        let valid_len = match utf8::decode(self.input.unconsumed()) {
+    fn process_input(&mut self) -> usize {
+        match utf8::decode(self.input.unconsumed()) {
             Ok(_) => {
                 // Entire input is valid
                 self.input.unconsumed().len()
@@ -85,13 +62,46 @@ impl<R: io::Read> io::Read for LossyUtf8Reader<R> {
                     }
                 }
             },
-        };
-        assert!(valid_len > 0);
+        }
+    }
+}
 
-        let src = &self.input.unconsumed()[..valid_len];
+impl<R: io::Read> io::Read for LossyUtf8Reader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        // Match the input buffer size
+        if !self.ended {
+            let total_len = self.input.unconsumed().len() + self.input.free_mut().len();
+            let wanted_len = buf.len().max(MIN_BUF);
+            if wanted_len < total_len {
+                self.input.add_space(total_len - wanted_len);
+            }
+        }
+
+        // Fill up to a point where we definitely will make progress.
+        while !self.ended && self.input.unconsumed().len() < MIN_BUF {
+            let amount = self.reader.read(self.input.free_mut())?;
+            self.input.add_filled(amount);
+
+            if amount == 0 {
+                self.ended = true;
+            }
+        }
+
+        if self.ended && self.input.unconsumed().is_empty() {
+            return Ok(0);
+        }
+
+        if self.valid_len == 0 {
+            self.valid_len = self.process_input();
+            assert!(self.valid_len > 0);
+        }
+
+        let src = &self.input.unconsumed()[..self.valid_len];
         let max = src.len().min(buf.len());
         buf[..max].copy_from_slice(&src[..max]);
         self.input.consume(max);
+
+        self.valid_len -= max;
 
         Ok(max)
     }
@@ -148,6 +158,33 @@ mod test {
     #[test]
     fn utf8_broken_prefix_ascii() {
         assert_eq!(do_reader(&mut [&[97, 97, 97, 195]]), "aaa?");
+    }
+
+    #[test]
+    fn hiragana() {
+        assert_eq!(do_reader(&mut ["あいうえお".as_bytes()]), "あいうえお");
+    }
+
+    #[test]
+    fn emoji() {
+        assert_eq!(do_reader(&mut ["✅✅✅".as_bytes()]), "✅✅✅");
+    }
+
+    #[test]
+    fn leftover() {
+        let s = "あ";
+        assert_eq!(s.as_bytes(), &[227, 129, 130]);
+
+        let mut buf = [0; 2];
+        let mut r = LossyUtf8Reader::new(s.as_bytes());
+
+        assert_eq!(r.read(&mut buf).unwrap(), 2);
+        assert_eq!(&buf[..], &[227, 129]);
+
+        assert_eq!(r.read(&mut buf).unwrap(), 1);
+        assert_eq!(&buf[..1], &[130]);
+
+        assert_eq!(r.read(&mut buf).unwrap(), 0);
     }
 
     struct TestReader<'a>(&'a mut [&'a [u8]]);
