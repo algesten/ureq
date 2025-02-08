@@ -84,7 +84,7 @@ impl Proxy {
     }
 
     fn new_with_flag(proxy: &str, from_env: bool) -> Result<Self, Error> {
-        let mut uri = proxy.parse::<Uri>().unwrap();
+        let mut uri = proxy.parse::<Uri>().or(Err(Error::InvalidProxyUrl))?;
 
         // The uri must have an authority part (with the host), or
         // it is invalid.
@@ -468,5 +468,17 @@ mod test {
         let c = Proxy::new("localhost:1234").unwrap();
         assert_eq!(c.proto(), Proto::Http);
         assert_eq!(c.uri(), "http://localhost:1234");
+    }
+
+    #[test]
+    fn proxy_empty_env_url() {
+        let result = Proxy::new_with_flag("", false);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn proxy_invalid_env_url() {
+        let result = Proxy::new_with_flag("r32/?//52:**", false);
+        assert!(result.is_err());
     }
 }
