@@ -156,6 +156,8 @@ pub struct Config {
     max_idle_connections: usize,
     max_idle_connections_per_host: usize,
     max_idle_age: Duration,
+    #[cfg(feature = "keepalive")]
+    tcp_keepalive: Option<socket2::TcpKeepalive>,
 
     // Chain built for middleware.
     pub(crate) middleware: MiddlewareChain,
@@ -393,6 +395,12 @@ impl Config {
     /// Defaults to 15 seconds
     pub fn max_idle_age(&self) -> Duration {
         self.max_idle_age
+    }
+
+    #[cfg(feature = "keepalive")]
+    /// TCP Keepalive configuration
+    pub fn tcp_keepalive(&self) -> &Option<socket2::TcpKeepalive> {
+        &self.tcp_keepalive
     }
 }
 
@@ -712,6 +720,17 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
         self.config().timeouts.recv_body = v;
         self
     }
+
+    /// Configuration of TCP keepalive
+    ///
+    /// If `None`, keepalive is not configured for the connections
+    ///
+    /// Defaults to `None`
+    #[cfg(feature = "keepalive")]
+    pub fn tcp_keepalive(mut self, v: Option<socket2::TcpKeepalive>) -> Self {
+        self.config().tcp_keepalive = v;
+        self
+    }
 }
 
 /// Possible config values for headers.
@@ -849,6 +868,8 @@ impl Default for Config {
             max_idle_connections_per_host: 3,
             max_idle_age: Duration::from_secs(15),
             middleware: MiddlewareChain::default(),
+            #[cfg(feature = "keepalive")]
+            tcp_keepalive: None,
             force_send_body: false,
         }
     }
