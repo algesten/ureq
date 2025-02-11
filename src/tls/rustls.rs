@@ -9,6 +9,7 @@ use rustls::{ClientConfig, ClientConnection, RootCertStore, StreamOwned, ALL_VER
 use rustls_pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs1KeyDer, PrivatePkcs8KeyDer};
 use rustls_pki_types::{PrivateSec1KeyDer, ServerName};
 
+use crate::config::Config;
 use crate::tls::cert::KeyKind;
 use crate::tls::{RootCerts, TlsProvider};
 use crate::transport::{Buffers, ConnectionDetails, Connector, LazyBuffers};
@@ -22,7 +23,12 @@ use super::TlsConfig;
 /// Requires feature flag **rustls**.
 #[derive(Default)]
 pub struct RustlsConnector {
-    config: OnceLock<Arc<ClientConfig>>,
+    config: OnceLock<CachedRustlConfig>,
+}
+
+struct CachedRustlConfig {
+    config_hash: u64,
+    rustls_config: Arc<ClientConfig>,
 }
 
 impl<In: Transport> Connector<In> for RustlsConnector {
@@ -51,11 +57,7 @@ impl<In: Transport> Connector<In> for RustlsConnector {
 
         trace!("Try wrap in TLS");
 
-        let tls_config = details.config.tls_config();
-
-        // Initialize the config on first run.
-        let config_ref = self.config.get_or_init(|| build_config(tls_config));
-        let config = config_ref.clone(); // cheap clone due to Arc
+        let config = self.get_cached_config(details.config);
 
         let name_borrowed: ServerName<'_> = details
             .uri
@@ -89,7 +91,39 @@ impl<In: Transport> Connector<In> for RustlsConnector {
     }
 }
 
-fn build_config(tls_config: &TlsConfig) -> Arc<ClientConfig> {
+impl RustlsConnector {
+    fn get_cached_config(&self, config: &Config) -> Arc<ClientConfig> {
+        let tls_config = config.tls_config();
+
+        if config.request_level {
+            // If the TlsConfig is request level, it is not allowed to
+            // initialize the self.config OnceLock, but it should
+            // reuse the cached value if it is the same TlsConfig
+            // by comparing the config_hash value.
+
+            let is_cached = self
+                .config
+                .get()
+                .map(|c| c.config_hash == tls_config.hash_value())
+                .unwrap_or(false);
+
+            if is_cached {
+                // unwrap is ok because if is_cached is true we must have had a value.
+                self.config.get().unwrap().rustls_config.clone()
+            } else {
+                build_config(tls_config).rustls_config
+            }
+        } else {
+            // On agent level, we initialize the config on first run. This is
+            // the value we want to cache.
+            let config_ref = self.config.get_or_init(|| build_config(tls_config));
+
+            config_ref.rustls_config.clone()
+        }
+    }
+}
+
+fn build_config(tls_config: &TlsConfig) -> CachedRustlConfig {
     // 1. Prefer provider set by TlsConfig.
     // 2. Use process wide default set in rustls library.
     // 3. Pick ring, if it is enabled (the default behavior).
@@ -183,7 +217,10 @@ fn build_config(tls_config: &TlsConfig) -> Arc<ClientConfig> {
         debug!("Disable SNI");
     }
 
-    Arc::new(config)
+    CachedRustlConfig {
+        config_hash: tls_config.hash_value(),
+        rustls_config: Arc::new(config),
+    }
 }
 
 pub struct RustlsTransport {

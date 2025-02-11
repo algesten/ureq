@@ -1,5 +1,7 @@
 # Unreleased
 
+  * Support request level TlsConfig (#996)
+
 # 3.0.5
 
   * Fix incorrect reading of valid utf8 (#992)

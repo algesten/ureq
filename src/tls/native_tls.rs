@@ -3,6 +3,7 @@ use std::fmt;
 use std::io::{Read, Write};
 use std::sync::{Arc, OnceLock};
 
+use crate::config::Config;
 use crate::tls::{RootCerts, TlsProvider};
 use crate::{transport::*, Error};
 use der::pem::LineEnding;
@@ -17,7 +18,12 @@ use super::TlsConfig;
 /// Requires feature flag **native-tls**.
 #[derive(Default)]
 pub struct NativeTlsConnector {
-    connector: OnceLock<Arc<TlsConnector>>,
+    connector: OnceLock<CachedNativeTlsConnector>,
+}
+
+struct CachedNativeTlsConnector {
+    config_hash: u64,
+    native_tls_connector: Arc<TlsConnector>,
 }
 
 impl<In: Transport> Connector<In> for NativeTlsConnector {
@@ -46,20 +52,7 @@ impl<In: Transport> Connector<In> for NativeTlsConnector {
 
         trace!("Try wrap TLS");
 
-        let tls_config = &details.config.tls_config();
-
-        // Initialize the connector on first run.
-        let connector_ref = match self.connector.get() {
-            Some(v) => v,
-            None => {
-                // This is unlikely to be racy, but if it is, doesn't matter much.
-                let c = build_connector(tls_config)?;
-                // Maybe someone else set it first. Weird, but ok.
-                let _ = self.connector.set(c);
-                self.connector.get().unwrap()
-            }
-        };
-        let connector = connector_ref.clone(); // cheap clone due to Arc
+        let connector = self.get_cached_native_tls_connector(details.config)?;
 
         let domain = details
             .uri
@@ -84,7 +77,49 @@ impl<In: Transport> Connector<In> for NativeTlsConnector {
     }
 }
 
-fn build_connector(tls_config: &TlsConfig) -> Result<Arc<TlsConnector>, Error> {
+impl NativeTlsConnector {
+    fn get_cached_native_tls_connector(&self, config: &Config) -> Result<Arc<TlsConnector>, Error> {
+        let tls_config = config.tls_config();
+
+        let connector = if config.request_level {
+            // If the TlsConfig is request level, it is not allowed to
+            // initialize the self.config OnceLock, but it should
+            // reuse the cached value if it is the same TlsConfig
+            // by comparing the config_hash value.
+
+            let is_cached = self
+                .connector
+                .get()
+                .map(|c| c.config_hash == tls_config.hash_value())
+                .unwrap_or(false);
+
+            if is_cached {
+                // unwrap is ok because if is_cached is true we must have had a value.
+                self.connector.get().unwrap().native_tls_connector.clone()
+            } else {
+                build_connector(tls_config)?.native_tls_connector
+            }
+        } else {
+            // Initialize the connector on first run.
+            let connector_ref = match self.connector.get() {
+                Some(v) => v,
+                None => {
+                    // This is unlikely to be racy, but if it is, doesn't matter much.
+                    let c = build_connector(tls_config)?;
+                    // Maybe someone else set it first. Weird, but ok.
+                    let _ = self.connector.set(c);
+                    self.connector.get().unwrap()
+                }
+            };
+
+            connector_ref.native_tls_connector.clone() // cheap clone due to Arc
+        };
+
+        Ok(connector)
+    }
+}
+
+fn build_connector(tls_config: &TlsConfig) -> Result<CachedNativeTlsConnector, Error> {
     let mut builder = TlsConnector::builder();
 
     if tls_config.disable_verification {
@@ -136,7 +171,12 @@ fn build_connector(tls_config: &TlsConfig) -> Result<Arc<TlsConnector>, Error> {
 
     let conn = builder.build()?;
 
-    Ok(Arc::new(conn))
+    let cached = CachedNativeTlsConnector {
+        config_hash: tls_config.hash_value(),
+        native_tls_connector: Arc::new(conn),
+    };
+
+    Ok(cached)
 }
 
 fn add_valid_der<'a, C>(certs: C, builder: &mut TlsConnectorBuilder)
