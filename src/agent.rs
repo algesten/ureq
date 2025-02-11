@@ -245,7 +245,12 @@ impl Agent {
     }
 
     pub(crate) fn new_request_level_config(&self) -> RequestLevelConfig {
-        RequestLevelConfig(self.config.as_ref().clone())
+        let mut config = self.config.as_ref().clone();
+
+        // Set flag indicating this is request level.
+        config.request_level = true;
+
+        RequestLevelConfig(config)
     }
 
     /// Make a GET request using this agent.
