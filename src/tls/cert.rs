@@ -1,4 +1,5 @@
 use std::fmt;
+use std::hash::{Hash, Hasher};
 
 use crate::Error;
 
@@ -8,7 +9,7 @@ use crate::Error;
 ///
 /// The internal representation is DER form. The provided helpers for PEM
 /// translates to DER.
-#[derive(Clone)]
+#[derive(Clone, Hash)]
 pub struct Certificate<'a> {
     der: CertDer<'a>,
 }
@@ -18,6 +19,13 @@ enum CertDer<'a> {
     Borrowed(&'a [u8]),
     Owned(Vec<u8>),
     Rustls(rustls_pki_types::CertificateDer<'static>),
+}
+
+impl Hash for CertDer<'_> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        core::mem::discriminant(self).hash(state);
+        self.as_ref().hash(state)
+    }
 }
 
 impl<'a> AsRef<[u8]> for CertDer<'a> {
@@ -78,6 +86,7 @@ impl<'a> Certificate<'a> {
 /// translates to DER.
 ///
 /// Deliberately not `Clone` to avoid accidental copies in memory.
+#[derive(Hash)]
 pub struct PrivateKey<'a> {
     kind: KeyKind,
     der: PrivateKeyDer<'a>,
@@ -87,6 +96,17 @@ enum PrivateKeyDer<'a> {
     Borrowed(&'a [u8]),
     Owned(Vec<u8>),
     Rustls(rustls_pki_types::PrivateKeyDer<'static>),
+}
+
+impl Hash for PrivateKeyDer<'_> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        core::mem::discriminant(self).hash(state);
+        match self {
+            PrivateKeyDer::Borrowed(v) => v.hash(state),
+            PrivateKeyDer::Owned(v) => v.hash(state),
+            PrivateKeyDer::Rustls(v) => v.secret_der().as_ref().hash(state),
+        }
+    }
 }
 
 impl<'a> AsRef<[u8]> for PrivateKey<'a> {
@@ -103,7 +123,7 @@ impl<'a> AsRef<[u8]> for PrivateKey<'a> {
 ///
 /// * For **rustls** any kind is valid.
 /// * For **native-tls** the only valid option is [`Pkcs8`](KeyKind::Pkcs8).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum KeyKind {
     /// An RSA private key
