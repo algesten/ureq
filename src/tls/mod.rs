@@ -1,6 +1,8 @@
 //! TLS for handling `https`.
 
+use std::collections::hash_map::DefaultHasher;
 use std::fmt;
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 mod cert;
@@ -17,7 +19,7 @@ pub(crate) mod native_tls;
 /// Defaults to [`Rustls`][Self::Rustls] because this has the highest chance
 /// to compile and "just work" straight out of the box without installing additional
 /// development dependencies.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum TlsProvider {
     /// [Rustls](https://crates.io/crates/rustls) with the
@@ -80,6 +82,12 @@ impl TlsConfig {
         TlsConfigBuilder {
             config: TlsConfig::default(),
         }
+    }
+
+    pub(crate) fn hash_value(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        self.hash(&mut hasher);
+        hasher.finish()
     }
 }
 
@@ -259,7 +267,7 @@ impl TlsConfigBuilder {
 }
 
 /// A client certificate.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct ClientCert(Arc<(Vec<Certificate<'static>>, PrivateKey<'static>)>);
 
 impl ClientCert {
@@ -280,7 +288,7 @@ impl ClientCert {
 }
 
 /// Configuration setting for root certs.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 #[non_exhaustive]
 pub enum RootCerts {
     /// Use these specific certificates as root certs.
@@ -345,6 +353,21 @@ impl fmt::Debug for TlsConfig {
             .field("use_sni", &self.use_sni)
             .field("disable_verification", &self.disable_verification)
             .finish()
+    }
+}
+
+impl Hash for TlsConfig {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.provider.hash(state);
+        self.client_cert.hash(state);
+        self.root_certs.hash(state);
+        self.use_sni.hash(state);
+        self.disable_verification.hash(state);
+
+        #[cfg(feature = "_rustls")]
+        if let Some(arc) = &self.rustls_crypto_provider {
+            (Arc::as_ptr(arc) as usize).hash(state);
+        }
     }
 }
 
