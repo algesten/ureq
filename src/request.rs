@@ -402,10 +402,9 @@ impl RequestBuilder<WithoutBody> {
     /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn force_send_body(mut self) -> RequestBuilder<WithBody> {
-        // This is how we communicate to run() that we want to disable
-        // the method-body-compliance check.
-        let config = self.request_level_config();
-        config.force_send_body = true;
+        if let Some(exts) = self.extensions_mut() {
+            exts.insert(ForceSendBody);
+        }
 
         RequestBuilder {
             agent: self.agent,
@@ -416,6 +415,9 @@ impl RequestBuilder<WithoutBody> {
         }
     }
 }
+
+#[derive(Debug, Clone)]
+pub(crate) struct ForceSendBody;
 
 impl RequestBuilder<WithBody> {
     pub(crate) fn new<T>(agent: Agent, method: Method, uri: T) -> Self

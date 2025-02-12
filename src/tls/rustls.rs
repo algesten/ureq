@@ -9,7 +9,6 @@ use rustls::{ClientConfig, ClientConnection, RootCertStore, StreamOwned, ALL_VER
 use rustls_pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs1KeyDer, PrivatePkcs8KeyDer};
 use rustls_pki_types::{PrivateSec1KeyDer, ServerName};
 
-use crate::config::Config;
 use crate::tls::cert::KeyKind;
 use crate::tls::{RootCerts, TlsProvider};
 use crate::transport::{Buffers, ConnectionDetails, Connector, LazyBuffers};
@@ -57,7 +56,7 @@ impl<In: Transport> Connector<In> for RustlsConnector {
 
         trace!("Try wrap in TLS");
 
-        let config = self.get_cached_config(details.config);
+        let config = self.get_cached_config(details);
 
         let name_borrowed: ServerName<'_> = details
             .uri
@@ -92,10 +91,10 @@ impl<In: Transport> Connector<In> for RustlsConnector {
 }
 
 impl RustlsConnector {
-    fn get_cached_config(&self, config: &Config) -> Arc<ClientConfig> {
-        let tls_config = config.tls_config();
+    fn get_cached_config(&self, details: &ConnectionDetails) -> Arc<ClientConfig> {
+        let tls_config = details.config.tls_config();
 
-        if config.request_level {
+        if details.request_level {
             // If the TlsConfig is request level, it is not allowed to
             // initialize the self.config OnceLock, but it should
             // reuse the cached value if it is the same TlsConfig

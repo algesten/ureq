@@ -3,7 +3,6 @@ use std::fmt;
 use std::io::{Read, Write};
 use std::sync::{Arc, OnceLock};
 
-use crate::config::Config;
 use crate::tls::{RootCerts, TlsProvider};
 use crate::{transport::*, Error};
 use der::pem::LineEnding;
@@ -52,7 +51,7 @@ impl<In: Transport> Connector<In> for NativeTlsConnector {
 
         trace!("Try wrap TLS");
 
-        let connector = self.get_cached_native_tls_connector(details.config)?;
+        let connector = self.get_cached_native_tls_connector(details)?;
 
         let domain = details
             .uri
@@ -78,10 +77,13 @@ impl<In: Transport> Connector<In> for NativeTlsConnector {
 }
 
 impl NativeTlsConnector {
-    fn get_cached_native_tls_connector(&self, config: &Config) -> Result<Arc<TlsConnector>, Error> {
-        let tls_config = config.tls_config();
+    fn get_cached_native_tls_connector(
+        &self,
+        details: &ConnectionDetails,
+    ) -> Result<Arc<TlsConnector>, Error> {
+        let tls_config = details.config.tls_config();
 
-        let connector = if config.request_level {
+        let connector = if details.request_level {
             // If the TlsConfig is request level, it is not allowed to
             // initialize the self.config OnceLock, but it should
             // reuse the cached value if it is the same TlsConfig

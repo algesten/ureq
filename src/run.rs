@@ -13,6 +13,7 @@ use crate::body::ResponseInfo;
 use crate::config::{Config, RequestLevelConfig, DEFAULT_USER_AGENT};
 use crate::http;
 use crate::pool::Connection;
+use crate::request::ForceSendBody;
 use crate::response::{RedirectHistory, ResponseUri};
 use crate::timings::{CallTimings, CurrentTime};
 use crate::transport::time::{Duration, Instant};
@@ -33,12 +34,13 @@ pub(crate) fn run(
     let mut redirect_count = 0;
 
     // Configuration on the request level overrides the agent level.
-    let config = request
+    let (config, request_level) = request
         .extensions_mut()
         .remove::<RequestLevelConfig>()
-        .map(|rl| rl.0)
-        .map(Arc::new)
-        .unwrap_or_else(|| agent.config.clone());
+        .map(|rl| (Arc::new(rl.0), true))
+        .unwrap_or_else(|| (agent.config.clone(), false));
+
+    let force_send_body = request.extensions_mut().remove::<ForceSendBody>().is_some();
 
     let mut redirect_history: Option<Vec<Uri>> =
         config.save_redirect_history().then_some(Vec::new());
@@ -49,7 +51,7 @@ pub(crate) fn run(
 
     let mut flow = Flow::new(request)?;
 
-    if config.force_send_body {
+    if force_send_body {
         flow.send_body_despite_method();
     }
 
@@ -66,6 +68,7 @@ pub(crate) fn run(
         match flow_run(
             agent,
             &config,
+            request_level,
             flow,
             &mut body,
             redirect_count,
@@ -109,9 +112,11 @@ pub(crate) fn run(
     Ok(response)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn flow_run(
     agent: &Agent,
     config: &Config,
+    request_level: bool,
     mut flow: Flow<Prepare>,
     body: &mut SendBody,
     redirect_count: u32,
@@ -127,7 +132,7 @@ fn flow_run(
 
     add_headers(&mut flow, agent, config, body, &uri)?;
 
-    let mut connection = connect(agent, config, &uri, timings)?;
+    let mut connection = connect(agent, config, request_level, &uri, timings)?;
 
     let mut flow = flow.proceed();
 
@@ -336,6 +341,7 @@ fn add_headers(
 fn connect(
     agent: &Agent,
     config: &Config,
+    request_level: bool,
     wanted_uri: &Uri,
     timings: &mut CallTimings,
 ) -> Result<Connection, Error> {
@@ -363,6 +369,7 @@ fn connect(
         addrs,
         resolver: &*agent.resolver,
         config,
+        request_level,
         now: timings.now(),
         timeout: timings.next_timeout(Timeout::Connect),
         proxied,
