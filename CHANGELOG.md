@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Stop passing internal state in Config (#996)
   * Support request level TlsConfig (#996)
 
 # 3.0.5

@@ -159,13 +159,6 @@ pub struct Config {
 
     // Chain built for middleware.
     pub(crate) middleware: MiddlewareChain,
-
-    // Techically not config, but here to pass as argument from
-    // RequestBuilder::force_send_body() to run()
-    pub(crate) force_send_body: bool,
-
-    // If this config instance is request level.
-    pub(crate) request_level: bool,
 }
 
 impl Config {
@@ -852,8 +845,6 @@ impl Default for Config {
             max_idle_connections_per_host: 3,
             max_idle_age: Duration::from_secs(15),
             middleware: MiddlewareChain::default(),
-            force_send_body: false,
-            request_level: false,
         }
     }
 }

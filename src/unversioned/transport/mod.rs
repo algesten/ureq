@@ -183,8 +183,13 @@ pub struct ConnectionDetails<'a> {
     /// For CONNECT proxy, this is the address of the proxy server.
     pub addrs: ResolvedSocketAddrs,
 
-    /// The Agent configuration.
+    /// The configuration.
+    ///
+    /// Agent or Request level.
     pub config: &'a Config,
+
+    /// Whether the config is request level.
+    pub request_level: bool,
 
     /// The resolver configured on [`Agent`](crate::Agent).
     ///
