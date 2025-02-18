@@ -529,7 +529,17 @@ fn recv_response(
 
         let (amount, maybe_response) = flow.try_response(input, allow_partial_redirect)?;
 
-        if input.len() > config.max_response_header_size() {
+        let check_size = if maybe_response.is_some() {
+            // We got a parsed response, ensure the size is within
+            // configured parameters.
+            amount
+        } else {
+            // We did not parse a response, if input is too large,
+            // we stop trying to get more data.
+            input.len()
+        };
+
+        if check_size > config.max_response_header_size() {
             return Err(Error::LargeResponseHeader(
                 input.len(),
                 config.max_response_header_size(),

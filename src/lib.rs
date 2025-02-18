@@ -1132,6 +1132,18 @@ pub(crate) mod test {
         ensure!(Body, 700); // 648
     }
 
+    #[test]
+    fn limit_max_response_header_size() {
+        init_test_log();
+        let err = get("http://httpbin.org/get")
+            .config()
+            .max_response_header_size(5)
+            .build()
+            .call()
+            .unwrap_err();
+        assert!(matches!(err, Error::LargeResponseHeader(65, 5)));
+    }
+
     // This doesn't need to run, just compile.
     fn _ensure_send_sync() {
         fn is_send(_t: impl Send) {}
