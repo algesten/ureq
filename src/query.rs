@@ -4,7 +4,33 @@ use std::iter::Enumerate;
 use std::ops::Deref;
 use std::str::Chars;
 
-use percent_encoding::utf8_percent_encode;
+use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
+
+pub const ENCODED_IN_QUERY: &AsciiSet = &CONTROLS
+    .add(b' ')
+    .add(b'"')
+    .add(b'#')
+    .add(b'$')
+    .add(b'%')
+    .add(b'&')
+    .add(b'+')
+    .add(b',')
+    .add(b'/')
+    .add(b':')
+    .add(b';')
+    .add(b'<')
+    .add(b'=')
+    .add(b'>')
+    .add(b'?')
+    .add(b'@')
+    .add(b'[')
+    .add(b'\\')
+    .add(b']')
+    .add(b'^')
+    .add(b'`')
+    .add(b'{')
+    .add(b'|')
+    .add(b'}');
 
 #[derive(Clone)]
 pub(crate) struct QueryParam<'a> {
@@ -18,7 +44,7 @@ enum Source<'a> {
 }
 
 pub fn url_enc(i: &str) -> Cow<str> {
-    utf8_percent_encode(i, percent_encoding::NON_ALPHANUMERIC).into()
+    utf8_percent_encode(i, ENCODED_IN_QUERY).into()
 }
 
 impl<'a> QueryParam<'a> {
@@ -143,5 +169,12 @@ mod test {
         assert_eq!(p("foo=bar"), vec!["foo=bar"]);
         assert_eq!(p("foo=bar&"), vec!["foo=bar"]);
         assert_eq!(p("foo=bar&foo2=bar2"), vec!["foo=bar", "foo2=bar2"]);
+    }
+
+    #[test]
+    fn do_not_url_encode_some_things() {
+        const NOT_ENCODE: &str = &"!'()*-._~";
+        let q = QueryParam::new_key_value("key", NOT_ENCODE);
+        assert_eq!(q.as_str(), format!("key={}", NOT_ENCODE));
     }
 }
