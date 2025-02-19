@@ -140,6 +140,10 @@ impl Connection {
         pool.purge(now);
     }
 
+    pub fn is_tls(&self) -> bool {
+        self.transport.is_tls()
+    }
+
     fn age(&self, now: Instant) -> Duration {
         now.duration_since(now)
     }

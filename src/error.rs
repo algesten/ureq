@@ -142,6 +142,12 @@ pub enum Error {
     /// Attempt to connect to a CONNECT proxy failed.
     ConnectProxyFailed(String),
 
+    /// The protocol requires TLS (https), but the connector did not
+    /// create a TLS secured transport.
+    ///
+    /// This typically indicates a fault in bespoke `Connector` chains.
+    TlsRequired,
+
     /// hoot made no progress and there is no more input to read.
     ///
     /// We should never see this value.
@@ -230,6 +236,7 @@ impl fmt::Display for Error {
             #[cfg(feature = "json")]
             Error::Json(v) => write!(f, "json: {}", v),
             Error::ConnectProxyFailed(v) => write!(f, "CONNECT proxy failed: {}", v),
+            Error::TlsRequired => write!(f, "TLS required, but transport is unsecured"),
             Error::BodyStalled => write!(f, "body data reading stalled"),
         }
     }
