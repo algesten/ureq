@@ -1,5 +1,7 @@
 # Unreleased
 
+# 3.0.6
+
   * Avoid percent encoding some query parameter chars (#1004)
   * Fix incorrect LargeResponseHeader (#1003)
   * Stop passing internal state in Config (#996)
