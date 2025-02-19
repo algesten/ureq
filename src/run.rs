@@ -377,6 +377,10 @@ fn connect(
 
     let connection = agent.pool.connect(&details, config.max_idle_age().into())?;
 
+    if details.needs_tls() && !connection.is_tls() {
+        return Err(Error::TlsRequired);
+    }
+
     timings.record_time(Timeout::Connect);
 
     Ok(connection)

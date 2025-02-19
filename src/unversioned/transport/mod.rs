@@ -486,4 +486,8 @@ where
     fn is_open(&mut self) -> bool {
         (**self).is_open()
     }
+
+    fn is_tls(&self) -> bool {
+        (**self).is_tls()
+    }
 }
