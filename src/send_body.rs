@@ -8,7 +8,7 @@ use crate::util::private::Private;
 
 /// Request body for sending data via POST, PUT and PATCH.
 ///
-/// Typically not indicated with directly since the trait [`AsSendBody`] is implemented
+/// Typically not interacted with directly since the trait [`AsSendBody`] is implemented
 /// for the majority of the types of data a user might want to send to a remote server.
 /// That means if you want to send things like `String`, `&str` or `[u8]`, they can be
 /// used directly. See documentation for [`AsSendBody`].
