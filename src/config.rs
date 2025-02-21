@@ -7,8 +7,8 @@ use std::time::Duration;
 
 use http::Uri;
 
-use crate::http;
 use crate::middleware::{Middleware, MiddlewareChain};
+use crate::{http, Body, Error};
 use crate::{Agent, AsSendBody, Proxy, RequestBuilder};
 
 #[cfg(feature = "_tls")]
@@ -26,6 +26,7 @@ mod private {
 
 pub(crate) mod typestate {
     use super::*;
+    use crate::request_ext::WithAgent;
 
     /// Typestate for [`Config`] when configured for an [`Agent`].
     pub struct AgentScope(pub(crate) Config);
@@ -33,6 +34,8 @@ pub(crate) mod typestate {
     pub struct RequestScope<Any>(pub(crate) RequestBuilder<Any>);
     /// Typestate for for [`Config`] when configured via [`Agent::configure_request`].
     pub struct HttpCrateScope<S: AsSendBody>(pub(crate) http::Request<S>);
+    /// Typestate for for [`Config`] when configured via [`crate::RequestExt::with_agent`].
+    pub struct RequestExtScope<'a, S: AsSendBody>(pub(crate) WithAgent<'a, S>);
 
     impl private::ConfigScope for AgentScope {
         fn config(&mut self) -> &mut Config {
@@ -54,8 +57,17 @@ pub(crate) mod typestate {
             &mut req_level.0
         }
     }
+
+    impl<S: AsSendBody> private::ConfigScope for RequestExtScope<'_, S> {
+        fn config(&mut self) -> &mut Config {
+            self.0.request_level_config()
+        }
+    }
 }
 
+use crate::config::typestate::RequestExtScope;
+use crate::http::Response;
+use crate::request_ext::WithAgent;
 use typestate::AgentScope;
 use typestate::HttpCrateScope;
 use typestate::RequestScope;
@@ -798,6 +810,18 @@ impl<S: AsSendBody> ConfigBuilder<HttpCrateScope<S>> {
     /// Finalize the config
     pub fn build(self) -> http::Request<S> {
         self.0 .0
+    }
+}
+
+impl<'a, S: AsSendBody> ConfigBuilder<RequestExtScope<'a, S>> {
+    /// Finalize the config
+    pub fn build(self) -> WithAgent<'a, S> {
+        self.0 .0
+    }
+
+    /// Run the request with the agent in the ConfigBuilder
+    pub fn run(self) -> Result<Response<Body>, Error> {
+        self.0 .0.run()
     }
 }
 
