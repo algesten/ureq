@@ -525,6 +525,7 @@ use http::{Request, Response, Uri};
 pub use proxy::Proxy;
 pub use request::RequestBuilder;
 use request::{WithBody, WithoutBody};
+pub use request_ext::{AgentRef, RequestExt, WithAgent};
 pub use response_ext::ResponseExt;
 pub use send_body::AsSendBody;
 
@@ -536,6 +537,7 @@ mod pool;
 mod proxy;
 mod query;
 mod request;
+mod request_ext;
 mod response_ext;
 mod run;
 mod send_body;
@@ -568,6 +570,7 @@ pub mod typestate {
 
     pub use super::config::typestate::AgentScope;
     pub use super::config::typestate::HttpCrateScope;
+    pub use super::config::typestate::RequestExtScope;
     pub use super::config::typestate::RequestScope;
 }
 

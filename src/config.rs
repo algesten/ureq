@@ -6,9 +6,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use http::Uri;
+use ureq_proto::http::Response;
 
-use crate::http;
 use crate::middleware::{Middleware, MiddlewareChain};
+use crate::{http, Body, Error, WithAgent};
 use crate::{Agent, AsSendBody, Proxy, RequestBuilder};
 
 #[cfg(feature = "_tls")]
@@ -25,6 +26,8 @@ mod private {
 }
 
 pub(crate) mod typestate {
+    use crate::WithAgent;
+
     use super::*;
 
     /// Typestate for [`Config`] when configured for an [`Agent`].
@@ -33,6 +36,8 @@ pub(crate) mod typestate {
     pub struct RequestScope<Any>(pub(crate) RequestBuilder<Any>);
     /// Typestate for for [`Config`] when configured via [`Agent::configure_request`].
     pub struct HttpCrateScope<S: AsSendBody>(pub(crate) http::Request<S>);
+    /// TODO
+    pub struct RequestExtScope<'a, S: AsSendBody>(pub(crate) WithAgent<'a, S>);
 
     impl private::ConfigScope for AgentScope {
         fn config(&mut self) -> &mut Config {
@@ -54,10 +59,17 @@ pub(crate) mod typestate {
             &mut req_level.0
         }
     }
+
+    impl<'a, S: AsSendBody> private::ConfigScope for RequestExtScope<'a, S> {
+        fn config(&mut self) -> &mut Config {
+            todo!()
+        }
+    }
 }
 
 use typestate::AgentScope;
 use typestate::HttpCrateScope;
+use typestate::RequestExtScope;
 use typestate::RequestScope;
 
 /// Config primarily for the [`Agent`], but also per-request.
@@ -778,6 +790,18 @@ impl<S: AsSendBody> ConfigBuilder<HttpCrateScope<S>> {
     /// Finalize the config
     pub fn build(self) -> http::Request<S> {
         self.0 .0
+    }
+}
+
+impl<'a, S: AsSendBody> ConfigBuilder<RequestExtScope<'a, S>> {
+    /// TODO
+    pub fn build(self) -> WithAgent<'a, S> {
+        self.0 .0
+    }
+
+    /// TODO
+    pub fn run(self) -> Result<Response<Body>, Error> {
+        self.0 .0.run()
     }
 }
 
