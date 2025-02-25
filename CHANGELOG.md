@@ -1,5 +1,7 @@
 # Unreleased
 
+  * Fix not appending port to host header (#1017)
+
 # 3.0.6
 
   * Avoid percent encoding some query parameter chars (#1004)
