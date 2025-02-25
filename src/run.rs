@@ -55,6 +55,8 @@ pub(crate) fn run(
         flow.send_body_despite_method();
     }
 
+    flow.allow_non_standard_methods(config.allow_non_standard_methods());
+
     let (response, handler) = loop {
         let timeout = timings.next_timeout(Timeout::Global);
         let timed_out = match timeout.after {

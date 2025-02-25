@@ -1144,6 +1144,28 @@ pub(crate) mod test {
         assert!(matches!(err, Error::LargeResponseHeader(65, 5)));
     }
 
+    #[test]
+    #[cfg(feature = "_test")]
+    fn non_standard_method() {
+        init_test_log();
+        let method = Method::from_bytes(b"FNORD").unwrap();
+
+        let req = Request::builder()
+            .method(method)
+            .uri("http://httpbin.org/fnord")
+            .body(())
+            .unwrap();
+
+        let agent = Agent::new_with_defaults();
+
+        let req = agent
+            .configure_request(req)
+            .allow_non_standard_methods(true)
+            .build();
+
+        agent.run(req).unwrap();
+    }
+
     // This doesn't need to run, just compile.
     fn _ensure_send_sync() {
         fn is_send(_t: impl Send) {}

@@ -372,6 +372,26 @@ fn setup_default_handlers(handlers: &mut Vec<TestHandler>) {
         handlers,
     );
 
+    maybe_add(
+        TestHandler::new("/fnord", |_uri, req, w| {
+            assert_eq!(req.method().as_str(), "FNORD");
+
+            write!(
+                w,
+                "HTTP/1.1 200 OK\r\n\
+                Content-Type: application/json\r\n\
+                Content-Length: {}\r\n\
+                \r\n",
+                HTTPBIN_GET.as_bytes().len()
+            )?;
+            if req.method() != Method::HEAD {
+                w.write_all(HTTPBIN_GET.as_bytes())?;
+            }
+            Ok(())
+        }),
+        handlers,
+    );
+
     #[cfg(feature = "charset")]
     {
         let (cow, _, _) =
