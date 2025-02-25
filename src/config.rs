@@ -156,6 +156,7 @@ pub struct Config {
     max_idle_connections: usize,
     max_idle_connections_per_host: usize,
     max_idle_age: Duration,
+    allow_non_standard_methods: bool,
 
     // Chain built for middleware.
     pub(crate) middleware: MiddlewareChain,
@@ -390,6 +391,15 @@ impl Config {
     pub fn max_idle_age(&self) -> Duration {
         self.max_idle_age
     }
+
+    /// Whether to allow non-standard HTTP methods.
+    ///
+    /// By default the methods are limited by the HTTP version.
+    ///
+    /// Defaults to false
+    pub fn allow_non_standard_methods(&self) -> bool {
+        self.allow_non_standard_methods
+    }
 }
 
 /// Builder of [`Config`]
@@ -611,6 +621,16 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
     /// Defaults to 15 seconds
     pub fn max_idle_age(mut self, v: Duration) -> Self {
         self.config().max_idle_age = v;
+        self
+    }
+
+    /// Whether to allow non-standard HTTP methods.
+    ///
+    /// By default the methods are limited by the HTTP version.
+    ///
+    /// Defaults to false
+    pub fn allow_non_standard_methods(mut self, v: bool) -> Self {
+        self.config().allow_non_standard_methods = v;
         self
     }
 
@@ -844,6 +864,7 @@ impl Default for Config {
             max_idle_connections: 10,
             max_idle_connections_per_host: 3,
             max_idle_age: Duration::from_secs(15),
+            allow_non_standard_methods: false,
             middleware: MiddlewareChain::default(),
         }
     }

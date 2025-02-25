@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Allow non-standard HTTP methods (#1018)
   * Fix not appending port to host header (#1017)
 
 # 3.0.6
