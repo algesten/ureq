@@ -1,5 +1,7 @@
 # Unreleased
 
+# 3.0.7
+
   * Allow non-standard HTTP methods (#1018)
   * Fix not appending port to host header (#1017)
 
