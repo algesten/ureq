@@ -14,7 +14,7 @@ use crate::config::{Config, RequestLevelConfig, DEFAULT_USER_AGENT};
 use crate::http;
 use crate::pool::Connection;
 use crate::request::ForceSendBody;
-use crate::response::{RedirectHistory, ResponseUri};
+use crate::response_ext::{RedirectHistory, ResponseUri};
 use crate::timings::{CallTimings, CurrentTime};
 use crate::transport::time::{Duration, Instant};
 use crate::transport::ConnectionDetails;
