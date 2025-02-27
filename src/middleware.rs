@@ -133,7 +133,7 @@ use crate::{Agent, Body, Error, SendBody};
 ///         -> Result<Response<Body>, ureq::Error> {
 ///
 ///         // increase the counter for each invocation
-///         self.0.fetch_add(1, Ordering::SeqCst);
+///         self.0.fetch_add(1, Ordering::Relaxed);
 ///
 ///         // continue the middleware chain
 ///         next.handle(req)
@@ -152,7 +152,7 @@ use crate::{Agent, Body, Error, SendBody};
 /// agent.get("http://httpbin.org/get").call()?;
 ///
 /// // Check we did indeed increase the counter twice.
-/// assert_eq!(shared_counter.load(Ordering::SeqCst), 2);
+/// assert_eq!(shared_counter.load(Ordering::Relaxed), 2);
 ///
 /// # Ok::<_, ureq::Error>(())
 /// ```
