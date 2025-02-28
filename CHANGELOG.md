@@ -1,5 +1,9 @@
 # Unreleased
 
+# 3.0.8
+
+  * Fix incorrect parsing bug "missing http version" (#1026)
+
 # 3.0.7
 
   * Allow non-standard HTTP methods (#1018)
