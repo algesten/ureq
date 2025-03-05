@@ -525,6 +525,7 @@ use http::{Request, Response, Uri};
 pub use proxy::Proxy;
 pub use request::RequestBuilder;
 use request::{WithBody, WithoutBody};
+pub use request_ext::RequestExt;
 pub use response::ResponseExt;
 pub use send_body::AsSendBody;
 
@@ -553,6 +554,8 @@ pub mod tls;
 
 #[cfg(feature = "cookies")]
 mod cookies;
+mod request_ext;
+
 #[cfg(feature = "cookies")]
 pub use cookies::{Cookie, CookieJar};
 
