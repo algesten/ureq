@@ -200,7 +200,7 @@ fn setup_default_handlers(handlers: &mut Vec<TestHandler>) {
                 Content-Type: application/json\r\n\
                 Content-Length: {}\r\n\
                 \r\n",
-                HTTPBIN_GET.as_bytes().len()
+                HTTPBIN_GET.len()
             )?;
             if req.method() != Method::HEAD {
                 w.write_all(HTTPBIN_GET.as_bytes())?;
@@ -218,7 +218,7 @@ fn setup_default_handlers(handlers: &mut Vec<TestHandler>) {
                 Content-Type: application/json\r\n\
                 Content-Length: {}\r\n\
                 \r\n",
-                HTTPBIN_GET.as_bytes().len()
+                HTTPBIN_GET.len()
             )
         }),
         handlers,
@@ -232,7 +232,7 @@ fn setup_default_handlers(handlers: &mut Vec<TestHandler>) {
                 Content-Type: application/json\r\n\
                 Content-Length: {}\r\n\
                 \r\n",
-                HTTPBIN_PUT.as_bytes().len()
+                HTTPBIN_PUT.len()
             )?;
             w.write_all(HTTPBIN_PUT.as_bytes())
         }),
@@ -247,7 +247,7 @@ fn setup_default_handlers(handlers: &mut Vec<TestHandler>) {
                     Content-Type: application/json\r\n\
                     Content-Length: {}\r\n\
                     \r\n",
-                HTTPBIN_PUT.as_bytes().len()
+                HTTPBIN_PUT.len()
             )?;
             w.write_all(HTTPBIN_PUT.as_bytes())
         }),
@@ -284,7 +284,7 @@ fn setup_default_handlers(handlers: &mut Vec<TestHandler>) {
                 Content-Type: application/json\r\n\
                 Content-Length: {}\r\n\
                 \r\n",
-                HTTPBIN_JSON.as_bytes().len()
+                HTTPBIN_JSON.len()
             )?;
             w.write_all(HTTPBIN_JSON.as_bytes())
         }),
@@ -364,7 +364,7 @@ fn setup_default_handlers(handlers: &mut Vec<TestHandler>) {
                 Content-Type: application/json\r\n\
                 Content-Length: {}\r\n\
                 \r\n",
-                HTTPBIN_GET.as_bytes().len()
+                HTTPBIN_GET.len()
             )?;
             w.write_all(HTTPBIN_GET.as_bytes())?;
             Ok(())
@@ -382,7 +382,7 @@ fn setup_default_handlers(handlers: &mut Vec<TestHandler>) {
                 Content-Type: application/json\r\n\
                 Content-Length: {}\r\n\
                 \r\n",
-                HTTPBIN_GET.as_bytes().len()
+                HTTPBIN_GET.len()
             )?;
             if req.method() != Method::HEAD {
                 w.write_all(HTTPBIN_GET.as_bytes())?;
