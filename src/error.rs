@@ -49,6 +49,17 @@ pub enum Error {
     InvalidProxyUrl,
 
     /// A connection failed.
+    ///
+    /// This is a fallback error when there is no other explanation as to
+    /// why a connector chain didn't produce a connection. The idea is that the connector
+    /// chain would return some other [`Error`] rather than rely om this value.
+    ///
+    /// Typically bespoke connector chains should, as far as possible, map their underlying
+    /// errors to [`Error::Io`] and use the [`io::ErrorKind`] to provide a reason.
+    ///
+    /// A bespoke chain is allowed to map to this value, but that provides very little
+    /// information to the user as to why the connection failed. One way to mitigate that
+    /// would be to rely on the `log` crate to provide additional information.
     ConnectionFailed,
 
     /// A send body (Such as `&str`) is larger than the `content-length` header.
@@ -148,7 +159,20 @@ pub enum Error {
     /// This typically indicates a fault in bespoke `Connector` chains.
     TlsRequired,
 
-    /// hoot made no progress and there is no more input to read.
+    /// Some other error occured.
+    ///
+    /// This is an escape hatch for bespoke connector chains having errors that don't naturally
+    /// map to any other error. For connector chains we recommend:
+    ///
+    /// 1. Map to [`Error::Io`] as far as possible.
+    /// 2. Map to other [`Error`] where reasonable.
+    /// 3. Fall back on [`Error::Other`].
+    /// 4. As a last resort [`Error::ConnectionFailed`].
+    ///
+    /// ureq does not produce this error using the default connectors.
+    Other(Box<dyn std::error::Error + Send + Sync>),
+
+    /// ureq-proto made no progress and there is no more input to read.
     ///
     /// We should never see this value.
     #[doc(hidden)]
@@ -237,6 +261,7 @@ impl fmt::Display for Error {
             Error::Json(v) => write!(f, "json: {}", v),
             Error::ConnectProxyFailed(v) => write!(f, "CONNECT proxy failed: {}", v),
             Error::TlsRequired => write!(f, "TLS required, but transport is unsecured"),
+            Error::Other(v) => write!(f, "other: {}", v),
             Error::BodyStalled => write!(f, "body data reading stalled"),
         }
     }
