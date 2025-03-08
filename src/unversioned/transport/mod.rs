@@ -83,6 +83,15 @@ pub use crate::timings::NextTimeout;
 ///
 /// The built-in [`DefaultConnector`] provides SOCKS, TCP sockets and TLS wrapping.
 ///
+/// # Errors
+///
+/// When writing a bespoke connector chain we recommend handling errors like this:
+///
+/// 1. Map to [`Error::Io`] as far as possible.
+/// 2. Map to any other [`Error`] where reasonable.
+/// 3. Fall back on [`Error::Other`] preserving the original error.
+/// 4. As a last resort [`Error::ConnectionFailed`] + logging.
+///
 /// # Example
 ///
 /// ```
