@@ -1,5 +1,7 @@
 # Unreleased
 
+  * Improved errors and doc for bespoke transports (#1032)
+
 # 3.0.8
 
   * Fix incorrect parsing bug "missing http version" (#1026)

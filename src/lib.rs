@@ -1207,5 +1207,10 @@ pub(crate) mod test {
         let response = post("https://yaz").send(&data).unwrap();
         let owned_reader = response.into_parts().1.into_reader();
         is_sync(owned_reader);
+
+        let err = Error::HostNotFound;
+        is_send(err);
+        let err = Error::HostNotFound;
+        is_sync(err);
     }
 }
