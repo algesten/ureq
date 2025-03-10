@@ -70,12 +70,6 @@ pub struct WithAgent<'a, S: AsSendBody> {
 impl<'a, S: AsSendBody> WithAgent<'a, S> {
     /// TODO
     pub fn configure(mut self) -> ConfigBuilder<RequestExtScope<'a, S>> {
-        let exts = self.request.extensions_mut();
-
-        if exts.get::<RequestLevelConfig>().is_none() {
-            exts.insert(self.agent.new_request_level_config());
-        }
-
         ConfigBuilder(RequestExtScope(self))
     }
 
@@ -169,7 +163,7 @@ mod tests {
             .unwrap()
             .with_default_agent()
             .configure()
-            .http_status_as_error(true)
+            .http_status_as_error(false)
             .build();
 
         // Configure with the trait
