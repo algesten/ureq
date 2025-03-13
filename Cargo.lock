@@ -1444,9 +1444,9 @@ dependencies = [
 
 [[package]]
 name = "ureq-proto"
-version = "0.3.4"
+version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "135487149f03ef07422c30dba704aeb6c9e1140c9dc50134c9a20937e2d1e9f6"
+checksum = "ae239d0a3341aebc94259414d1dc67cfce87d41cbebc816772c91b77902fafa4"
 dependencies = [
  "base64",
  "http",
