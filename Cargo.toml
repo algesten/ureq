@@ -93,7 +93,7 @@ serde = { version = "1.0.138", optional = true, default-features = false, featur
 serde_json = { version = "1.0.120", optional = true, default-features = false, features = ["std"] }
 
 [dev-dependencies]
-env_logger = "0.11.6"
+env_logger = "0.11.7"
 auto-args = "0.3.0"
 serde = { version = "1.0.204", features = ["std", "derive"] }
 assert_no_alloc = "1.1.2"
