@@ -22,6 +22,19 @@ targets = [
   { triple = "x86_64-unknown-redox" },
 ]
 
+# 2025-03-13: We get double windows-sys crates in our build deps due to aws-lc-rs/bindgen
+# The dep all other crates use is 0.59.0. Ideally we don't want to ignore this, but
+# for now it appears to be the only solution.
+#
+#    = windows-sys v0.52.0
+#      ├── errno v0.3.10
+#      │   └── rustix v0.38.44
+#      │       └── which v4.4.2
+#      │           └── bindgen v0.69.5
+#      │               └── (build) aws-lc-sys v0.27.0
+#
+exclude = ["windows-sys"]
+
 [advisories]
 yanked = "deny"
 ignore = []
