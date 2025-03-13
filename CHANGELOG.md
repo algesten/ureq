@@ -1,5 +1,8 @@
 # Unreleased
 
+# 3.0.9
+
+  * Bump deps (#1031)
   * Allow body for all methods when using http-crate API (#1035)
   * Improved errors and doc for bespoke transports (#1032)
 
