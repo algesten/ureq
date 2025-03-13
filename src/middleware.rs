@@ -204,7 +204,7 @@ impl<'a> MiddlewareNext<'a> {
             self.index += 1;
             mw.handle(request, self)
         } else {
-            // When chain is over, call the actual do_run on agent.
+            // When chain is over, call the main run().
             let (parts, body) = request.into_parts();
             let request = http::Request::from_parts(parts, ());
             run(self.agent, request, body)

@@ -3,6 +3,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use http::{Method, Request, Response, Uri};
+use ureq_proto::BodyMode;
 
 use crate::body::Body;
 use crate::config::typestate::{AgentScope, HttpCrateScope};
@@ -10,6 +11,7 @@ use crate::config::{Config, ConfigBuilder, RequestLevelConfig};
 use crate::http;
 use crate::middleware::MiddlewareNext;
 use crate::pool::ConnectionPool;
+use crate::request::ForceSendBody;
 use crate::resolver::{DefaultResolver, Resolver};
 use crate::send_body::AsSendBody;
 use crate::transport::{boxed_connector, Connector, DefaultConnector, Transport};
@@ -202,7 +204,16 @@ impl Agent {
     pub fn run(&self, request: Request<impl AsSendBody>) -> Result<Response<Body>, Error> {
         let (parts, mut body) = request.into_parts();
         let body = body.as_body();
-        let request = Request::from_parts(parts, ());
+        let mut request = Request::from_parts(parts, ());
+
+        // When using the http-crate API we cannot enforce the correctness of
+        // Method vs Body combos. This also solves a problem where we can't
+        // determine if a non-standard method is supposed to have a body such
+        // as for WebDAV PROPFIND.
+        let has_body = !matches!(body.body_mode(), BodyMode::NoBody);
+        if has_body {
+            request.extensions_mut().insert(ForceSendBody);
+        }
 
         self.run_via_middleware(request, body)
     }

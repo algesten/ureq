@@ -1145,6 +1145,25 @@ pub(crate) mod test {
     }
 
     #[test]
+    fn propfind_with_body() {
+        init_test_log();
+
+        // https://github.com/algesten/ureq/issues/1034
+        let request = http::Request::builder()
+            .method("PROPFIND")
+            .uri("https://www.google.com/")
+            .body("Some really cool body")
+            .unwrap();
+
+        let _ = Agent::config_builder()
+            .allow_non_standard_methods(true)
+            .build()
+            .new_agent()
+            .run(request)
+            .unwrap();
+    }
+
+    #[test]
     #[cfg(feature = "_test")]
     fn non_standard_method() {
         init_test_log();
