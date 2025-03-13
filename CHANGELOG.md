@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Allow body for all methods when using http-crate API (#1035)
   * Improved errors and doc for bespoke transports (#1032)
 
 # 3.0.8
