@@ -1,5 +1,9 @@
 # Unreleased
 
+# 3.0.10
+
+  * Bump rustls-platform-verifier to 0.5.0
+
 # 3.0.9
 
   * Bump deps (#1031)
