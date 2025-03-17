@@ -33,7 +33,20 @@ targets = [
 #      │           └── bindgen v0.69.5
 #      │               └── (build) aws-lc-sys v0.27.0
 #
-exclude = ["windows-sys"]
+
+# 2025-03-17: security-framework differs between native-tls and rustls-platform-verifier.
+#             Hopefully only very few people end up using both rustls and native-tls at
+#             the same time.
+#
+#  = security-framework v2.11.1
+#    └── native-tls v0.2.14
+#        └── ureq v3.0.9
+#  = security-framework v3.2.0
+#    └── rustls-platform-verifier v0.5.1
+#        └── ureq v3.0.9
+#
+
+exclude = ["windows-sys", "security-framework"]
 
 [advisories]
 yanked = "deny"
