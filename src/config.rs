@@ -34,7 +34,7 @@ pub(crate) mod typestate {
     pub struct RequestScope<Any>(pub(crate) RequestBuilder<Any>);
     /// Typestate for for [`Config`] when configured via [`Agent::configure_request`].
     pub struct HttpCrateScope<S: AsSendBody>(pub(crate) http::Request<S>);
-    // TODO
+    /// Typestate for for [`Config`] when configured via [`request::with_agent`].
     pub struct RequestExtScope<'a, S: AsSendBody>(pub(crate) WithAgent<'a, S>);
 
     impl private::ConfigScope for AgentScope {
@@ -814,12 +814,12 @@ impl<S: AsSendBody> ConfigBuilder<HttpCrateScope<S>> {
 }
 
 impl<'a, S: AsSendBody> ConfigBuilder<RequestExtScope<'a, S>> {
-    /// TODO
+    /// Finalize the config
     pub fn build(self) -> WithAgent<'a, S> {
         self.0 .0
     }
 
-    /// TODO
+    /// Run the request with the agent in the ConfigBuilder
     pub fn run(self) -> Result<Response<Body>, Error> {
         self.0 .0.run()
     }
