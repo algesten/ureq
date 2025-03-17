@@ -1,4 +1,4 @@
-use std::ops::{Deref, DerefMut};
+use std::ops::{Deref};
 use ureq_proto::http::{Request, Response};
 use crate::config::{Config, ConfigBuilder, RequestLevelConfig};
 use crate::{http, Agent, AsSendBody, Body, Error};
@@ -51,7 +51,7 @@ where
     /// ```
     /// use ureq::{http, Agent, RequestExt, Error};
     /// use std::time::Duration;
-    /// let mut agent = Agent::config_builder()
+    /// let agent = Agent::config_builder()
     ///     .timeout_global(Some(Duration::from_secs(30)))
     ///     .build()
     ///     .new_agent();
@@ -61,7 +61,7 @@ where
     ///             .uri("http://foo.bar")
     ///             .body(())
     ///             .unwrap()
-    ///             .with_agent(agent)
+    ///             .with_agent(&agent)
     ///             .run();
     /// ```
     /// # Example with further customizations
@@ -81,7 +81,7 @@ where
     ///             .uri("http://foo.bar")
     ///             .body(())
     ///             .unwrap()
-    ///             .with_agent(agent)
+    ///             .with_agent(&mut agent)
     ///             .configure()
     ///             .http_status_as_error(false)
     ///             .run();
@@ -129,7 +129,7 @@ impl<'a, S: AsSendBody> WithAgent<'a, S> {
 /// Reference type to hold an owned or borrowed [`Agent`].
 pub enum AgentRef<'a> {
     Owned(Agent),
-    Borrowed(&'a mut Agent),
+    Borrowed(&'a Agent),
 }
 
 
@@ -149,8 +149,8 @@ impl From<Agent> for AgentRef<'static> {
     }
 }
 
-impl<'a> From<&'a mut Agent> for AgentRef<'a> {
-    fn from(value: &'a mut Agent) -> Self {
+impl<'a> From<&'a Agent> for AgentRef<'a> {
+    fn from(value: &'a Agent) -> Self {
         AgentRef::Borrowed(value)
     }
 }
@@ -166,22 +166,14 @@ impl Deref for AgentRef<'_> {
     }
 }
 
-impl DerefMut for AgentRef<'_> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        match self {
-            AgentRef::Owned(agent) => agent,
-            AgentRef::Borrowed(agent) => agent,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
     use super::*;
     use crate::config::RequestLevelConfig;
 
     #[test]
-    fn set_https_only_to_true_on_get_request() {
+    fn set_https_only_to_true_on_get_request_with_default_agent() {
         // Create `http` crate request and configure with trait
         let request = http::Request::builder()
             .method(http::Method::GET)
@@ -190,81 +182,114 @@ mod tests {
             .unwrap()
             .with_default_agent()
             .configure()
-            .http_status_as_error(false)
+            .https_only(true)
             .build();
 
         // Assert that the request-level configuration has been set
         let request_config = request
+            .request
             .extensions()
             .get::<RequestLevelConfig>()
             .cloned()
             .unwrap();
 
         assert_eq!(request_config.0.https_only(), true);
-
-        todo!();
     }
 
-    // #[test]
-    // fn set_https_only_to_false_on_get_request() {
-    //     // Create `http` crate request
-    //     let request = http::Request::builder()
-    //         .method(http::Method::GET)
-    //         .uri("http://foo.bar")
-    //         .body(())
-    //         .unwrap();
-    //
-    //     // Configure with the trait
-    //     let request = request.configure().https_only(false).build();
-    //
-    //     let request_config = request
-    //         .extensions()
-    //         .get::<RequestLevelConfig>()
-    //         .cloned()
-    //         .unwrap();
-    //
-    //     assert_eq!(request_config.0.https_only(), false);
-    // }
-    //
-    // #[test]
-    // fn set_http_status_as_error_to_true_on_post_request() {
-    //     // Create `http` crate request
-    //     let request = http::Request::builder()
-    //         .method(http::Method::POST)
-    //         .uri("http://foo.bar")
-    //         .body("Some body")
-    //         .unwrap();
-    //
-    //     // Configure with the trait
-    //     let request = request.configure().http_status_as_error(true).build();
-    //
-    //     let request_config = request
-    //         .extensions()
-    //         .get::<RequestLevelConfig>()
-    //         .cloned()
-    //         .unwrap();
-    //
-    //     assert_eq!(request_config.0.http_status_as_error(), true);
-    // }
-    //
-    // #[test]
-    // fn set_http_status_as_error_to_false_on_post_request() {
-    //     // Create `http` crate request
-    //     let request = http::Request::builder()
-    //         .method(http::Method::GET)
-    //         .uri("http://foo.bar")
-    //         .body("Some body")
-    //         .unwrap();
-    //
-    //     // Configure with the trait
-    //     let request = request.configure().http_status_as_error(false).build();
-    //
-    //     let request_config = request
-    //         .extensions()
-    //         .get::<RequestLevelConfig>()
-    //         .cloned()
-    //         .unwrap();
-    //
-    //     assert_eq!(request_config.0.http_status_as_error(), false);
-    // }
+    #[test]
+    fn set_https_only_to_false_on_get_request_with_default_agent() {
+        // Create `http` crate request and configure with trait
+        let request = http::Request::builder()
+            .method(http::Method::GET)
+            .uri("http://foo.bar")
+            .body(())
+            .unwrap()
+            .with_default_agent()
+            .configure()
+            .https_only(true)
+            .build();
+
+        // Assert that the request-level configuration has been set
+        let request_config = request
+            .request
+            .extensions()
+            .get::<RequestLevelConfig>()
+            .cloned()
+            .unwrap();
+
+        assert_eq!(request_config.0.https_only(), false);
+    }
+
+    #[test]
+    fn set_http_status_as_error_to_true_on_post_request_with_default_agent() {
+        // Create `http` crate request
+        let request = http::Request::builder()
+            .method(http::Method::POST)
+            .uri("http://foo.bar")
+            .body("Some body")
+            .unwrap();
+
+        // Configure with the trait
+        let request = request.with_default_agent().configure().http_status_as_error(true).build();
+
+        let request_config = request
+            .request
+            .extensions()
+            .get::<RequestLevelConfig>()
+            .cloned()
+            .unwrap();
+
+        assert_eq!(request_config.0.http_status_as_error(), true);
+    }
+
+    #[test]
+    fn set_http_status_as_error_to_false_on_post_request_with_default_agent() {
+        // Create `http` crate request
+        let request = http::Request::builder()
+            .method(http::Method::POST)
+            .uri("http://foo.bar")
+            .body("Some body")
+            .unwrap();
+
+        // Configure with the trait
+        let request = request.with_default_agent().configure().http_status_as_error(false).build();
+
+        let request_config = request
+            .request
+            .extensions()
+            .get::<RequestLevelConfig>()
+            .cloned()
+            .unwrap();
+
+        assert_eq!(request_config.0.http_status_as_error(), false);
+    }
+
+    #[test]
+    fn set_http_status_as_error_to_false_on_post_request_with_specified_agent() {
+        // Create `http` crate request
+        let request = http::Request::builder()
+            .method(http::Method::POST)
+            .uri("http://foo.bar")
+            .body("Some body")
+            .unwrap();
+
+        // Configure with the trait
+        let agent = Agent::config_builder()
+            .timeout_per_call(Some(Duration::from_secs(60)))
+            .build()
+            .new_agent();
+
+        let request = request.with_agent(&agent).configure().http_status_as_error(false).build();
+
+        let request_config = request
+            .request
+            .extensions()
+            .get::<RequestLevelConfig>()
+            .cloned()
+            .unwrap();
+
+        // The request-level config is the agent defaults + the explicitly configured stuff
+        assert_eq!(request_config.0.http_status_as_error(), false);
+        assert_eq!(request_config.0.timeouts().per_call, Some(Duration::from_secs(60)));
+    }
 }
