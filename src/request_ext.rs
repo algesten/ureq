@@ -1,7 +1,6 @@
 use std::ops::{Deref, DerefMut};
 use ureq_proto::http::{Request, Response};
 use crate::config::{Config, ConfigBuilder, RequestLevelConfig};
-use crate::typestate::{HttpCrateScope, RequestScope};
 use crate::{http, Agent, AsSendBody, Body, Error};
 use crate::config::typestate::RequestExtScope;
 
@@ -13,67 +12,98 @@ pub trait RequestExt<S>
 where
     S: AsSendBody,
 {
-    /// TODO
+    /// Allows configuring the request behaviour, starting with the default [`Agent`].
+    ///
+    /// This method allows configuring the request by using the default Agent, and performing
+    /// additional configurations on top.
+    /// This method returns a `WithAgent` struct that it is possible to call `configure()` and `run()`
+    /// on to configure the request behaviour, or run the request.
     ///
     /// # Example
     ///
     /// ```
-    /// use ureq::{http, RequestExt};
+    /// use ureq::{http, RequestExt, Error};
     ///
-    /// http::Request::builder()
-    ///     .method(http::Method::POST)
-    ///     .uri("http://httpbin.org/post")
-    ///     .body(())
-    ///     .unwrap()
-    ///     .with_default_agent()
-    ///     .run();
+    /// let request: Result<http::Response<_>, Error> = http::Request::builder()
+    ///             .method(http::Method::GET)
+    ///             .uri("http://foo.bar")
+    ///             .body(())
+    ///             .unwrap()
+    ///             .with_default_agent()
+    ///             .configure()
+    ///             .http_status_as_error(false)
+    ///             .run();
     /// ```
     fn with_default_agent(self) -> WithAgent<'static, S> where Self: Sized {
         let agent = Agent::new_with_defaults();
         Self::with_agent(self, agent)
     }
 
-    /// Use this [`Request`] with a ureq [`Agent`].
+    /// Allows configuring this request behaviour, using a specific [`Agent`].
+    ///
+    /// This method allows configuring the request by using a user-provided `Agent` and performing
+    /// additional configurations on top.
+    /// This method returns a `WithAgent` struct that it is possible to call `configure()` and `run()`
+    /// on to configure the request behaviour, or run the request.
     ///
     /// # Example
     ///
     /// ```
-    /// use ureq::{http, Agent, RequestExt};
+    /// use ureq::{http, Agent, RequestExt, Error};
     /// use std::time::Duration;
-    ///
-    /// let request: http::Request<()> = http::Request::builder()
-    ///     .method(http::Method::GET)
-    ///     .uri("http://httpbin.org/get")
-    ///     .body(())
-    ///     .unwrap();
-    ///
     /// let mut agent = Agent::config_builder()
     ///     .timeout_global(Some(Duration::from_secs(30)))
     ///     .build()
     ///     .new_agent();
     ///
-    /// let response = request
-    ///     .with_agent(&mut agent)
-    ///     .configure()
-    ///     .https_only(true)
-    ///     .run()
-    ///     .unwrap();
+    /// let request: Result<http::Response<_>, Error> = http::Request::builder()
+    ///             .method(http::Method::GET)
+    ///             .uri("http://foo.bar")
+    ///             .body(())
+    ///             .unwrap()
+    ///             .with_agent(agent)
+    ///             .run();
+    /// ```
+    /// # Example with further customizations
+    ///
+    /// In this example we use a specific agent, but apply a request-specific configuration on top.
+    ///
+    /// ```
+    /// use ureq::{http, Agent, RequestExt, Error};
+    /// use std::time::Duration;
+    /// let mut agent = Agent::config_builder()
+    ///     .timeout_global(Some(Duration::from_secs(30)))
+    ///     .build()
+    ///     .new_agent();
+    ///
+    /// let request: Result<http::Response<_>, Error> = http::Request::builder()
+    ///             .method(http::Method::GET)
+    ///             .uri("http://foo.bar")
+    ///             .body(())
+    ///             .unwrap()
+    ///             .with_agent(agent)
+    ///             .configure()
+    ///             .http_status_as_error(false)
+    ///             .run();
     /// ```
     fn with_agent<'a>(self, agent: impl Into<AgentRef<'a>>) -> WithAgent<'a, S>;
 }
 
+/// Wrapper struct that holds a [`Request`] associated with an [`Agent`].
 pub struct WithAgent<'a, S: AsSendBody> {
     pub(crate) agent: AgentRef<'a>,
     pub(crate) request: Request<S>,
 }
 
 impl<'a, S: AsSendBody> WithAgent<'a, S> {
-    /// TODO
-    pub fn configure(mut self) -> ConfigBuilder<RequestExtScope<'a, S>> {
+    /// Returns a [`ConfigBuilder`] for configuring the request.
+    ///
+    /// This allows setting additional request-specific options before sending the request.
+    pub fn configure(self) -> ConfigBuilder<RequestExtScope<'a, S>> {
         ConfigBuilder(RequestExtScope(self))
     }
 
-    /// TODO
+    /// Executes the request using the associated [`Agent`].
     pub fn run(self) -> Result<Response<Body>, Error> {
         self.agent.run(self.request)
     }
@@ -85,23 +115,20 @@ impl<'a, S: AsSendBody> WithAgent<'a, S> {
             .extensions_mut()
             .get_mut::<RequestLevelConfig>();
 
-
         if request_level_config.is_none() {
             self.request.extensions_mut().insert(self.agent.new_request_level_config());
         }
 
-        // Unwrap is OK because of above check
+        // Unwrap is safe because of the above check
         let req_level: &mut RequestLevelConfig = self.request.extensions_mut().get_mut::<RequestLevelConfig>().unwrap();
 
         &mut req_level.0
     }
 }
 
-/// Glue type to hold an owned or &mut Agent.
+/// Reference type to hold an owned or borrowed [`Agent`].
 pub enum AgentRef<'a> {
-    /// TODO
     Owned(Agent),
-    /// TODO
     Borrowed(&'a mut Agent),
 }
 
@@ -155,7 +182,7 @@ mod tests {
 
     #[test]
     fn set_https_only_to_true_on_get_request() {
-        // Create `http` crate request
+        // Create `http` crate request and configure with trait
         let request = http::Request::builder()
             .method(http::Method::GET)
             .uri("http://foo.bar")
@@ -166,19 +193,14 @@ mod tests {
             .http_status_as_error(false)
             .build();
 
-        // Configure with the trait
-        // let request = request.configure().https_only(true).build();
+        // Assert that the request-level configuration has been set
+        let request_config = request
+            .extensions()
+            .get::<RequestLevelConfig>()
+            .cloned()
+            .unwrap();
 
-        dbg!(&request.request.extensions().get::<RequestLevelConfig>());
-        dbg!(&request.agent.deref());
-
-        // let request_config = request
-        //     .extensions()
-        //     .get::<RequestLevelConfig>()
-        //     .cloned()
-        //     .unwrap();
-        //
-        // assert_eq!(request_config.0.https_only(), true);
+        assert_eq!(request_config.0.https_only(), true);
 
         todo!();
     }
