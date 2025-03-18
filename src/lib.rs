@@ -1144,7 +1144,7 @@ pub(crate) mod test {
             .build()
             .call()
             .unwrap_err();
-        assert!(matches!(err, Error::LargeResponseHeader(65, 5)));
+        assert!(matches!(err, Error::LargeResponseHeader(516, 5)));
     }
 
     #[test]
