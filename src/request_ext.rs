@@ -84,7 +84,7 @@ where
     ///             .uri("http://foo.bar")
     ///             .body(())
     ///             .unwrap()
-    ///             .with_agent(&mut agent)
+    ///             .with_agent(&agent)
     ///             .configure()
     ///             .http_status_as_error(false)
     ///             .run();
