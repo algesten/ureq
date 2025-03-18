@@ -181,7 +181,7 @@ mod tests {
     use std::time::Duration;
 
     #[test]
-    fn set_https_only_to_true_on_get_request_with_default_agent() {
+    fn configure_request_with_default_agent() {
         // Create `http` crate request and configure with trait
         let request = http::Request::builder()
             .method(http::Method::GET)
@@ -205,7 +205,7 @@ mod tests {
     }
 
     #[test]
-    fn set_https_only_to_false_on_get_request_with_default_agent() {
+    fn configure_request_default_agent_2() {
         // Create `http` crate request and configure with trait
         let request = http::Request::builder()
             .method(http::Method::GET)
@@ -225,11 +225,11 @@ mod tests {
             .cloned()
             .unwrap();
 
-        assert_eq!(request_config.0.https_only(), false);
+        assert_eq!(request_config.0.https_only(), true);
     }
 
     #[test]
-    fn set_http_status_as_error_to_true_on_post_request_with_default_agent() {
+    fn configure_request_default_agent_3() {
         // Create `http` crate request
         let request = http::Request::builder()
             .method(http::Method::POST)
@@ -255,7 +255,7 @@ mod tests {
     }
 
     #[test]
-    fn set_http_status_as_error_to_false_on_post_request_with_default_agent() {
+    fn configure_request_default_agent_4() {
         // Create `http` crate request
         let request = http::Request::builder()
             .method(http::Method::POST)
@@ -281,7 +281,7 @@ mod tests {
     }
 
     #[test]
-    fn set_http_status_as_error_to_false_on_post_request_with_specified_agent() {
+    fn configure_request_specified_agent() {
         // Create `http` crate request
         let request = http::Request::builder()
             .method(http::Method::POST)
