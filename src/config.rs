@@ -7,8 +7,8 @@ use std::time::Duration;
 
 use http::Uri;
 
-use crate::{http, Body, Error};
 use crate::middleware::{Middleware, MiddlewareChain};
+use crate::{http, Body, Error};
 use crate::{Agent, AsSendBody, Proxy, RequestBuilder};
 
 #[cfg(feature = "_tls")]
@@ -25,8 +25,8 @@ mod private {
 }
 
 pub(crate) mod typestate {
-    use crate::request_ext::WithAgent;
     use super::*;
+    use crate::request_ext::WithAgent;
 
     /// Typestate for [`Config`] when configured for an [`Agent`].
     pub struct AgentScope(pub(crate) Config);
@@ -65,12 +65,12 @@ pub(crate) mod typestate {
     }
 }
 
-use typestate::AgentScope;
-use typestate::HttpCrateScope;
-use typestate::RequestScope;
 use crate::config::typestate::RequestExtScope;
 use crate::http::Response;
 use crate::request_ext::WithAgent;
+use typestate::AgentScope;
+use typestate::HttpCrateScope;
+use typestate::RequestScope;
 
 /// Config primarily for the [`Agent`], but also per-request.
 ///

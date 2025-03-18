@@ -1,8 +1,8 @@
-use std::ops::{Deref};
-use ureq_proto::http::{Request, Response};
+use crate::config::typestate::RequestExtScope;
 use crate::config::{Config, ConfigBuilder, RequestLevelConfig};
 use crate::{http, Agent, AsSendBody, Body, Error};
-use crate::config::typestate::RequestExtScope;
+use std::ops::Deref;
+use ureq_proto::http::{Request, Response};
 
 /// Extension trait for [`http::Request<impl AsSendBody>`].
 ///
@@ -34,7 +34,10 @@ where
     ///             .http_status_as_error(false)
     ///             .run();
     /// ```
-    fn with_default_agent(self) -> WithAgent<'static, S> where Self: Sized {
+    fn with_default_agent(self) -> WithAgent<'static, S>
+    where
+        Self: Sized,
+    {
         let agent = Agent::new_with_defaults();
         Self::with_agent(self, agent)
     }
@@ -111,16 +114,23 @@ impl<'a, S: AsSendBody> WithAgent<'a, S> {
 
 impl<'a, S: AsSendBody> WithAgent<'a, S> {
     pub(crate) fn request_level_config(&mut self) -> &mut Config {
-        let request_level_config = self.request
+        let request_level_config = self
+            .request
             .extensions_mut()
             .get_mut::<RequestLevelConfig>();
 
         if request_level_config.is_none() {
-            self.request.extensions_mut().insert(self.agent.new_request_level_config());
+            self.request
+                .extensions_mut()
+                .insert(self.agent.new_request_level_config());
         }
 
         // Unwrap is safe because of the above check
-        let req_level: &mut RequestLevelConfig = self.request.extensions_mut().get_mut::<RequestLevelConfig>().unwrap();
+        let req_level: &mut RequestLevelConfig = self
+            .request
+            .extensions_mut()
+            .get_mut::<RequestLevelConfig>()
+            .unwrap();
 
         &mut req_level.0
     }
@@ -132,7 +142,6 @@ pub enum AgentRef<'a> {
     Borrowed(&'a Agent),
 }
 
-
 impl<S: AsSendBody> RequestExt<S> for http::Request<S> {
     fn with_agent<'a>(self, agent: impl Into<AgentRef<'a>>) -> WithAgent<'a, S> {
         WithAgent {
@@ -141,7 +150,6 @@ impl<S: AsSendBody> RequestExt<S> for http::Request<S> {
         }
     }
 }
-
 
 impl From<Agent> for AgentRef<'static> {
     fn from(value: Agent) -> Self {
@@ -168,9 +176,9 @@ impl Deref for AgentRef<'_> {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
     use super::*;
     use crate::config::RequestLevelConfig;
+    use std::time::Duration;
 
     #[test]
     fn set_https_only_to_true_on_get_request_with_default_agent() {
@@ -230,7 +238,11 @@ mod tests {
             .unwrap();
 
         // Configure with the trait
-        let request = request.with_default_agent().configure().http_status_as_error(true).build();
+        let request = request
+            .with_default_agent()
+            .configure()
+            .http_status_as_error(true)
+            .build();
 
         let request_config = request
             .request
@@ -252,7 +264,11 @@ mod tests {
             .unwrap();
 
         // Configure with the trait
-        let request = request.with_default_agent().configure().http_status_as_error(false).build();
+        let request = request
+            .with_default_agent()
+            .configure()
+            .http_status_as_error(false)
+            .build();
 
         let request_config = request
             .request
@@ -279,7 +295,11 @@ mod tests {
             .build()
             .new_agent();
 
-        let request = request.with_agent(&agent).configure().http_status_as_error(false).build();
+        let request = request
+            .with_agent(&agent)
+            .configure()
+            .http_status_as_error(false)
+            .build();
 
         let request_config = request
             .request
@@ -290,6 +310,9 @@ mod tests {
 
         // The request-level config is the agent defaults + the explicitly configured stuff
         assert_eq!(request_config.0.http_status_as_error(), false);
-        assert_eq!(request_config.0.timeouts().per_call, Some(Duration::from_secs(60)));
+        assert_eq!(
+            request_config.0.timeouts().per_call,
+            Some(Duration::from_secs(60))
+        );
     }
 }
