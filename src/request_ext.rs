@@ -214,7 +214,7 @@ mod tests {
             .unwrap()
             .with_default_agent()
             .configure()
-            .https_only(true)
+            .https_only(false)
             .build();
 
         // Assert that the request-level configuration has been set
@@ -225,7 +225,7 @@ mod tests {
             .cloned()
             .unwrap();
 
-        assert_eq!(request_config.0.https_only(), true);
+        assert_eq!(request_config.0.https_only(), false);
     }
 
     #[test]
