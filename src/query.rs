@@ -6,6 +6,9 @@ use std::str::Chars;
 
 use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 
+/// AsciiSet for characters that need to be percent-encoded in URL query parameters.
+///
+/// This set follows URL specification from <https://url.spec.whatwg.org/>
 pub const ENCODED_IN_QUERY: &AsciiSet = &CONTROLS
     .add(b' ')
     .add(b'"')
@@ -13,6 +16,7 @@ pub const ENCODED_IN_QUERY: &AsciiSet = &CONTROLS
     .add(b'$')
     .add(b'%')
     .add(b'&')
+    .add(b'\'') // Single quote should be encoded according to the URL specs
     .add(b'+')
     .add(b',')
     .add(b'/')
@@ -43,13 +47,26 @@ enum Source<'a> {
     Owned(String),
 }
 
+/// Percent-encode a string using the ENCODED_IN_QUERY set.
 pub fn url_enc(i: &str) -> Cow<str> {
     utf8_percent_encode(i, ENCODED_IN_QUERY).into()
 }
 
 impl<'a> QueryParam<'a> {
+    /// Create a new key-value pair with both the key and value percent-encoded.
     pub fn new_key_value(param: &str, value: &str) -> QueryParam<'static> {
         let s = format!("{}={}", url_enc(param), url_enc(value));
+        QueryParam {
+            source: Source::Owned(s),
+        }
+    }
+
+    /// Create a new key-value pair without percent-encoding.
+    ///
+    /// This is used by query_raw() to add parameters that are already encoded
+    /// or that should not be encoded.
+    pub fn new_key_value_raw(param: &str, value: &str) -> QueryParam<'static> {
+        let s = format!("{}={}", param, value);
         QueryParam {
             source: Source::Owned(s),
         }
@@ -173,8 +190,33 @@ mod test {
 
     #[test]
     fn do_not_url_encode_some_things() {
-        const NOT_ENCODE: &str = "!'()*-._~";
+        const NOT_ENCODE: &str = "!()*-._~";
         let q = QueryParam::new_key_value("key", NOT_ENCODE);
         assert_eq!(q.as_str(), format!("key={}", NOT_ENCODE));
+    }
+
+    #[test]
+    fn do_encode_single_quote() {
+        let value = "value'with'quotes";
+        let q = QueryParam::new_key_value("key", value);
+        assert_eq!(q.as_str(), "key=value%27with%27quotes");
+    }
+
+    #[test]
+    fn raw_query_param_no_encoding() {
+        // Use URI-valid characters for the raw param test
+        let value = "value-without-spaces&special='chars'";
+        let q = QueryParam::new_key_value_raw("key", value);
+        assert_eq!(q.as_str(), format!("key={}", value));
+
+        // Verify that symbols like &=+?/ remain unencoded in raw mode
+        // but are encoded in normal mode
+        let special_symbols = "symbols&=+?/'";
+        let q_raw = QueryParam::new_key_value_raw("raw", special_symbols);
+        let q_encoded = QueryParam::new_key_value("encoded", special_symbols);
+
+        // Raw should preserve all special chars, encoded should encode them
+        assert_eq!(q_raw.as_str(), "raw=symbols&=+?/'");
+        assert_ne!(q_raw.as_str(), q_encoded.as_str());
     }
 }

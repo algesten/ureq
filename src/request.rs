@@ -137,13 +137,16 @@ impl<Any> RequestBuilder<Any> {
     /// Add a query parameter to the URL.
     ///
     /// Always appends a new parameter, also when using the name of
-    /// an already existing one.
+    /// an already existing one. Both key and value are percent-encoded
+    /// according to the URL specification.
     ///
     /// # Examples
     ///
     /// ```
+    /// // Creates a URL with an encoded query parameter:
+    /// // https://httpbin.org/get?my_query=with%20value
     /// let req = ureq::get("https://httpbin.org/get")
-    ///     .query("my_query", "with_value");
+    ///     .query("my_query", "with value");
     /// ```
     pub fn query<K, V>(mut self, key: K, value: V) -> Self
     where
@@ -155,9 +158,40 @@ impl<Any> RequestBuilder<Any> {
         self
     }
 
+    /// Add a query parameter to the URL without percent-encoding.
+    ///
+    /// Always appends a new parameter, also when using the name of
+    /// an already existing one. Neither key nor value are percent-encoded,
+    /// which allows you to use pre-encoded values or bypass encoding.
+    ///
+    /// **Important note**: When using this method, you must ensure that your
+    /// query parameters don't contain characters that would make the URI invalid,
+    /// such as spaces or control characters. You are responsible for any pre-encoding
+    /// needed for URI validity. If you're unsure, use the regular `query()` method instead.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Creates a URL with a raw query parameter:
+    /// // https://httpbin.org/get?my_query=pre-encoded%20value
+    /// let req = ureq::get("https://httpbin.org/get")
+    ///     .query_raw("my_query", "pre-encoded%20value");
+    /// ```
+    pub fn query_raw<K, V>(mut self, key: K, value: V) -> Self
+    where
+        K: AsRef<str>,
+        V: AsRef<str>,
+    {
+        self.query_extra
+            .push(QueryParam::new_key_value_raw(key.as_ref(), value.as_ref()));
+        self
+    }
+
     /// Set multi query parameters.
     ///
-    /// For example, to set `?format=json&dest=/login`
+    /// Both keys and values are percent-encoded according to the URL specification.
+    ///
+    /// For example, to set `?format=json&dest=%2Flogin`
     ///
     /// ```
     /// let query = vec![
@@ -182,7 +216,41 @@ impl<Any> RequestBuilder<Any> {
         );
         self
     }
-
+    /// Set multi query parameters without percent-encoding.
+    ///
+    /// Neither keys nor values are percent-encoded, which allows you to use
+    /// pre-encoded values or bypass encoding.
+    ///
+    /// **Important note**: When using this method, you must ensure that your
+    /// query parameters don't contain characters that would make the URI invalid,
+    /// such as spaces or control characters. You are responsible for any pre-encoding
+    /// needed for URI validity. If you're unsure, use the regular `query_pairs()` method instead.
+    ///
+    /// For example, to set `?format=json&dest=/login` without encoding:
+    ///
+    /// ```
+    /// let query = vec![
+    ///     ("format", "json"),
+    ///     ("dest", "/login"),
+    /// ];
+    ///
+    /// let response = ureq::get("http://httpbin.org/get")
+    ///    .query_pairs_raw(query)
+    ///    .call()?;
+    /// # Ok::<_, ureq::Error>(())
+    /// ```
+    pub fn query_pairs_raw<I, K, V>(mut self, iter: I) -> Self
+    where
+        I: IntoIterator<Item = (K, V)>,
+        K: AsRef<str>,
+        V: AsRef<str>,
+    {
+        self.query_extra.extend(
+            iter.into_iter()
+                .map(|(k, v)| QueryParam::new_key_value_raw(k.as_ref(), v.as_ref())),
+        );
+        self
+    }
     /// Overrides the URI for this request.
     ///
     /// Typically this is set via `ureq::get(<uri>)` or `Agent::get(<uri>)`. This
@@ -663,6 +731,65 @@ mod test {
         assert!(matches!(err, Error::Http(_)));
     }
 
+    #[test]
+    fn query_with_encoding() {
+        let request = Request::builder()
+            .uri("https://foo.bar/path")
+            .body(())
+            .unwrap();
+
+        // Test that single quotes and spaces are encoded
+        let amended = amend_request_query(
+            request,
+            vec![QueryParam::new_key_value("key", "value with 'quotes'")].into_iter(),
+        );
+
+        assert_eq!(
+            amended.uri(),
+            "https://foo.bar/path?key=value%20with%20%27quotes%27"
+        );
+    }
+
+    #[test]
+    fn query_raw_without_encoding() {
+        let request = Request::builder()
+            .uri("https://foo.bar/path")
+            .body(())
+            .unwrap();
+
+        // Test that raw values remain unencoded (using URI-valid characters)
+        let amended = amend_request_query(
+            request,
+            vec![QueryParam::new_key_value_raw("key", "value-with-'quotes'")].into_iter(),
+        );
+
+        assert_eq!(
+            amended.uri(),
+            "https://foo.bar/path?key=value-with-'quotes'"
+        );
+    }
+    #[test]
+    fn encoded_and_raw_combined() {
+        let request = Request::builder()
+            .uri("https://foo.bar/path")
+            .body(())
+            .unwrap();
+
+        // Test combination of encoded and unencoded parameters
+        let amended = amend_request_query(
+            request,
+            vec![
+                QueryParam::new_key_value("encoded", "value with spaces"),
+                QueryParam::new_key_value_raw("raw", "value-without-spaces"),
+            ]
+            .into_iter(),
+        );
+
+        assert_eq!(
+            amended.uri(),
+            "https://foo.bar/path?encoded=value%20with%20spaces&raw=value-without-spaces"
+        );
+    }
     #[test]
     fn debug_print_without_body() {
         let call = crate::get("https://foo/bar");
