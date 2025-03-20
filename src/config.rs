@@ -34,7 +34,7 @@ pub(crate) mod typestate {
     pub struct RequestScope<Any>(pub(crate) RequestBuilder<Any>);
     /// Typestate for for [`Config`] when configured via [`Agent::configure_request`].
     pub struct HttpCrateScope<S: AsSendBody>(pub(crate) http::Request<S>);
-    /// Typestate for for [`Config`] when configured via [`request::with_agent`].
+    /// Typestate for for [`Config`] when configured via [`crate::RequestExt::with_agent`].
     pub struct RequestExtScope<'a, S: AsSendBody>(pub(crate) WithAgent<'a, S>);
 
     impl private::ConfigScope for AgentScope {
