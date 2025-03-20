@@ -169,7 +169,7 @@ impl Deref for AgentRef<'_> {
     fn deref(&self) -> &Self::Target {
         match self {
             AgentRef::Owned(agent) => agent,
-            AgentRef::Borrowed(agent) => &*agent,
+            AgentRef::Borrowed(agent) => agent,
         }
     }
 }
