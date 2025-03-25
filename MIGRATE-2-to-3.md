@@ -48,3 +48,12 @@ for the response body.
 
 [http crate]: https://crates.io/crates/http
 [http-related crates]: https://crates.io/crates/http/reverse_dependencies
+
+## Features
+
+- `proxy-from-env` is the default now. CONNECT-proxy needs no extra feature flag, but `socks-proxy` does.
+- `native-certs` is built-in. In the `TlsConfig`, which you can set on agent or request level, you have three choices
+  via the [`RootCerts`](https://docs.rs/ureq/3.0.6/ureq/tls/enum.RootCerts.html#variant.PlatformVerifier) enum.
+  `Specific` when you want to set the root certs yourself, `PlatformVerifier`, which for rustls delegates to the system,
+  and for native-tls means using the root certs native-tls is picking up (this is what you want), and finally `WebPki`,
+  which uses the root certs bundled with ureq.
