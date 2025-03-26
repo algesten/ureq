@@ -49,13 +49,13 @@ pub(crate) fn run(
 
     let mut timings = CallTimings::new(timeouts, CurrentTime::default());
 
-    let mut flow = Call::new(request)?;
+    let mut call = Call::new(request)?;
 
     if force_send_body {
-        flow.send_body_despite_method();
+        call.send_body_despite_method();
     }
 
-    flow.allow_non_standard_methods(config.allow_non_standard_methods());
+    call.allow_non_standard_methods(config.allow_non_standard_methods());
 
     let (response, handler) = loop {
         let timeout = timings.next_timeout(Timeout::Global);
@@ -67,33 +67,33 @@ pub(crate) fn run(
             return Err(Error::Timeout(Timeout::Global));
         }
 
-        match flow_run(
+        match call_run(
             agent,
             &config,
             request_level,
-            flow,
+            call,
             &mut body,
             redirect_count,
             &mut redirect_history,
             &mut timings,
         )? {
             // Follow redirect
-            FlowResult::Redirect(rflow, rtimings) => {
+            CallResult::Redirect(rcall, rtimings) => {
                 redirect_count += 1;
 
-                flow = handle_redirect(rflow, &config)?;
+                call = handle_redirect(rcall, &config)?;
                 timings = rtimings.new_call();
             }
 
             // Return response
-            FlowResult::Response(response, handler) => break (response, handler),
+            CallResult::Response(response, handler) => break (response, handler),
         }
     };
 
     let (parts, _) = response.into_parts();
 
     let recv_body_mode = handler
-        .flow
+        .call
         .as_ref()
         .map(|f| f.body_mode())
         .unwrap_or(BodyMode::NoBody);
@@ -115,54 +115,54 @@ pub(crate) fn run(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn flow_run(
+fn call_run(
     agent: &Agent,
     config: &Config,
     request_level: bool,
-    mut flow: Call<Prepare>,
+    mut call: Call<Prepare>,
     body: &mut SendBody,
     redirect_count: u32,
     redirect_history: &mut Option<Vec<Uri>>,
     timings: &mut CallTimings,
-) -> Result<FlowResult, Error> {
-    let uri = flow.uri().clone();
-    debug!("{} {:?}", flow.method(), &DebugUri(flow.uri()));
+) -> Result<CallResult, Error> {
+    let uri = call.uri().clone();
+    debug!("{} {:?}", call.method(), &DebugUri(call.uri()));
 
     if config.https_only() && uri.scheme() != Some(&Scheme::HTTPS) {
         return Err(Error::RequireHttpsOnly(uri.to_string()));
     }
 
-    add_headers(&mut flow, agent, config, body, &uri)?;
+    add_headers(&mut call, agent, config, body, &uri)?;
 
     let mut connection = connect(agent, config, request_level, &uri, timings)?;
 
-    let mut flow = flow.proceed();
+    let mut call = call.proceed();
 
     if log_enabled!(log::Level::Debug) {
-        let headers = flow.headers_map()?;
+        let headers = call.headers_map()?;
 
         let r = DebugRequest {
-            method: flow.method(),
-            uri: flow.uri(),
-            version: flow.version(),
+            method: call.method(),
+            uri: call.uri(),
+            version: call.version(),
             headers,
         };
         debug!("{:?}", r);
     }
 
-    let flow = match send_request(flow, &mut connection, timings)? {
-        SendRequestResult::Await100(flow) => match await_100(flow, &mut connection, timings)? {
-            Await100Result::SendBody(flow) => send_body(flow, body, &mut connection, timings)?,
-            Await100Result::RecvResponse(flow) => flow,
+    let call = match send_request(call, &mut connection, timings)? {
+        SendRequestResult::Await100(call) => match await_100(call, &mut connection, timings)? {
+            Await100Result::SendBody(call) => send_body(call, body, &mut connection, timings)?,
+            Await100Result::RecvResponse(call) => call,
         },
-        SendRequestResult::SendBody(flow) => send_body(flow, body, &mut connection, timings)?,
-        SendRequestResult::RecvResponse(flow) => flow,
+        SendRequestResult::SendBody(call) => send_body(call, body, &mut connection, timings)?,
+        SendRequestResult::RecvResponse(call) => call,
     };
 
     let is_following_redirects = redirect_count < config.max_redirects();
 
     let (mut response, response_result) = recv_response(
-        flow,
+        call,
         &mut connection,
         config,
         timings,
@@ -194,10 +194,10 @@ fn flow_run(
     response.extensions_mut().insert(ResponseUri(uri));
 
     let ret = match response_result {
-        RecvResponseResult::RecvBody(flow) => {
+        RecvResponseResult::RecvBody(call) => {
             let timings = mem::take(timings);
             let mut handler = BodyHandler {
-                flow: Some(flow),
+                call: Some(call),
                 connection: Some(connection),
                 timings,
                 ..Default::default()
@@ -205,56 +205,56 @@ fn flow_run(
 
             if response.status().is_redirection() {
                 if is_following_redirects {
-                    let flow = handler.consume_redirect_body()?;
+                    let call = handler.consume_redirect_body()?;
 
-                    FlowResult::Redirect(flow, handler.timings)
+                    CallResult::Redirect(call, handler.timings)
                 } else if config.max_redirects_do_error() {
                     return Err(Error::TooManyRedirects);
                 } else {
-                    FlowResult::Response(response, handler)
+                    CallResult::Response(response, handler)
                 }
             } else {
-                FlowResult::Response(response, handler)
+                CallResult::Response(response, handler)
             }
         }
-        RecvResponseResult::Redirect(flow) => {
-            cleanup(connection, flow.must_close_connection(), timings.now());
+        RecvResponseResult::Redirect(call) => {
+            cleanup(connection, call.must_close_connection(), timings.now());
 
             if is_following_redirects {
-                FlowResult::Redirect(flow, mem::take(timings))
+                CallResult::Redirect(call, mem::take(timings))
             } else if config.max_redirects_do_error() {
                 return Err(Error::TooManyRedirects);
             } else {
-                FlowResult::Response(response, BodyHandler::default())
+                CallResult::Response(response, BodyHandler::default())
             }
         }
-        RecvResponseResult::Cleanup(flow) => {
-            cleanup(connection, flow.must_close_connection(), timings.now());
-            FlowResult::Response(response, BodyHandler::default())
+        RecvResponseResult::Cleanup(call) => {
+            cleanup(connection, call.must_close_connection(), timings.now());
+            CallResult::Response(response, BodyHandler::default())
         }
     };
 
     Ok(ret)
 }
 
-/// Return type of [`flow_run`].
+/// Return type of [`call_run`].
 #[allow(clippy::large_enum_variant)]
-enum FlowResult {
-    /// Flow resulted in a redirect.
+enum CallResult {
+    /// Call resulted in a redirect.
     Redirect(Call<Redirect>, CallTimings),
 
-    /// Flow resulted in a response.
+    /// Call resulted in a response.
     Response(Response<()>, BodyHandler),
 }
 
 fn add_headers(
-    flow: &mut Call<Prepare>,
+    call: &mut Call<Prepare>,
     agent: &Agent,
     config: &Config,
     body: &SendBody,
     uri: &Uri,
 ) -> Result<(), Error> {
-    let headers = flow.headers();
+    let headers = call.headers();
 
     let send_body_mode = if headers.has_send_body_mode() {
         None
@@ -276,7 +276,7 @@ fn add_headers(
         if !value.is_empty() {
             let value = HeaderValue::from_str(&value)
                 .map_err(|_| Error::CookieValue("Cookie value is an invalid http-header"))?;
-            flow.header(header::COOKIE, value)?;
+            call.header(header::COOKIE, value)?;
         }
     }
 
@@ -300,7 +300,7 @@ fn add_headers(
                 // unwrap is ok because above ACCEPTS will produce a valid value,
                 // or the value is user provided in which case it must be valid.
                 let value = HeaderValue::from_str(v).unwrap();
-                flow.header(header::ACCEPT_ENCODING, value)?;
+                call.header(header::ACCEPT_ENCODING, value)?;
             }
         }
     }
@@ -309,11 +309,11 @@ fn add_headers(
         match send_body_mode {
             BodyMode::LengthDelimited(v) => {
                 let value = HeaderValue::from(v);
-                flow.header(header::CONTENT_LENGTH, value)?;
+                call.header(header::CONTENT_LENGTH, value)?;
             }
             BodyMode::Chunked => {
                 let value = HeaderValue::from_static("chunked");
-                flow.header(header::TRANSFER_ENCODING, value)?;
+                call.header(header::TRANSFER_ENCODING, value)?;
             }
             _ => {}
         }
@@ -324,7 +324,7 @@ fn add_headers(
         // set bad values, it's not really ureq's problem.
         if let Some(v) = config.user_agent().as_str(DEFAULT_USER_AGENT) {
             let value = HeaderValue::from_str(v).unwrap();
-            flow.header(header::USER_AGENT, value)?;
+            call.header(header::USER_AGENT, value)?;
         }
     }
 
@@ -333,7 +333,7 @@ fn add_headers(
         // set bad values, it's not really ureq's problem.
         if let Some(v) = config.accept().as_str("*/*") {
             let value = HeaderValue::from_str(v).unwrap();
-            flow.header(header::ACCEPT, value)?;
+            call.header(header::ACCEPT, value)?;
         }
     }
 
@@ -389,17 +389,17 @@ fn connect(
 }
 
 fn send_request(
-    mut flow: Call<SendRequest>,
+    mut call: Call<SendRequest>,
     connection: &mut Connection,
     timings: &mut CallTimings,
 ) -> Result<SendRequestResult, Error> {
     loop {
-        if flow.can_proceed() {
+        if call.can_proceed() {
             break;
         }
 
         let buffers = connection.buffers();
-        let amount = flow.write(buffers.output())?;
+        let amount = call.write(buffers.output())?;
         let timeout = timings.next_timeout(Timeout::SendRequest);
         connection.transmit_output(amount, timeout)?;
     }
@@ -407,18 +407,18 @@ fn send_request(
     timings.record_time(Timeout::SendRequest);
 
     // The request might be misconfigured.
-    let flow = flow.proceed()?;
+    let call = call.proceed()?;
 
     // We checked can_proceed() above, this unwrap is fine.
-    Ok(flow.unwrap())
+    Ok(call.unwrap())
 }
 
 fn await_100(
-    mut flow: Call<Await100>,
+    mut call: Call<Await100>,
     connection: &mut Connection,
     timings: &mut CallTimings,
 ) -> Result<Await100Result, Error> {
-    while flow.can_keep_await_100() {
+    while call.can_keep_await_100() {
         let timeout = timings.next_timeout(Timeout::Await100);
 
         if timeout.after.is_zero() {
@@ -433,7 +433,7 @@ fn await_100(
                     return Err(Error::disconnected());
                 }
 
-                let amount = flow.try_read_100(input)?;
+                let amount = call.try_read_100(input)?;
                 if amount > 0 {
                     connection.consume_input(amount);
                     break;
@@ -451,19 +451,19 @@ fn await_100(
     timings.record_time(Timeout::Await100);
 
     // A misconfigured request might surface here.
-    let flow = flow.proceed()?;
+    let call = call.proceed()?;
 
-    Ok(flow)
+    Ok(call)
 }
 
 fn send_body(
-    mut flow: Call<SendBodyState>,
+    mut call: Call<SendBodyState>,
     body: &mut SendBody,
     connection: &mut Connection,
     timings: &mut CallTimings,
 ) -> Result<Call<RecvResponse>, Error> {
     loop {
-        if flow.can_proceed() {
+        if call.can_proceed() {
             break;
         }
 
@@ -473,23 +473,23 @@ fn send_body(
 
         let input_len = tmp.len();
 
-        let input_fitting_in_output = flow.calculate_max_input(output.len());
+        let input_fitting_in_output = call.calculate_max_input(output.len());
         let max_input = input_len.min(input_fitting_in_output);
 
-        let output_used = if !flow.is_chunked() {
+        let output_used = if !call.is_chunked() {
             // For non-chunked, The body can be written directly to the output.
-            // This optimizes away a memcopy if we were to go via flow.write().
+            // This optimizes away a memcopy if we were to go via call.write().
             let output_used = body.read(output)?;
 
-            // Size checking is still in the flow.
-            flow.consume_direct_write(output_used)?;
+            // Size checking is still in the call.
+            call.consume_direct_write(output_used)?;
 
             output_used
         } else {
             let tmp = &mut tmp[..max_input];
             let n = body.read(tmp)?;
 
-            let (input_used, output_used) = flow.write(&tmp[..n], output)?;
+            let (input_used, output_used) = call.write(&tmp[..n], output)?;
 
             // Since output is "a bit" larger than the input (compensate for chunk ovexrhead),
             // the entire input we read from the body should also be shipped to the output.
@@ -503,11 +503,11 @@ fn send_body(
     }
 
     timings.record_time(Timeout::SendBody);
-    Ok(flow.proceed().unwrap())
+    Ok(call.proceed().unwrap())
 }
 
 fn recv_response(
-    mut flow: Call<RecvResponse>,
+    mut call: Call<RecvResponse>,
     connection: &mut Connection,
     config: &Config,
     timings: &mut CallTimings,
@@ -533,7 +533,7 @@ fn recv_response(
         // 302 responses.
         let allow_partial_redirect = !cookies_enabled && is_following_redirects;
 
-        let (amount, maybe_response) = flow.try_response(input, allow_partial_redirect)?;
+        let (amount, maybe_response) = call.try_response(input, allow_partial_redirect)?;
 
         let check_size = if maybe_response.is_some() {
             // We got a parsed response, ensure the size is within
@@ -555,7 +555,7 @@ fn recv_response(
         connection.consume_input(amount);
 
         if let Some(response) = maybe_response {
-            assert!(flow.can_proceed());
+            assert!(call.can_proceed());
             break response;
         } else if !made_progress {
             return Err(Error::disconnected());
@@ -563,22 +563,22 @@ fn recv_response(
     };
 
     timings.record_time(Timeout::RecvResponse);
-    Ok((response, flow.proceed().unwrap()))
+    Ok((response, call.proceed().unwrap()))
 }
 
-fn handle_redirect(mut flow: Call<Redirect>, config: &Config) -> Result<Call<Prepare>, Error> {
-    let maybe_new_flow = flow.as_new_call(config.redirect_auth_headers())?;
-    let status = flow.status();
+fn handle_redirect(mut call: Call<Redirect>, config: &Config) -> Result<Call<Prepare>, Error> {
+    let maybe_new_call = call.as_new_call(config.redirect_auth_headers())?;
+    let status = call.status();
 
-    if let Some(flow) = maybe_new_flow {
+    if let Some(call) = maybe_new_call {
         debug!(
             "Redirect ({}): {} {:?}",
             status,
-            flow.method(),
-            DebugUri(flow.uri())
+            call.method(),
+            DebugUri(call.uri())
         );
 
-        Ok(flow)
+        Ok(call)
     } else {
         Err(Error::RedirectFailed)
     }
@@ -594,7 +594,7 @@ fn cleanup(connection: Connection, must_close: bool, now: Instant) {
 
 #[derive(Default)]
 pub(crate) struct BodyHandler {
-    flow: Option<Call<RecvBody>>,
+    call: Option<Call<RecvBody>>,
     connection: Option<Connection>,
     timings: CallTimings,
     remote_closed: bool,
@@ -603,18 +603,18 @@ pub(crate) struct BodyHandler {
 
 impl BodyHandler {
     fn do_read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
-        let (Some(flow), Some(connection), timings) =
-            (&mut self.flow, &mut self.connection, &mut self.timings)
+        let (Some(call), Some(connection), timings) =
+            (&mut self.call, &mut self.connection, &mut self.timings)
         else {
             return Ok(0);
         };
 
         loop {
-            let body_fulfilled = match flow.body_mode() {
+            let body_fulfilled = match call.body_mode() {
                 BodyMode::NoBody => unreachable!("must be a BodyMode for BodyHandler"),
                 // These modes are fulfilled by either reaching the content-length or
                 // receiving an end chunk delimiter.
-                BodyMode::LengthDelimited(_) | BodyMode::Chunked => flow.can_proceed(),
+                BodyMode::LengthDelimited(_) | BodyMode::Chunked => call.can_proceed(),
                 // This mode can only end once remote closes
                 BodyMode::CloseDelimited => false,
             };
@@ -629,7 +629,7 @@ impl BodyHandler {
             // First try to use input already buffered
             if has_buffered_input {
                 let input = connection.buffers().input();
-                let (input_used, output_used) = flow.read(input, buf)?;
+                let (input_used, output_used) = call.read(input, buf)?;
                 connection.consume_input(input_used);
 
                 if output_used > 0 {
@@ -667,7 +667,7 @@ impl BodyHandler {
             let input = connection.buffers().input();
             let input_ended = input.is_empty();
 
-            let (input_used, output_used) = flow.read(input, buf)?;
+            let (input_used, output_used) = call.read(input, buf)?;
             connection.consume_input(input_used);
 
             if output_used > 0 {
@@ -690,16 +690,16 @@ impl BodyHandler {
     fn ended(&mut self) -> Result<(), Error> {
         self.timings.record_time(Timeout::RecvBody);
 
-        let flow = self.flow.take().expect("ended() called with body");
+        let call = self.call.take().expect("ended() called with body");
 
-        if !flow.can_proceed() {
+        if !call.can_proceed() {
             return Err(Error::disconnected());
         }
 
-        let must_close_connection = match flow.proceed().unwrap() {
-            RecvBodyResult::Redirect(flow) => {
-                let c = flow.must_close_connection();
-                self.redirect = Some(Box::new(flow));
+        let must_close_connection = match call.proceed().unwrap() {
+            RecvBodyResult::Redirect(call) => {
+                let c = call.must_close_connection();
+                self.redirect = Some(Box::new(call));
                 c
             }
             RecvBodyResult::Cleanup(v) => v.must_close_connection(),
