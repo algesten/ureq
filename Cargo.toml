@@ -56,8 +56,8 @@ _doc = ["rustls?/aws-lc-rs"]
 
 [dependencies]
 base64 = "0.22.1"
-ureq-proto = "0.3.5"
-# ureq-proto = { path = "../ureq-proto" }
+ureq-proto = { version = "0.4.0", default-features = false, features = ["client"] }
+# ureq-proto = { path = "../ureq-proto", default-features = false, features = ["client"] }
 log = "0.4.25"
 utf-8 = "0.7.6"
 percent-encoding = "2.3.1"
