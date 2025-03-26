@@ -14,7 +14,7 @@ use crate::{Agent, AsSendBody, Proxy, RequestBuilder};
 #[cfg(feature = "_tls")]
 use crate::tls::TlsConfig;
 
-pub use ureq_proto::client::flow::RedirectAuthHeaders;
+pub use ureq_proto::client::RedirectAuthHeaders;
 
 mod private {
     use super::Config;

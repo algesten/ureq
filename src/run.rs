@@ -3,10 +3,10 @@ use std::{io, mem};
 
 use http::uri::Scheme;
 use http::{header, HeaderValue, Request, Response, Uri};
-use ureq_proto::client::flow::state::{Await100, RecvBody, RecvResponse, Redirect, SendRequest};
-use ureq_proto::client::flow::state::{Prepare, SendBody as SendBodyState};
-use ureq_proto::client::flow::{Await100Result, RecvBodyResult};
-use ureq_proto::client::flow::{RecvResponseResult, SendRequestResult};
+use ureq_proto::client::state::{Await100, RecvBody, RecvResponse, Redirect, SendRequest};
+use ureq_proto::client::state::{Prepare, SendBody as SendBodyState};
+use ureq_proto::client::{Await100Result, RecvBodyResult};
+use ureq_proto::client::{RecvResponseResult, SendRequestResult};
 use ureq_proto::BodyMode;
 
 use crate::body::ResponseInfo;
@@ -21,7 +21,7 @@ use crate::transport::ConnectionDetails;
 use crate::util::{DebugRequest, DebugResponse, DebugUri, HeaderMapExt, UriExt};
 use crate::{Agent, Body, Error, SendBody, Timeout};
 
-type Flow<T> = ureq_proto::client::flow::Flow<(), T>;
+type Call<T> = ureq_proto::client::Call<T>;
 
 /// Run a request.
 ///
@@ -49,7 +49,7 @@ pub(crate) fn run(
 
     let mut timings = CallTimings::new(timeouts, CurrentTime::default());
 
-    let mut flow = Flow::new(request)?;
+    let mut flow = Call::new(request)?;
 
     if force_send_body {
         flow.send_body_despite_method();
@@ -119,7 +119,7 @@ fn flow_run(
     agent: &Agent,
     config: &Config,
     request_level: bool,
-    mut flow: Flow<Prepare>,
+    mut flow: Call<Prepare>,
     body: &mut SendBody,
     redirect_count: u32,
     redirect_history: &mut Option<Vec<Uri>>,
@@ -241,14 +241,14 @@ fn flow_run(
 #[allow(clippy::large_enum_variant)]
 enum FlowResult {
     /// Flow resulted in a redirect.
-    Redirect(Flow<Redirect>, CallTimings),
+    Redirect(Call<Redirect>, CallTimings),
 
     /// Flow resulted in a response.
     Response(Response<()>, BodyHandler),
 }
 
 fn add_headers(
-    flow: &mut Flow<Prepare>,
+    flow: &mut Call<Prepare>,
     agent: &Agent,
     config: &Config,
     body: &SendBody,
@@ -389,10 +389,10 @@ fn connect(
 }
 
 fn send_request(
-    mut flow: Flow<SendRequest>,
+    mut flow: Call<SendRequest>,
     connection: &mut Connection,
     timings: &mut CallTimings,
-) -> Result<SendRequestResult<()>, Error> {
+) -> Result<SendRequestResult, Error> {
     loop {
         if flow.can_proceed() {
             break;
@@ -414,10 +414,10 @@ fn send_request(
 }
 
 fn await_100(
-    mut flow: Flow<Await100>,
+    mut flow: Call<Await100>,
     connection: &mut Connection,
     timings: &mut CallTimings,
-) -> Result<Await100Result<()>, Error> {
+) -> Result<Await100Result, Error> {
     while flow.can_keep_await_100() {
         let timeout = timings.next_timeout(Timeout::Await100);
 
@@ -457,11 +457,11 @@ fn await_100(
 }
 
 fn send_body(
-    mut flow: Flow<SendBodyState>,
+    mut flow: Call<SendBodyState>,
     body: &mut SendBody,
     connection: &mut Connection,
     timings: &mut CallTimings,
-) -> Result<Flow<RecvResponse>, Error> {
+) -> Result<Call<RecvResponse>, Error> {
     loop {
         if flow.can_proceed() {
             break;
@@ -507,12 +507,12 @@ fn send_body(
 }
 
 fn recv_response(
-    mut flow: Flow<RecvResponse>,
+    mut flow: Call<RecvResponse>,
     connection: &mut Connection,
     config: &Config,
     timings: &mut CallTimings,
     is_following_redirects: bool,
-) -> Result<(Response<()>, RecvResponseResult<()>), Error> {
+) -> Result<(Response<()>, RecvResponseResult), Error> {
     let response = loop {
         let timeout = timings.next_timeout(Timeout::RecvResponse);
         let made_progress = connection.await_input(timeout)?;
@@ -566,8 +566,8 @@ fn recv_response(
     Ok((response, flow.proceed().unwrap()))
 }
 
-fn handle_redirect(mut flow: Flow<Redirect>, config: &Config) -> Result<Flow<Prepare>, Error> {
-    let maybe_new_flow = flow.as_new_flow(config.redirect_auth_headers())?;
+fn handle_redirect(mut flow: Call<Redirect>, config: &Config) -> Result<Call<Prepare>, Error> {
+    let maybe_new_flow = flow.as_new_call(config.redirect_auth_headers())?;
     let status = flow.status();
 
     if let Some(flow) = maybe_new_flow {
@@ -594,11 +594,11 @@ fn cleanup(connection: Connection, must_close: bool, now: Instant) {
 
 #[derive(Default)]
 pub(crate) struct BodyHandler {
-    flow: Option<Flow<RecvBody>>,
+    flow: Option<Call<RecvBody>>,
     connection: Option<Connection>,
     timings: CallTimings,
     remote_closed: bool,
-    redirect: Option<Box<Flow<Redirect>>>,
+    redirect: Option<Box<Call<Redirect>>>,
 }
 
 impl BodyHandler {
@@ -711,7 +711,7 @@ impl BodyHandler {
         Ok(())
     }
 
-    fn consume_redirect_body(&mut self) -> Result<Flow<Redirect>, Error> {
+    fn consume_redirect_body(&mut self) -> Result<Call<Redirect>, Error> {
         let mut buf = vec![0; 1024];
         loop {
             let amount = self.do_read(&mut buf)?;
