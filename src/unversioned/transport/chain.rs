@@ -1,59 +1,385 @@
-use std::fmt;
-use std::marker::PhantomData;
-
 use super::{Connector, Transport};
 
-/// Two chained connectors called one after another.
+/// Chain of up to 8 connectors
 ///
-/// Created by calling [`Connector::chain`] on the first connector.
-pub struct ChainedConnector<In, First, Second>(First, Second, PhantomData<In>);
+/// Can be created manually from a tuple of connectors through `ChainedConnector::new`
+#[derive(Debug, Clone)]
+pub struct ChainedConnector<Connectors>(Connectors);
 
-impl<In, First, Second> Connector<In> for ChainedConnector<In, First, Second>
+impl<Connectors> ChainedConnector<Connectors> {
+    /// Create a new chained connector that chains a tuple of connectors
+    ///
+    /// ```rust
+    /// # use ureq::unversioned::transport::{ChainedConnector, TcpConnector, ConnectProxyConnector};
+    /// let connector: ChainedConnector<(TcpConnector, ConnectProxyConnector)> =
+    ///     ChainedConnector::new((
+    ///         TcpConnector::default(),
+    ///         ConnectProxyConnector::default()
+    ///     ));
+    /// ```
+    pub fn new(connectors: Connectors) -> Self {
+        Self(connectors)
+    }
+}
+
+// Macro to generate the implementations of ChainedConnectors for various tuple length
+// macro_rules! impl_chained_connectors {
+//     (($first_ty:ident, $first_name: ident) ; $(($ty:ident, $name:ident, $prev_ty:ident)),* ; ($final_ty:ident, $final_name: ident, $pre_final_ty:ident)) => {
+//         impl<In, $first_ty, $($ty,)* $final_ty> Connector<In> for ChainedConnector<($first_ty, $($ty,)* $final_ty)>
+//         where
+//             In: Transport,
+//             $first_ty: Connector<In>,
+//             $($ty: Connector<$prev_ty::Out>,)*
+//             $final_ty: Connector<$pre_final_ty::Out>,
+//         {
+//             type Out = $final_ty::Out;
+//             fn connect(
+//                 &self,
+//                 details: &super::ConnectionDetails,
+//                 chained: Option<In>,
+//             ) -> Result<Option<Self::Out>, crate::Error> {
+//                 let ChainedConnector((
+//                     ref $first_name,
+//                     $(ref $name,)*
+//                     ref $final_name,
+//                 )) = self;
+
+//                 let out = $first_name.connect(details, chained)?;
+//                 $(
+//                     let out = $name.connect(details, out)?;
+//                 )*
+//                 $final_name.connect(details,out)
+//             }
+//         }
+
+//     };
+// }
+
+// Expansion of:
+// impl_chained_connectors!(
+//     (A, a) ;
+//     (B, b, A),
+//     (C, c, B),
+//     (D, d, C),
+//     (E, e, D),
+//     (F, f, E),
+//     (G, g, F),
+//     (H, h, G),
+//     (I, i, H);
+//     (J, j, I)
+// );
+impl<In, A, B, C, D, E, F, G, H, I, J> Connector<In>
+    for ChainedConnector<(A, B, C, D, E, F, G, H, I, J)>
 where
     In: Transport,
-    First: Connector<In>,
-    Second: Connector<First::Out>,
+    A: Connector<In>,
+    B: Connector<A::Out>,
+    C: Connector<B::Out>,
+    D: Connector<C::Out>,
+    E: Connector<D::Out>,
+    F: Connector<E::Out>,
+    G: Connector<F::Out>,
+    H: Connector<G::Out>,
+    I: Connector<H::Out>,
+    J: Connector<I::Out>,
 {
-    type Out = Second::Out;
-
+    type Out = J::Out;
     fn connect(
         &self,
         details: &super::ConnectionDetails,
         chained: Option<In>,
     ) -> Result<Option<Self::Out>, crate::Error> {
-        let f_out = self.0.connect(details, chained)?;
-        self.1.connect(details, f_out)
+        let ChainedConnector((
+            ref a,
+            ref b,
+            ref c,
+            ref d,
+            ref e,
+            ref f,
+            ref g,
+            ref h,
+            ref i,
+            ref j,
+        )) = self;
+        let out = a.connect(details, chained)?;
+        let out = b.connect(details, out)?;
+        let out = c.connect(details, out)?;
+        let out = d.connect(details, out)?;
+        let out = e.connect(details, out)?;
+        let out = f.connect(details, out)?;
+        let out = g.connect(details, out)?;
+        let out = h.connect(details, out)?;
+        let out = i.connect(details, out)?;
+        j.connect(details, out)
     }
 }
 
-impl<In, First, Second> ChainedConnector<In, First, Second> {
-    pub(crate) fn new(first: First, second: Second) -> Self {
-        ChainedConnector(first, second, PhantomData)
-    }
-}
-
-impl<In, First, Second> fmt::Debug for ChainedConnector<In, First, Second>
+// Expansion of:
+// impl_chained_connectors!(
+//     (A, a) ;
+//     (B, b, A),
+//     (C, c, B),
+//     (D, d, C),
+//     (E, e, D),
+//     (F, f, E),
+//     (G, g, F),
+//     (H, h, G);
+//     (I, i, H)
+// );
+impl<In, A, B, C, D, E, F, G, H, I> Connector<In> for ChainedConnector<(A, B, C, D, E, F, G, H, I)>
 where
     In: Transport,
-    First: Connector<In>,
-    Second: Connector<First::Out>,
+    A: Connector<In>,
+    B: Connector<A::Out>,
+    C: Connector<B::Out>,
+    D: Connector<C::Out>,
+    E: Connector<D::Out>,
+    F: Connector<E::Out>,
+    G: Connector<F::Out>,
+    H: Connector<G::Out>,
+    I: Connector<H::Out>,
 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("ChainedConnector")
-            .field(&self.0)
-            .field(&self.1)
-            .finish()
+    type Out = I::Out;
+    fn connect(
+        &self,
+        details: &super::ConnectionDetails,
+        chained: Option<In>,
+    ) -> Result<Option<Self::Out>, crate::Error> {
+        let ChainedConnector((ref a, ref b, ref c, ref d, ref e, ref f, ref g, ref h, ref i)) =
+            self;
+        let out = a.connect(details, chained)?;
+        let out = b.connect(details, out)?;
+        let out = c.connect(details, out)?;
+        let out = d.connect(details, out)?;
+        let out = e.connect(details, out)?;
+        let out = f.connect(details, out)?;
+        let out = g.connect(details, out)?;
+        let out = h.connect(details, out)?;
+        i.connect(details, out)
     }
 }
 
-impl<In, First, Second> Clone for ChainedConnector<In, First, Second>
+// Expansion of:
+// impl_chained_connectors!(
+//     (A, a) ;
+//     (B, b, A),
+//     (C, c, B),
+//     (D, d, C),
+//     (E, e, D),
+//     (F, f, E),
+//     (G, g, F);
+//     (H, h, G)
+// );
+impl<In, A, B, C, D, E, F, G, H> Connector<In> for ChainedConnector<(A, B, C, D, E, F, G, H)>
 where
     In: Transport,
-    First: Connector<In> + Clone,
-    Second: Connector<First::Out> + Clone,
+    A: Connector<In>,
+    B: Connector<A::Out>,
+    C: Connector<B::Out>,
+    D: Connector<C::Out>,
+    E: Connector<D::Out>,
+    F: Connector<E::Out>,
+    G: Connector<F::Out>,
+    H: Connector<G::Out>,
 {
-    fn clone(&self) -> Self {
-        ChainedConnector(self.0.clone(), self.1.clone(), PhantomData)
+    type Out = H::Out;
+    fn connect(
+        &self,
+        details: &super::ConnectionDetails,
+        chained: Option<In>,
+    ) -> Result<Option<Self::Out>, crate::Error> {
+        let ChainedConnector((ref a, ref b, ref c, ref d, ref e, ref f, ref g, ref h)) = self;
+        let out = a.connect(details, chained)?;
+        let out = b.connect(details, out)?;
+        let out = c.connect(details, out)?;
+        let out = d.connect(details, out)?;
+        let out = e.connect(details, out)?;
+        let out = f.connect(details, out)?;
+        let out = g.connect(details, out)?;
+        h.connect(details, out)
+    }
+}
+
+// Expansion of:
+// impl_chained_connectors!(
+//     (A, a) ;
+//     (B, b, A),
+//     (C, c, B),
+//     (D, d, C),
+//     (E, e, D),
+//     (F, f, E);
+//     (G, g, F)
+// );
+impl<In, A, B, C, D, E, F, G> Connector<In> for ChainedConnector<(A, B, C, D, E, F, G)>
+where
+    In: Transport,
+    A: Connector<In>,
+    B: Connector<A::Out>,
+    C: Connector<B::Out>,
+    D: Connector<C::Out>,
+    E: Connector<D::Out>,
+    F: Connector<E::Out>,
+    G: Connector<F::Out>,
+{
+    type Out = G::Out;
+    fn connect(
+        &self,
+        details: &super::ConnectionDetails,
+        chained: Option<In>,
+    ) -> Result<Option<Self::Out>, crate::Error> {
+        let ChainedConnector((ref a, ref b, ref c, ref d, ref e, ref f, ref g)) = self;
+        let out = a.connect(details, chained)?;
+        let out = b.connect(details, out)?;
+        let out = c.connect(details, out)?;
+        let out = d.connect(details, out)?;
+        let out = e.connect(details, out)?;
+        let out = f.connect(details, out)?;
+        g.connect(details, out)
+    }
+}
+
+// Expansion of:
+// impl_chained_connectors!(
+//     (A, a) ;
+//     (B, b, A),
+//     (C, c, B),
+//     (D, d, C),
+//     (E, e, D);
+//     (F, f, E)
+// );
+impl<In, A, B, C, D, E, F> Connector<In> for ChainedConnector<(A, B, C, D, E, F)>
+where
+    In: Transport,
+    A: Connector<In>,
+    B: Connector<A::Out>,
+    C: Connector<B::Out>,
+    D: Connector<C::Out>,
+    E: Connector<D::Out>,
+    F: Connector<E::Out>,
+{
+    type Out = F::Out;
+    fn connect(
+        &self,
+        details: &super::ConnectionDetails,
+        chained: Option<In>,
+    ) -> Result<Option<Self::Out>, crate::Error> {
+        let ChainedConnector((ref a, ref b, ref c, ref d, ref e, ref f)) = self;
+        let out = a.connect(details, chained)?;
+        let out = b.connect(details, out)?;
+        let out = c.connect(details, out)?;
+        let out = d.connect(details, out)?;
+        let out = e.connect(details, out)?;
+        f.connect(details, out)
+    }
+}
+
+// Expansion of:
+// impl_chained_connectors!(
+//     (A, a) ;
+//     (B, b, A),
+//     (C, c, B),
+//     (D, d, C);
+//     (E, e, D)
+// );
+impl<In, A, B, C, D, E> Connector<In> for ChainedConnector<(A, B, C, D, E)>
+where
+    In: Transport,
+    A: Connector<In>,
+    B: Connector<A::Out>,
+    C: Connector<B::Out>,
+    D: Connector<C::Out>,
+    E: Connector<D::Out>,
+{
+    type Out = E::Out;
+    fn connect(
+        &self,
+        details: &super::ConnectionDetails,
+        chained: Option<In>,
+    ) -> Result<Option<Self::Out>, crate::Error> {
+        let ChainedConnector((ref a, ref b, ref c, ref d, ref e)) = self;
+        let out = a.connect(details, chained)?;
+        let out = b.connect(details, out)?;
+        let out = c.connect(details, out)?;
+        let out = d.connect(details, out)?;
+        e.connect(details, out)
+    }
+}
+
+// Expansion of:
+// impl_chained_connectors!(
+//     (A, a) ;
+//     (B, b, A),
+//     (C, c, B);
+//     (D, d, C)
+// );
+impl<In, A, B, C, D> Connector<In> for ChainedConnector<(A, B, C, D)>
+where
+    In: Transport,
+    A: Connector<In>,
+    B: Connector<A::Out>,
+    C: Connector<B::Out>,
+    D: Connector<C::Out>,
+{
+    type Out = D::Out;
+    fn connect(
+        &self,
+        details: &super::ConnectionDetails,
+        chained: Option<In>,
+    ) -> Result<Option<Self::Out>, crate::Error> {
+        let ChainedConnector((ref a, ref b, ref c, ref d)) = self;
+        let out = a.connect(details, chained)?;
+        let out = b.connect(details, out)?;
+        let out = c.connect(details, out)?;
+        d.connect(details, out)
+    }
+}
+
+// Expansion of:
+// impl_chained_connectors!(
+//     (A, a) ;
+//     (B, b, A);
+//     (C, c, B)
+// );
+impl<In, A, B, C> Connector<In> for ChainedConnector<(A, B, C)>
+where
+    In: Transport,
+    A: Connector<In>,
+    B: Connector<A::Out>,
+    C: Connector<B::Out>,
+{
+    type Out = C::Out;
+    fn connect(
+        &self,
+        details: &super::ConnectionDetails,
+        chained: Option<In>,
+    ) -> Result<Option<Self::Out>, crate::Error> {
+        let ChainedConnector((ref a, ref b, ref c)) = self;
+        let out = a.connect(details, chained)?;
+        let out = b.connect(details, out)?;
+        c.connect(details, out)
+    }
+}
+
+// Expansion of:
+// impl_chained_connectors!(
+//     (A, a) ;;
+//     (B, b, A)
+// );
+impl<In, A, B> Connector<In> for ChainedConnector<(A, B)>
+where
+    In: Transport,
+    A: Connector<In>,
+    B: Connector<A::Out>,
+{
+    type Out = B::Out;
+    fn connect(
+        &self,
+        details: &super::ConnectionDetails,
+        chained: Option<In>,
+    ) -> Result<Option<Self::Out>, crate::Error> {
+        let ChainedConnector((ref a, ref b)) = self;
+        let out = a.connect(details, chained)?;
+        b.connect(details, out)
     }
 }
 
