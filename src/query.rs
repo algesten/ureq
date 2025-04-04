@@ -173,7 +173,7 @@ mod test {
 
     #[test]
     fn do_not_url_encode_some_things() {
-        const NOT_ENCODE: &str = &"!'()*-._~";
+        const NOT_ENCODE: &str = "!'()*-._~";
         let q = QueryParam::new_key_value("key", NOT_ENCODE);
         assert_eq!(q.as_str(), format!("key={}", NOT_ENCODE));
     }

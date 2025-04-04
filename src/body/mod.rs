@@ -840,8 +840,6 @@ impl<'a> io::Read for BodySourceRef<'a> {
 
 #[cfg(all(test, feature = "_test"))]
 mod test {
-    use std::iter;
-
     use crate::test::init_test_log;
     use crate::transport::set_handler;
     use crate::Error;
@@ -900,10 +898,7 @@ mod test {
         set_handler(
             "/get",
             200,
-            &[(
-                "content-type",
-                &iter::repeat('b').take(64 * 1024).collect::<String>(),
-            )],
+            &[("content-type", &"b".repeat(64 * 1024))],
             b"{}",
         );
 
