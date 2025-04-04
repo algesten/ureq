@@ -63,7 +63,7 @@ impl Proxy {
     /// # Arguments:
     ///
     /// * `proxy` - a str of format `<protocol>://<user>:<password>@<host>:port` . All parts
-    ///    except host are optional.
+    ///   except host are optional.
     ///
     /// ###  Protocols
     ///
