@@ -201,7 +201,7 @@ mod tests {
             .cloned()
             .unwrap();
 
-        assert_eq!(request_config.0.https_only(), true);
+        assert!(request_config.0.https_only());
     }
 
     #[test]
@@ -225,7 +225,7 @@ mod tests {
             .cloned()
             .unwrap();
 
-        assert_eq!(request_config.0.https_only(), false);
+        assert!(!request_config.0.https_only());
     }
 
     #[test]
@@ -251,7 +251,7 @@ mod tests {
             .cloned()
             .unwrap();
 
-        assert_eq!(request_config.0.http_status_as_error(), true);
+        assert!(request_config.0.http_status_as_error());
     }
 
     #[test]
@@ -277,7 +277,7 @@ mod tests {
             .cloned()
             .unwrap();
 
-        assert_eq!(request_config.0.http_status_as_error(), false);
+        assert!(!request_config.0.http_status_as_error());
     }
 
     #[test]
@@ -309,7 +309,7 @@ mod tests {
             .unwrap();
 
         // The request-level config is the agent defaults + the explicitly configured stuff
-        assert_eq!(request_config.0.http_status_as_error(), false);
+        assert!(!request_config.0.http_status_as_error());
         assert_eq!(
             request_config.0.timeouts().per_call,
             Some(Duration::from_secs(60))
