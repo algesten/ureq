@@ -315,6 +315,15 @@ impl Body {
         Ok(value)
     }
 
+    /// placeholder docs for json with `facet`
+    #[cfg(feature = "json")]
+    pub fn read_facet_json<T: facet::Facet>(&mut self) -> Result<T, Error> {
+        let reader = self.with_config().limit(MAX_BODY_SIZE).read_to_string()?;
+        let value: T =
+            facet_json::from_str(&reader).map_err(|e| Error::FacetJson(e.to_string()))?;
+        Ok(value)
+    }
+
     /// Read the body data with configuration.
     ///
     /// This borrows the body which gives easier use with [`http::Response::body_mut()`].

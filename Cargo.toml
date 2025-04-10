@@ -12,7 +12,7 @@ edition = "2018"
 exclude = ["/cargo_deny.sh", "/deny.toml", "/test.sh"]
 
 # MSRV
-rust-version = "1.71.1"
+# rust-version = "1.71.1"
 
 [package.metadata.docs.rs]
 features = ["rustls", "platform-verifier", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset", "json", "_test", "_doc"]
@@ -30,7 +30,7 @@ cookies = ["dep:cookie_store", "_url"]
 gzip = ["dep:flate2"]
 brotli = ["dep:brotli-decompressor"]
 charset = ["dep:encoding_rs"]
-json = ["dep:serde", "dep:serde_json", "cookie_store?/serde_json"]
+json = ["dep:serde", "dep:serde_json", "dep:facet", "dep:facet-json", "cookie_store?/serde_json"]
 
 ######## UNSTABLE FEATURES.
 # Might be removed or changed in a minor version.
@@ -88,6 +88,8 @@ encoding_rs = { version = "0.8.34", optional = true }
 
 serde = { version = "1.0.138", optional = true, default-features = false, features = ["std"] }
 serde_json = { version = "1.0.120", optional = true, default-features = false, features = ["std"] }
+facet-json = { version = "0.1.7", optional = true }
+facet = { version = "0.1.10", optional = true }
 
 [dev-dependencies]
 env_logger = "0.11.7"
