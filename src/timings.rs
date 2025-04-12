@@ -1,4 +1,5 @@
 use std::fmt;
+use std::iter::once;
 use std::sync::Arc;
 
 use crate::config::Timeouts;
@@ -61,7 +62,9 @@ impl Timeout {
     /// All timeouts to check
     fn timeouts_to_check(&self) -> impl Iterator<Item = Timeout> {
         // Always check Global and PerCall
-        self.preceeding().chain([Timeout::Global, Timeout::PerCall])
+        once(*self)
+            .chain(self.preceeding())
+            .chain([Timeout::Global, Timeout::PerCall])
     }
 
     /// Get the corresponding configured timeout
@@ -144,17 +147,22 @@ impl CallTimings {
     }
 
     pub(crate) fn next_timeout(&self, timeout: Timeout) -> NextTimeout {
+        let now = self.now();
+
         let (reason, at) = timeout
             .timeouts_to_check()
             .filter_map(|to_check| {
-                let time = self.time_of(to_check)?;
+                let time = if to_check == timeout {
+                    now
+                } else {
+                    self.time_of(to_check)?
+                };
                 let timeout = to_check.configured_timeout(&self.timeouts)?;
                 Some((to_check, time + timeout))
             })
             .min_by(|a, b| a.1.cmp(&b.1))
             .unwrap_or((Timeout::Global, Instant::NotHappening));
 
-        let now = self.now();
         let after = at.duration_since(now);
 
         NextTimeout { after, reason }
