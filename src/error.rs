@@ -150,6 +150,12 @@ pub enum Error {
     #[cfg(feature = "json")]
     Json(serde_json::Error),
 
+    /// facet JSON error.
+    /// 
+    /// facet currently has no publicly visible error type.
+    #[cfg(feature = "json")]
+    FacetJson(String),
+
     /// Attempt to connect to a CONNECT proxy failed.
     ConnectProxyFailed(String),
 
@@ -259,6 +265,8 @@ impl fmt::Display for Error {
             Error::Decompress(x, y) => write!(f, "{} decompression failed: {}", x, y),
             #[cfg(feature = "json")]
             Error::Json(v) => write!(f, "json: {}", v),
+            #[cfg(feature = "json")]
+            Error::FacetJson(v) => write!(f, "facet-json: {}", v),
             Error::ConnectProxyFailed(v) => write!(f, "CONNECT proxy failed: {}", v),
             Error::TlsRequired => write!(f, "TLS required, but transport is unsecured"),
             Error::Other(v) => write!(f, "other: {}", v),
