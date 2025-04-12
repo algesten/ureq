@@ -1,5 +1,9 @@
 # Unreleased
 
+  * Fix bug making timeout settings not working (#1051)
+  * Big refactor of ureq-proto (#1042)
+  * Extension trait for http::Request allowing agent config (#1011)
+
 # 3.0.10
 
   * Bump rustls-platform-verifier to 0.5.0
