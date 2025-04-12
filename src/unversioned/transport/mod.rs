@@ -256,13 +256,13 @@ impl<'a> ConnectionDetails<'a> {
 ///
 /// For receiving data, the order of calls are:
 ///
-/// 1. [`Transport::await_input()`]
+/// 1. [`Transport::maybe_await_input()`]
 /// 2. The transport impl itself uses [`Buffers::input_append_buf()`] to fill a number
 ///    of bytes from the underlying transport and use [`Buffers::input_appended()`] to
 ///    tell the buffer how much been filled.
 /// 3. [`Transport::buffers()`] to obtain the buffers
 /// 4. [`Buffers::input()`] followed by [`Buffers::input_consume()`]. It's important to retain the
-///    unconsumed bytes for the next call to `await_input()`. This is handled by [`LazyBuffers`].
+///    unconsumed bytes for the next call to `maybe_await_input()`. This is handled by [`LazyBuffers`].
 ///    It's important to call [`Buffers::input_consume()`] also with 0 consumed bytes since that's
 ///    how we keep track of whether the input is making progress.
 ///
@@ -278,9 +278,27 @@ pub trait Transport: Debug + Send + Sync + 'static {
     /// If that happens the transport must return an [`Error::Timeout`] instance.
     fn transmit_output(&mut self, amount: usize, timeout: NextTimeout) -> Result<(), Error>;
 
-    /// Await input from the transport. The transport should internally use
-    /// [`Buffers::input_append_buf()`] followed by [`Buffers::input_appended()`] to
-    /// store the incoming data.
+    /// Await input from the transport.
+    ///
+    /// Early returns if [`Buffers::can_use_input()`], return true.
+    #[doc(hidden)]
+    fn maybe_await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
+        // If we already have input available, we don't wait.
+        // This might be false even when there is input in the buffer
+        // because the last use of the buffer made no progress.
+        // Example: we might want to read the _entire_ http request headers,
+        //          not partially.
+        if self.buffers().can_use_input() {
+            return Ok(true);
+        }
+
+        self.await_input(timeout)
+    }
+
+    /// Wait for input and fill the buffer.
+    ///
+    /// 1. Use [`Buffers::input_append_buf()`] to fill the buffer
+    /// 2. Followed by [`Buffers::input_appended()`] to report how many bytes were read.
     fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error>;
 
     /// Tell whether this transport is still functional. This must provide an accurate answer

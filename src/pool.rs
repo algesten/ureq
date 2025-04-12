@@ -103,8 +103,8 @@ impl Connection {
         self.transport.transmit_output(amount, timeout)
     }
 
-    pub fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
-        self.transport.await_input(timeout)
+    pub fn maybe_await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
+        self.transport.maybe_await_input(timeout)
     }
 
     pub fn consume_input(&mut self, amount: usize) {

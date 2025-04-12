@@ -231,10 +231,6 @@ impl Transport for NativeTlsTransport {
     }
 
     fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
-        if self.buffers.can_use_input() {
-            return Ok(true);
-        }
-
         let stream = self.stream.handshaken()?;
         stream.get_mut().set_timeout(timeout);
 

@@ -56,7 +56,7 @@ impl<T: Transport> TransportAdapter<T> {
 impl<T: Transport> io::Read for TransportAdapter<T> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.transport
-            .await_input(self.timeout)
+            .maybe_await_input(self.timeout)
             .map_err(|e| e.into_io())?;
         let input = self.transport.buffers().input();
 

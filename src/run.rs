@@ -426,7 +426,7 @@ fn await_100(
             break;
         }
 
-        match connection.await_input(timeout) {
+        match connection.maybe_await_input(timeout) {
             Ok(_) => {
                 let input = connection.buffers().input();
                 if input.is_empty() {
@@ -515,7 +515,7 @@ fn recv_response(
 ) -> Result<(Response<()>, RecvResponseResult), Error> {
     let response = loop {
         let timeout = timings.next_timeout(Timeout::RecvResponse);
-        let made_progress = connection.await_input(timeout)?;
+        let made_progress = connection.maybe_await_input(timeout)?;
 
         let input = connection.buffers().input();
 
@@ -650,7 +650,7 @@ impl BodyHandler {
 
             let timeout = timings.next_timeout(Timeout::RecvBody);
 
-            let made_progress = match connection.await_input(timeout) {
+            let made_progress = match connection.maybe_await_input(timeout) {
                 Ok(v) => v,
                 Err(Error::Io(e)) => match e.kind() {
                     io::ErrorKind::UnexpectedEof
@@ -676,7 +676,7 @@ impl BodyHandler {
                 self.ended()?;
                 return Ok(0);
             } else if made_progress {
-                // The await_input() made progress, but handled amount is 0. This
+                // The maybe_await_input() made progress, but handled amount is 0. This
                 // can for instance happen if we read some data, but not enough for
                 // decoding any gzip.
                 continue;

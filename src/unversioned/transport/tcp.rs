@@ -157,10 +157,6 @@ impl Transport for TcpTransport {
     }
 
     fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
-        if self.buffers.can_use_input() {
-            return Ok(true);
-        }
-
         // Proceed to fill the buffers from the TcpStream
         maybe_update_timeout(
             timeout,

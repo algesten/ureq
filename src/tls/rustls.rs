@@ -242,10 +242,6 @@ impl Transport for RustlsTransport {
     }
 
     fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
-        if self.buffers.can_use_input() {
-            return Ok(true);
-        }
-
         self.stream.get_mut().set_timeout(timeout);
 
         let input = self.buffers.input_append_buf();
