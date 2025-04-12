@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Annotated example for making a Transport (#1054)
   * Feature for adding unencoded query parameters (#1039)
   * Fix bug in not encoding ' in query parameters (#1039)
   * Fix bug making timeout settings not working (#1051)

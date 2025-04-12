@@ -299,6 +299,8 @@ pub trait Transport: Debug + Send + Sync + 'static {
     ///
     /// 1. Use [`Buffers::input_append_buf()`] to fill the buffer
     /// 2. Followed by [`Buffers::input_appended()`] to report how many bytes were read.
+    ///
+    /// Returns `true` if it made progress, i.e. if it managed to fill the input buffer with any bytes.
     fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error>;
 
     /// Tell whether this transport is still functional. This must provide an accurate answer
