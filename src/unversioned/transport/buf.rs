@@ -61,6 +61,7 @@ pub trait Buffers {
 /// The buffers are lazy such that no allocations are made until needed. That means
 /// a [`Transport`](crate::transport::Transport) implementation can freely instantiate
 /// the `LazyBuffers`.
+#[derive(Debug)]
 pub struct LazyBuffers {
     input_size: usize,
     output_size: usize,

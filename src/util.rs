@@ -78,6 +78,7 @@ impl<T> IoResultExt for io::Result<T> {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct ConsumeBuf {
     buf: Vec<u8>,
     filled: usize,

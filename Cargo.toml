@@ -100,3 +100,7 @@ rustls = { version = "0.23", features = ["aws-lc-rs"] }
 [[example]]
 name = "cureq"
 required-features = ["rustls", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset"]
+
+[[example]]
+name = "mpsc-transport"
+required-features = ["rustls"]
