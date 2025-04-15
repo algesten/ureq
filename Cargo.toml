@@ -104,3 +104,7 @@ required-features = ["rustls", "native-tls", "socks-proxy", "cookies", "gzip", "
 [[example]]
 name = "mpsc-transport"
 required-features = ["rustls"]
+
+[[example]]
+name = "proxy"
+required-features = ["rustls"]

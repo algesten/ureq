@@ -202,6 +202,12 @@ impl Config {
     pub(crate) fn max_redirects_do_error(&self) -> bool {
         self.max_redirects > 0 && self.max_redirects_will_error
     }
+
+    pub(crate) fn clone_without_proxy(&self) -> Self {
+        let mut c = self.clone();
+        c.proxy = None;
+        c
+    }
 }
 
 impl Config {

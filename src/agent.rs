@@ -1,5 +1,5 @@
 use std::convert::TryFrom;
-use std::fmt::Debug;
+use std::fmt;
 use std::sync::Arc;
 
 use http::{Method, Request, Response, Uri};
@@ -15,6 +15,7 @@ use crate::request::ForceSendBody;
 use crate::resolver::{DefaultResolver, Resolver};
 use crate::send_body::AsSendBody;
 use crate::transport::{boxed_connector, Connector, DefaultConnector, Transport};
+use crate::unversioned::transport::{ConnectionDetails, RunConnector};
 use crate::{Error, RequestBuilder, SendBody};
 use crate::{WithBody, WithoutBody};
 
@@ -85,7 +86,7 @@ use crate::{WithBody, WithoutBody};
 ///
 /// Note that both [`Config::clone()`] and [`Agent::clone()`] are  "cheap" meaning they should not
 /// incur any heap allocation.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Agent {
     pub(crate) config: Arc<Config>,
     pub(crate) pool: Arc<ConnectionPool>,
@@ -93,6 +94,8 @@ pub struct Agent {
 
     #[cfg(feature = "cookies")]
     pub(crate) jar: Arc<crate::cookies::SharedCookieJar>,
+
+    pub(crate) run_connector: Arc<RunConnector>,
 }
 
 impl Agent {
@@ -137,6 +140,11 @@ impl Agent {
     ) -> Self {
         let pool = Arc::new(ConnectionPool::new(connector, &config));
 
+        let run_connector = {
+            let pool = pool.clone();
+            Arc::new(move |details: &ConnectionDetails| pool.run_connector(details))
+        };
+
         Agent {
             config: Arc::new(config),
             pool,
@@ -144,6 +152,8 @@ impl Agent {
 
             #[cfg(feature = "cookies")]
             jar: Arc::new(crate::cookies::SharedCookieJar::new()),
+
+            run_connector,
         }
     }
 
@@ -353,6 +363,23 @@ impl Agent {
 impl From<Config> for Agent {
     fn from(value: Config) -> Self {
         Agent::new_with_config(value)
+    }
+}
+
+impl fmt::Debug for Agent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut dbg = f.debug_struct("Agent");
+
+        dbg.field("config", &self.config)
+            .field("pool", &self.pool)
+            .field("resolver", &self.resolver);
+
+        #[cfg(feature = "cookies")]
+        {
+            dbg.field("jar", &self.jar);
+        }
+
+        dbg.finish()
     }
 }
 

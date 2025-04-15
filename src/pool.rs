@@ -31,7 +31,7 @@ impl ConnectionPool {
         details: &ConnectionDetails,
         max_idle_age: Duration,
     ) -> Result<Connection, Error> {
-        let key = PoolKey::new(details.uri, details.config.proxy());
+        let key = details.into();
 
         {
             let mut pool = self.pool.lock().unwrap();
@@ -43,10 +43,7 @@ impl ConnectionPool {
             }
         }
 
-        let transport = self
-            .connector
-            .connect(details, None)?
-            .ok_or(Error::ConnectionFailed)?;
+        let transport = self.run_connector(details)?;
 
         let conn = Connection {
             transport,
@@ -57,6 +54,15 @@ impl ConnectionPool {
         };
 
         Ok(conn)
+    }
+
+    pub fn run_connector(&self, details: &ConnectionDetails) -> Result<Box<dyn Transport>, Error> {
+        let transport = self
+            .connector
+            .connect(details, None)?
+            .ok_or(Error::ConnectionFailed)?;
+
+        Ok(transport)
     }
 
     #[cfg(test)]
@@ -301,6 +307,12 @@ impl fmt::Debug for PoolKey {
             .field("authority", &DebugAuthority(&self.0 .1))
             .field("proxy", &self.0 .2)
             .finish()
+    }
+}
+
+impl<'a, 'b> From<&'a ConnectionDetails<'b>> for PoolKey {
+    fn from(details: &'a ConnectionDetails) -> Self {
+        PoolKey::new(details.uri, details.config.proxy())
     }
 }
 
