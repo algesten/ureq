@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Fix CONNECT proxy bug (#1057)
   * Fix bug setting cookies in redirects (#1055)
   * Annotated example for making a Transport (#1054)
   * Feature for adding unencoded query parameters (#1039)
