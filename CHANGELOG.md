@@ -1,5 +1,7 @@
 # Unreleased
 
+# 3.0.11
+
   * Fix CONNECT proxy bug (#1057)
   * Fix bug setting cookies in redirects (#1055)
   * Annotated example for making a Transport (#1054)
