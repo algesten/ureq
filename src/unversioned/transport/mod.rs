@@ -22,13 +22,13 @@
 //! connector handling other schemes than `http`/`https` without affecting "regular" connections.
 
 use std::fmt::Debug;
+use std::sync::Arc;
 
 use http::uri::Scheme;
 use http::Uri;
 
 use crate::config::Config;
 use crate::http;
-use crate::proxy::Proto;
 use crate::Error;
 
 use super::resolver::{ResolvedSocketAddrs, Resolver};
@@ -214,27 +214,18 @@ pub struct ConnectionDetails<'a> {
     // TODO(martin): Make mechanism to lower duration for each step in the connector chain.
     pub timeout: NextTimeout,
 
-    /// In case of CONNECT (HTTP) proxy, this is the actual requested
-    /// uri that will go through the proxy.
+    /// Run the connector chain.
     ///
-    /// This ends up in the connect line like `CONNECT host:port HTTP/1.1`.
-    ///
-    /// For socks proxy it is `None`.
-    pub proxied: Option<&'a Uri>,
+    /// Used for CONNECT proxy to establish a connection to the proxy server itself.
+    pub run_connector: Arc<RunConnector>,
 }
+
+pub(crate) type RunConnector =
+    dyn Fn(&ConnectionDetails) -> Result<Box<dyn Transport>, Error> + Send + Sync;
 
 impl<'a> ConnectionDetails<'a> {
     /// Tell if the requested socket need TLS wrapping.
-    ///
-    /// This is (obviously) true for URLs starting `https`, but
-    /// also in the case of using a CONNECT proxy over https.
     pub fn needs_tls(&self) -> bool {
-        if let Some(p) = self.config.proxy() {
-            if p.proto() == Proto::Https {
-                return true;
-            }
-        }
-
         self.uri.scheme() == Some(&Scheme::HTTPS)
     }
 }
@@ -369,6 +360,10 @@ impl Default for DefaultConnector {
         #[cfg(not(feature = "socks-proxy"))]
         let inner = inner.chain(no_proxy::WarnOnNoSocksConnector);
 
+        // If this is a CONNECT proxy, we must "prepare" the socket
+        // by setting up another connection and sending the `CONNECT host:port` line.
+        let inner = inner.chain(ConnectProxyConnector::default());
+
         // If we didn't get a socks-proxy, open a Tcp connection
         let inner = inner.chain(TcpConnector::default());
 
@@ -393,10 +388,6 @@ impl Default for DefaultConnector {
         let inner = inner.chain(no_tls::WarnOnMissingTlsProvider(
             crate::tls::TlsProvider::NativeTls,
         ));
-
-        // If this is a CONNECT proxy, we must "prepare" the socket
-        // by sending the `CONNECT host:port` line.
-        let inner = inner.chain(ConnectProxyConnector::default());
 
         DefaultConnector {
             inner: boxed_connector(inner),

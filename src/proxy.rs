@@ -11,7 +11,7 @@ use http::{StatusCode, Uri};
 
 use crate::config::DEFAULT_USER_AGENT;
 use crate::http;
-use crate::transport::{ConnectionDetails, Connector, Transport, TransportAdapter};
+use crate::transport::{ConnectionDetails, Connector, Either, Transport, TransportAdapter};
 use crate::util::{AuthorityExt, DebugUri, SchemeExt, UriExt};
 use crate::Error;
 
@@ -227,30 +227,57 @@ fn insert_default_scheme(uri: Uri) -> Uri {
 pub struct ConnectProxyConnector(());
 
 impl<In: Transport> Connector<In> for ConnectProxyConnector {
-    type Out = In;
+    type Out = Either<In, Box<dyn Transport>>;
 
     fn connect(
         &self,
         details: &ConnectionDetails,
         chained: Option<In>,
     ) -> Result<Option<Self::Out>, Error> {
-        let Some(transport) = chained else {
+        // If there is already a connection, do nothing.
+        if let Some(transport) = chained {
+            return Ok(Some(Either::A(transport)));
+        }
+
+        // If we're using a CONNECT proxy, we need to resolve that hostname.
+        let maybe_connect_uri = details.config.connect_proxy_uri();
+
+        let Some(connect_uri) = maybe_connect_uri else {
+            // Not using CONNECT
             return Ok(None);
         };
 
-        let is_connect_proxy = details.config.connect_proxy_uri().is_some();
-        if !is_connect_proxy {
-            return Ok(Some(transport));
-        }
+        let proxied = details.uri;
+
+        // TODO(martin): it's a bit weird to put the CONNECT proxy
+        // resolver timeout as part of Timeout::Connect, but we don't
+        // have anything more granular for now.
+        let addrs = details
+            .resolver
+            .resolve(connect_uri, details.config, details.timeout)?;
+
+        let proxy_config = details.config.clone_without_proxy();
+
+        // ConnectionDetails to establish a connection to the CONNECT
+        // proxy itself.
+        let proxy_details = ConnectionDetails {
+            uri: connect_uri,
+            addrs,
+            config: &proxy_config,
+            request_level: details.request_level,
+            resolver: details.resolver,
+            now: details.now,
+            timeout: details.timeout,
+            run_connector: details.run_connector.clone(),
+        };
+
+        let transport = (details.run_connector)(&proxy_details)?;
 
         // unwrap is ok because connect_proxy_uri() above checks it.
         let proxy = details.config.proxy().unwrap();
 
         let mut w = TransportAdapter::new(transport);
 
-        // unwrap is ok because run.rs will construct the ConnectionDetails
-        // such that CONNECT proxy _must_ have the `proxied` field set.
-        let proxied = details.proxied.unwrap();
         proxied.ensure_valid_url()?;
 
         let proxied_host = proxied.host().unwrap();
@@ -304,7 +331,7 @@ impl<In: Transport> Connector<In> for ConnectProxyConnector {
             }
         }
 
-        Ok(Some(transport))
+        Ok(Some(Either::B(transport)))
     }
 }
 
