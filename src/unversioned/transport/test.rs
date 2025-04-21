@@ -193,6 +193,21 @@ fn setup_default_handlers(handlers: &mut Vec<TestHandler>) {
     );
 
     maybe_add(
+        TestHandler::new("/bytes/200000000", |_uri, _req, w| {
+            write!(
+                w,
+                "HTTP/1.1 200 OK\r\n\
+                Content-Type: application/octet-stream\r\n\
+                Content-Length: 100\r\n\
+                \r\n"
+            )?;
+            // We don't actually want 200MB of data in memory.
+            write!(w, "{}", "1".repeat(100))
+        }),
+        handlers,
+    );
+
+    maybe_add(
         TestHandler::new("/get", |_uri, req, w| {
             write!(
                 w,

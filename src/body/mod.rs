@@ -31,6 +31,22 @@ const MAX_BODY_SIZE: u64 = 10 * 1024 * 1024;
 
 /// A response body returned as [`http::Response<Body>`].
 ///
+/// # Default size limit
+///
+/// Methods like `read_to_string()`, `read_to_vec()`, and `read_json()` have a **default 10MB limit**
+/// to prevent memory exhaustion. To download larger files, use `with_config().limit(new_size)`:
+///
+/// ```
+/// // Download a 20MB file
+/// let bytes = ureq::get("http://httpbin.org/bytes/200000000")
+///     .call()?
+///     .body_mut()
+///     .with_config()
+///     .limit(20 * 1024 * 1024) // 20MB
+///     .read_to_vec()?;
+/// # Ok::<_, ureq::Error>(())
+/// ```
+///
 /// # Body lengths
 ///
 /// HTTP/1.1 has two major modes of transfering body data. Either a `Content-Length`
@@ -251,6 +267,19 @@ impl Body {
     /// assert_eq!(s, "User-agent: *\nDisallow: /deny\n");
     /// # Ok::<_, ureq::Error>(())
     /// ```
+    ///
+    /// For larger text files, you must explicitly increase the limit:
+    ///
+    /// ```
+    /// // Read a large text file (25MB)
+    /// let text = ureq::get("http://httpbin.org/get")
+    ///     .call()?
+    ///     .body_mut()
+    ///     .with_config()
+    ///     .limit(25 * 1024 * 1024) // 25MB
+    ///     .read_to_string()?;
+    /// # Ok::<_, ureq::Error>(())
+    /// ```
     pub fn read_to_string(&mut self) -> Result<String, Error> {
         self.with_config()
             .limit(MAX_BODY_SIZE)
@@ -269,6 +298,19 @@ impl Body {
     ///
     /// let bytes = res.body_mut().read_to_vec()?;
     /// assert_eq!(bytes.len(), 100);
+    /// # Ok::<_, ureq::Error>(())
+    /// ```
+    ///
+    /// For larger files, you must explicitly increase the limit:
+    ///
+    /// ```
+    /// // Download a larger file (50MB)
+    /// let bytes = ureq::get("http://httpbin.org/bytes/200000000")
+    ///     .call()?
+    ///     .body_mut()
+    ///     .with_config()
+    ///     .limit(50 * 1024 * 1024) // 50MB
+    ///     .read_to_vec()?;
     /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn read_to_vec(&mut self) -> Result<Vec<u8>, Error> {
@@ -306,6 +348,21 @@ impl Body {
     ///     .read_json::<BodyType>()?;
     ///
     /// assert_eq!(body.slideshow.author, "Yours Truly");
+    /// # Ok::<_, ureq::Error>(())
+    /// ```
+    ///
+    /// For larger JSON files, you must explicitly increase the limit:
+    ///
+    /// ```
+    /// use serde_json::Value;
+    ///
+    /// // Parse a large JSON file (30MB)
+    /// let json: Value = ureq::get("https://httpbin.org/json")
+    ///     .call()?
+    ///     .body_mut()
+    ///     .with_config()
+    ///     .limit(30 * 1024 * 1024) // 30MB
+    ///     .read_json()?;
     /// # Ok::<_, ureq::Error>(())
     /// ```
     #[cfg(feature = "json")]
@@ -369,6 +426,21 @@ impl Body {
 /// * [Body::with_config()]
 /// * [Body::into_with_config()]
 ///
+/// # Handling large responses
+///
+/// The `BodyWithConfig` is the primary way to increase the default 10MB size limit
+/// when downloading large files to memory:
+///
+/// ```
+/// // Download a 50MB file
+/// let large_data = ureq::get("http://httpbin.org/bytes/200000000")
+///     .call()?
+///     .body_mut()
+///     .with_config()
+///     .limit(50 * 1024 * 1024) // 50MB
+///     .read_to_vec()?;
+/// # Ok::<_, ureq::Error>(())
+/// ```
 pub struct BodyWithConfig<'a> {
     handler: BodySourceRef<'a>,
     info: Arc<ResponseInfo>,
