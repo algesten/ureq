@@ -1,5 +1,7 @@
 # Unreleased
 
+ * Improve doc for 10MB limit (#1061)
+
 # 3.0.11
 
   * Fix CONNECT proxy bug (#1057)
