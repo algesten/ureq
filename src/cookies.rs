@@ -171,7 +171,10 @@ impl<'a> CookieJar<'a> {
 impl SharedCookieJar {
     pub(crate) fn new() -> Self {
         SharedCookieJar {
-            inner: Mutex::new(CookieStore::new()),
+            inner: Mutex::new(CookieStore::new(
+                #[cfg(feature = "cookies-publicsuffix")]
+                None
+            )),
         }
     }
 

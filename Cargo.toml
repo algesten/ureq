@@ -27,6 +27,7 @@ native-tls = ["dep:native-tls", "dep:der", "_tls", "dep:webpki-root-certs"]
 platform-verifier = ["dep:rustls-platform-verifier"]
 socks-proxy = ["dep:socks"]
 cookies = ["dep:cookie_store", "_url"]
+cookies-publicsuffix = ["cookie_store?/public_suffix"]
 gzip = ["dep:flate2"]
 brotli = ["dep:brotli-decompressor"]
 charset = ["dep:encoding_rs"]
@@ -88,7 +89,6 @@ encoding_rs = { version = "0.8.34", optional = true }
 
 serde = { version = "1.0.138", optional = true, default-features = false, features = ["std"] }
 serde_json = { version = "1.0.120", optional = true, default-features = false, features = ["std"] }
-
 [dev-dependencies]
 env_logger = "0.11.7"
 auto-args = "0.3.0"
