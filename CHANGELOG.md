@@ -1,5 +1,6 @@
 # Unreleased
 
+ * Fix featue flag `public_suffix` for CookieStore (#1063)
  * Improve doc for 10MB limit (#1061)
 
 # 3.0.11
