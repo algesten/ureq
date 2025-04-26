@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::fmt;
+use std::iter;
 use std::sync::{Mutex, MutexGuard};
 
 use cookie_store::CookieStore;
@@ -168,10 +169,20 @@ impl<'a> CookieJar<'a> {
     pub fn release(self) {}
 }
 
+// CookieStore::new() changes parameters depending on feature flag "public_suffix".
+// That means if a user enables public_suffix for CookieStore through diamond dependency,
+// we start having compilation errors un ureq.
+//
+// This workaround instantiates a CookieStore in a way that does not change with flags.
+fn instantiate_cookie_store() -> CookieStore {
+    let i = iter::empty::<Result<cookie_store::Cookie<'static>, &str>>();
+    CookieStore::from_cookies(i, true).unwrap()
+}
+
 impl SharedCookieJar {
     pub(crate) fn new() -> Self {
         SharedCookieJar {
-            inner: Mutex::new(CookieStore::new()),
+            inner: Mutex::new(instantiate_cookie_store()),
         }
     }
 
