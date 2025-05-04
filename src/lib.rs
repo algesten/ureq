@@ -1136,6 +1136,7 @@ pub(crate) mod test {
     }
 
     #[test]
+    #[cfg(feature = "_test")]
     fn limit_max_response_header_size() {
         init_test_log();
         let err = get("http://httpbin.org/get")
@@ -1148,6 +1149,7 @@ pub(crate) mod test {
     }
 
     #[test]
+    #[cfg(feature = "_test")]
     fn propfind_with_body() {
         init_test_log();
 
