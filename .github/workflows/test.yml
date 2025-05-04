@@ -42,6 +42,17 @@ jobs:
           RUSTDOCFLAGS: -Dwarnings
         run: cargo +${{steps.toolchain.outputs.name}} doc --no-deps --all-features --document-private-items
 
+  snowflake:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Martin's snowflake formatting rules
+        uses: algesten/snowflake@v1.0.4
+        with:
+          check_diff: true
+
   build_versions:
     strategy:
       matrix:
