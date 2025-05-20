@@ -200,7 +200,7 @@ pub(crate) enum BodyInner<'a> {
     ByteSlice(&'a [u8]),
     #[cfg(feature = "json")]
     ByteVec(io::Cursor<Vec<u8>>),
-    Body(BodyReader<'a>),
+    Body(Box<BodyReader<'a>>),
     Reader(&'a mut dyn Read),
     OwnedReader(Box<dyn Read>),
 }
@@ -323,14 +323,14 @@ impl<'a> From<BodyInner<'a>> for SendBody<'a> {
 impl Private for Body {}
 impl AsSendBody for Body {
     fn as_body(&mut self) -> SendBody {
-        BodyInner::Body(self.as_reader()).into()
+        BodyInner::Body(Box::new(self.as_reader())).into()
     }
 }
 
 impl Private for Response<Body> {}
 impl AsSendBody for Response<Body> {
     fn as_body(&mut self) -> SendBody {
-        BodyInner::Body(self.body_mut().as_reader()).into()
+        BodyInner::Body(Box::new(self.body_mut().as_reader())).into()
     }
 }
 

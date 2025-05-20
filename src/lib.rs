@@ -1127,12 +1127,12 @@ pub(crate) mod test {
             };
         }
 
-        ensure!(RequestBuilder<WithoutBody>, 400); // 288
+        ensure!(RequestBuilder<WithoutBody>, 400); // 304
         ensure!(Agent, 100); // 32
         ensure!(Config, 400); // 320
         ensure!(ConfigBuilder<AgentScope>, 400); // 320
-        ensure!(Response<Body>, 800); // 760
-        ensure!(Body, 700); // 648
+        ensure!(Response<Body>, 250); // 136
+        ensure!(Body, 50); // 24
     }
 
     #[test]
