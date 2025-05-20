@@ -97,7 +97,7 @@ pub struct Body {
 }
 
 enum BodyDataSource {
-    Handler(BodyHandler),
+    Handler(Box<BodyHandler>),
     Reader(Box<dyn io::Read + Send + Sync>),
 }
 
@@ -120,7 +120,7 @@ impl Body {
 
     pub(crate) fn new(handler: BodyHandler, info: ResponseInfo) -> Self {
         Body {
-            source: BodyDataSource::Handler(handler),
+            source: BodyDataSource::Handler(Box::new(handler)),
             info: Arc::new(info),
         }
     }
@@ -894,7 +894,7 @@ impl From<BodyDataSource> for BodySourceRef<'static> {
 
 pub(crate) enum BodySourceRef<'a> {
     HandlerShared(&'a mut BodyHandler),
-    HandlerOwned(BodyHandler),
+    HandlerOwned(Box<BodyHandler>),
     ReaderShared(&'a mut (dyn io::Read + Send + Sync)),
     ReaderOwned(Box<dyn io::Read + Send + Sync>),
 }
