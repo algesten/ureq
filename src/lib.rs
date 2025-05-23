@@ -549,6 +549,9 @@ use unversioned::transport;
 
 pub mod middleware;
 
+#[cfg(feature = "digest-auth")]
+pub use middleware::digest::DigestAuthMiddleware;
+
 #[cfg(feature = "_tls")]
 pub mod tls;
 
@@ -698,6 +701,9 @@ where
 #[cfg(test)]
 pub(crate) mod test {
     use std::{io, sync::OnceLock};
+
+    #[cfg(feature = "digest-auth")]
+    use std::time::Duration;
 
     use assert_no_alloc::AllocDisabler;
     use config::{Config, ConfigBuilder};
@@ -1071,6 +1077,51 @@ pub(crate) mod test {
         jar.release();
 
         let _ = agent.get("http://cookie.test/cookie-test").call().unwrap();
+    }
+
+    #[test]
+    #[cfg(feature = "digest-auth")]
+    fn valid_credentials() {
+        let arbitrary_username = "MyUsername";
+        let arbitrary_password = "MyPassword";
+        let digest_auth_middleware = crate::middleware::digest::DigestAuthMiddleware::new(
+            arbitrary_username,
+            arbitrary_password,
+        );
+        let test_url = format!(
+            "http://httpbin.org/digest-auth/auth/{}/{}",
+            arbitrary_username, arbitrary_password
+        );
+        let agent: Agent = crate::config::Config::builder()
+            .timeout_global(Some(Duration::from_secs(5)))
+            .http_status_as_error(false)
+            .middleware(digest_auth_middleware)
+            .build()
+            .into();
+        let result = agent.get(&test_url).call();
+        assert_eq!(result.unwrap().status(), 200);
+    }
+
+    #[test]
+    #[cfg(feature = "digest-auth")]
+    fn invalid_credentials() {
+        let arbitrary_username = "MyUsername";
+        let arbitrary_password = "MyPassword";
+        let bad_password = "BadPassword";
+        let digest_auth_middleware =
+            crate::middleware::digest::DigestAuthMiddleware::new(arbitrary_username, bad_password);
+        let test_url = format!(
+            "http://httpbin.org/digest-auth/auth/{}/{}",
+            arbitrary_username, arbitrary_password
+        );
+        let agent: Agent = crate::config::Config::builder()
+            .timeout_global(Some(Duration::from_secs(5)))
+            .http_status_as_error(false)
+            .middleware(digest_auth_middleware)
+            .build()
+            .into();
+        let result = agent.get(&test_url).call();
+        assert_eq!(result.unwrap().status(), 401);
     }
 
     #[test]
