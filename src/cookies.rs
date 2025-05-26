@@ -271,7 +271,12 @@ fn is_cookie_rfc_compliant(cookie: &cookie_store::Cookie) -> bool {
 
     let value = cookie.value().as_bytes();
 
-    let valid_value = value.iter().all(is_valid_value);
+    let valid_value = value
+        .strip_prefix(br#"""#)
+        .and_then(|value| value.strip_suffix(br#"""#))
+        .unwrap_or(value)
+        .iter()
+        .all(is_valid_value);
 
     if !valid_value {
         // NB. Do not log cookie value since it might be secret
@@ -323,11 +328,19 @@ mod test {
     fn illegal_cookie_value() {
         let cookie = Cookie::parse("name=borked,", &uri()).unwrap();
         assert!(!is_cookie_rfc_compliant(cookie.as_cookie_store()));
+        let cookie = Cookie::parse("name=\"borked", &uri()).unwrap();
+        assert!(!is_cookie_rfc_compliant(cookie.as_cookie_store()));
+        let cookie = Cookie::parse("name=borked\"", &uri()).unwrap();
+        assert!(!is_cookie_rfc_compliant(cookie.as_cookie_store()));
+        let cookie = Cookie::parse("name=\"\"borked\"", &uri()).unwrap();
+        assert!(!is_cookie_rfc_compliant(cookie.as_cookie_store()));
     }
 
     #[test]
     fn legal_cookie_name_value() {
         let cookie = Cookie::parse("name=value", &uri()).unwrap();
+        assert!(is_cookie_rfc_compliant(cookie.as_cookie_store()));
+        let cookie = Cookie::parse("name=\"value\"", &uri()).unwrap();
         assert!(is_cookie_rfc_compliant(cookie.as_cookie_store()));
     }
 }
