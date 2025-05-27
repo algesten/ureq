@@ -9,7 +9,7 @@ use crate::body::Body;
 use crate::config::typestate::RequestScope;
 use crate::config::{Config, ConfigBuilder, RequestLevelConfig};
 use crate::http;
-use crate::query::url_enc;
+use crate::query::form_url_enc;
 use crate::query::{parse_query_params, QueryParam};
 use crate::send_body::AsSendBody;
 use crate::util::private::Private;
@@ -581,9 +581,9 @@ impl RequestBuilder<WithBody> {
             if !body.is_empty() {
                 body.push('&');
             }
-            body.push_str(&url_enc(k.as_ref()));
+            body.push_str(&form_url_enc(k.as_ref()));
             body.push('=');
-            body.push_str(&url_enc(v.as_ref()));
+            body.push_str(&form_url_enc(v.as_ref()));
         }
 
         let mut request = self.builder.body(())?;
