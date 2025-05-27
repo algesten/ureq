@@ -1,5 +1,7 @@
 # Unreleased
 
+ * Use + instead of %20 for url encoded form bodies (#1071)
+ * Fix problem with double-quotes in cookie values (#1068)
  * Reduce Body size (#1065)
  * Fix featue flag `public_suffix` for CookieStore (#1063)
  * Improve doc for 10MB limit (#1061)
