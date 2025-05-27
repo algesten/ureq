@@ -58,9 +58,11 @@ impl DigestAuthMiddleware {
             .to_str()
             .ok()?;
         let mut challenge = WwwAuthenticateHeader::from_str(challenge_string).ok()?;
+
         let path = uri.path();
         let context = AuthContext::new(&self.username, &self.password, path);
         let auth_header: AuthorizationHeader = challenge.respond(&context).ok()?;
+
         HeaderValue::from_str(&auth_header.to_string()).ok()
     }
 }
@@ -77,7 +79,7 @@ impl Middleware for DigestAuthMiddleware {
         }
 
         // Clone for the authentication challenge response.
-        let (parts, body) = request.into_parts();
+        let (mut parts, body) = request.into_parts();
         let request = http::Request::from_parts(parts.clone(), body);
         let agent = next.agent;
 
@@ -87,12 +89,11 @@ impl Middleware for DigestAuthMiddleware {
             if let Some(challenge_answer_header) =
                 self.construct_answer_to_challenge(&parts.uri, &response)
             {
-                let mut retry_parts = parts;
-                retry_parts
+                parts
                     .headers
                     .insert(http::header::AUTHORIZATION, challenge_answer_header);
 
-                let retry_request = http::Request::from_parts(retry_parts, SendBody::none());
+                let retry_request = http::Request::from_parts(parts, SendBody::none());
                 return agent.run(retry_request);
             }
         }
