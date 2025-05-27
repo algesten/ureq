@@ -1,6 +1,6 @@
 use crate::middleware::{Middleware, MiddlewareNext};
-use crate::{http, Body, Error, SendBody};
-use digest_auth::{AuthContext, WwwAuthenticateHeader};
+use crate::{http, http::HeaderValue, Body, Error, SendBody};
+use digest_auth::{AuthContext, AuthorizationHeader, WwwAuthenticateHeader};
 use std::str::FromStr;
 
 /// Provides simple digest authentication powered by the `digest_auth` crate.
@@ -26,7 +26,7 @@ use std::str::FromStr;
 ///     ureq::DigestAuthMiddleware::new(arbitrary_username, arbitrary_password);
 /// # let url = String::new();
 ///
-/// let agent = ureq::config::Config::builder()
+/// let agent: ureq::Agent = ureq::config::Config::builder()
 ///     .http_status_as_error(false)  // Required for digest auth
 ///     .middleware(digest_auth_middleware)
 ///     .build()
@@ -47,20 +47,21 @@ impl DigestAuthMiddleware {
         }
     }
 
-    fn respond_to_challenge(
+    fn construct_answer_to_challenge(
         &self,
         uri: &http::Uri,
         response: &http::Response<Body>,
-    ) -> Option<String> {
-        let challenge_string = response.headers().get("www-authenticate")?.to_str().ok()?;
+    ) -> Option<HeaderValue> {
+        let challenge_string = response
+            .headers()
+            .get(http::header::WWW_AUTHENTICATE)?
+            .to_str()
+            .ok()?;
         let mut challenge = WwwAuthenticateHeader::from_str(challenge_string).ok()?;
         let path = uri.path();
         let context = AuthContext::new(&self.username, &self.password, path);
-        challenge
-            .respond(&context)
-            .as_ref()
-            .map(ToString::to_string)
-            .ok()
+        let auth_header: AuthorizationHeader = challenge.respond(&context).ok()?;
+        HeaderValue::from_str(&auth_header.to_string()).ok()
     }
 }
 
@@ -71,7 +72,7 @@ impl Middleware for DigestAuthMiddleware {
         next: MiddlewareNext,
     ) -> Result<http::Response<Body>, Error> {
         // Prevent infinite recursion when doing a nested request below.
-        if request.headers().get("authorization").is_some() {
+        if request.headers().get(http::header::AUTHORIZATION).is_some() {
             return next.handle(request);
         }
 
@@ -82,18 +83,14 @@ impl Middleware for DigestAuthMiddleware {
 
         let response = next.handle(request)?;
 
-        if response.status() == 401 {
-            if let Some(challenge_answer) = self.respond_to_challenge(&parts.uri, &response) {
+        if response.status() == http::StatusCode::UNAUTHORIZED {
+            if let Some(challenge_answer_header) =
+                self.construct_answer_to_challenge(&parts.uri, &response)
+            {
                 let mut retry_parts = parts;
-                retry_parts.headers.insert(
-                    "authorization",
-                    challenge_answer.parse().map_err(|_| {
-                        Error::Io(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            "Invalid authorization header",
-                        ))
-                    })?,
-                );
+                retry_parts
+                    .headers
+                    .insert(http::header::AUTHORIZATION, challenge_answer_header);
 
                 let retry_request = http::Request::from_parts(retry_parts, SendBody::none());
                 return agent.run(retry_request);
