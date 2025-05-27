@@ -58,10 +58,14 @@ pub fn form_url_enc(i: &str) -> Cow<str> {
         "%20" => "+",
         _ => part,
     });
+
+    // We try to avoid allocating if we can (returning a Cow).
     match iter.next() {
         None => "".into(),
         Some(first) => match iter.next() {
+            // Case avoids allocation
             None => first.into(),
+            // Following allocates
             Some(second) => {
                 let mut string = first.to_owned();
                 string.push_str(second);
