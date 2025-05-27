@@ -52,6 +52,26 @@ pub fn url_enc(i: &str) -> Cow<str> {
     utf8_percent_encode(i, ENCODED_IN_QUERY).into()
 }
 
+/// Percent-encode a string using the ENCODED_IN_QUERY set, but replace encoded `%20` with `+`.
+pub fn form_url_enc(i: &str) -> Cow<str> {
+    let mut iter = utf8_percent_encode(i, ENCODED_IN_QUERY).map(|part| match part {
+        "%20" => "+",
+        _ => part,
+    });
+    match iter.next() {
+        None => "".into(),
+        Some(first) => match iter.next() {
+            None => first.into(),
+            Some(second) => {
+                let mut string = first.to_owned();
+                string.push_str(second);
+                string.extend(iter);
+                string.into()
+            }
+        },
+    }
+}
+
 impl<'a> QueryParam<'a> {
     /// Create a new key-value pair with both the key and value percent-encoded.
     pub fn new_key_value(param: &str, value: &str) -> QueryParam<'static> {
@@ -193,6 +213,13 @@ mod test {
         const NOT_ENCODE: &str = "!()*-._~";
         let q = QueryParam::new_key_value("key", NOT_ENCODE);
         assert_eq!(q.as_str(), format!("key={}", NOT_ENCODE));
+    }
+
+    #[test]
+    fn special_encoding_space_for_form() {
+        let value = "value with spaces and 'quotes'";
+        let form = form_url_enc(value);
+        assert_eq!(form.as_ref(), "value+with+spaces+and+%27quotes%27");
     }
 
     #[test]
