@@ -1229,8 +1229,8 @@ pub(crate) mod test {
         let arbitrary_username = "MyUsername";
         let arbitrary_password = "MyPassword";
         let digest_auth_middleware = crate::middleware::digest::DigestAuthMiddleware::new(
-            arbitrary_username,
-            arbitrary_password,
+            arbitrary_username.to_string(),
+            arbitrary_password.to_string(),
         );
         let test_url = format!(
             "http://httpbin.org/digest-auth/auth/{}/{}",
@@ -1252,8 +1252,10 @@ pub(crate) mod test {
         let arbitrary_username = "MyUsername";
         let arbitrary_password = "MyPassword";
         let bad_password = "BadPassword";
-        let digest_auth_middleware =
-            crate::middleware::digest::DigestAuthMiddleware::new(arbitrary_username, bad_password);
+        let digest_auth_middleware = crate::middleware::digest::DigestAuthMiddleware::new(
+            arbitrary_username.to_string(),
+            bad_password.to_string(),
+        );
         let test_url = format!(
             "http://httpbin.org/digest-auth/auth/{}/{}",
             arbitrary_username, arbitrary_password
