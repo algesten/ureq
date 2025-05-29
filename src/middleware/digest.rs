@@ -22,8 +22,8 @@ use std::str::FromStr;
 /// ```
 /// let arbitrary_username = "MyUsername";
 /// let arbitrary_password = "MyPassword";
-/// let digest_auth_middleware =
-///     ureq::DigestAuthMiddleware::new(arbitrary_username, arbitrary_password);
+/// let digest_auth_middleware = ureq::DigestAuthMiddleware::new(
+///     arbitrary_username.to_string(), arbitrary_password.to_string());
 /// # let url = String::new();
 ///
 /// let agent: ureq::Agent = ureq::config::Config::builder()
@@ -40,10 +40,10 @@ pub struct DigestAuthMiddleware {
 
 impl DigestAuthMiddleware {
     /// Create a new digest authentication middleware.
-    pub fn new(username: &str, password: &str) -> Self {
+    pub fn new(username: String, password: String) -> Self {
         Self {
-            username: username.into(),
-            password: password.into(),
+            username: username,
+            password: password,
         }
     }
 
