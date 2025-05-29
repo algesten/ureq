@@ -207,7 +207,13 @@ impl Body {
     /// mut reference to the `Body`, and then use `as_reader()`. It is also possible to
     /// get a non-shared, owned reader via [`Body::into_reader()`].
     ///
-    /// * Reader is not limited. To set a limit use [`Body::with_config()`].
+    /// * Reader is not limited by default. That means a malicious server could
+    ///   exhaust all avaliable memory on your client machine.
+    ///   To set a limit use [`Body::into_with_config()`].
+    /// * Reader will error if `Content-Length` is set, but the connection is closed
+    ///   before all bytes are received.
+    /// * Reader will error if `Transfer-Encoding: chunked` is set, but the connection
+    ///   is closed without a FIN message (graceful connection shutdown) from the server.
     ///
     /// # Example
     ///
@@ -233,7 +239,13 @@ impl Body {
     /// variant consumes the body and turns it into a reader with lifetime `'static`.
     /// The reader can for instance be sent to another thread.
     ///
-    /// * Reader is not limited. To set a limit use [`Body::into_with_config()`].
+    /// * Reader is not limited by default. That means a malicious server could
+    ///   exhaust all avaliable memory on your client machine.
+    ///   To set a limit use [`Body::into_with_config()`].
+    /// * Reader will error if `Content-Length` is set, but the connection is closed
+    ///   before all bytes are received.
+    /// * Reader will error if `Transfer-Encoding: chunked` is set, but the connection
+    ///   is closed without a FIN message (graceful connection shutdown) from the server.
     ///
     /// ```
     /// use std::io::Read;
@@ -413,6 +425,12 @@ impl Body {
     ///     .reader();
     /// # Ok::<_, ureq::Error>(())
     /// ```
+    ///
+    /// This limit behavior can be used to prevent a malicious server from exhausting
+    /// memory on the client machine. For example, if the machine running
+    /// ureq has 1GB of RAM, you could protect the machine by setting a smaller
+    /// limit such as 128MB. The exact number will vary by your client's download
+    /// needs, available system resources, and system utilization.
     pub fn into_with_config(self) -> BodyWithConfig<'static> {
         let handler = self.source.into();
         BodyWithConfig::new(handler, self.info.clone())
