@@ -234,7 +234,10 @@ impl Agent {
         body: SendBody,
     ) -> Result<Response<Body>, Error> {
         let (parts, _) = request.into_parts();
-        let request = http::Request::from_parts(parts, body);
+        let mut request = http::Request::from_parts(parts, body);
+
+        // Clone here is cheap, since it's all Arcs.
+        request.extensions_mut().insert(AgentInstance(self.clone()));
 
         let next = MiddlewareNext::new(self);
         next.handle(request)
@@ -359,6 +362,9 @@ impl Agent {
         RequestBuilder::<WithoutBody>::new(self.clone(), Method::TRACE, uri)
     }
 }
+
+#[derive(Clone)]
+pub(crate) struct AgentInstance(pub(crate) Agent);
 
 impl From<Config> for Agent {
     fn from(value: Config) -> Self {
