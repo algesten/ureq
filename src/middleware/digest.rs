@@ -41,10 +41,7 @@ pub struct DigestAuthMiddleware {
 impl DigestAuthMiddleware {
     /// Create a new digest authentication middleware.
     pub fn new(username: String, password: String) -> Self {
-        Self {
-            username: username,
-            password: password,
-        }
+        Self { username, password }
     }
 
     fn construct_answer_to_challenge(
