@@ -7,6 +7,10 @@ use crate::http;
 use crate::run::run;
 use crate::{Agent, Body, Error, SendBody};
 
+#[cfg(feature = "digest-auth")]
+/// Digest authentication middleware.
+pub mod digest;
+
 /// Chained processing of request (and response).
 ///
 /// # Middleware as `fn`
