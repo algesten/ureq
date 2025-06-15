@@ -212,8 +212,6 @@ impl Body {
     ///   To set a limit use [`Body::into_with_config()`].
     /// * Reader will error if `Content-Length` is set, but the connection is closed
     ///   before all bytes are received.
-    /// * Reader will error if `Transfer-Encoding: chunked` is set, but the connection
-    ///   is closed without a FIN message (graceful connection shutdown) from the server.
     ///
     /// # Example
     ///
@@ -244,8 +242,6 @@ impl Body {
     ///   To set a limit use [`Body::into_with_config()`].
     /// * Reader will error if `Content-Length` is set, but the connection is closed
     ///   before all bytes are received.
-    /// * Reader will error if `Transfer-Encoding: chunked` is set, but the connection
-    ///   is closed without a FIN message (graceful connection shutdown) from the server.
     ///
     /// ```
     /// use std::io::Read;
