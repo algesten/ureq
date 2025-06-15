@@ -9,7 +9,7 @@ use http::uri::{Authority, Scheme};
 use http::{HeaderMap, HeaderName, HeaderValue, Method, Response, Uri, Version};
 
 use crate::http;
-use crate::proxy::Proto;
+use crate::proxy::ProxyProtocol;
 use crate::Error;
 
 pub(crate) mod private {
@@ -51,7 +51,7 @@ impl SchemeExt for Scheme {
             Some(443)
         } else if *self == Scheme::HTTP {
             Some(80)
-        } else if let Ok(proxy) = Proto::try_from(self.as_str()) {
+        } else if let Ok(proxy) = ProxyProtocol::try_from(self.as_str()) {
             Some(proxy.default_port())
         } else {
             debug!("Unknown scheme: {}", self);

@@ -5,7 +5,7 @@ use std::{io, thread};
 
 use socks::{Socks4Stream, Socks5Stream};
 
-use crate::proxy::{Proto, Proxy};
+use crate::proxy::{Proxy, ProxyProtocol};
 use crate::Error;
 
 use super::chain::Either;
@@ -32,7 +32,7 @@ impl<In: Transport> Connector<In> for SocksConnector {
         chained: Option<In>,
     ) -> Result<Option<Self::Out>, Error> {
         let proxy = match details.config.proxy() {
-            Some(v) if v.proto().is_socks() => v,
+            Some(v) if v.protocol().is_socks() => v,
             // If there is no proxy configured, or it isn't a SOCKS proxy, use whatever is chained.
             _ => {
                 trace!("SOCKS not configured");
@@ -75,7 +75,7 @@ fn try_connect(
         for proxy_addr in proxy_addrs {
             trace!(
                 "Try connect {} {} -> {}",
-                proxy.proto(),
+                proxy.protocol(),
                 proxy_addr,
                 target_addr
             );
@@ -84,7 +84,7 @@ fn try_connect(
                 Ok(v) => {
                     debug!(
                         "{} connected {} -> {}",
-                        proxy.proto(),
+                        proxy.protocol(),
                         proxy_addr,
                         target_addr
                     );
@@ -138,15 +138,15 @@ fn connect_proxy(
     proxy_addr: SocketAddr,
     target_addr: SocketAddr,
 ) -> Result<TcpStream, Error> {
-    let stream = match proxy.proto() {
-        Proto::Socks4 | Proto::Socks4A => {
+    let stream = match proxy.protocol() {
+        ProxyProtocol::Socks4 | ProxyProtocol::Socks4A => {
             if proxy.username().is_some() {
                 debug!("SOCKS4 does not support username/password");
             }
 
             Socks4Stream::connect(proxy_addr, target_addr, "")?.into_inner()
         }
-        Proto::Socks5 => {
+        ProxyProtocol::Socks5 => {
             if let Some(username) = proxy.username() {
                 // Connect with authentication.
                 let password = proxy.password().unwrap_or("");
