@@ -522,7 +522,7 @@ pub use ureq_proto::http;
 pub use body::{Body, BodyBuilder, BodyReader, BodyWithConfig};
 use http::Method;
 use http::{Request, Response, Uri};
-pub use proxy::{Proxy, ProxyProtocol};
+pub use proxy::{Proxy, ProxyBuilder, ProxyProtocol};
 pub use request::RequestBuilder;
 use request::{WithBody, WithoutBody};
 pub use request_ext::RequestExt;
