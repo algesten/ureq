@@ -1,5 +1,6 @@
 # Unreleased
 
+ * Chunked transfer handle abrupt close after 0\r\n (#1074)
  * Fix incorrect DNS resolving when using proxies (#1081)
  * Use + instead of %20 for url encoded form bodies (#1071)
  * Fix problem with double-quotes in cookie values (#1068)

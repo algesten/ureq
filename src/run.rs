@@ -693,18 +693,33 @@ impl BodyHandler {
 
         let call = self.call.take().expect("ended() called with body");
 
+        // In some cases, when reading chunked, the server send 0\r\n to indicate
+        // the end of the body, and then abruptly does a FIN. In these cases we have
+        // received the entire body, but must clean up the connection.
+        let is_ended_chunked = call.is_ended_chunked();
+
+        let mut force_close = false;
+
         if !call.can_proceed() {
-            return Err(Error::disconnected());
+            if is_ended_chunked {
+                // This case means we got 0\r\n, but can_proceed() is false because
+                // it only goes true on fully received chunked bodies.
+                debug!("Server ended connection after sending chunked 0\\r\\n");
+                force_close = true;
+            } else {
+                return Err(Error::disconnected());
+            }
         }
 
-        let must_close_connection = match call.proceed().unwrap() {
-            RecvBodyResult::Redirect(call) => {
-                let c = call.must_close_connection();
-                self.redirect = Some(Box::new(call));
-                c
-            }
-            RecvBodyResult::Cleanup(v) => v.must_close_connection(),
-        };
+        let must_close_connection = force_close
+            || match call.proceed().unwrap() {
+                RecvBodyResult::Redirect(call) => {
+                    let c = call.must_close_connection();
+                    self.redirect = Some(Box::new(call));
+                    c
+                }
+                RecvBodyResult::Cleanup(v) => v.must_close_connection(),
+            };
 
         let connection = self.connection.take().expect("ended() called with body");
         cleanup(connection, must_close_connection, self.timings.now());

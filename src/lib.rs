@@ -1018,6 +1018,7 @@ pub(crate) mod test {
 
     #[test]
     fn post_big_body_chunked() {
+        init_test_log();
         // https://github.com/algesten/ureq/issues/879
         let mut data = io::Cursor::new(vec![42; 153_600]);
         post("http://httpbin.org/post")
@@ -1189,6 +1190,24 @@ pub(crate) mod test {
             .build();
 
         agent.run(req).unwrap();
+    }
+
+    #[test]
+    #[cfg(feature = "_test")]
+    fn chunk_abort() {
+        init_test_log();
+        let mut res = get("http://my-fine-server/1chunk-abort").call().unwrap();
+        let body = res.body_mut().read_to_string().unwrap();
+        assert_eq!(body, "OK");
+        let mut res = get("http://my-fine-server/2chunk-abort").call().unwrap();
+        let body = res.body_mut().read_to_string().unwrap();
+        assert_eq!(body, "OK");
+        let mut res = get("http://my-fine-server/3chunk-abort").call().unwrap();
+        let body = res.body_mut().read_to_string().unwrap();
+        assert_eq!(body, "OK");
+        let mut res = get("http://my-fine-server/4chunk-abort").call().unwrap();
+        let body = res.body_mut().read_to_string().unwrap();
+        assert_eq!(body, "OK");
     }
 
     // This doesn't need to run, just compile.
