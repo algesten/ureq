@@ -54,6 +54,54 @@ impl ProxyProtocol {
 }
 
 /// Proxy server settings
+///
+/// This struct represents a proxy server configuration that can be used to route HTTP/HTTPS
+/// requests through a proxy server. It supports various proxy protocols including HTTP CONNECT,
+/// HTTPS CONNECT, SOCKS4, SOCKS4A, and SOCKS5.
+///
+/// # Protocol Support
+///
+/// * `HTTP`: HTTP CONNECT proxy
+/// * `HTTPS`: HTTPS CONNECT proxy (requires a TLS provider)
+/// * `SOCKS4`: SOCKS4 proxy (requires **socks-proxy** feature)
+/// * `SOCKS4A`: SOCKS4A proxy (requires **socks-proxy** feature)
+/// * `SOCKS5`: SOCKS5 proxy (requires **socks-proxy** feature)
+///
+/// # DNS Resolution
+///
+/// The `resolve_target` setting controls where DNS resolution happens:
+///
+/// * When `true`: DNS resolution happens locally before connecting to the proxy.
+///   The resolved IP address is sent to the proxy.
+/// * When `false`: The hostname is sent to the proxy, which performs DNS resolution.
+///
+/// Default behavior:
+/// * For SOCKS4: `true` (local resolution required)
+/// * For all other protocols: `false` (proxy performs resolution)
+///
+/// # Examples
+///
+/// ```rust
+/// use ureq::{Proxy, ProxyProtocol};
+///
+/// // Create a proxy from a URI string
+/// let proxy = Proxy::new("http://localhost:8080").unwrap();
+///
+/// // Create a proxy using the builder pattern
+/// let proxy = Proxy::builder(ProxyProtocol::Socks5)
+///     .host("proxy.example.com")
+///     .port(1080)
+///     .username("user")
+///     .password("pass")
+///     .resolve_target(true)  // Force local DNS resolution
+///     .build()
+///     .unwrap();
+///
+/// // Read proxy settings from environment variables
+/// if let Some(proxy) = Proxy::try_from_env() {
+///     // Use proxy from environment
+/// }
+/// ```
 #[derive(Clone, Eq, Hash, PartialEq)]
 pub struct Proxy {
     inner: Arc<ProxyInner>,

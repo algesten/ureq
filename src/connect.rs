@@ -1,5 +1,6 @@
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
+use std::borrow::Cow;
 use std::fmt;
 use std::io::Write;
 use ureq_proto::parser::try_parse_response;
@@ -41,11 +42,12 @@ impl<In: Transport> Connector<In> for ConnectProxyConnector {
         };
 
         let target = details.uri;
+        let target_addrs = &details.addrs;
 
         // TODO(martin): it's a bit weird to put the CONNECT proxy
         // resolver timeout as part of Timeout::Connect, but we don't
         // have anything more granular for now.
-        let addrs = details
+        let proxy_addrs = details
             .resolver
             .resolve(connect_uri, details.config, details.timeout)?;
 
@@ -55,7 +57,7 @@ impl<In: Transport> Connector<In> for ConnectProxyConnector {
         // proxy itself.
         let proxy_details = ConnectionDetails {
             uri: connect_uri,
-            addrs,
+            addrs: proxy_addrs,
             config: &proxy_config,
             request_level: details.request_level,
             resolver: details.resolver,
@@ -74,10 +76,20 @@ impl<In: Transport> Connector<In> for ConnectProxyConnector {
         target.ensure_valid_url()?;
 
         // unwraps are ok because ensure_valid_url() checks it.
-        let target_host = target.host().unwrap();
+        let mut target_host = Cow::Borrowed(target.host().unwrap());
         let target_port = target
             .port_u16()
             .unwrap_or(target.scheme().unwrap().default_port().unwrap());
+
+        if proxy.resolve_target() {
+            // In run() we do the resolution of the target (proxied) host, at this
+            // point we should have at least one IP address.
+            //
+            // TODO(martin): On fail try more addresses
+            let resolved = target_addrs.first().expect("at least one resolved address");
+
+            target_host = Cow::Owned(resolved.to_string());
+        }
 
         write!(w, "CONNECT {}:{} HTTP/1.1\r\n", target_host, target_port)?;
         write!(w, "Host: {}:{}\r\n", target_host, target_port)?;
