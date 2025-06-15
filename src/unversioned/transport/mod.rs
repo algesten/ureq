@@ -189,7 +189,8 @@ pub struct ConnectionDetails<'a> {
 
     /// The resolved IP address + port for the uri being requested. See [`Resolver`].
     ///
-    /// For CONNECT proxy, this is the address of the proxy server.
+    /// For proxies, whetherh this holds real addresses depends on
+    /// [`Proxy::resolve_target()`](crate::Proxy::resolve_target).
     pub addrs: ResolvedSocketAddrs,
 
     /// The configuration.

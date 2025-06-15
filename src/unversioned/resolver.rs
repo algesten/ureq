@@ -30,12 +30,24 @@ pub trait Resolver: Debug + Send + Sync + 'static {
     /// Resolve the URI to a socket address.
     ///
     /// The implementation should resolve within the given _timeout_.
+    ///
+    /// The resolver must guarantee at least one returned address, or error with
+    /// `Error::HostNotFound`.
     fn resolve(
         &self,
         uri: &Uri,
         config: &Config,
         timeout: NextTimeout,
     ) -> Result<ResolvedSocketAddrs, Error>;
+
+    /// Produce an empty array of addresses.
+    fn empty(&self) -> ResolvedSocketAddrs {
+        fn uninited_socketaddr() -> SocketAddr {
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0)
+        }
+
+        ArrayVec::from_fn(|_| uninited_socketaddr())
+    }
 }
 
 /// Max number of socket addresses to keep from the resolver.
@@ -112,11 +124,7 @@ impl Resolver for DefaultResolver {
         let ip_family = config.ip_family();
         let wanted = ip_family.keep_wanted(iter);
 
-        fn uninited_socketaddr() -> SocketAddr {
-            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0)
-        }
-
-        let mut result: ResolvedSocketAddrs = ArrayVec::from_fn(|_| uninited_socketaddr());
+        let mut result = self.empty();
         for addr in wanted.take(MAX_ADDRS) {
             result.push(addr);
         }

@@ -351,9 +351,19 @@ fn connect(
     // cannot make requests with partial uri like "/path".
     uri.ensure_valid_url()?;
 
-    let addrs = agent
-        .resolver
-        .resolve(uri, config, timings.next_timeout(Timeout::Resolve))?;
+    let is_proxy = config.proxy().is_some();
+
+    // For most proxy configs, the proxy itself should resolve the host name we are connecting to.
+    // However for SOCKS4, we must do it and pass the resolved IP to the proxy.
+    let is_proxy_local_resolve = config.proxy().map(|p| p.resolve_target()).unwrap_or(false);
+
+    let addrs = if !is_proxy || is_proxy_local_resolve {
+        agent
+            .resolver
+            .resolve(uri, config, timings.next_timeout(Timeout::Resolve))?
+    } else {
+        agent.resolver.empty()
+    };
 
     timings.record_time(Timeout::Resolve);
 

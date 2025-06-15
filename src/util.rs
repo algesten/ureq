@@ -305,6 +305,9 @@ pub(crate) trait UriExt {
 
     #[cfg(feature = "_url")]
     fn try_into_url(&self) -> Result<url::Url, Error>;
+
+    #[allow(unused)]
+    fn host_port(&self) -> (&str, u16);
 }
 
 impl UriExt for Uri {
@@ -332,6 +335,14 @@ impl UriExt for Uri {
         let url = url::Url::parse(&uri).expect("parsed url");
 
         Ok(url)
+    }
+
+    fn host_port(&self) -> (&str, u16) {
+        (
+            self.host().unwrap(),
+            self.port_u16()
+                .unwrap_or(self.scheme().unwrap().default_port().unwrap_or(80)),
+        )
     }
 }
 
