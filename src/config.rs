@@ -192,7 +192,7 @@ impl Config {
     pub(crate) fn connect_proxy_uri(&self) -> Option<&Uri> {
         let proxy = self.proxy.as_ref()?;
 
-        if !proxy.proto().is_connect() {
+        if !proxy.protocol().is_connect() {
             return None;
         }
 

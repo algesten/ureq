@@ -424,7 +424,7 @@ mod no_proxy {
         ) -> Result<Option<Self::Out>, Error> {
             if chained.is_none() {
                 if let Some(proxy) = details.config.proxy() {
-                    if proxy.proto().is_socks() {
+                    if proxy.protocol().is_socks() {
                         if proxy.is_from_env() {
                             warn!(
                                 "Enable feature socks-proxy to use proxy
