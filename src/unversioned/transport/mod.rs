@@ -57,7 +57,7 @@ mod socks;
 #[cfg(feature = "socks-proxy")]
 pub use self::socks::SocksConnector;
 
-pub use crate::proxy::ConnectProxyConnector;
+pub use crate::connect::ConnectProxyConnector;
 
 #[cfg(feature = "_rustls")]
 pub use crate::tls::rustls::RustlsConnector;
