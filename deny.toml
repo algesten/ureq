@@ -83,6 +83,7 @@ allow = [
   "Unicode-DFS-2016",               # https://spdx.org/licenses/Unicode-DFS-2016.html
   "Unicode-3.0",                    # https://www.unicode.org/license.txt
   "Zlib",                           # https://tldrlegal.com/license/zlib-libpng-license-(zlib)
+  "CDLA-Permissive-2.0",            # https://cdla.dev/permissive-2-0/
 ]
 
 [[licenses.clarify]]
