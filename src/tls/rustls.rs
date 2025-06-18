@@ -56,7 +56,7 @@ impl<In: Transport> Connector<In> for RustlsConnector {
 
         trace!("Try wrap in TLS");
 
-        let config = self.get_cached_config(details);
+        let config = self.get_cached_config(details)?;
 
         let name_borrowed: ServerName<'_> = details
             .uri
@@ -91,10 +91,10 @@ impl<In: Transport> Connector<In> for RustlsConnector {
 }
 
 impl RustlsConnector {
-    fn get_cached_config(&self, details: &ConnectionDetails) -> Arc<ClientConfig> {
+    fn get_cached_config(&self, details: &ConnectionDetails) -> Result<Arc<ClientConfig>, Error> {
         let tls_config = details.config.tls_config();
 
-        if details.request_level {
+        Ok(if details.request_level {
             // If the TlsConfig is request level, it is not allowed to
             // initialize the self.config OnceLock, but it should
             // reuse the cached value if it is the same TlsConfig
@@ -110,19 +110,30 @@ impl RustlsConnector {
                 // unwrap is ok because if is_cached is true we must have had a value.
                 self.config.get().unwrap().rustls_config.clone()
             } else {
-                build_config(tls_config).rustls_config
+                build_config(tls_config)?.rustls_config
             }
         } else {
             // On agent level, we initialize the config on first run. This is
             // the value we want to cache.
-            let config_ref = self.config.get_or_init(|| build_config(tls_config));
-
-            config_ref.rustls_config.clone()
-        }
+            //
+            // NB: This init is a racey. The problem is that build_config() must
+            //     return a Result, and OnceLock::get_or_try_init is not stabilized
+            //     https://github.com/rust-lang/rust/issues/109737
+            //     In case we're slamming a newly created Agent with many simultaneous
+            //     TLS requests, this might create some unnecessary/discarded rustls configs.
+            loop {
+                if let Some(config_ref) = self.config.get() {
+                    break config_ref.rustls_config.clone();
+                } else {
+                    let config = build_config(tls_config)?;
+                    let _ = self.config.set(config);
+                }
+            }
+        })
     }
 }
 
-fn build_config(tls_config: &TlsConfig) -> CachedRustlConfig {
+fn build_config(tls_config: &TlsConfig) -> Result<CachedRustlConfig, Error> {
     // 1. Prefer provider set by TlsConfig.
     // 2. Use process wide default set in rustls library.
     // 3. Pick ring, if it is enabled (the default behavior).
@@ -176,7 +187,7 @@ fn build_config(tls_config: &TlsConfig) -> CachedRustlConfig {
                 // This actually not dangerous. The rustls_platform_verifier is safe.
                 .dangerous()
                 .with_custom_certificate_verifier(Arc::new(
-                    rustls_platform_verifier::Verifier::new().with_provider(provider),
+                    rustls_platform_verifier::Verifier::new(provider)?,
                 )),
             RootCerts::WebPki => {
                 let root_store = RootCertStore {
@@ -216,10 +227,10 @@ fn build_config(tls_config: &TlsConfig) -> CachedRustlConfig {
         debug!("Disable SNI");
     }
 
-    CachedRustlConfig {
+    Ok(CachedRustlConfig {
         config_hash: tls_config.hash_value(),
         rustls_config: Arc::new(config),
-    }
+    })
 }
 
 pub struct RustlsTransport {
