@@ -66,8 +66,8 @@ percent-encoding = "2.3.1"
 rustls-pemfile = { version = "2.1.2", optional = true, default-features = false, features = ["std"] }
 rustls-pki-types = { version = "1.11.0", optional = true, default-features = false, features = ["std"] }
 rustls-platform-verifier = { version = "0.5.1", optional = true, default-features = false }
-webpki-roots = { version = "0.26.8", optional = true, default-features = false }
-webpki-root-certs = { version = "0.26.8", optional = true, default-features = false }
+webpki-roots = { version = "1.0.0", optional = true, default-features = false }
+webpki-root-certs = { version = "1.0.0", optional = true, default-features = false }
 
 rustls = { version = "0.23.22", optional = true, default-features = false, features = ["logging", "std", "tls12"] }
 # held back on 0.2.12 to avoid double dependency on windows-sys (0.59.0, 0.52.0)
