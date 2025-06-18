@@ -33,13 +33,11 @@ use crate::Error;
 
 use super::resolver::{ResolvedSocketAddrs, Resolver};
 
-pub use self::tcp::TcpConnector;
-use self::time::Instant;
-
 mod buf;
 pub use buf::{Buffers, LazyBuffers};
 
 mod tcp;
+pub use self::tcp::TcpConnector;
 
 mod io;
 pub use io::TransportAdapter;
@@ -67,6 +65,7 @@ pub use crate::tls::rustls::RustlsConnector;
 pub use crate::tls::native_tls::NativeTlsConnector;
 
 pub mod time;
+use self::time::Instant;
 
 pub use crate::timings::NextTimeout;
 
