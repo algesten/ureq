@@ -47,6 +47,9 @@ pub use io::TransportAdapter;
 mod chain;
 pub use chain::{ChainedConnector, Either};
 
+mod connect;
+pub use connect::ConnectProxyConnector;
+
 #[cfg(feature = "_test")]
 mod test;
 #[cfg(feature = "_test")]
@@ -56,8 +59,6 @@ pub use test::set_handler;
 mod socks;
 #[cfg(feature = "socks-proxy")]
 pub use self::socks::SocksConnector;
-
-pub use crate::connect::ConnectProxyConnector;
 
 #[cfg(feature = "_rustls")]
 pub use crate::tls::rustls::RustlsConnector;

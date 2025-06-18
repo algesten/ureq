@@ -532,7 +532,6 @@ pub use send_body::AsSendBody;
 mod agent;
 mod body;
 pub mod config;
-mod connect;
 mod error;
 mod pool;
 mod proxy;
