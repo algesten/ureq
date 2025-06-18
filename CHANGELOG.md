@@ -1,5 +1,9 @@
 # Unreleased
 
+* Bump webpki-roots/webpki-root-certs to 1.0.0 (#1089)
+* Bump rustls-platform-verifier to 0.6.0 (#1089)
+* Allow the license CDLA-Permissive-2.0 (#1089)
+
 # 3.0.12
 
  * Chunked transfer handle abrupt close after 0\r\n (#1074)
