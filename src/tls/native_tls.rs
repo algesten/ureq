@@ -1,10 +1,10 @@
 use std::convert::TryFrom;
-use std::fmt;
 use std::io::{Read, Write};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
+use std::{fmt, io};
 
 use crate::tls::{RootCerts, TlsProvider};
-use crate::{transport::*, Error};
+use crate::{transport::time::Duration, transport::*, Error};
 use der::pem::LineEnding;
 use der::Document;
 use native_tls::{Certificate, HandshakeError, Identity, TlsConnector};
@@ -60,7 +60,7 @@ impl<In: Transport> Connector<In> for NativeTlsConnector {
             .host()
             .to_string();
 
-        let adapter = TransportAdapter::new(transport.boxed());
+        let adapter = ErrorCapture::wrap(TransportAdapter::new(transport.boxed()));
         let stream = LazyStream::Unstarted(Some((connector, domain, adapter)));
 
         let buffers = LazyBuffers::new(
@@ -221,30 +221,60 @@ impl Transport for NativeTlsTransport {
     }
 
     fn transmit_output(&mut self, amount: usize, timeout: NextTimeout) -> Result<(), Error> {
-        let stream = self.stream.handshaken()?;
-        stream.get_mut().set_timeout(timeout);
+        let stream = self.stream.handshaken(timeout)?;
+        stream.get_mut().get_mut().set_timeout(timeout);
 
         let output = &self.buffers.output()[..amount];
-        stream.write_all(output)?;
+        let ret = stream.write_all(output);
+
+        // Surface errors capture below NativeTls primarily.
+        stream.get_mut().take_captured()?;
+
+        // Then NativeTls errors
+        ret?;
 
         Ok(())
     }
 
     fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
-        let stream = self.stream.handshaken()?;
-        stream.get_mut().set_timeout(timeout);
+        let stream = self.stream.handshaken(timeout)?;
+        stream.get_mut().get_mut().set_timeout(timeout);
 
         let input = self.buffers.input_append_buf();
-        let amount = stream.read(input)?;
+        let result = stream.read(input);
+
+        let amount = match result {
+            Ok(v) => {
+                if v == 0 {
+                    // NativeTls normalizes some error conditions to Ok(0)
+                    stream.get_mut().take_captured()?;
+                }
+
+                v
+            }
+            Err(e) => {
+                // First captured
+                stream.get_mut().take_captured()?;
+
+                // Then NativeTls
+                return Err(e.into());
+            }
+        };
+
         self.buffers.input_appended(amount);
 
         Ok(amount > 0)
     }
 
     fn is_open(&mut self) -> bool {
+        let timeout = NextTimeout {
+            after: Duration::Exact(std::time::Duration::from_secs(1)),
+            reason: crate::Timeout::Global,
+        };
+
         self.stream
-            .handshaken()
-            .map(|c| c.get_mut().get_mut().is_open())
+            .handshaken(timeout)
+            .map(|c| c.get_mut().get_mut().get_mut().is_open())
             .unwrap_or(false)
     }
 
@@ -256,22 +286,46 @@ impl Transport for NativeTlsTransport {
 /// Helper to delay the handshake until we are starting IO.
 /// This normalizes native-tls to behave like rustls.
 enum LazyStream {
-    Unstarted(Option<(Arc<TlsConnector>, String, TransportAdapter)>),
-    Started(TlsStream<TransportAdapter>),
+    Unstarted(Option<(Arc<TlsConnector>, String, ErrorCapture<TransportAdapter>)>),
+    Started(TlsStream<ErrorCapture<TransportAdapter>>),
 }
 
 impl LazyStream {
-    fn handshaken(&mut self) -> Result<&mut TlsStream<TransportAdapter>, Error> {
+    fn handshaken(
+        &mut self,
+        timeout: NextTimeout,
+    ) -> Result<&mut TlsStream<ErrorCapture<TransportAdapter>>, Error> {
         match self {
             LazyStream::Unstarted(v) => {
-                let (conn, domain, adapter) = v.take().unwrap();
-                let stream = conn.connect(&domain, adapter).map_err(|e| match e {
+                let (conn, domain, mut adapter) = v.take().unwrap();
+
+                // Respect timeout during TLS handshake
+                adapter.get_mut().set_timeout(timeout);
+                let capture = adapter.capture();
+
+                let result = conn.connect(&domain, adapter).map_err(|e| match e {
                     HandshakeError::Failure(e) => e,
                     HandshakeError::WouldBlock(_) => unreachable!(),
-                })?;
+                });
+
+                let stream = match result {
+                    Ok(v) => v,
+                    Err(e) => {
+                        // The error might originate in a Error::Timeout in the underlying adapter.
+                        // If so, we receive that error in this mpsc::Receiver. That's a more specific
+                        // error than the NativeTls::Error type.
+                        let mut lock = capture.lock().unwrap();
+                        if let Some(error) = lock.take() {
+                            return Err(error);
+                        }
+
+                        return Err(e.into());
+                    }
+                };
+
                 *self = LazyStream::Started(stream);
                 // Next time we hit the other match arm
-                self.handshaken()
+                self.handshaken(timeout)
             }
             LazyStream::Started(v) => Ok(v),
         }
@@ -287,4 +341,74 @@ impl fmt::Debug for NativeTlsTransport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("NativeTlsTransport").finish()
     }
+}
+
+/// A wrapper that captures and preserves underlying transport errors.
+///
+/// Native-tls may normalize or obscure specific errors from the underlying transport,
+/// such as timeout errors. This wrapper intercepts and stores ureq errors for later
+/// retrieval, allowing us to surface more specific error information (like timeouts)
+/// rather than generic TLS errors.
+///
+/// When an error occurs during IO operations, it's captured in the mutex and a generic
+/// "fake error" is returned to native-tls.
+struct ErrorCapture<S> {
+    stream: S,
+    capture: Arc<Mutex<Option<Error>>>,
+}
+
+impl<S: Read + Write> ErrorCapture<S> {
+    fn wrap(stream: S) -> Self {
+        ErrorCapture {
+            stream,
+            capture: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    fn capture(&self) -> Arc<Mutex<Option<Error>>> {
+        self.capture.clone()
+    }
+
+    fn get_mut(&mut self) -> &mut S {
+        &mut self.stream
+    }
+
+    fn take_captured(&self) -> Result<(), Error> {
+        let mut lock = self.capture.lock().unwrap();
+        if let Some(error) = lock.take() {
+            return Err(error);
+        }
+        Ok(())
+    }
+}
+
+impl<S: Read> Read for ErrorCapture<S> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.stream
+            .read(buf)
+            .map_err(|e| capture_error(e, &self.capture))
+    }
+}
+
+impl<S: Write> Write for ErrorCapture<S> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.stream
+            .write(buf)
+            .map_err(|e| capture_error(e, &self.capture))
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.stream
+            .flush()
+            .map_err(|e| capture_error(e, &self.capture))
+    }
+}
+
+fn capture_error(e: io::Error, capture: &Arc<Mutex<Option<Error>>>) -> io::Error {
+    let error: Error = e.into();
+
+    let mut lock = capture.lock().unwrap();
+    *lock = Some(error);
+
+    io::Error::new(io::ErrorKind::Other, "fake error towards native-tls")
 }
