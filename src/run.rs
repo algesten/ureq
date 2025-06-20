@@ -431,7 +431,7 @@ fn await_100(
             Ok(_) => {
                 let input = connection.buffers().input();
                 if input.is_empty() {
-                    return Err(Error::disconnected());
+                    return Err(Error::disconnected("await_100 empty input"));
                 }
 
                 let amount = call.try_read_100(input)?;
@@ -559,7 +559,7 @@ fn recv_response(
             assert!(call.can_proceed());
             break response;
         } else if !made_progress {
-            return Err(Error::disconnected());
+            return Err(Error::disconnected("recv_respone made no progress"));
         }
     };
 
@@ -707,7 +707,7 @@ impl BodyHandler {
                 debug!("Server ended connection after sending chunked 0\\r\\n");
                 force_close = true;
             } else {
-                return Err(Error::disconnected());
+                return Err(Error::disconnected("ended call cannot proceed"));
             }
         }
 

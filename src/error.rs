@@ -194,7 +194,8 @@ impl Error {
         }
     }
 
-    pub(crate) fn disconnected() -> Error {
+    pub(crate) fn disconnected(reason: &'static str) -> Error {
+        trace!("UnexpectedEof reason: {}", reason);
         io::Error::new(io::ErrorKind::UnexpectedEof, "Peer disconnected").into()
     }
 }
