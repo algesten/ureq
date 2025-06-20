@@ -1,5 +1,6 @@
 # Unreleased
 
+* native-tls transport capture and surface underlying errors (#1093)
 * Bump webpki-roots/webpki-root-certs to 1.0.0 (#1089)
 * Bump rustls-platform-verifier to 0.6.0 (#1089)
 * Allow the license CDLA-Permissive-2.0 (#1089)
