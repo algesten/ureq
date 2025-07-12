@@ -76,7 +76,8 @@ pub enum Error {
     TooManyRedirects,
 
     /// Some error with TLS.
-    #[cfg(feature = "_tls")]
+    // #[cfg(feature = "_tls")] This is deliberately not _tls, because we want to let
+    // bespoke TLS transports use this error code.
     Tls(&'static str),
 
     /// Error in reading PEM certificates/private keys.
@@ -234,7 +235,6 @@ impl fmt::Display for Error {
                 write!(f, "the response body is larger than request limit: {}", v)
             }
             Error::TooManyRedirects => write!(f, "too many redirects"),
-            #[cfg(feature = "_tls")]
             Error::Tls(v) => write!(f, "{}", v),
             #[cfg(feature = "_tls")]
             Error::Pem(v) => write!(f, "PEM: {:?}", v),
