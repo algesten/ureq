@@ -76,7 +76,7 @@ use crate::{WithBody, WithoutBody};
 /// server and it is returned to the agent's pool, once the Body instance (or reader) is dropped.
 ///
 /// There is an asymmetry in that sending a request body will borrow the Agent instance, while receiving
-/// the response body does not. This inconvencience is somewhat mitigated by that [`Agent::run()`] (or
+/// the response body does not. This inconvenience is somewhat mitigated by that [`Agent::run()`] (or
 /// going via the methods such as [`Agent::get()`]), borrows `&self`, i.e. not exclusive `mut` borrows.
 ///
 /// That cloning the agent shares the connection pool is considered a feature. It is often useful to
