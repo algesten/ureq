@@ -510,6 +510,10 @@
 #![deny(missing_docs)]
 // I don't think elided lifetimes help in understanding the code.
 #![allow(clippy::needless_lifetimes)]
+// Since you can't use inlined args for all cases, using it means the
+// code will have a mix of inlined and not inlined. Code should be
+// uniform, thus this lint is misguided.
+#![allow(clippy::uninlined_format_args)]
 
 #[macro_use]
 extern crate log;
