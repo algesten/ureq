@@ -1,5 +1,6 @@
 //! Multipart requests which write out their data in one fell swoop.
 use mime::Mime;
+use rand::distr::SampleString as _;
 
 use std::borrow::Cow;
 use std::error::Error;
@@ -9,8 +10,6 @@ use std::path::{Path, PathBuf};
 use std::io::prelude::*;
 use std::io::Cursor;
 use std::{fmt, io};
-
-use super::{HttpRequest, HttpStream};
 
 macro_rules! try_lazy (
     ($field:expr, $try:expr) => (
@@ -35,51 +34,34 @@ pub type LazyIoResult<'a, T> = Result<T, LazyIoError<'a>>;
 
 /// An error for lazily written multipart requests, including the original error as well
 /// as the field which caused the error, if applicable.
+#[non_exhaustive]
 pub struct LazyError<'a, E> {
     /// The field that caused the error.
     /// If `None`, there was a problem opening the stream to write or finalizing the stream.
     pub field_name: Option<Cow<'a, str>>,
     /// The inner error.
     pub error: E,
-    /// Private field for back-compat.
-    _priv: (),
 }
 
 impl<'a, E> LazyError<'a, E> {
-    fn without_field<E_: Into<E>>(error: E_) -> Self {
-        LazyError {
-            field_name: None,
-            error: error.into(),
-            _priv: (),
-        }
-    }
-
     fn with_field<E_: Into<E>>(field_name: Cow<'a, str>, error: E_) -> Self {
         LazyError {
             field_name: Some(field_name),
             error: error.into(),
-            _priv: (),
-        }
-    }
-
-    fn transform_err<E_: From<E>>(self) -> LazyError<'a, E_> {
-        LazyError {
-            field_name: self.field_name,
-            error: self.error.into(),
-            _priv: (),
         }
     }
 }
 
 /// Take `self.error`, discarding `self.field_name`.
-impl<'a> Into<io::Error> for LazyError<'a, io::Error> {
-    fn into(self) -> io::Error {
-        self.error
+impl<'a> From<LazyError<'a, io::Error>> for io::Error {
+    fn from(val: LazyError<'a, io::Error>) -> Self {
+        val.error
     }
 }
 
 impl<'a, E: Error> Error for LazyError<'a, E> {
     fn description(&self) -> &str {
+        #[allow(deprecated)]
         self.error.description()
     }
 
@@ -191,26 +173,6 @@ impl<'n, 'd> Multipart<'n, 'd> {
         self
     }
 
-    /// Convert `req` to `HttpStream`, write out the fields in this request, and finish the
-    /// request, returning the response if successful, or the first error encountered.
-    ///
-    /// If any files were added by path they will now be opened for reading.
-    pub fn send<R: HttpRequest>(
-        &mut self,
-        mut req: R,
-    ) -> Result<<R::Stream as HttpStream>::Response, LazyError<'n, <R::Stream as HttpStream>::Error>>
-    {
-        let mut prepared = self.prepare().map_err(LazyError::transform_err)?;
-
-        req.apply_headers(prepared.boundary(), prepared.content_len());
-
-        let mut stream = try_lazy!(req.open_stream());
-
-        try_lazy!(io::copy(&mut prepared, &mut stream));
-
-        stream.finish().map_err(LazyError::without_field)
-    }
-
     /// Export the multipart data contained in this lazy request as an adaptor which implements `Read`.
     ///
     /// During this step, if any files were added by path then they will be opened for reading
@@ -270,7 +232,7 @@ impl<'d> PreparedFields<'d> {
 
         // One of the two RFCs specifies that any bytes before the first boundary are to be
         // ignored anyway
-        let mut boundary = format!("\r\n--{}", super::gen_boundary());
+        let mut boundary = format!("\r\n--{}", gen_boundary());
 
         let mut text_data = Vec::new();
         let mut streams = Vec::new();
@@ -298,12 +260,14 @@ impl<'d> PreparedFields<'d> {
                         &field.name,
                         &boundary,
                         &stream.content_type,
-                        stream.filename.as_ref().map(|f| &**f),
+                        stream.filename.as_deref(),
                         stream.stream,
                     ));
                 }
             }
         }
+
+        content_len += text_data.len() as u64;
 
         // So we don't write a spurious end boundary
         if text_data.is_empty() && streams.is_empty() {
@@ -379,7 +343,7 @@ impl<'d> PreparedField<'d> {
         path: &Path,
         boundary: &str,
     ) -> Result<(Self, u64), LazyIoError<'n>> {
-        let (content_type, filename) = super::mime_filename(&path);
+        let (content_type, filename) = mime_filename(path);
 
         let file = try_lazy!(name, File::open(path));
         let content_len = try_lazy!(name, file.metadata()).len();
@@ -408,6 +372,7 @@ impl<'d> PreparedField<'d> {
         .unwrap();
 
         if let Some(filename) = filename {
+            // TODO(gmacon): The filename should be percent-encoded if necessary
             write!(header, "; filename=\"{}\"", filename).unwrap();
         }
 
@@ -460,6 +425,12 @@ impl IntoCowPath<'static> for PathBuf {
     }
 }
 
+impl<'a> IntoCowPath<'a> for &'a PathBuf {
+    fn into_cow_path(self) -> Cow<'a, Path> {
+        self.into()
+    }
+}
+
 impl<'a> IntoCowPath<'a> for &'a Path {
     fn into_cow_path(self) -> Cow<'a, Path> {
         self.into()
@@ -482,65 +453,19 @@ fn cursor_at_end<T: AsRef<[u8]>>(cursor: &Cursor<T>) -> bool {
     cursor.position() == (cursor.get_ref().as_ref().len() as u64)
 }
 
-#[cfg(feature = "hyper")]
-mod hyper {
-    use hyper::client::{Body, Client, IntoUrl, RequestBuilder, Response};
-    use hyper::Result as HyperResult;
+const BOUNDARY_LEN: usize = 16;
 
-    impl<'n, 'd> super::Multipart<'n, 'd> {
-        /// #### Feature: `hyper`
-        /// Complete a POST request with the given `hyper::client::Client` and URL.
-        ///
-        /// Supplies the fields in the body, optionally setting the content-length header if
-        /// applicable (all added fields were text or files, i.e. no streams).
-        pub fn client_request<U: IntoUrl>(
-            &mut self,
-            client: &Client,
-            url: U,
-        ) -> HyperResult<Response> {
-            self.client_request_mut(client, url, |r| r)
-        }
+fn gen_boundary() -> String {
+    let mut rng = rand::rng();
+    rand::distr::Alphanumeric.sample_string(&mut rng, BOUNDARY_LEN)
+}
 
-        /// #### Feature: `hyper`
-        /// Complete a POST request with the given `hyper::client::Client` and URL;
-        /// allows mutating the `hyper::client::RequestBuilder` via the passed closure.
-        ///
-        /// Note that the body, and the `ContentType` and `ContentLength` headers will be
-        /// overwritten, either by this method or by Hyper.
-        pub fn client_request_mut<U: IntoUrl, F: FnOnce(RequestBuilder) -> RequestBuilder>(
-            &mut self,
-            client: &Client,
-            url: U,
-            mut_fn: F,
-        ) -> HyperResult<Response> {
-            let mut fields = match self.prepare() {
-                Ok(fields) => fields,
-                Err(err) => {
-                    error!("Error preparing request: {}", err);
-                    return Err(err.error.into());
-                }
-            };
+fn mime_filename(path: &Path) -> (Mime, Option<&str>) {
+    let content_type = ::mime_guess::from_path(path);
+    let filename = opt_filename(path);
+    (content_type.first_or_octet_stream(), filename)
+}
 
-            mut_fn(client.post(url))
-                .header(::client::hyper::content_type(fields.boundary()))
-                .body(fields.to_body())
-                .send()
-        }
-    }
-
-    impl<'d> super::PreparedFields<'d> {
-        /// #### Feature: `hyper`
-        /// Convert `self` to `hyper::client::Body`.
-        #[cfg_attr(feature = "clippy", warn(wrong_self_convention))]
-        pub fn to_body<'b>(&'b mut self) -> Body<'b>
-        where
-            'd: 'b,
-        {
-            if let Some(content_len) = self.content_len {
-                Body::SizedBody(self, content_len)
-            } else {
-                Body::ChunkedBody(self)
-            }
-        }
-    }
+fn opt_filename(path: &Path) -> Option<&str> {
+    path.file_name().and_then(|filename| filename.to_str())
 }

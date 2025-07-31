@@ -598,6 +598,53 @@ impl RequestBuilder<WithBody> {
         do_call(self.agent, request, self.query_extra, body.as_body())
     }
 
+    /// Send form encoded data.
+    ///
+    /// Constructs a [form submission] with the content-type header
+    /// `application/x-www-form-urlencoded`. Keys and values will be URL encoded.
+    ///
+    /// ```
+    /// let form = [
+    ///     ("name", "martin"),
+    ///     ("favorite_bird", "blue-footed booby"),
+    /// ];
+    ///
+    /// let response = ureq::post("http://httpbin.org/post")
+    ///    .send_form(form)?;
+    /// # Ok::<_, ureq::Error>(())
+    /// ```
+    ///
+    /// [form submission]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods/POST#url-encoded_form_submission
+    pub fn send_multipart_form(
+        self,
+        mut form: crate::multipart::PreparedFields<'_>,
+    ) -> Result<Response<Body>, Error> {
+        let mut request = self.builder.body(())?;
+
+        if !request.headers().has_content_type() {
+            request.headers_mut().append(
+                http::header::CONTENT_TYPE,
+                HeaderValue::try_from(format!("multipart/form-data; boundary={}", form.boundary()))
+                    .unwrap(),
+            );
+        }
+
+        if let Some(len) = form.content_len() {
+            if request.headers().content_length().is_none() {
+                request
+                    .headers_mut()
+                    .append(http::header::CONTENT_LENGTH, HeaderValue::from(len));
+            }
+        }
+
+        do_call(
+            self.agent,
+            request,
+            self.query_extra,
+            SendBody::from_reader(&mut form),
+        )
+    }
+
     /// Send body data as JSON.
     ///
     /// Requires the **json** feature.

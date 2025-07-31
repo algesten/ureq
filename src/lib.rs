@@ -537,6 +537,7 @@ mod agent;
 mod body;
 pub mod config;
 mod error;
+pub mod multipart;
 mod pool;
 mod proxy;
 mod query;
