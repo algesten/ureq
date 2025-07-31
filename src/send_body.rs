@@ -32,7 +32,7 @@ impl<'a> SendBody<'a> {
         BodyInner::Reader(reader).into()
     }
 
-    /// Creates a body from an owned [`Read]` impl.
+    /// Creates a body from an owned [`Read`] impl.
     pub fn from_owned_reader(reader: impl Read + 'static) -> SendBody<'static> {
         BodyInner::OwnedReader(Box::new(reader)).into()
     }
