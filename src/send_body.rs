@@ -64,6 +64,7 @@ impl<'a> SendBody<'a> {
             BodyInner::Reader(v) => v.read(buf),
             BodyInner::OwnedReader(v) => v.read(buf),
             BodyInner::Body(v) => v.read(buf),
+            BodyInner::SizedReader(v, _) => v.read(buf),
         }?;
 
         if n == 0 {
@@ -189,6 +190,7 @@ impl<'a> AsSendBody for SendBody<'a> {
                 BodyInner::Reader(v) => BodyInner::Reader(v),
                 BodyInner::Body(v) => BodyInner::Reader(v),
                 BodyInner::OwnedReader(v) => BodyInner::Reader(v),
+                BodyInner::SizedReader(v, s) => BodyInner::SizedReader(v, *s),
             },
             ended: self.ended,
         }
@@ -203,6 +205,7 @@ pub(crate) enum BodyInner<'a> {
     Body(Box<BodyReader<'a>>),
     Reader(&'a mut dyn Read),
     OwnedReader(Box<dyn Read>),
+    SizedReader(&'a mut dyn Read, u64),
 }
 
 impl<'a> BodyInner<'a> {
@@ -215,6 +218,7 @@ impl<'a> BodyInner<'a> {
             BodyInner::Body(v) => v.body_mode(),
             BodyInner::Reader(_) => BodyMode::Chunked,
             BodyInner::OwnedReader(_) => BodyMode::Chunked,
+            BodyInner::SizedReader(_, size) => BodyMode::LengthDelimited(*size),
         }
     }
 }
@@ -264,7 +268,11 @@ impl AsSendBody for &Vec<u8> {
 impl Private for &File {}
 impl AsSendBody for &File {
     fn as_body(&mut self) -> SendBody {
-        BodyInner::Reader(self).into()
+        match self.metadata() {
+            Ok(meta) if meta.is_file() => BodyInner::SizedReader(self, meta.len()).into(),
+            // If self is not a regular file, or if we failed to get the metadata, unsized:
+            _ => BodyInner::Reader(self).into(),
+        }
     }
 }
 
@@ -278,7 +286,11 @@ impl AsSendBody for &TcpStream {
 impl Private for File {}
 impl AsSendBody for File {
     fn as_body(&mut self) -> SendBody {
-        BodyInner::Reader(self).into()
+        match self.metadata() {
+            Ok(meta) if meta.is_file() => BodyInner::SizedReader(self, meta.len()).into(),
+            // If self is not a regular file, or if we failed to get the metadata, unsized:
+            _ => BodyInner::Reader(self).into(),
+        }
     }
 }
 
