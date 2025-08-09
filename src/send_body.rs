@@ -38,6 +38,16 @@ impl<'a> SendBody<'a> {
         (None, BodyInner::OwnedReader(Box::new(reader))).into()
     }
 
+    #[cfg(feature = "multipart")]
+    pub(crate) fn from_file(file: File) -> SendBody<'static> {
+        let size = lazy_file_size(&file);
+        SendBody {
+            inner: BodyInner::OwnedReader(Box::new(file)),
+            size: Some(size),
+            ended: false,
+        }
+    }
+
     /// Creates a body to send as JSON from any [`Serialize`](serde::ser::Serialize) value.
     #[cfg(feature = "json")]
     pub fn from_json(
@@ -142,6 +152,20 @@ impl<'a> SendBody<'a> {
     /// ```
     pub fn into_reader(self) -> impl Sized + io::Read + 'a {
         ReadAdapter(self)
+    }
+
+    #[cfg(feature = "multipart")]
+    pub(crate) fn from_bytes<'b>(bytes: &'b [u8]) -> SendBody<'b> {
+        SendBody {
+            inner: BodyInner::ByteSlice(bytes),
+            size: Some(Ok(bytes.len() as u64)),
+            ended: false,
+        }
+    }
+
+    #[cfg(feature = "multipart")]
+    pub(crate) fn size(&self) -> Option<u64> {
+        self.size.as_ref().and_then(|r| r.as_ref().ok()).copied()
     }
 }
 
