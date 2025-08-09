@@ -251,7 +251,7 @@ fn add_headers(
     call: &mut Call<Prepare>,
     agent: &Agent,
     config: &Config,
-    body: &SendBody,
+    body: &mut SendBody,
     uri: &Uri,
 ) -> Result<(), Error> {
     let headers = call.headers();
@@ -259,7 +259,7 @@ fn add_headers(
     let send_body_mode = if headers.has_send_body_mode() {
         None
     } else {
-        Some(body.body_mode())
+        Some(body.body_mode()?)
     };
     let has_header_accept_enc = headers.has_accept_encoding();
     let has_header_ua = headers.has_user_agent();

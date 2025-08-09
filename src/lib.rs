@@ -1033,6 +1033,35 @@ pub(crate) mod test {
 
     #[test]
     #[cfg(not(feature = "_test"))]
+    fn post_array_body_sends_content_length() {
+        init_test_log();
+        let mut response = post("http://httpbin.org/post")
+            .content_type("application/octet-stream")
+            .send(vec![42; 123])
+            .expect("to send correctly");
+
+        let ret = response.body_mut().read_to_string().unwrap();
+        assert!(ret.contains("\"Content-Length\": \"123\""));
+    }
+
+    #[test]
+    #[cfg(not(feature = "_test"))]
+    fn post_file_sends_file_length() {
+        init_test_log();
+
+        let file = std::fs::File::open("LICENSE-MIT").unwrap();
+
+        let mut response = post("http://httpbin.org/post")
+            .content_type("application/octet-stream")
+            .send(file)
+            .expect("to send correctly");
+
+        let ret = response.body_mut().read_to_string().unwrap();
+        assert!(ret.contains("\"Content-Length\": \"1072\""));
+    }
+
+    #[test]
+    #[cfg(not(feature = "_test"))]
     fn username_password_from_uri() {
         init_test_log();
         let mut res = get("https://martin:secret@httpbin.org/get").call().unwrap();
