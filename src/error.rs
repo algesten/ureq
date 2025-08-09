@@ -151,6 +151,14 @@ pub enum Error {
     #[cfg(feature = "json")]
     Json(serde_json::Error),
 
+    /// Invalid MIME type in multipart form.
+    ///
+    /// *Note:* The wrapped error struct is not considered part of ureq API.
+    /// Breaking changes in that struct will not be reflected in ureq
+    /// major versions.
+    #[cfg(feature = "multipart")]
+    InvalidMimeType(mime_guess::mime::FromStrError),
+
     /// Attempt to connect to a CONNECT proxy failed.
     ConnectProxyFailed(String),
 
@@ -260,6 +268,8 @@ impl fmt::Display for Error {
             Error::Decompress(x, y) => write!(f, "{} decompression failed: {}", x, y),
             #[cfg(feature = "json")]
             Error::Json(v) => write!(f, "json: {}", v),
+            #[cfg(feature = "multipart")]
+            Error::InvalidMimeType(v) => write!(f, "invalid MIME type: {}", v),
             Error::ConnectProxyFailed(v) => write!(f, "CONNECT proxy failed: {}", v),
             Error::TlsRequired => write!(f, "TLS required, but transport is unsecured"),
             Error::Other(v) => write!(f, "other: {}", v),

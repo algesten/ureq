@@ -49,9 +49,10 @@ jobs:
         with:
           fetch-depth: 0
       - name: Martin's snowflake formatting rules
-        uses: algesten/snowflake@v1.0.4
+        uses: algesten/snowflake@v1.1.0
         with:
           check_diff: true
+          line_width_rules: 'Cargo.toml:150'
 
   build_versions:
     strategy:
@@ -85,6 +86,7 @@ jobs:
           - gzip
           - brotli
           - json
+          - multipart
           - native-tls
     env:
       RUST_BACKTRACE: "1"
@@ -114,6 +116,7 @@ jobs:
           - gzip
           - brotli
           - json
+          - multipart
           - native-tls
           - rustls-no-provider
     env:
