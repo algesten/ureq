@@ -52,7 +52,7 @@ pub(crate) fn run(
     let mut call = Call::new(request)?;
 
     if force_send_body {
-        call.send_body_despite_method();
+        call.force_send_body();
     }
 
     call.allow_non_standard_methods(config.allow_non_standard_methods());
