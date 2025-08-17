@@ -1,5 +1,6 @@
 # Unreleased
 
+* Bump all deps to latest (#1104)
 * Fixes to CONNECT to follow spec (#1103)
 * Send Content-Length for File (#1100)
 * native-tls transport capture and surface underlying errors (#1093)
