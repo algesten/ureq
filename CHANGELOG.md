@@ -1,5 +1,11 @@
 # Unreleased
 
+# 3.1.0
+
+DECISION: webpki-roots and webpki-root-certs goes from pre-release (0.26)
+          to stable release (1.0.0). This is potentially a big change
+          for ureq users. We release this as semver minor.
+
 * Bump all deps to latest (#1104)
 * Fixes to CONNECT to follow spec (#1103)
 * Send Content-Length for File (#1100)
