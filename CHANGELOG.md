@@ -1,5 +1,6 @@
 # Unreleased
 
+* Fixes to CONNECT to follow spec (#1103)
 * Send Content-Length for File (#1100)
 * native-tls transport capture and surface underlying errors (#1093)
 * Bump webpki-roots/webpki-root-certs to 1.0.0 (#1089)
