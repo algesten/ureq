@@ -23,20 +23,33 @@ targets = [
 ]
 
 # 2025-03-13: We get double windows-sys crates in our build deps due to aws-lc-rs/bindgen
-# The dep all other crates use is 0.59.0. Ideally we don't want to ignore this, but
-# for now it appears to be the only solution.
+#             The dep all other crates use is 0.59.0. Ideally we don't want to ignore this, but
+#             for now it appears to be the only solution.
+# 2025-08-17: The situation is getting worse, not better. We have 4 different versions
+#             now via various dependencies (previously 2).
 #
-#    = windows-sys v0.52.0
-#      ├── errno v0.3.10
-#      │   └── rustix v0.38.44
-#      │       └── which v4.4.2
-#      │           └── bindgen v0.69.5
-#      │               └── (build) aws-lc-sys v0.27.0
+# windows-sys v0.45.0
+# └── jni v0.21.1
+#     └── rustls-platform-verifier v0.6.1
+#         └── ureq v3.0.12 (/Users/martin/dev/ureq)
 #
+# windows-sys v0.52.0
+# └── ring v0.17.14
+#     ├── rustls v0.23.31
+#     │   ├── rustls-platform-verifier v0.6.1
+#
+# windows-sys v0.59.0
+# ├── rustix v0.38.44
+# │   ├── tempfile v3.15.0
+# │   │   ├── native-tls v0.2.12
+# │   │   │   └── ureq v3.0.12 (/Users/martin/dev/ureq)
+# │   │   └── ureq v3.0.12 (/Users/martin/dev/ureq)
+
 
 # 2025-03-17: security-framework differs between native-tls and rustls-platform-verifier.
 #             Hopefully only very few people end up using both rustls and native-tls at
 #             the same time.
+# 2025-08-17: This is still the case. Different versions, same situation.
 #
 #  = security-framework v2.11.1
 #    └── native-tls v0.2.14
