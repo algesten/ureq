@@ -1,5 +1,7 @@
 # Unreleased
 
+* Fix edge case regression when setting request header Content-Length: 0 #1109
+
 # 3.1.0
 
 DECISION: webpki-roots and webpki-root-certs goes from pre-release (0.26)
