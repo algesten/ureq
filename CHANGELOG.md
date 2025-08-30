@@ -1,6 +1,6 @@
 # Unreleased
 
-* Fix edge case regression when setting request header Content-Length: 0 #1109
+  * Fix edge case regression when setting request header Content-Length: 0 #1109
 
 # 3.1.0
 
@@ -8,34 +8,34 @@ DECISION: webpki-roots and webpki-root-certs goes from pre-release (0.26)
           to stable release (1.0.0). This is potentially a big change
           for ureq users. We release this as semver minor.
 
-* Bump all deps to latest (#1104)
-* Fixes to CONNECT to follow spec (#1103)
-* Send Content-Length for File (#1100)
-* native-tls transport capture and surface underlying errors (#1093)
-* Bump webpki-roots/webpki-root-certs to 1.0.0 (#1089)
-* Bump rustls-platform-verifier to 0.6.0 (#1089)
-* Allow the license CDLA-Permissive-2.0 (#1089)
+  * Bump all deps to latest #1104
+  * Fixes to CONNECT to follow spec #1103
+  * Send Content-Length for File #1100
+  * native-tls transport capture and surface underlying errors #1093
+  * Bump webpki-roots/webpki-root-certs to 1.0.0 #1089
+  * Bump rustls-platform-verifier to 0.6.0 #1089
+  * Allow the license CDLA-Permissive-2.0 #1089
 
 # 3.0.12
 
- * Chunked transfer handle abrupt close after 0\r\n (#1074)
- * Fix incorrect DNS resolving when using proxies (#1081)
- * Use + instead of %20 for url encoded form bodies (#1071)
- * Fix problem with double-quotes in cookie values (#1068)
- * Reduce Body size (#1065)
- * Fix featue flag `public_suffix` for CookieStore (#1063)
- * Improve doc for 10MB limit (#1061)
+  * Chunked transfer handle abrupt close after 0\r\n #1074
+  * Fix incorrect DNS resolving when using proxies #1081
+  * Use + instead of %20 for url encoded form bodies #1071
+  * Fix problem with double-quotes in cookie values #1068
+  * Reduce Body size #1065
+  * Fix featue flag `public_suffix` for CookieStore #1063
+  * Improve doc for 10MB limit #1061
 
 # 3.0.11
 
-  * Fix CONNECT proxy bug (#1057)
-  * Fix bug setting cookies in redirects (#1055)
-  * Annotated example for making a Transport (#1054)
-  * Feature for adding unencoded query parameters (#1039)
-  * Fix bug in not encoding ' in query parameters (#1039)
-  * Fix bug making timeout settings not working (#1051)
-  * Big refactor of ureq-proto (#1042)
-  * Extension trait for http::Request allowing agent config (#1011)
+  * Fix CONNECT proxy bug #1057
+  * Fix bug setting cookies in redirects #1055
+  * Annotated example for making a Transport #1054
+  * Feature for adding unencoded query parameters #1039
+  * Fix bug in not encoding ' in query parameters #1039
+  * Fix bug making timeout settings not working #1051
+  * Big refactor of ureq-proto #1042
+  * Extension trait for http::Request allowing agent config #1011
 
 # 3.0.10
 
@@ -43,129 +43,129 @@ DECISION: webpki-roots and webpki-root-certs goes from pre-release (0.26)
 
 # 3.0.9
 
-  * Bump deps (#1031)
-  * Allow body for all methods when using http-crate API (#1035)
-  * Improved errors and doc for bespoke transports (#1032)
+  * Bump deps #1031
+  * Allow body for all methods when using http-crate API #1035
+  * Improved errors and doc for bespoke transports #1032
 
 # 3.0.8
 
-  * Fix incorrect parsing bug "missing http version" (#1026)
+  * Fix incorrect parsing bug "missing http version" #1026
 
 # 3.0.7
 
-  * Allow non-standard HTTP methods (#1018)
-  * Fix not appending port to host header (#1017)
+  * Allow non-standard HTTP methods #1018
+  * Fix not appending port to host header #1017
 
 # 3.0.6
 
-  * Avoid percent encoding some query parameter chars (#1004)
-  * Fix incorrect LargeResponseHeader (#1003)
-  * Stop passing internal state in Config (#996)
-  * Support request level TlsConfig (#996)
+  * Avoid percent encoding some query parameter chars #1004
+  * Fix incorrect LargeResponseHeader #1003
+  * Stop passing internal state in Config #996
+  * Support request level TlsConfig #996
 
 # 3.0.5
 
-  * Fix incorrect reading of valid utf8 (#992)
-  * Fix panic when parsing malformed proxy URI (#990)
-  * ureq::Error wrapped as io::Error should pass through body chain (#984)
-  * send_json should set content-length header (#983)
+  * Fix incorrect reading of valid utf8 #992
+  * Fix panic when parsing malformed proxy URI #990
+  * ureq::Error wrapped as io::Error should pass through body chain #984
+  * send_json should set content-length header #983
 
 # 3.0.4
 
-  * Manually unroll some macros to regular code (#978)
-  * Fix bug in `rustls-no-provider` when disabling ring (#973)
+  * Manually unroll some macros to regular code #978
+  * Fix bug in `rustls-no-provider` when disabling ring #973
 
 # 3.0.3
 
-  * Use the same data in CONNECT and Host header for proxied requests (#967)
-  * Set default scheme in proxy uri (#966)
-  * Redact URI and Location header on debug level (#964)
-  * Downgrade all logging to debug and below (#964)
+  * Use the same data in CONNECT and Host header for proxied requests #967
+  * Set default scheme in proxy uri #966
+  * Redact URI and Location header on debug level #964
+  * Downgrade all logging to debug and below #964
 
 # 3.0.2
 
-  * Remove dependency on once_cell (#959)
-  * Fix bug parsing partial redirects (#958)
-  * Expose typestate variables (#956)
+  * Remove dependency on once_cell #959
+  * Fix bug parsing partial redirects #958
+  * Expose typestate variables #956
 
 # 3.0.1
 
-  * Fix excessive stack sizes (#950)
-  * Do not enable **json** by default (breaking, but it was a mistake) (#948)
+  * Fix excessive stack sizes #950
+  * Do not enable **json** (by default breaking, but it was a mistake) #948
 
 # 3.0.0
 
-  * Replace RequestBuilder Deref with explicit wrappers (#944)
-  * Remove dependency on `url` crate (#943)
-  * Feature `Config::save_redirect_history` (#939)
+  * Replace RequestBuilder Deref with explicit wrappers #944
+  * Remove dependency on `url` crate #943
+  * Feature `Config::save_redirect_history` #939
 
 # 3.0.0-rc5
 
-  * `TlsConfig::unversioned_rustls_crypto_provider()` (#931)
-  * Feature `rustls-no-provider` to compile without ring (#931)
-  * Fix CONNECT proxy Host header (#936)
-  * Re-enable CONNECT proxy support (#932)
-  * Body::content_length (#927)
-  * Handle Authorization: Basic from URI (#923)
-  * Remove many uses of Box::new() from Connector chain (#919)
+  * `TlsConfig::unversioned_rustls_crypto_provider()` #931
+  * Feature `rustls-no-provider` to compile without ring #931
+  * Fix CONNECT proxy Host header #936
+  * Re-enable CONNECT proxy support #932
+  * Body::content_length #927
+  * Handle Authorization: Basic from URI #923
+  * Remove many uses of Box::new() from Connector chain #919
 
 # 3.0.0-rc4
 
-  * Default to `TooManyRedirects` error (#916)
-  * Add `ConfigBuilder::max_redirects_will_error()` (#916)
-  * Add new `SendBody::into_reader()` (#914)
-  * Fix completely broken PEM parsing (#912)
-  * Improve ergonomics for `AutoHeaderValue` (#896)
+  * Default to `TooManyRedirects` error #916
+  * Add `ConfigBuilder::max_redirects_will_error()` #916
+  * Add new `SendBody::into_reader()` #914
+  * Fix completely broken PEM parsing #912
+  * Improve ergonomics for `AutoHeaderValue` #896
 
 # 3.0.0-rc3
 
-  * Re-export ureq_proto::ArrayVec (#891)
-  * Expose typestate variables, but #[doc(hidden)] (#889)
-  * Clarify versioning and MSRV policy (#887)
-  * Get last used uri via `ResponseExt::get_uri()` (#884)
-  * Expose more things for 3rd party Transport impls (#886)
-  * Make accessor fn for `Config` and `TlsConfig` (#886)
-  * Move `Transport` and `Resolver` traits to `unversioned` (#881)
-  * Upgrade deps (#885)
-  * MSRV 1.71.1 to follow rustls (#885)
-  * Fix bug in chunked overhead calculation (#880)
-  * Make it possible to disable all automatic headers (#876)
-  * Rename `hoot` -> `ureq_proto`(#872)
-  * Fix `disable_verification` for TLS (#871)
-  * `vendored` feature flag to get vendored native-tls (#866)
-  * Fix incorrect handling of expect-100 (#867)
+  * Re-export ureq_proto::ArrayVec #891
+  * Expose typestate variables, but #[doc(hidden)] #889
+  * Clarify versioning and MSRV policy #887
+  * Get last used uri via `ResponseExt::get_uri()` #884
+  * Expose more things for 3rd party Transport impls #886
+  * Make accessor fn for `Config` and `TlsConfig` #886
+  * Move `Transport` and `Resolver` traits to `unversioned` #881
+  * Upgrade deps #885
+  * MSRV 1.71.1 to follow rustls #885
+  * Fix bug in chunked overhead calculation #880
+  * Make it possible to disable all automatic headers #876
+  * Rename `hoot` -> `ureq_proto`#872
+  * Fix `disable_verification` for TLS #871
+  * `vendored` feature flag to get vendored native-tls #866
+  * Fix incorrect handling of expect-100 #867
 
 # 3.0.0-rc2
-  * Remove pub-field config structs in favor of builders (#848)
-  * BodyBuilder to create a response Body for test/middleware (#847)
-  * RequestBuilder::send_empty() convenience fn (#846)
-  * Rename BodyWithConfig::into_reader -> reader (#845)
-  * Escape hatch to send body for any method (#857)
-  * Reintrodice RequestBuilder::query (#843)
-  * Reintroduce RequestBuilder::query_pairs (#856)
-  * Reintroduce ResponseBuilder::send_form helper (#859)
-  * (internal) Use HeaderName for non-sensitive headers (#855)
-  * Fix broken build with rustls (#832)
-  * Reduce dependency count, platform-verifier feature (#833, #818)
+  * Remove pub-field config structs in favor of builders #848
+  * BodyBuilder to create a response Body for test/middleware #847
+  * RequestBuilder::send_empty() convenience fn #846
+  * Rename BodyWithConfig::into_reader -> reader #845
+  * Escape hatch to send body for any method #857
+  * Reintrodice RequestBuilder::query #843
+  * Reintroduce RequestBuilder::query_pairs #856
+  * Reintroduce ResponseBuilder::send_form helper #859
+  * (internal) Use HeaderName for non-sensitive headers #855
+  * Fix broken build with rustls #832
+  * Reduce dependency count, platform-verifier feature #833 #818
 
 # 3.0.0-rc1
   * Ground up rewrite based on the http crate API.
 
 # 2.12.1
 
-  * Do not use multi-version deps (>=x.x.x) (#907)
+  * Do not use multi-version deps (>=x.x.x) #907
 
 # 2.12.0
 
-  * Bump MSRV 1.67 -> 1.71 because rustls will soon adopt it (#905)
-  * Unpin rustls dep (>=0.23.19) (#905)
+  * Bump MSRV 1.67 -> 1.71 because rustls will soon adopt it #905
+  * Unpin rustls dep (>=0.23.19) #905
 
 # 2.11.0
 
-  * Fixes for changes to cargo-deny (#882)
-  * Pin rustls dep on 0.23.19 to keep MSRV 1.67 (#878)
-  * Bump MSRV 1.63 -> 1.67 due to time crate (#878)
-  * Re-export rustls (#813)
+  * Fixes for changes to cargo-deny #882
+  * Pin rustls dep on 0.23.19 to keep MSRV 1.67 #878
+  * Bump MSRV 1.63 -> 1.67 due to time crate #878
+  * Re-export rustls #813
 
 # 2.10.1
   * default `ureq` Rustls tls config updated to avoid panic for applications
@@ -174,44 +174,44 @@ DECISION: webpki-roots and webpki-root-certs goes from pre-release (0.26)
     circumstance instead of panicking.
 
 # 2.10.0
-  * Bump MSRV 1.61 -> 1.63 due to rustls (#764)
-  * Update deps (only patch versions in Cargo.lock) (#763)
-  * Refork frewsxcv/rust-chunked-transfer to fix MIT/Apache2.0 license (#761)
-  * Enable http-crate feature for docs (#755)
+  * Bump MSRV 1.61 -> 1.63 due to rustls #764
+  * Update deps only patch versions (in Cargo.lock) #763
+  * Refork frewsxcv/rust-chunked-transfer to fix MIT/Apache2.0 license #761
+  * Enable http-crate feature for docs #755
   * Update Rustls from 0.22 to 0.23 - this may be a breaking change if your
     application depends on Rustls 0.22 (e.g. to provide a custom
     `rustls::ClientConfig` to `ureq`). See the [Rustls 0.23.0][rustls-0.23.0]
-    changelog for a list of breaking API changes (#753)
+    changelog for a list of breaking API changes #753
   * Rustls dep to default to ring backend. If your project uses the
     default `ureq` TLS config, or constructs its own `rustls::ClientConfig`
     with `rustls::ClientConfig::builder()` you must ensure the Rustls
     `aws-lc-rs` feature is not activated, or set the process default
     cryptography provider before constructing any configs. See the Rustls
-    [CryptoProvider][CryptoProvider] docs for more information (#753)
-  * Remove direct dep rustls-webpki (#752)
-  * Fix doc Rustls does now support IP address certificates (#759)(#753)
+    [CryptoProvider][CryptoProvider] docs for more information #753
+  * Remove direct dep rustls-webpki #752
+  * Fix doc Rustls does now support IP address certificates #759 #753
 
 [rustls-0.23.0]: https://github.com/rustls/rustls/releases/tag/v%2F0.23.0
 [CryptoProvider]: https://docs.rs/rustls/latest/rustls/crypto/struct.CryptoProvider.html#using-the-per-process-default-cryptoprovider
 
 # 2.9.7
 
-  * Update deps (`base64` 0.22, `rustls` to 0.22.4 (#747, #748)
-  * Parse URL after middleware to enable changing it (#745)
-  * Tidy up code and fix compilation (#742, 743)
+  * Update deps `base64` 0.22, `rustls` to 0.22.4 #747 #748
+  * Parse URL after middleware to enable changing it #745
+  * Tidy up code and fix compilation #742, 743
 
 # 2.9.6
 
 ## Fixed
 
-  * `hootbin` is optional dep. Tests must be run with feature `testdeps` (#729)
-  * Exclude script files from cargo package (#728)
+  * `hootbin` is optional dep. Tests must be run with feature `testdeps` #729
+  * Exclude script files from cargo package #728
 
 # 2.9.5
 
 ## Fixed
 
-  * Update deps (`cookie` 0.18, `cookie_store` 0.21, unpin `url`). (#722)
+  * Update deps (`cookie` 0.18, `cookie_store` 0.21, unpin `url`). #722
 
 # 2.9.4
 
@@ -229,147 +229,150 @@ DECISION: webpki-roots and webpki-root-certs goes from pre-release (0.26)
 
 ## Added
 
-  * Replace dependency on httpbin.org for tests/doc-tests. (#703)
+  * Replace dependency on httpbin.org for tests/doc-tests. #703
 
 ## Fixed
 
-  * Remove Header struct that never should have been exported. (#696)
-  * Update deps (rustls 0.22) (#690)
+  * Remove Header struct that never should have been exported. #696
+  * Update deps (rustls 0.22) #690
 
 # 2.9.1
 
 ## Fixed
 
-  * Unbreak feature `http-interop`. This feature is version locked to http crate 0.2
+  * Unbreak feature `http-interop`. This feature is version locked to
+    http crate 0.2
   * New feature `http-crate`. This feature is for http crate 1.0
-  * New feature `proxy-from-env` to detect proxy settings for global Agent (ureq::get).
+  * New feature `proxy-from-env` to detect proxy settings for
+    global Agent (ureq::get)
 
 # 2.9.0
 
 ## Fixed
-  * Broken rustls dep (introduced new function in patch version) (#677)
-  * Doc and test fixes (#670, #673, #674)
+  * Broken rustls dep (introduced new function in patch version) #677
+  * Doc and test fixes #670 #673 #674
 
 ## Added
   * Upgraded http dep to 1.0
-  * http_interop to not require utf-8 headers (#672)
-  * http_interop implement conversion for `http::request::Parts` (#669)
+  * http_interop to not require utf-8 headers #672
+  * http_interop implement conversion for `http::request::Parts` #669
 
 # 2.8.0
 
 ## Fixed
-  * Fix regression in IPv6 handling (#635)
-  * Read proxy response to \r\n\r\n (#620)
+  * Fix regression in IPv6 handling #635
+  * Read proxy response to \r\n\r\n #620
 
 ## Added
-  * Auto-detect proxy from env vars (turned off by default) (#649)
-  * Conversion ureq::Response -> http::Response<Vec<u8>> (#638)
-  * cargo-deny CI action to disallow copy-left and duplicate deps (#661)
+  * Auto-detect proxy from env vars (turned off by default) #649
+  * Conversion ureq::Response -> http::Response<Vec<u8>> #638
+  * cargo-deny CI action to disallow copy-left and duplicate deps #661
 
 # 2.7.1
 
 ## Fixed
- * Updated serde_json dependency constraint to be >=1.0.97 (#630)
+ * Updated serde_json dependency constraint to be >=1.0.97 #630
 
 # 2.7.0
 
 ## Fixed
- * Pass User-Agent when connecting to proxy (#597)
- * Proxy: Use CONNECT for HTTPS requests, but not HTTP requests (#587)
- * Cookie headers are now cleared on redirect (#608)
+ * Pass User-Agent when connecting to proxy #597
+ * Proxy: Use CONNECT for HTTPS requests, but not HTTP requests #587
+ * Cookie headers are now cleared on redirect #608
  * HTTP/1.0 responses with Content-Length no longer block until server closes
-   the socket. (#625)
+   the socket. #625
 
 ## Added
- * Conversions to and from http::Response and http::request::Builder (#591)
- * Updated to rustls 0.21 and rustls-webpki, which add support for IP address certificates (#601)
- * Response::local_addr (#605)
+ * Conversions to and from http::Response and http::request::Builder #591
+ * Updated to rustls 0.21 and rustls-webpki, which add support for IP
+   address certificates #601
+ * Response::local_addr #605
 
 # 2.6.2
 
 ## Fixed
- * Non-empty connection pools were never dropped (#583)
+ * Non-empty connection pools were never dropped #583
 
 # 2.6.1
 
 ## Fixed
- * gzip: examine Content-Length header before removing (#578)
+ * gzip: examine Content-Length header before removing #578
 
 # 2.6.0
 
 ## Added
- * Response::remote_addr() (#489)
- * Request::query_pairs() - make query params from an Iterator of pairs (#519)
+ * Response::remote_addr() #489
+ * Request::query_pairs() - make query params from an Iterator of pairs #519
 
 ## Fixed
- * Gzip responses with chunked encoding now work with connection pooling (#560)
- * Don't panic when rustls-native-certs errors (#564)
- * Responses with zero-length body now work with connection pooling (#565)
+ * Gzip responses with chunked encoding now work with connection pooling #560
+ * Don't panic when rustls-native-certs errors #564
+ * Responses with zero-length body now work with connection pooling #565
 
 # 2.5.0
- * Add tcp no_delay option (#465)
+ * Add tcp no_delay option #465
  * Rework public TLS traits
- * Warn if requests aren't sent (#490)
- * Fixes for returning stream to pool (#509)
- * Avoid extra syscalls when content is buffered (#508)
- * Remove dep on sync_wrapper (#514, #528)
- * Error instead of panic on large deadlines (#517)
- * Make ReadWrite trait simpler (used in bespoke TLS impls) (#530)
- * Buffer short response bodies (#531)
+ * Warn if requests aren't sent #490
+ * Fixes for returning stream to pool #509
+ * Avoid extra syscalls when content is buffered #508
+ * Remove dep on sync_wrapper #514 #528
+ * Error instead of panic on large deadlines #517
+ * Make ReadWrite trait simpler (used in bespoke TLS impls) #530
+ * Buffer short response bodies #531
  * Update cookie/cookie_store dep
 
 # 2.4.0
 
- * Enable `gzip` feature by default (#455)
- * `gzip` and `brotli` feature flags to enable decompression (#453, #421)
- * Middleware function on agent (#448)
- * Agent option to preserve `Authorization` header on redirects (#445)
- * Deprecate re-exported serde types (#446)
- * Widen type of `send_json` to `impl Serializable` (#446)
- * `native-tls` feature provides an alternative TLS backend (#449, #391)
+ * Enable `gzip` feature by default #455
+ * `gzip` and `brotli` feature flags to enable decompression #453 #421
+ * Middleware function on agent #448
+ * Agent option to preserve `Authorization` header on redirects #445
+ * Deprecate re-exported serde types #446
+ * Widen type of `send_json` to `impl Serializable` #446
+ * `native-tls` feature provides an alternative TLS backend #449 #391
 
 # 2.3.2
  * Re-introduce the `ureq::patch` and `agent::patch` calls.
- * Fix regression in 2.3.x for feature native-certs (#441)
+ * Fix regression in 2.3.x for feature native-certs #441
 
 # 2.3.1
- * Don't panic when given an invalid DNS name (#436).
- * Update to rustls-native-certs v0.6 (#432).
+ * Don't panic when given an invalid DNS name #436
+ * Update to rustls-native-certs v0.6 #432
 
 # 2.3.0
- * Upgrade to rustls 0.20 (#427).
- * Make test mocks of Response more accurate by removing newline (#423).
- * Redact sensitive headers when logging prelude (#414).
+ * Upgrade to rustls 0.20 #427
+ * Make test mocks of Response more accurate by removing newline #423
+ * Redact sensitive headers when logging prelude #414
 
 # 2.2.0
  * Update to latest dependencies
- * Add SOCKS4 support (#410).
- * Downgrade logging on info level to debug (#409).
- * Bugfix: Clear content-length header on redirect (#394, #395).
+ * Add SOCKS4 support #410
+ * Downgrade logging on info level to debug #409
+ * Bugfix: Clear content-length header on redirect #394 #395
 
 # 2.1.1
- * Bugfix: don't reuse conns with bytes pending from server (#372). This
+ * Bugfix: don't reuse conns with bytes pending from server #372. This
    reduces Transport errors when using an Agent for connection pooling.
 
 # 2.1.0
- * Bugfix: allow status lines without a reason phrase (#316)
- * Example: "cureq" to easier make ad-hoc command line tests (#330)
- * Override timeout per Request (#335)
- * Bugfix: handle non-utf8 status and headers (#347) and better errors (#329)
- * Request inspection (method, url, etc) (#310, #350)
- * Bugfix: stop percent encoding cookies (#353)
- * Enforce cookie RFC naming/value rules (#353)
- * Bugfix: reduce error struct size (#356)
+ * Bugfix: allow status lines without a reason phrase #316
+ * Example: "cureq" to easier make ad-hoc command line tests #330
+ * Override timeout per Request #335
+ * Bugfix: handle non-utf8 status and headers #347 and better errors #329
+ * Request inspection (method, url, etc) #310 #350
+ * Bugfix: stop percent encoding cookies #353
+ * Enforce cookie RFC naming/value rules #353
+ * Bugfix: reduce error struct size #356
 
 # 2.0.2
- * Bugfix: Apply deadline across redirects. (#313)
+ * Bugfix: Apply deadline across redirects. #313
  * OrAnyStatus::or_any_status ergonomic helper
- * Allow header lines to end with only LF (#321)
+ * Allow header lines to end with only LF #321
 
 # 2.0.1
- * Fix handling of 308 redirects (port from 1.5.4 branch).
- * Return UnexpectedEof instead of InvalidData on short responses. (#293)
- * Implement std::error::Error for error::Transport. (#299)
+ * Fix handling of 308 redirects (port from 1.5.4 branch)
+ * Return UnexpectedEof instead of InvalidData on short responses. #293
+ * Implement std::error::Error for error::Transport. #299
 
 # 2.0.0
  * Methods that formerly returned Response now return Result<Response, Error>.
@@ -415,9 +418,9 @@ DECISION: webpki-roots and webpki-root-certs goes from pre-release (0.26)
 
 # 2.0.0-rc4
 
- * Remove error_on_non_2xx. (#272)
- * Do more validation on status line. (#266)
- * (internal) Add history to response objects (#275)
+ * Remove error_on_non_2xx. #272
+ * Do more validation on status line. #266
+ * (internal) Add history to response objects #275
 
 # 2.0.0-rc3
 
@@ -462,30 +465,30 @@ DECISION: webpki-roots and webpki-root-certs goes from pre-release (0.26)
 # 1.5.2
 
  * Remove 'static constraint on Request.send(), allowing a wider variety of
-   types to be passed. Also eliminate some copying. (#205).
- * Allow turning a Response into an Error (#214).
- * Update env_logger to 0.8.1 (#195).
- * Remove convenience method for CONNECT verb (#177).
- * Fix bugs in handling of timeout_read (#197 and #198).
+   types to be passed. Also eliminate some copying. #205
+ * Allow turning a Response into an Error #214
+ * Update env_logger to 0.8.1 #195
+ * Remove convenience method for CONNECT verb #177
+ * Fix bugs in handling of timeout_read #197 and #198
 
 # 1.5.1
 
- * Use cookie_store crate for correct cookie handling (#169).
- * Fix bug in picking wrong host for redirects introduced in 1.5.0 (#180).
- * Allow proxy settings on Agent (#178).
+ * Use cookie_store crate for correct cookie handling #169
+ * Fix bug in picking wrong host for redirects introduced in 1.5.0 #180
+ * Allow proxy settings on Agent #178
 
 # 1.5.0
 
  * Add pluggable name resolution. Users can now override the IP addresses for
-   hostnames of their choice (#148).
+   hostnames of their choice #148
  * bugfix: Don't re-pool streams on drop. This would occur if the user called
    `response.into_reader()` and dropped the resulting `Read` before reading all
    the way to EOF. The result would be a BadStatus error on the next request to
-   the same hostname. This only affected users using an explicit Agent (#160).
- * Automatically set Transfer-Encoding: chunked when using `send` (#86).
- * `into_reader()` now returns `impl Read + Send` instead of `impl Read` (#156).
- * Add support for log crate (#170).
- * Retry broken connections in more cases (should reduce BadStatus errors; #168).
+   the same hostname. This only affected users using an explicit Agent #160
+ * Automatically set Transfer-Encoding: chunked when using `send` #86
+ * `into_reader()` now returns `impl Read + Send` instead of `impl Read` #156
+ * Add support for log crate #170
+ * Retry broken connections in more cases (should reduce BadStatus errors) #168
 
 # 1.4.1
 
