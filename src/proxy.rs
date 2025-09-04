@@ -373,6 +373,20 @@ impl ProxyBuilder {
     }
 }
 
+pub(crate) fn try_no_proxy_from_env() -> Vec<String> {
+    const TRY_ENV: &[&str] = &["NO_PROXY", "no_proxy"];
+
+    let mut no_proxy_list = Vec::new();
+
+    for attempt in TRY_ENV {
+        if let Ok(env) = std::env::var(attempt) {
+            no_proxy_list.extend(env.split(',').map(|s| s.to_owned()));
+        }
+    }
+
+    no_proxy_list
+}
+
 impl TryFrom<&str> for ProxyProtocol {
     type Error = Error;
 
