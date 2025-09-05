@@ -5,10 +5,15 @@ use ureq_proto::http::Uri;
 pub enum HostnameMatcher {
     /// Matches the pattern literally - by string equality
     Literal(String),
+    /// Matches any string
+    MatchAll,
 }
 
 impl HostnameMatcher {
     pub fn parse(pattern: &str) -> Self {
+        if pattern == "*" {
+            return Self::MatchAll;
+        }
         Self::Literal(pattern.to_owned())
     }
 
@@ -19,6 +24,7 @@ impl HostnameMatcher {
 
         match self {
             Self::Literal(lit) => lit == hostname,
+            Self::MatchAll => true,
         }
     }
 }
