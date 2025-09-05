@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use http::Uri;
 
+use crate::hostname_matcher::HostnameMatcher;
 use crate::middleware::{Middleware, MiddlewareChain};
 use crate::{http, proxy, Body, Error};
 use crate::{Agent, AsSendBody, Proxy, RequestBuilder};
@@ -153,7 +154,7 @@ pub struct Config {
     #[cfg(feature = "_tls")]
     tls_config: TlsConfig,
     proxy: Option<Proxy>,
-    no_proxy_list: Vec<String>,
+    no_proxy_list: Vec<HostnameMatcher>,
     no_delay: bool,
     max_redirects: u32,
     max_redirects_will_error: bool,
@@ -192,8 +193,9 @@ impl Config {
 
     /// Checks if a specific uri should not be proxied
     pub fn is_in_no_proxy(&self, uri: &Uri) -> bool {
-        uri.host()
-            .is_some_and(|host| self.no_proxy_list().iter().any(|no_proxy| no_proxy == host))
+        self.no_proxy_list()
+            .iter()
+            .any(|matcher| matcher.matches(uri))
     }
 
     pub(crate) fn connect_proxy_uri(&self) -> Option<&Uri> {
@@ -261,7 +263,7 @@ impl Config {
     ///
     /// Picked up from environment when using [`Config::default()`] or
     /// [`Agent::new_with_defaults()`][crate::Agent::new_with_defaults].
-    pub fn no_proxy_list(&self) -> &[String] {
+    pub fn no_proxy_list(&self) -> &[HostnameMatcher] {
         &self.no_proxy_list
     }
 
@@ -492,7 +494,7 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
     ///
     /// Picked up from environment when using [`Config::default()`] or
     /// [`Agent::new_with_defaults()`][crate::Agent::new_with_defaults].
-    pub fn no_proxy_list(mut self, v: Vec<String>) -> Self {
+    pub fn no_proxy_list(mut self, v: Vec<HostnameMatcher>) -> Self {
         self.config().no_proxy_list = v;
         self
     }
