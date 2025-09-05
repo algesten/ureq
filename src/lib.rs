@@ -538,6 +538,7 @@ mod agent;
 mod body;
 pub mod config;
 mod error;
+mod hostname_matcher;
 mod pool;
 mod proxy;
 mod query;
