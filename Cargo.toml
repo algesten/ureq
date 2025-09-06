@@ -71,6 +71,7 @@ webpki-root-certs = { version = "1.0.0", optional = true, default-features = fal
 
 rustls = { version = "0.23.22", optional = true, default-features = false, features = ["logging", "std", "tls12"] }
 # held back on 0.2.12 to avoid double dependency on windows-sys (0.59.0, 0.52.0)
+# native-tls 0.2.13 requires MSRV 1.82. We keep 0.2.12 until we decide to bunp MSRV
 native-tls = { version = "0.2.12", optional = true, default-features = false }
 der = { version = "0.7.9", optional = true, default-features = false, features = ["pem", "std"] }
 
@@ -78,12 +79,12 @@ socks = { version = "0.3.4", optional = true }
 
 # cookie_store uses Url, while http-crate has its own Uri.
 # Keep url crate in lockstep with cookie_store.
-cookie_store = { version = "0.21.1", optional = true, default-features = false, features = ["preserve_order"] }
+cookie_store = { version = "0.22", optional = true, default-features = false, features = ["preserve_order"] }
 # ureq-proto forces url=2.5.4. This optional dep documents the situation in cookie_store.
 url = { version = "2.3.1", optional = true, default-features = false }
 
 flate2 = { version = "1.0.30", optional = true }
-brotli-decompressor = { version = "4.0.2", optional = true }
+brotli-decompressor = { version = "5.0.0", optional = true }
 encoding_rs = { version = "0.8.34", optional = true }
 
 serde = { version = "1.0.138", optional = true, default-features = false, features = ["std"] }
