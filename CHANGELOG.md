@@ -1,5 +1,7 @@
 # Unreleased
 
+# 3.1.1
+
   * Fix regression in MSRV (hold back native-tls) #1113
   * Fix edge case regression when setting request header Content-Length: 0 #1109
 
