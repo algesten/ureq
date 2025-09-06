@@ -5,6 +5,7 @@ use ureq_proto::http::uri::{PathAndQuery, Scheme};
 
 use http::Uri;
 
+use crate::hostname_matcher::HostnameMatcher;
 use crate::http;
 use crate::util::{AuthorityExt, DebugUri};
 use crate::Error;
@@ -371,6 +372,20 @@ impl ProxyBuilder {
         let proxy = format!("{}://{}{}:{}", self.protocol, userpass, host, port);
         Proxy::new_with_flag(&proxy, false, Some(self.resolve_target))
     }
+}
+
+pub(crate) fn try_no_proxy_from_env() -> Vec<HostnameMatcher> {
+    const TRY_ENV: &[&str] = &["NO_PROXY", "no_proxy"];
+
+    let mut no_proxy_list = Vec::new();
+
+    for attempt in TRY_ENV {
+        if let Ok(env) = std::env::var(attempt) {
+            no_proxy_list.extend(env.split(',').map(HostnameMatcher::parse));
+        }
+    }
+
+    no_proxy_list
 }
 
 impl TryFrom<&str> for ProxyProtocol {
