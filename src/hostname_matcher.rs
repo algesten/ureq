@@ -5,6 +5,8 @@ use ureq_proto::http::Uri;
 pub enum HostnameMatcher {
     /// Matches the pattern literally - by string equality
     Literal(String),
+    /// Subdomain match - equivalent to checking if ther pattern is the suffix to the string
+    Suffix(String),
     /// Matches any string
     MatchAll,
 }
@@ -14,7 +16,13 @@ impl HostnameMatcher {
         if pattern == "*" {
             return Self::MatchAll;
         }
-        Self::Literal(pattern.to_owned())
+
+        let pattern = pattern.to_owned();
+
+        if pattern.starts_with('.') {
+            return Self::Suffix(pattern);
+        }
+        Self::Literal(pattern)
     }
 
     pub fn matches(&self, uri: &Uri) -> bool {
@@ -24,6 +32,7 @@ impl HostnameMatcher {
 
         match self {
             Self::Literal(lit) => lit == hostname,
+            Self::Suffix(suffix) => hostname.ends_with(suffix),
             Self::MatchAll => true,
         }
     }
