@@ -68,9 +68,9 @@ jobs:
           toolchain: ${{ matrix.rust }}
       - uses: Swatinem/rust-cache@v2
       - name: Build 1
-        run: cargo +${{steps.toolchain.outputs.name}} build
+        run: cargo +${{steps.toolchain.outputs.name}} build --all-features
       - name: Build 2
-        run: cargo +${{steps.toolchain.outputs.name}} build
+        run: cargo +${{steps.toolchain.outputs.name}} build --all-features
 
   build_and_test:
     name: Test
