@@ -890,6 +890,13 @@ pub(crate) mod test {
     }
 
     #[test]
+    fn query_no_slash() {
+        init_test_log();
+        let mut res = get("http://httpbin.org?query=foo").call().unwrap();
+        res.body_mut().read_to_string().unwrap();
+    }
+
+    #[test]
     fn simple_head() {
         init_test_log();
         let mut res = head("http://httpbin.org/get").call().unwrap();
