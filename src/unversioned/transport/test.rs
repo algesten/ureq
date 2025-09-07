@@ -227,6 +227,24 @@ fn setup_default_handlers(handlers: &mut Vec<TestHandler>) {
     );
 
     maybe_add(
+        TestHandler::new("/?query=foo", |_uri, req, w| {
+            write!(
+                w,
+                "HTTP/1.1 200 OK\r\n\
+                Content-Type: application/json\r\n\
+                Content-Length: {}\r\n\
+                \r\n",
+                HTTPBIN_GET.len()
+            )?;
+            if req.method() != Method::HEAD {
+                w.write_all(HTTPBIN_GET.as_bytes())?;
+            }
+            Ok(())
+        }),
+        handlers,
+    );
+
+    maybe_add(
         TestHandler::new("/head", |_uri, _req, w| {
             write!(
                 w,
