@@ -1,5 +1,9 @@
 # Unreleased
 
+# 3.1.2
+
+  * Fix bug when query is after host "example.com?query" #1115
+
 # 3.1.1
 
   * Fix regression in MSRV (hold back native-tls) #1113
