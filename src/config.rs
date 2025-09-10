@@ -7,8 +7,9 @@ use std::time::Duration;
 
 use http::Uri;
 
+use crate::hostname_matcher::HostnameMatcher;
 use crate::middleware::{Middleware, MiddlewareChain};
-use crate::{http, Body, Error};
+use crate::{http, proxy, Body, Error};
 use crate::{Agent, AsSendBody, Proxy, RequestBuilder};
 
 #[cfg(feature = "_tls")]
@@ -153,6 +154,7 @@ pub struct Config {
     #[cfg(feature = "_tls")]
     tls_config: TlsConfig,
     proxy: Option<Proxy>,
+    no_proxy_list: Vec<HostnameMatcher>,
     no_delay: bool,
     max_redirects: u32,
     max_redirects_will_error: bool,
@@ -187,6 +189,13 @@ impl Config {
     /// Cloning the config does not incur heap allocations.
     pub fn new_agent(&self) -> Agent {
         self.clone().into()
+    }
+
+    /// Checks if a specific uri should not be proxied
+    pub fn is_in_no_proxy(&self, uri: &Uri) -> bool {
+        self.no_proxy_list()
+            .iter()
+            .any(|matcher| matcher.matches(uri))
     }
 
     pub(crate) fn connect_proxy_uri(&self) -> Option<&Uri> {
@@ -248,6 +257,14 @@ impl Config {
     /// Picked up from environment when using [`Config::default()`] or
     pub fn proxy(&self) -> Option<&Proxy> {
         self.proxy.as_ref()
+    }
+
+    /// Disable proxy for specific URIs
+    ///
+    /// Picked up from environment when using [`Config::default()`] or
+    /// [`Agent::new_with_defaults()`][crate::Agent::new_with_defaults].
+    pub fn no_proxy_list(&self) -> &[HostnameMatcher] {
+        &self.no_proxy_list
     }
 
     /// Disable Nagle's algorithm
@@ -470,6 +487,15 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
     /// [`Agent::new_with_defaults()`][crate::Agent::new_with_defaults].
     pub fn proxy(mut self, v: Option<Proxy>) -> Self {
         self.config().proxy = v;
+        self
+    }
+
+    /// Disable proxy for specific URI's
+    ///
+    /// Picked up from environment when using [`Config::default()`] or
+    /// [`Agent::new_with_defaults()`][crate::Agent::new_with_defaults].
+    pub fn no_proxy_list(mut self, v: Vec<HostnameMatcher>) -> Self {
+        self.config().no_proxy_list = v;
         self
     }
 
@@ -879,6 +905,7 @@ impl Default for Config {
             #[cfg(feature = "_tls")]
             tls_config: TlsConfig::default(),
             proxy: Proxy::try_from_env(),
+            no_proxy_list: proxy::try_no_proxy_from_env(),
             no_delay: true,
             max_redirects: 10,
             max_redirects_will_error: true,
@@ -956,6 +983,7 @@ impl fmt::Debug for Config {
             .field("https_only", &self.https_only)
             .field("ip_family", &self.ip_family)
             .field("proxy", &self.proxy)
+            .field("no_proxy_list", &self.no_proxy_list)
             .field("no_delay", &self.no_delay)
             .field("max_redirects", &self.max_redirects)
             .field("redirect_auth_headers", &self.redirect_auth_headers)

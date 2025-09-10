@@ -47,6 +47,11 @@ impl<In: Transport> Connector<In> for SocksConnector {
             return Ok(chained.map(Either::A));
         }
 
+        if details.config.is_in_no_proxy(details.uri) {
+            trace!("url in no_proxy");
+            return Ok(chained.map(Either::A));
+        }
+
         let proxy_addrs = details
             .resolver
             .resolve(proxy.uri(), details.config, details.timeout)?;

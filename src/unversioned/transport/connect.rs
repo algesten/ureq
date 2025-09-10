@@ -41,6 +41,10 @@ impl<In: Transport> Connector<In> for ConnectProxyConnector {
             return Ok(None);
         };
 
+        if details.config.is_in_no_proxy(details.uri) {
+            return Ok(None);
+        }
+
         let target = details.uri;
         let target_addrs = &details.addrs;
 
