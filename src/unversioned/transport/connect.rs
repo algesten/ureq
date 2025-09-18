@@ -40,6 +40,9 @@ impl<In: Transport> Connector<In> for ConnectProxyConnector {
             // Not using CONNECT
             return Ok(None);
         };
+        if !details.config.should_proxy(details.uri) {
+            return Ok(None);
+        }
 
         let target = details.uri;
         let target_addrs = &details.addrs;

@@ -356,8 +356,11 @@ fn connect(
     // For most proxy configs, the proxy itself should resolve the host name we are connecting to.
     // However for SOCKS4, we must do it and pass the resolved IP to the proxy.
     let is_proxy_local_resolve = config.proxy().map(|p| p.resolve_target()).unwrap_or(false);
+    // This determines if we should proxy the request.
+    // This respects the environment variable `NO_PROXY`.
+    let should_proxy = config.should_proxy(uri);
 
-    let addrs = if !is_proxy || is_proxy_local_resolve {
+    let addrs = if !should_proxy || !is_proxy || is_proxy_local_resolve {
         agent
             .resolver
             .resolve(uri, config, timings.next_timeout(Timeout::Resolve))?

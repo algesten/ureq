@@ -113,6 +113,7 @@ struct ProxyInner {
     uri: Uri,
     from_env: bool,
     resolve_target: bool,
+    no_proxy: Option<NoProxy>
 }
 
 impl Proxy {
@@ -177,11 +178,17 @@ impl Proxy {
         let proto: ProxyProtocol = scheme.try_into()?;
         let resolve_target = resolve_target.unwrap_or(proto.default_resolve_target());
 
+        let no_proxy = match from_env {
+            true =>  NoProxy::try_from_env(),
+            false => None,
+        };
+
         let inner = ProxyInner {
             proto,
             uri,
             from_env,
             resolve_target,
+            no_proxy,
         };
 
         Ok(Self {
@@ -273,6 +280,21 @@ impl Proxy {
     /// case is to let the proxy resolve the target host.
     pub fn resolve_target(&self) -> bool {
         self.inner.resolve_target
+    }
+
+    /// Determines whether the host should be proxied.
+    ///
+    /// This method is used by Proxy Connectors to decide if a connection to the given host
+    /// should be routed through the proxy or established directly.
+    ///
+    /// * `true` - The connection should be routed through the proxy connector
+    /// * `false` - The connection should bypass the proxy and connect directly to the host
+    pub fn should_proxy(&self, host: &str) -> bool {
+        if let Some(no_proxy) = &self.inner.no_proxy {
+            no_proxy.should_proxy(host)
+        } else {
+            true
+        }
     }
 }
 
@@ -411,6 +433,67 @@ impl fmt::Display for ProxyProtocol {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+enum NoProxyEntry {
+    ExactHost(String),
+    HostSuffix(String),
+    MatchAll,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+struct NoProxy {
+    inner: Vec<NoProxyEntry>,
+}
+
+impl NoProxy {
+
+    /// Read no proxy settings from environment variables.
+    ///
+    /// The environment variable is expected to contain values separated by comma. The following
+    /// environment variables are attempted:
+    ///
+    /// * `NO_PROXY`
+    ///
+    /// Returns `None` if no environment variable is set
+    pub fn try_from_env() -> Option<Self> {
+        let entries = (&["no_proxy", "NO_PROXY"])
+            .iter()
+            .filter_map(|&env| std::env::var(env).ok())
+            .flat_map(|env| env.split(",").filter(|s| !s.is_empty()).filter_map(Self::match_entry).collect::<Vec<_>>())
+            .collect::<std::collections::HashSet<NoProxyEntry>>()
+            .into_iter()
+            .collect::<Vec<NoProxyEntry>>();
+
+        if entries.is_empty() {
+            None
+        } else {
+            Some(Self { inner: entries })
+        }
+    }
+
+    pub fn should_proxy(&self, host: &str) -> bool {
+        for entry in self.inner.iter() {
+            match entry {
+                NoProxyEntry::MatchAll => return false,
+                NoProxyEntry::ExactHost(e) if e == host => return false,
+                NoProxyEntry::HostSuffix(suffix) if host.ends_with(suffix) => return false,
+                _ => true,
+            };
+        }
+        true
+    }
+
+    fn match_entry(u: &str) -> Option<NoProxyEntry> {
+        let entry = match u {
+            "*" => NoProxyEntry::MatchAll,
+            u if u.starts_with("*") => NoProxyEntry::HostSuffix(u.chars().skip(1).collect::<String>()),
+            u if u.starts_with(".") => NoProxyEntry::HostSuffix(u.to_string()),
+            _ => NoProxyEntry::ExactHost(u.to_string()),
+        };
+        Some(entry)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -509,6 +592,36 @@ mod tests {
         assert_eq!(proxy.port(), 80);
         assert_eq!(proxy.inner.proto, ProxyProtocol::Http);
     }
+
+    #[test]
+    fn no_proxy_should_host_be_proxied() {
+
+
+        std::env::set_var("NO_PROXY", "*.example.com.np");
+        std::env::set_var("no_proxy", "localhost,.example.com");
+
+        let p = Proxy::new_with_flag("localhost:1234", true, None).unwrap();
+
+        assert!(!p.should_proxy("localhost"));
+        assert!(!p.should_proxy("api.example.com"));
+        assert!(!p.should_proxy("01.api.example.com"));
+
+        // Route through proxy
+        assert!(p.should_proxy("docs.rs"));
+        assert!(p.should_proxy("example.com"));
+
+        std::env::set_var("NO_PROXY", ".example.com,*");
+        std::env::set_var("no_proxy", "*,localhost");
+
+        let p = Proxy::new_with_flag("localhost:1234", true, None).unwrap();
+
+        assert!(!p.should_proxy("localhost"));
+        assert!(!p.should_proxy("api.example.com"));
+        assert!(!p.should_proxy("docs.rs"));
+        assert!(!p.should_proxy("example.com"));
+
+    }
+
 }
 
 #[cfg(test)]

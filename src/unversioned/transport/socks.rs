@@ -51,6 +51,10 @@ impl<In: Transport> Connector<In> for SocksConnector {
             .resolver
             .resolve(proxy.uri(), details.config, details.timeout)?;
 
+        if !details.config.should_proxy(details.uri) {
+            return Ok(None);
+        }
+
         let stream = if proxy.resolve_target() {
             // The target is already resolved by run().
             let resolved = details.addrs.iter().cloned();
