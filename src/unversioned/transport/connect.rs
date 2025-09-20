@@ -44,6 +44,17 @@ impl<In: Transport> Connector<In> for ConnectProxyConnector {
         let target = details.uri;
         let target_addrs = &details.addrs;
 
+        // Check if this host matches NO_PROXY
+        let is_no_proxy = details
+            .config
+            .proxy()
+            .map(|p| p.is_no_proxy(target))
+            .unwrap_or(false);
+
+        if is_no_proxy {
+            return Ok(None);
+        }
+
         // TODO(martin): it's a bit weird to put the CONNECT proxy
         // resolver timeout as part of Timeout::Connect, but we don't
         // have anything more granular for now.

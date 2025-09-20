@@ -51,6 +51,17 @@ impl<In: Transport> Connector<In> for SocksConnector {
             .resolver
             .resolve(proxy.uri(), details.config, details.timeout)?;
 
+        // Check if this host is not supposed to be proxied.
+        let is_no_proxy = details
+            .config
+            .proxy()
+            .map(|p| p.is_no_proxy(details.uri))
+            .unwrap_or(false);
+
+        if is_no_proxy {
+            return Ok(None);
+        }
+
         let stream = if proxy.resolve_target() {
             // The target is already resolved by run().
             let resolved = details.addrs.iter().cloned();
