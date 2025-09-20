@@ -282,19 +282,18 @@ impl Proxy {
         self.inner.resolve_target
     }
 
-    /// Determines whether the host should be proxied.
+    /// Tells if this entry matches anything on the NO_PROXY list.
     ///
     /// This method is used by Proxy Connectors to decide if a connection to the given host
     /// should be routed through the proxy or established directly.
     ///
-    /// * `true` - The connection should be routed through the proxy connector
-    /// * `false` - The connection should bypass the proxy and connect directly to the host
-    pub fn should_proxy(&self, host: &str) -> bool {
-        if let Some(no_proxy) = &self.inner.no_proxy {
-            no_proxy.should_proxy(host)
-        } else {
-            true
+    /// * `false` - The connection should be routed through the proxy connector
+    /// * `true` - The connection should bypass the proxy and connect directly to the host
+    pub fn is_no_proxy(&self, uri: &Uri) -> bool {
+        if let (Some(no_proxy), Some(host)) = (&self.inner.no_proxy, uri.host()) {
+            return no_proxy.is_no_proxy(host);
         }
+        false
     }
 }
 
@@ -452,56 +451,52 @@ impl NoProxy {
     /// environment variables are attempted:
     ///
     /// * `NO_PROXY`
+    /// * `no_proxy`
     ///
     /// Returns `None` if no environment variable is set
     pub fn try_from_env() -> Option<Self> {
-        let entries = (&["no_proxy", "NO_PROXY"])
-            .iter()
-            .filter_map(|&env| std::env::var(env).ok())
-            .flat_map(|env| {
-                env.split(",")
-                    .filter(|s| !s.is_empty())
-                    .filter_map(Self::match_entry)
-                    .collect::<Vec<_>>()
-            })
-            .collect::<std::collections::HashSet<NoProxyEntry>>()
-            .into_iter()
-            .collect::<Vec<NoProxyEntry>>();
+        const TRY_ENV: &[&str] = &["NO_PROXY", "no_proxy"];
 
-        if entries.is_empty() {
-            None
-        } else {
-            Some(Self { inner: entries })
-        }
-    }
-
-    pub fn should_proxy(&self, host: &str) -> bool {
-        for entry in self.inner.iter() {
-            match entry {
-                NoProxyEntry::MatchAll => return false,
-                NoProxyEntry::ExactHost(e) if e == host => return false,
-                NoProxyEntry::HostSuffix(suffix) if host.ends_with(suffix) => return false,
-                _ => true,
-            };
-        }
-        true
-    }
-
-    fn match_entry(u: &str) -> Option<NoProxyEntry> {
-        let entry = match u {
-            "*" => NoProxyEntry::MatchAll,
-            u if u.starts_with("*") => {
-                NoProxyEntry::HostSuffix(u.chars().skip(1).collect::<String>())
+        for attempt in TRY_ENV {
+            if let Ok(env) = std::env::var(attempt) {
+                let inner = env.split(',').filter_map(NoProxyEntry::try_parse).collect();
+                return Some(Self { inner });
             }
-            u if u.starts_with(".") => NoProxyEntry::HostSuffix(u.to_string()),
-            _ => NoProxyEntry::ExactHost(u.to_string()),
+        }
+
+        None
+    }
+
+    pub fn is_no_proxy(&self, host: &str) -> bool {
+        self.inner.iter().any(|entry| entry.matches(host))
+    }
+}
+
+impl NoProxyEntry {
+    fn try_parse(u: &str) -> Option<Self> {
+        let entry = match u {
+            "*" => Self::MatchAll,
+            u if u.starts_with("*") => Self::HostSuffix(u.chars().skip(1).collect::<String>()),
+            u if u.starts_with(".") => Self::HostSuffix(u.to_string()),
+            _ => Self::ExactHost(u.to_string()),
         };
         Some(entry)
+    }
+
+    fn matches(&self, host: &str) -> bool {
+        match self {
+            NoProxyEntry::MatchAll => true,
+            NoProxyEntry::ExactHost(e) if e == host => true,
+            NoProxyEntry::HostSuffix(suffix) if host.ends_with(suffix) => true,
+            _ => false,
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use super::*;
 
     #[test]
@@ -601,28 +596,31 @@ mod tests {
 
     #[test]
     fn no_proxy_should_host_be_proxied() {
-        std::env::set_var("NO_PROXY", "*.example.com.np");
-        std::env::set_var("no_proxy", "localhost,.example.com");
+        std::env::set_var("NO_PROXY", "*.example.com.np,localhost,.example.com");
 
         let p = Proxy::new_with_flag("localhost:1234", true, None).unwrap();
 
-        assert!(!p.should_proxy("localhost"));
-        assert!(!p.should_proxy("api.example.com"));
-        assert!(!p.should_proxy("01.api.example.com"));
+        fn is_no_proxy(p: &Proxy, host: &str) -> bool {
+            let uri = Uri::from_str(&format!("http://{}", host)).unwrap();
+            p.is_no_proxy(&uri)
+        }
+
+        assert!(is_no_proxy(&p, "localhost"));
+        assert!(is_no_proxy(&p, "api.example.com"));
+        assert!(is_no_proxy(&p, "01.api.example.com"));
 
         // Route through proxy
-        assert!(p.should_proxy("docs.rs"));
-        assert!(p.should_proxy("example.com"));
+        assert!(!is_no_proxy(&p, "docs.rs"));
+        assert!(!is_no_proxy(&p, "example.com"));
 
-        std::env::set_var("NO_PROXY", ".example.com,*");
-        std::env::set_var("no_proxy", "*,localhost");
+        std::env::set_var("NO_PROXY", ".example.com,*,*,localhost");
 
         let p = Proxy::new_with_flag("localhost:1234", true, None).unwrap();
 
-        assert!(!p.should_proxy("localhost"));
-        assert!(!p.should_proxy("api.example.com"));
-        assert!(!p.should_proxy("docs.rs"));
-        assert!(!p.should_proxy("example.com"));
+        assert!(is_no_proxy(&p, "localhost"));
+        assert!(is_no_proxy(&p, "api.example.com"));
+        assert!(is_no_proxy(&p, "docs.rs"));
+        assert!(is_no_proxy(&p, "example.com"));
     }
 }
 

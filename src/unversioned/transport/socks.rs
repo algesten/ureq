@@ -51,7 +51,14 @@ impl<In: Transport> Connector<In> for SocksConnector {
             .resolver
             .resolve(proxy.uri(), details.config, details.timeout)?;
 
-        if !details.config.should_proxy(details.uri) {
+        // Check if this host is not supposed to be proxied.
+        let is_no_proxy = details
+            .config
+            .proxy()
+            .map(|p| p.is_no_proxy(&details.uri))
+            .unwrap_or(false);
+
+        if is_no_proxy {
             return Ok(None);
         }
 
