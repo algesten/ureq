@@ -55,7 +55,7 @@ impl<In: Transport> Connector<In> for SocksConnector {
         let is_no_proxy = details
             .config
             .proxy()
-            .map(|p| p.is_no_proxy(&details.uri))
+            .map(|p| p.is_no_proxy(details.uri))
             .unwrap_or(false);
 
         if is_no_proxy {

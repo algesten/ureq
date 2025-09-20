@@ -139,7 +139,7 @@ impl Proxy {
     /// * `john:smith@socks.google.com:8000`
     /// * `localhost`
     pub fn new(proxy: &str) -> Result<Self, Error> {
-        Self::new_with_flag(proxy, false, None)
+        Self::new_with_flag(proxy, None, false, None)
     }
 
     /// Creates a proxy config using a builder.
@@ -151,11 +151,13 @@ impl Proxy {
             username: None,
             password: None,
             resolve_target: p.default_resolve_target(),
+            no_proxy: None,
         }
     }
 
     fn new_with_flag(
         proxy: &str,
+        no_proxy: Option<NoProxy>,
         from_env: bool,
         resolve_target: Option<bool>,
     ) -> Result<Self, Error> {
@@ -177,11 +179,6 @@ impl Proxy {
 
         let proto: ProxyProtocol = scheme.try_into()?;
         let resolve_target = resolve_target.unwrap_or(proto.default_resolve_target());
-
-        let no_proxy = match from_env {
-            true => NoProxy::try_from_env(),
-            false => None,
-        };
 
         let inner = ProxyInner {
             proto,
@@ -218,7 +215,8 @@ impl Proxy {
 
         for attempt in TRY_ENV {
             if let Ok(env) = std::env::var(attempt) {
-                if let Ok(proxy) = Self::new_with_flag(&env, true, None) {
+                let no_proxy = NoProxy::try_from_env();
+                if let Ok(proxy) = Self::new_with_flag(&env, no_proxy, true, None) {
                     return Some(proxy);
                 }
             }
@@ -321,6 +319,7 @@ pub struct ProxyBuilder {
     username: Option<String>,
     password: Option<String>,
     resolve_target: bool,
+    no_proxy: Option<NoProxy>,
 }
 
 impl ProxyBuilder {
@@ -371,6 +370,27 @@ impl ProxyBuilder {
         self
     }
 
+    /// Add a NO_PROXY expression to not route proxy through.
+    ///
+    /// Correct expressions are:
+    ///
+    /// * `example.com` -> Literally match `example.com`, but not `sub.example.com`
+    /// * `.example.com` -> Match `sub.example.com` and `foo.sub.example.com`, but not `example.com`.
+    /// * `*.example.com` -> Exactly like `.example.com`
+    /// * `*` -> Match everything
+    ///
+    /// Silently ignores expressions that are not on the above form.
+    pub fn no_proxy(mut self, expr: &str) -> Self {
+        if let Some(entry) = NoProxyEntry::try_parse(expr) {
+            if self.no_proxy.is_none() {
+                self.no_proxy = Some(NoProxy::default());
+            }
+            self.no_proxy.as_mut().unwrap().inner.push(entry);
+        }
+
+        self
+    }
+
     /// Construct the [`Proxy`]
     pub fn build(self) -> Result<Proxy, Error> {
         let host = self.host.as_deref().unwrap_or("localhost");
@@ -390,7 +410,7 @@ impl ProxyBuilder {
         // validation and normalization in new_with_flag. This could be refactored
         // in the future.
         let proxy = format!("{}://{}{}:{}", self.protocol, userpass, host, port);
-        Proxy::new_with_flag(&proxy, false, Some(self.resolve_target))
+        Proxy::new_with_flag(&proxy, self.no_proxy, false, Some(self.resolve_target))
     }
 }
 
@@ -439,7 +459,7 @@ enum NoProxyEntry {
     MatchAll,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Default)]
 struct NoProxy {
     inner: Vec<NoProxyEntry>,
 }
@@ -598,7 +618,7 @@ mod tests {
     fn no_proxy_should_host_be_proxied() {
         std::env::set_var("NO_PROXY", "*.example.com.np,localhost,.example.com");
 
-        let p = Proxy::new_with_flag("localhost:1234", true, None).unwrap();
+        let p = Proxy::new_with_flag("localhost:1234", None, true, None).unwrap();
 
         fn is_no_proxy(p: &Proxy, host: &str) -> bool {
             let uri = Uri::from_str(&format!("http://{}", host)).unwrap();
@@ -615,7 +635,7 @@ mod tests {
 
         std::env::set_var("NO_PROXY", ".example.com,*,*,localhost");
 
-        let p = Proxy::new_with_flag("localhost:1234", true, None).unwrap();
+        let p = Proxy::new_with_flag("localhost:1234", None, true, None).unwrap();
 
         assert!(is_no_proxy(&p, "localhost"));
         assert!(is_no_proxy(&p, "api.example.com"));
@@ -644,13 +664,13 @@ mod test {
 
     #[test]
     fn proxy_empty_env_url() {
-        let result = Proxy::new_with_flag("", false, None);
+        let result = Proxy::new_with_flag("", None, false, None);
         assert!(result.is_err());
     }
 
     #[test]
     fn proxy_invalid_env_url() {
-        let result = Proxy::new_with_flag("r32/?//52:**", false, None);
+        let result = Proxy::new_with_flag("r32/?//52:**", None, false, None);
         assert!(result.is_err());
     }
 
