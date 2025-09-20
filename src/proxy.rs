@@ -113,7 +113,7 @@ struct ProxyInner {
     uri: Uri,
     from_env: bool,
     resolve_target: bool,
-    no_proxy: Option<NoProxy>
+    no_proxy: Option<NoProxy>,
 }
 
 impl Proxy {
@@ -179,7 +179,7 @@ impl Proxy {
         let resolve_target = resolve_target.unwrap_or(proto.default_resolve_target());
 
         let no_proxy = match from_env {
-            true =>  NoProxy::try_from_env(),
+            true => NoProxy::try_from_env(),
             false => None,
         };
 
@@ -446,7 +446,6 @@ struct NoProxy {
 }
 
 impl NoProxy {
-
     /// Read no proxy settings from environment variables.
     ///
     /// The environment variable is expected to contain values separated by comma. The following
@@ -459,7 +458,12 @@ impl NoProxy {
         let entries = (&["no_proxy", "NO_PROXY"])
             .iter()
             .filter_map(|&env| std::env::var(env).ok())
-            .flat_map(|env| env.split(",").filter(|s| !s.is_empty()).filter_map(Self::match_entry).collect::<Vec<_>>())
+            .flat_map(|env| {
+                env.split(",")
+                    .filter(|s| !s.is_empty())
+                    .filter_map(Self::match_entry)
+                    .collect::<Vec<_>>()
+            })
             .collect::<std::collections::HashSet<NoProxyEntry>>()
             .into_iter()
             .collect::<Vec<NoProxyEntry>>();
@@ -486,7 +490,9 @@ impl NoProxy {
     fn match_entry(u: &str) -> Option<NoProxyEntry> {
         let entry = match u {
             "*" => NoProxyEntry::MatchAll,
-            u if u.starts_with("*") => NoProxyEntry::HostSuffix(u.chars().skip(1).collect::<String>()),
+            u if u.starts_with("*") => {
+                NoProxyEntry::HostSuffix(u.chars().skip(1).collect::<String>())
+            }
             u if u.starts_with(".") => NoProxyEntry::HostSuffix(u.to_string()),
             _ => NoProxyEntry::ExactHost(u.to_string()),
         };
@@ -595,8 +601,6 @@ mod tests {
 
     #[test]
     fn no_proxy_should_host_be_proxied() {
-
-
         std::env::set_var("NO_PROXY", "*.example.com.np");
         std::env::set_var("no_proxy", "localhost,.example.com");
 
@@ -619,9 +623,7 @@ mod tests {
         assert!(!p.should_proxy("api.example.com"));
         assert!(!p.should_proxy("docs.rs"));
         assert!(!p.should_proxy("example.com"));
-
     }
-
 }
 
 #[cfg(test)]

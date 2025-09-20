@@ -210,9 +210,9 @@ impl Config {
     }
 
     pub(crate) fn should_proxy(&self, uri: &Uri) -> bool {
-        match (self.proxy.as_ref(),uri.host()) {
+        match (self.proxy.as_ref(), uri.host()) {
             (Some(proxy), Some(host)) => proxy.should_proxy(host),
-            _ => true
+            _ => true,
         }
     }
 }
