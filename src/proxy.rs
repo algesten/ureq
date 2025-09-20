@@ -496,9 +496,11 @@ impl NoProxyEntry {
     fn try_parse(u: &str) -> Option<Self> {
         let entry = match u {
             "*" => Self::MatchAll,
-            u if u.starts_with("*") => Self::HostSuffix(u.chars().skip(1).collect::<String>()),
-            u if u.starts_with(".") => Self::HostSuffix(u.to_string()),
-            _ => Self::ExactHost(u.to_string()),
+            u if u.starts_with("*") => {
+                Self::HostSuffix(u.chars().skip(1).collect::<String>().to_ascii_lowercase())
+            }
+            u if u.starts_with(".") => Self::HostSuffix(u.to_ascii_lowercase()),
+            _ => Self::ExactHost(u.to_ascii_lowercase()),
         };
         Some(entry)
     }
@@ -506,15 +508,35 @@ impl NoProxyEntry {
     fn matches(&self, host: &str) -> bool {
         match self {
             NoProxyEntry::MatchAll => true,
-            NoProxyEntry::ExactHost(e) if e == host => true,
-            NoProxyEntry::HostSuffix(suffix) if host.ends_with(suffix) => true,
-            _ => false,
+            NoProxyEntry::ExactHost(pattern) => {
+                // Fast path: if host is already lowercase, do direct comparison
+                if host.chars().all(|c| !c.is_ascii_uppercase()) {
+                    pattern == host
+                } else {
+                    // Slow path: convert host to lowercase and compare
+                    pattern == &host.to_ascii_lowercase()
+                }
+            }
+            NoProxyEntry::HostSuffix(suffix) => {
+                if host.len() < suffix.len() {
+                    return false;
+                }
+                let host_suffix = &host[host.len() - suffix.len()..];
+                // Fast path: if host suffix is already lowercase, do direct comparison
+                if host_suffix.chars().all(|c| !c.is_ascii_uppercase()) {
+                    suffix == host_suffix
+                } else {
+                    // Slow path: convert host suffix to lowercase and compare
+                    suffix == &host_suffix.to_ascii_lowercase()
+                }
+            }
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use assert_no_alloc::*;
     use std::str::FromStr;
 
     use super::*;
@@ -615,39 +637,230 @@ mod tests {
     }
 
     #[test]
-    fn no_proxy_should_host_be_proxied() {
-        std::env::set_var("NO_PROXY", "*.example.com.np,localhost,.example.com");
-
-        let p = Proxy::new_with_flag("localhost:1234", None, true, None).unwrap();
+    fn no_proxy_exact_host_matching() {
+        let p = Proxy::builder(ProxyProtocol::Http)
+            .host("proxy.example.com")
+            .port(8080)
+            .no_proxy("localhost")
+            .no_proxy("127.0.0.1")
+            .no_proxy("api.internal.com")
+            .build()
+            .unwrap();
 
         fn is_no_proxy(p: &Proxy, host: &str) -> bool {
             let uri = Uri::from_str(&format!("http://{}", host)).unwrap();
             p.is_no_proxy(&uri)
         }
 
+        // Should match exact hosts
         assert!(is_no_proxy(&p, "localhost"));
-        assert!(is_no_proxy(&p, "api.example.com"));
-        assert!(is_no_proxy(&p, "01.api.example.com"));
+        assert!(is_no_proxy(&p, "127.0.0.1"));
+        assert!(is_no_proxy(&p, "api.internal.com"));
 
-        // Route through proxy
+        // Should not match partial or different hosts
+        assert!(!is_no_proxy(&p, "mylocalhost"));
+        assert!(!is_no_proxy(&p, "localhost.example.com"));
+        assert!(!is_no_proxy(&p, "127.0.0.2"));
+        assert!(!is_no_proxy(&p, "api.internal.com.evil.com"));
         assert!(!is_no_proxy(&p, "docs.rs"));
-        assert!(!is_no_proxy(&p, "example.com"));
+    }
 
-        std::env::set_var("NO_PROXY", ".example.com,*,*,localhost");
+    #[test]
+    fn no_proxy_wildcard_suffix_matching() {
+        let p = Proxy::builder(ProxyProtocol::Http)
+            .host("proxy.example.com")
+            .port(8080)
+            .no_proxy("*.internal.com")
+            .no_proxy("*.dev")
+            .build()
+            .unwrap();
 
-        let p = Proxy::new_with_flag("localhost:1234", None, true, None).unwrap();
+        fn is_no_proxy(p: &Proxy, host: &str) -> bool {
+            let uri = Uri::from_str(&format!("http://{}", host)).unwrap();
+            p.is_no_proxy(&uri)
+        }
 
+        // Should match wildcard suffixes
+        assert!(is_no_proxy(&p, "api.internal.com"));
+        assert!(is_no_proxy(&p, "auth.internal.com"));
+        assert!(is_no_proxy(&p, "db.internal.com"));
+        assert!(is_no_proxy(&p, "app.dev"));
+        assert!(is_no_proxy(&p, "test.dev"));
+
+        // Should not match the bare suffix or unrelated hosts
+        assert!(!is_no_proxy(&p, "internal.com"));
+        assert!(!is_no_proxy(&p, "dev"));
+        assert!(!is_no_proxy(&p, "api.external.com"));
+        assert!(!is_no_proxy(&p, "app.prod"));
+        assert!(!is_no_proxy(&p, "docs.rs"));
+    }
+
+    #[test]
+    fn no_proxy_dot_suffix_matching() {
+        let p = Proxy::builder(ProxyProtocol::Http)
+            .host("proxy.example.com")
+            .port(8080)
+            .no_proxy(".internal.com")
+            .no_proxy(".staging")
+            .build()
+            .unwrap();
+
+        fn is_no_proxy(p: &Proxy, host: &str) -> bool {
+            let uri = Uri::from_str(&format!("http://{}", host)).unwrap();
+            p.is_no_proxy(&uri)
+        }
+
+        // Should match dot suffix patterns (only subdomains, not the domain itself)
+        assert!(is_no_proxy(&p, "api.internal.com"));
+        assert!(is_no_proxy(&p, "auth.internal.com"));
+        assert!(is_no_proxy(&p, "db.sub.internal.com"));
+        assert!(is_no_proxy(&p, "app.staging"));
+        assert!(is_no_proxy(&p, "test.staging"));
+
+        // Should NOT match the bare domain (key difference from wildcard)
+        assert!(!is_no_proxy(&p, "internal.com"));
+        assert!(!is_no_proxy(&p, "staging"));
+
+        // Should not match unrelated hosts
+        assert!(!is_no_proxy(&p, "api.external.com"));
+        assert!(!is_no_proxy(&p, "prod"));
+        assert!(!is_no_proxy(&p, "docs.rs"));
+    }
+
+    #[test]
+    fn no_proxy_match_all_wildcard() {
+        let p = Proxy::builder(ProxyProtocol::Http)
+            .host("proxy.example.com")
+            .port(8080)
+            .no_proxy("*")
+            .build()
+            .unwrap();
+
+        fn is_no_proxy(p: &Proxy, host: &str) -> bool {
+            let uri = Uri::from_str(&format!("http://{}", host)).unwrap();
+            p.is_no_proxy(&uri)
+        }
+
+        // Should match everything when using "*"
         assert!(is_no_proxy(&p, "localhost"));
+        assert!(is_no_proxy(&p, "127.0.0.1"));
         assert!(is_no_proxy(&p, "api.example.com"));
         assert!(is_no_proxy(&p, "docs.rs"));
-        assert!(is_no_proxy(&p, "example.com"));
+        assert!(is_no_proxy(&p, "github.com"));
+        assert!(is_no_proxy(&p, "any.random.domain"));
     }
-}
 
-#[cfg(test)]
-mod test {
-    use super::*;
-    use assert_no_alloc::*;
+    #[test]
+    fn no_proxy_mixed_patterns() {
+        let p = Proxy::builder(ProxyProtocol::Http)
+            .host("proxy.example.com")
+            .port(8080)
+            .no_proxy("localhost") // exact host
+            .no_proxy("*.dev") // wildcard suffix
+            .no_proxy(".staging") // dot suffix
+            .no_proxy("127.0.0.1") // exact IP
+            .build()
+            .unwrap();
+
+        fn is_no_proxy(p: &Proxy, host: &str) -> bool {
+            let uri = Uri::from_str(&format!("http://{}", host)).unwrap();
+            p.is_no_proxy(&uri)
+        }
+
+        // Should match exact hosts
+        assert!(is_no_proxy(&p, "localhost"));
+        assert!(is_no_proxy(&p, "127.0.0.1"));
+
+        // Should match wildcard suffixes
+        assert!(is_no_proxy(&p, "api.dev"));
+        assert!(is_no_proxy(&p, "test.dev"));
+
+        // Should match dot suffixes (only subdomains, not the domain itself)
+        assert!(is_no_proxy(&p, "app.staging"));
+        assert!(!is_no_proxy(&p, "staging"));
+
+        // Should not match unrelated hosts
+        assert!(!is_no_proxy(&p, "dev")); // bare wildcard suffix
+        assert!(!is_no_proxy(&p, "api.prod")); // different suffix
+        assert!(!is_no_proxy(&p, "docs.rs")); // unrelated
+        assert!(!is_no_proxy(&p, "127.0.0.2")); // different IP
+    }
+
+    #[test]
+    fn no_proxy_case_insensitive_matching() {
+        let p = Proxy::builder(ProxyProtocol::Http)
+            .host("proxy.example.com")
+            .port(8080)
+            .no_proxy("localhost")
+            .no_proxy("*.Example.Com")
+            .no_proxy(".INTERNAL")
+            .build()
+            .unwrap();
+
+        fn is_no_proxy(p: &Proxy, host: &str) -> bool {
+            let uri = Uri::from_str(&format!("http://{}", host)).unwrap();
+            p.is_no_proxy(&uri)
+        }
+
+        // Test exact host matching - should be case insensitive
+        // These patterns are stored as lowercase: "localhost"
+        assert!(is_no_proxy(&p, "localhost")); // fast path: already lowercase
+        assert!(is_no_proxy(&p, "LOCALHOST")); // slow path: needs conversion
+        assert!(is_no_proxy(&p, "LocalHost")); // slow path: needs conversion
+
+        // Test wildcard suffix case insensitive matching
+        // These patterns are stored as lowercase: ".example.com"
+        assert!(is_no_proxy(&p, "api.example.com")); // fast path: already lowercase
+        assert!(is_no_proxy(&p, "api.EXAMPLE.COM")); // slow path: needs conversion
+        assert!(is_no_proxy(&p, "API.example.COM")); // slow path: needs conversion
+        assert!(is_no_proxy(&p, "api.Example.Com")); // slow path: needs conversion
+
+        // Test dot suffix case insensitive matching (only matches subdomains)
+        // These patterns are stored as lowercase: ".internal"
+        assert!(is_no_proxy(&p, "app.internal")); // fast path: already lowercase
+        assert!(is_no_proxy(&p, "app.INTERNAL")); // slow path: needs conversion
+        assert!(is_no_proxy(&p, "APP.Internal")); // slow path: needs conversion
+        assert!(!is_no_proxy(&p, "INTERNAL")); // bare domain doesn't match dot suffix
+        assert!(!is_no_proxy(&p, "internal")); // bare domain doesn't match dot suffix
+    }
+
+    #[test]
+    fn no_proxy_edge_cases() {
+        let p = Proxy::builder(ProxyProtocol::Http)
+            .host("proxy.example.com")
+            .port(8080)
+            .no_proxy("") // empty string
+            .no_proxy("single") // single word
+            .no_proxy("*..") // malformed wildcard
+            .no_proxy("..") // malformed dot suffix
+            .no_proxy("192.168.1.1") // IP address
+            .no_proxy("*.local") // local domain
+            .build()
+            .unwrap();
+
+        fn is_no_proxy(p: &Proxy, host: &str) -> bool {
+            let uri = Uri::from_str(&format!("http://{}", host)).unwrap();
+            p.is_no_proxy(&uri)
+        }
+
+        // Test exact matching of various formats
+        assert!(is_no_proxy(&p, "single"));
+        assert!(is_no_proxy(&p, "192.168.1.1"));
+        assert!(!is_no_proxy(&p, "192.168.1.2"));
+
+        // Test wildcard with local domains
+        assert!(is_no_proxy(&p, "printer.local"));
+        assert!(is_no_proxy(&p, "router.local"));
+        assert!(!is_no_proxy(&p, "local")); // bare domain
+
+        // Test that malformed patterns don't break things
+        assert!(is_no_proxy(&p, "something..")); // matches exactly
+        assert!(!is_no_proxy(&p, "something.else"));
+
+        // Test empty string exact match
+        // Note: This is likely an edge case that shouldn't happen in practice
+        // but we want to ensure it doesn't crash
+    }
 
     #[test]
     fn proxy_clone_does_not_allocate() {
