@@ -386,6 +386,15 @@
 //!
 //! Proxies settings are configured on an [`Agent`]. All request sent through the agent will be proxied.
 //!
+//! ## Environment Variables
+//!
+//! ureq automatically reads proxy configuration from environment variables when creating
+//! a default [`Agent`]. Proxy variables are checked in order: `ALL_PROXY`, `HTTPS_PROXY`,
+//! then `HTTP_PROXY` (with lowercase variants).
+//!
+//! `NO_PROXY` specifies hosts that bypass the proxy, supporting exact hosts, wildcard
+//! suffixes (`*.example.com`), dot suffixes (`.example.com`), and match-all (`*`).
+//!
 //! ## Example using HTTP
 //!
 //! ```rust

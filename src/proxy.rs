@@ -202,6 +202,10 @@ impl Proxy {
     /// * `HTTPS_PROXY`
     /// * `HTTP_PROXY`
     ///
+    /// Additionally, the `NO_PROXY` environment variable is automatically read to determine
+    /// which hosts should bypass the proxy. This supports various pattern types including
+    /// exact hostnames, wildcard suffixes, and dot suffixes.
+    ///
     /// Returns `None` if no environment variable is set or the URI is invalid.
     pub fn try_from_env() -> Option<Self> {
         const TRY_ENV: &[&str] = &[
@@ -472,6 +476,26 @@ impl NoProxy {
     ///
     /// * `NO_PROXY`
     /// * `no_proxy`
+    ///
+    /// ## Supported Pattern Types
+    ///
+    /// * **Exact match**: `localhost`, `127.0.0.1` - matches the exact hostname (case-insensitive)
+    /// * **Wildcard suffix**: `*.example.com` - matches any subdomain of example.com
+    /// * **Dot suffix**: `.example.com` - matches any subdomain of example.com (but not example.com itself)
+    /// * **Match all**: `*` - bypasses proxy for all requests
+    ///
+    /// ## Examples
+    ///
+    /// ```bash
+    /// # Bypass proxy for localhost and internal domains
+    /// export NO_PROXY=localhost,127.0.0.1,*.internal.com
+    ///
+    /// # Bypass proxy for staging subdomains but not staging itself
+    /// export NO_PROXY=.staging
+    ///
+    /// # Bypass proxy for everything
+    /// export NO_PROXY=*
+    /// ```
     ///
     /// Returns `None` if no environment variable is set
     pub fn try_from_env() -> Option<Self> {

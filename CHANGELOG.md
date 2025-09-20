@@ -1,5 +1,7 @@
 # Unreleased
 
+  * Support for env NO_PROXY and proxy config #1118
+
 # 3.1.2
 
   * Fix bug when query is after host "example.com?query" #1115

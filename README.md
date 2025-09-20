@@ -143,13 +143,13 @@ The default enabled features are: **rustls** and **gzip**.
 * **platform-verifier** enables verifying the server certificates using a method native to the
   platform ureq is executing on. See [rustls-platform-verifier] crate
 * **socks-proxy** enables proxy config using the `socks4://`, `socks4a://`, `socks5://`
-   and `socks://` (equal to `socks5://`) prefix
+  and `socks://` (equal to `socks5://`) prefix
 * **cookies** enables cookies
 * **gzip** enables requests of gzip-compressed responses and decompresses them
 * **brotli** enables requests brotli-compressed responses and decompresses them
 * **charset** enables interpreting the charset part of the Content-Type header
-   (e.g.  `Content-Type: text/plain; charset=iso-8859-1`). Without this, the
-   library defaults to Rust's built in `utf-8`
+  (e.g.  `Content-Type: text/plain; charset=iso-8859-1`). Without this, the
+  library defaults to Rust's built in `utf-8`
 * **json** enables JSON sending and receiving via serde_json
 
 #### Unstable
@@ -371,6 +371,15 @@ the former is always available while the latter must be enabled using the featur
 **socks-proxy**.
 
 Proxies settings are configured on an [`Agent`]. All request sent through the agent will be proxied.
+
+### Environment Variables
+
+ureq automatically reads proxy configuration from environment variables when creating
+a default [`Agent`]. Proxy variables are checked in order: `ALL_PROXY`, `HTTPS_PROXY`,
+then `HTTP_PROXY` (with lowercase variants).
+
+`NO_PROXY` specifies hosts that bypass the proxy, supporting exact hosts, wildcard
+suffixes (`*.example.com`), dot suffixes (`.example.com`), and match-all (`*`).
 
 ### Example using HTTP
 
