@@ -86,6 +86,7 @@ jobs:
           - brotli
           - json
           - native-tls
+          - digest-auth
     env:
       RUST_BACKTRACE: "1"
       RUSTFLAGS: "-D dead_code -D unused-variables -D unused"
