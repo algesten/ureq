@@ -86,7 +86,7 @@ pub enum Error {
     /// Breaking changes in that struct will not be reflected in ureq
     /// major versions.
     #[cfg(feature = "_tls")]
-    Pem(rustls_pemfile::Error),
+    Pem(rustls_pki_types::pem::Error),
 
     /// An error originating in Rustls.
     ///

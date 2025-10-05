@@ -193,7 +193,8 @@ impl<'a> PrivateKey<'a> {
 /// The data may contain one or many PEM items. The iterator produces the recognized PEM
 /// items and skip others.
 pub fn parse_pem(pem: &[u8]) -> impl Iterator<Item = Result<PemItem<'static>, Error>> + '_ {
-    PemIter(pem)
+    use rustls_pki_types::pem::PemObject;
+    PemIter(<(rustls_pki_types::pem::SectionKind, Vec<u8>)>::pem_slice_iter(pem))
 }
 
 /// Kinds of PEM data found by [`parse_pem`]
@@ -206,43 +207,57 @@ pub enum PemItem<'a> {
     PrivateKey(PrivateKey<'a>),
 }
 
-struct PemIter<'a>(&'a [u8]);
+struct PemIter<I>(I)
+where
+    I: Iterator<
+        Item = Result<(rustls_pki_types::pem::SectionKind, Vec<u8>), rustls_pki_types::pem::Error>,
+    >;
 
-impl<'a> Iterator for PemIter<'a> {
+impl<I> Iterator for PemIter<I>
+where
+    I: Iterator<
+        Item = Result<(rustls_pki_types::pem::SectionKind, Vec<u8>), rustls_pki_types::pem::Error>,
+    >,
+{
     type Item = Result<PemItem<'static>, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            match rustls_pemfile::read_one_from_slice(self.0) {
-                Ok(Some((cert, rest))) => {
-                    // Move slice along for next iterator next()
-                    self.0 = rest;
-
-                    match cert {
-                        rustls_pemfile::Item::X509Certificate(der) => {
+            match self.0.next() {
+                Some(Ok((section_kind, der_data))) => {
+                    match section_kind {
+                        rustls_pki_types::pem::SectionKind::Certificate => {
                             return Some(Ok(Certificate {
-                                der: CertDer::Rustls(der),
+                                der: CertDer::Rustls(rustls_pki_types::CertificateDer::from(
+                                    der_data,
+                                )),
                             }
                             .into()));
                         }
-                        rustls_pemfile::Item::Pkcs1Key(der) => {
+                        rustls_pki_types::pem::SectionKind::RsaPrivateKey => {
                             return Some(Ok(PrivateKey {
                                 kind: KeyKind::Pkcs1,
-                                der: PrivateKeyDer::Rustls(der.into()),
+                                der: PrivateKeyDer::Rustls(rustls_pki_types::PrivateKeyDer::from(
+                                    rustls_pki_types::PrivatePkcs1KeyDer::from(der_data),
+                                )),
                             }
                             .into()));
                         }
-                        rustls_pemfile::Item::Pkcs8Key(der) => {
+                        rustls_pki_types::pem::SectionKind::PrivateKey => {
                             return Some(Ok(PrivateKey {
                                 kind: KeyKind::Pkcs8,
-                                der: PrivateKeyDer::Rustls(der.into()),
+                                der: PrivateKeyDer::Rustls(rustls_pki_types::PrivateKeyDer::from(
+                                    rustls_pki_types::PrivatePkcs8KeyDer::from(der_data),
+                                )),
                             }
                             .into()));
                         }
-                        rustls_pemfile::Item::Sec1Key(der) => {
+                        rustls_pki_types::pem::SectionKind::EcPrivateKey => {
                             return Some(Ok(PrivateKey {
                                 kind: KeyKind::Sec1,
-                                der: PrivateKeyDer::Rustls(der.into()),
+                                der: PrivateKeyDer::Rustls(rustls_pki_types::PrivateKeyDer::from(
+                                    rustls_pki_types::PrivateSec1KeyDer::from(der_data),
+                                )),
                             }
                             .into()));
                         }
@@ -253,9 +268,9 @@ impl<'a> Iterator for PemIter<'a> {
                 }
 
                 // It's over
-                Ok(None) => return None,
+                None => return None,
 
-                Err(e) => {
+                Some(Err(e)) => {
                     return Some(Err(Error::Pem(e)));
                 }
             }
