@@ -429,7 +429,7 @@ impl Body {
     /// needs, available system resources, and system utilization.
     pub fn into_with_config(self) -> BodyWithConfig<'static> {
         let handler = self.source.into();
-        BodyWithConfig::new(handler, self.info.clone())
+        BodyWithConfig::new(handler, self.info)
     }
 }
 
