@@ -85,3 +85,45 @@ impl<T: Transport> io::Write for TransportAdapter<T> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::io::{self, Read};
+
+    use super::super::*;
+    use super::*;
+
+    #[test]
+    fn timeout_errors_translate_transparently() {
+        #[derive(Debug)]
+        struct FailingTransport(LazyBuffers);
+        impl Transport for FailingTransport {
+            fn buffers(&mut self) -> &mut dyn crate::unversioned::transport::Buffers {
+                &mut self.0
+            }
+
+            fn transmit_output(
+                &mut self,
+                _amount: usize,
+                _timeout: NextTimeout,
+            ) -> Result<(), crate::Error> {
+                unimplemented!()
+            }
+
+            fn await_input(&mut self, _timeout: NextTimeout) -> Result<bool, crate::Error> {
+                Err(crate::Error::Timeout(Timeout::Global))
+            }
+
+            fn is_open(&mut self) -> bool {
+                unimplemented!()
+            }
+        }
+
+        let mut adapter = TransportAdapter::new(FailingTransport(LazyBuffers::new(1024, 1024)));
+        let Err(expected_error) = adapter.read(&mut [0u8; 10]) else {
+            panic!("Expected error, but got success");
+        };
+
+        assert_eq!(expected_error.kind(), io::ErrorKind::TimedOut);
+    }
+}
