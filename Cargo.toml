@@ -88,6 +88,9 @@ encoding_rs = { version = "0.8.34", optional = true }
 
 serde = { version = "1.0.138", optional = true, default-features = false, features = ["std"] }
 serde_json = { version = "1.0.120", optional = true, default-features = false, features = ["std"] }
+mime = "0.3.17"
+rand = "0.9.2"
+mime_guess = "2.0.5"
 
 [dev-dependencies]
 env_logger = "0.11.7"
