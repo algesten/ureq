@@ -15,7 +15,7 @@ exclude = ["/cargo_deny.sh", "/deny.toml", "/test.sh"]
 rust-version = "1.71.1"
 
 [package.metadata.docs.rs]
-features = ["rustls", "platform-verifier", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset", "json", "_test", "_doc"]
+features = ["rustls", "platform-verifier", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset", "json", "local_address", "_test", "_doc"]
 
 [features]
 default = ["rustls", "gzip"]
@@ -31,6 +31,7 @@ gzip = ["dep:flate2"]
 brotli = ["dep:brotli-decompressor"]
 charset = ["dep:encoding_rs"]
 json = ["dep:serde", "dep:serde_json", "cookie_store?/serde_json"]
+local_address = ["dep:socket2"]
 
 ######## UNSTABLE FEATURES.
 # Might be removed or changed in a minor version.
@@ -88,6 +89,8 @@ encoding_rs = { version = "0.8.34", optional = true }
 
 serde = { version = "1.0.138", optional = true, default-features = false, features = ["std"] }
 serde_json = { version = "1.0.120", optional = true, default-features = false, features = ["std"] }
+
+socket2 = { version = "0.6", optional = true }
 
 [dev-dependencies]
 env_logger = "0.11.7"
