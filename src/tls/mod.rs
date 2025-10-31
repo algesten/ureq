@@ -19,7 +19,7 @@ pub(crate) mod native_tls;
 /// Defaults to [`Rustls`][Self::Rustls] because this has the highest chance
 /// to compile and "just work" straight out of the box without installing additional
 /// development dependencies.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 #[non_exhaustive]
 pub enum TlsProvider {
     /// [Rustls](https://crates.io/crates/rustls) with the
@@ -29,6 +29,7 @@ pub enum TlsProvider {
     /// Requires the feature flag **rustls**.
     ///
     /// This is the default.
+    #[default]
     Rustls,
 
     /// [Native-TLS](https://crates.io/crates/native-tls) for cases where it's important to
@@ -335,12 +336,6 @@ impl Default for TlsConfig {
             #[cfg(feature = "_rustls")]
             rustls_crypto_provider: None,
         }
-    }
-}
-
-impl Default for TlsProvider {
-    fn default() -> Self {
-        Self::Rustls
     }
 }
 
