@@ -753,7 +753,7 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
 /// * `None` no automatic header
 /// * `Default` default behavior. I.e. for user-agent something like `ureq/3.1.2`
 /// * `Provided` is a user provided header
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum AutoHeaderValue {
     /// No automatic header.
     None,
@@ -761,16 +761,11 @@ pub enum AutoHeaderValue {
     /// Default behavior.
     ///
     /// I.e. for user-agent something like `ureq/3.1.2`.
+    #[default]
     Default,
 
     /// User provided header value.
     Provided(Arc<String>),
-}
-
-impl Default for AutoHeaderValue {
-    fn default() -> Self {
-        Self::Default
-    }
 }
 
 impl AutoHeaderValue {
