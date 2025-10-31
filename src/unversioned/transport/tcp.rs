@@ -74,6 +74,26 @@ fn try_connect_single(
 ) -> Result<TcpStream, Error> {
     trace!("Try connect TcpStream to {}", addr);
 
+    #[cfg(feature = "local_address")]
+    let maybe_stream: Result<TcpStream, _> = {
+        let domain = socket2::Domain::for_address(addr);
+        let socket = socket2::Socket::new(domain, socket2::Type::STREAM, None)?;
+
+        if let Some(local_address) = config.local_address() {
+            let address: SocketAddr = (local_address, 0).into();
+            socket.bind(&address.into())?;
+        }
+
+        if let Some(when) = timeout.not_zero() {
+            socket.connect_timeout(&addr.into(), *when)
+        } else {
+            socket.connect(&addr.into())
+        }
+        .map(|_| socket.into())
+        .normalize_would_block()
+    };
+
+    #[cfg(not(feature = "local_address"))]
     let maybe_stream = if let Some(when) = timeout.not_zero() {
         TcpStream::connect_timeout(&addr, *when)
     } else {

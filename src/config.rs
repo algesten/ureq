@@ -1,6 +1,8 @@
 //! Agent configuration
 
 use std::fmt;
+#[cfg(feature = "local_address")]
+use std::net::IpAddr;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -169,6 +171,8 @@ pub struct Config {
     max_idle_connections_per_host: usize,
     max_idle_age: Duration,
     allow_non_standard_methods: bool,
+    #[cfg(feature = "local_address")]
+    local_address: Option<IpAddr>,
 
     // Chain built for middleware.
     pub(crate) middleware: MiddlewareChain,
@@ -417,6 +421,16 @@ impl Config {
     /// Defaults to false
     pub fn allow_non_standard_methods(&self) -> bool {
         self.allow_non_standard_methods
+    }
+
+    #[cfg(feature = "local_address")]
+    /// Get local address used as the source of the request.
+    ///
+    /// By default the operating system will choose the best source address.
+    ///
+    /// Defaults to `None`.
+    pub fn local_address(&self) -> Option<IpAddr> {
+        self.local_address
     }
 }
 
@@ -746,6 +760,15 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
         self.config().timeouts.recv_body = v;
         self
     }
+
+    #[cfg(feature = "local_address")]
+    /// Bind to this address as the source of the request.
+    ///
+    /// Defaults to `None`.
+    pub fn local_address(mut self, v: impl Into<Option<IpAddr>>) -> Self {
+        self.config().local_address = v.into();
+        self
+    }
 }
 
 /// Possible config values for headers.
@@ -895,6 +918,8 @@ impl Default for Config {
             max_idle_connections_per_host: 3,
             max_idle_age: Duration::from_secs(15),
             allow_non_standard_methods: false,
+            #[cfg(feature = "local_address")]
+            local_address: None,
             middleware: MiddlewareChain::default(),
         }
     }
@@ -972,6 +997,11 @@ impl fmt::Debug for Config {
             )
             .field("max_idle_age", &self.max_idle_age)
             .field("middleware", &self.middleware);
+
+        #[cfg(feature = "local_address")]
+        {
+            dbg.field("local_address", &self.local_address);
+        }
 
         #[cfg(feature = "_tls")]
         {

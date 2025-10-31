@@ -2,6 +2,7 @@
 
   * Replace rustls-pemfile usage with rustls-pki-types #1122
   * Support for env NO_PROXY and proxy config #1118
+  * Support configuring the request source address #1126
 
 # 3.1.2
 
