@@ -11,3 +11,7 @@
 
 pub mod resolver;
 pub mod transport;
+
+#[cfg(feature = "multipart")]
+#[path = "../multipart.rs"]
+pub mod multipart;

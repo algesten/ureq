@@ -1,5 +1,16 @@
 //! Multipart support.
-
+//!
+//! //! **NOTE multipart does not (yet) [follow semver][super].**
+//!
+//! The multipart API is currently provided under unversioned, because we would like feedback on
+//! how well it works before stabilizing it. One decision we are uncertain about is that it
+//! has a lifetime parameter on the [`Form`] struct. That lifetime allows us to not take ownership of
+//! stuff like `&[u8]`, `&str`, `&mut dyn Read`, etc meaning we can keep the cloning and memory allocation
+//! to a minimum. The flip side is that it's not easy to pass `Form` around to other
+//! threads, mpsc channels, etc.
+//!
+//! Please provide API feedback in this issue: [issue-1128](https://github.com/algesten/ureq/issues/1128).
+//!
 use mime_guess::Mime;
 use ureq_proto::http;
 
@@ -21,7 +32,7 @@ const BOUNDARY_SUFFIX_LEN: usize = 16;
 ///
 /// ```
 /// # fn no_run() -> Result<(), ureq::Error> {
-/// use ureq::multipart::Form;
+/// use ureq::unversioned::multipart::Form;
 ///
 /// let form = Form::new()
 ///     .text("description", "My uploaded file")
@@ -37,7 +48,7 @@ const BOUNDARY_SUFFIX_LEN: usize = 16;
 ///
 /// ```
 /// # fn no_run() -> Result<(), ureq::Error> {
-/// use ureq::multipart::{Form, Part};
+/// use ureq::unversioned::multipart::{Form, Part};
 ///
 /// let form = Form::new()
 ///     .text("description", "My uploaded file")
@@ -71,7 +82,7 @@ pub struct Form<'a> {
 ///
 /// ```
 /// # fn no_run() -> Result<(), ureq::Error> {
-/// use ureq::multipart::{Form, Part};
+/// use ureq::unversioned::multipart::{Form, Part};
 ///
 /// let form = Form::new()
 ///     .text("description", "My uploaded file")
