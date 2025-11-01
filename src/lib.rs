@@ -155,7 +155,7 @@
 //!   (e.g.  `Content-Type: text/plain; charset=iso-8859-1`). Without this, the
 //!   library defaults to Rust's built in `utf-8`
 //! * **json** enables JSON sending and receiving via serde_json
-//! * **multipart** enables multipart/form-data sending via [`multipart::Form`]
+//! * **multipart** enables multipart/form-data sending via [`unversioned::multipart`]
 //!
 //! ### Unstable
 //!
@@ -573,9 +573,6 @@ mod request_ext;
 
 #[cfg(feature = "cookies")]
 pub use cookies::{Cookie, CookieJar};
-
-#[cfg(feature = "multipart")]
-pub mod multipart;
 
 pub use agent::Agent;
 pub use error::Error;
