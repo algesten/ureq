@@ -52,7 +52,7 @@ jobs:
         uses: algesten/snowflake@v1.1.0
         with:
           check_diff: true
-          line_width_rules: 'Cargo.toml:150'
+          line_width_rules: 'Cargo.toml:150;README.md:150;lib.rs:150'
 
   build_versions:
     strategy:
