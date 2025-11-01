@@ -492,28 +492,29 @@
 //! [rustls-platform-verifier]: https://crates.io/crates/rustls-platform-verifier
 //! [webpki-roots]: https://crates.io/crates/webpki-roots
 //! [`Arc`]: https://doc.rust-lang.org/std/sync/struct.Arc.html
-//! [`Agent`]: https://docs.rs/ureq/3.0.0-rc4/ureq/struct.Agent.html
-//! [`Error`]: https://docs.rs/ureq/3.0.0-rc4/ureq/enum.Error.html
-//! [`http_status_as_error()`]: https://docs.rs/ureq/3.0.0-rc4/ureq/config/struct.ConfigBuilder.html#method.http_status_as_error
+//! [`Agent`]: https://docs.rs/ureq/latest/ureq/struct.Agent.html
+//! [`Error`]: https://docs.rs/ureq/latest/ureq/enum.Error.html
+//! [`http_status_as_error()`]: https://docs.rs/ureq/latest/ureq/config/struct.ConfigBuilder.html#method.http_status_as_error
 //! [SCT]: https://en.wikipedia.org/wiki/Certificate_Transparency
 //! [CRL]: https://en.wikipedia.org/wiki/Certificate_revocation_list
-//! [PR818]: https://github.com/algesten/ureq/pull/818
-//! [`request.send_json()`]: https://docs.rs/ureq/3.0.0-rc4/ureq/struct.RequestBuilder.html#method.send_json
-//! [`body.read_json()`]: https://docs.rs/ureq/3.0.0-rc4/ureq/struct.Body.html#method.read_json
-//! [`AsSendBody`]: https://docs.rs/ureq/3.0.0-rc4/ureq/trait.AsSendBody.html
-//! [`SendBody::from_json()`]: https://docs.rs/ureq/3.0.0-rc4/ureq/struct.SendBody.html#method.from_json
+//! [PR 818]: https://github.com/algesten/ureq/pull/818
+//! [`request.send_json()`]: https://docs.rs/ureq/latest/ureq/struct.RequestBuilder.html#method.send_json
+//! [`body.read_json()`]: https://docs.rs/ureq/latest/ureq/struct.Body.html#method.read_json
+//! [`AsSendBody`]: https://docs.rs/ureq/latest/ureq/trait.AsSendBody.html
+//! [`SendBody::from_json()`]: https://docs.rs/ureq/latest/ureq/struct.SendBody.html#method.from_json
 //! [`std::io::Read`]: https://doc.rust-lang.org/std/io/trait.Read.html
-//! [`SendBody::from_reader()`]: https://docs.rs/ureq/3.0.0-rc4/ureq/struct.SendBody.html#method.from_reader
-//! [`SendBody::from_owned_reader()`]: https://docs.rs/ureq/3.0.0-rc4/ureq/struct.SendBody.html#method.from_owned_reader
-//! [`Body`]: https://docs.rs/ureq/3.0.0-rc4/ureq/struct.Body.html
-//! [`request.send_form()`]: https://docs.rs/ureq/3.0.0-rc4/ureq/struct.RequestBuilder.html#method.send_form
-//! [`Body::read_to_string()`]: https://docs.rs/ureq/3.0.0-rc4/ureq/struct.Body.html#method.read_to_string
-//! [`Body::as_reader()`]: https://docs.rs/ureq/3.0.0-rc4/ureq/struct.Body.html#method.as_reader
-//! [`Body::with_config()`]: https://docs.rs/ureq/3.0.0-rc4/ureq/struct.Body.html#method.with_config
-//! [`Transport`]: https://docs.rs/ureq/3.0.0-rc4/ureq/unversioned/transport/trait.Transport.html
-//! [`Resolver`]: https://docs.rs/ureq/3.0.0-rc4/ureq/unversioned/resolver/trait.Resolver.html
-//! [`unversioned`]: https://docs.rs/ureq/3.0.0-rc4/ureq/unversioned/index.html
+//! [`SendBody::from_reader()`]: https://docs.rs/ureq/latest/ureq/struct.SendBody.html#method.from_reader
+//! [`SendBody::from_owned_reader()`]: https://docs.rs/ureq/latest/ureq/struct.SendBody.html#method.from_owned_reader
+//! [`Body`]: https://docs.rs/ureq/latest/ureq/struct.Body.html
+//! [`request.send_form()`]: https://docs.rs/ureq/latest/ureq/struct.RequestBuilder.html#method.send_form
+//! [`Body::read_to_string()`]: https://docs.rs/ureq/latest/ureq/struct.Body.html#method.read_to_string
+//! [`Body::as_reader()`]: https://docs.rs/ureq/latest/ureq/struct.Body.html#method.as_reader
+//! [`Body::with_config()`]: https://docs.rs/ureq/latest/ureq/struct.Body.html#method.with_config
+//! [`Transport`]: https://docs.rs/ureq/latest/ureq/unversioned/transport/trait.Transport.html
+//! [`Resolver`]: https://docs.rs/ureq/latest/ureq/unversioned/resolver/trait.Resolver.html
+//! [`unversioned`]: https://docs.rs/ureq/latest/ureq/unversioned/index.html
 //! [`CryptoProvider`]: https://docs.rs/rustls/latest/rustls/crypto/struct.CryptoProvider.html
+//! [`unversioned::multipart`]: https://docs.rs/ureq/latest/ureq/unversioned/multipart/index.html
 
 #![forbid(unsafe_code)]
 #![warn(clippy::all)]
