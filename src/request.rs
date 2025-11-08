@@ -527,9 +527,20 @@ impl RequestBuilder<WithBody> {
     /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn send(self, data: impl AsSendBody) -> Result<Response<Body>, Error> {
-        let request = self.builder.body(())?;
+        let mut request = self.builder.body(())?;
         let mut data_ref = data;
-        do_call(self.agent, request, self.query_extra, data_ref.as_body())
+        let mut body = data_ref.as_body();
+
+        // Automatically set Content-Type if the body provides one and no Content-Type is already set
+        if let Some(content_type) = body.take_content_type() {
+            if !request.headers().has_content_type() {
+                request
+                    .headers_mut()
+                    .append(http::header::CONTENT_TYPE, content_type);
+            }
+        }
+
+        do_call(self.agent, request, self.query_extra, body)
     }
 
     /// Send an empty body.
@@ -586,16 +597,12 @@ impl RequestBuilder<WithBody> {
             body.push_str(&form_url_enc(v.as_ref()));
         }
 
-        let mut request = self.builder.body(())?;
+        let body = body.as_body();
+        let body = body.with_content_type(HeaderValue::from_static(
+            "application/x-www-form-urlencoded",
+        ));
 
-        if !request.headers().has_content_type() {
-            request.headers_mut().append(
-                http::header::CONTENT_TYPE,
-                HeaderValue::from_static("application/x-www-form-urlencoded"),
-            );
-        }
-
-        do_call(self.agent, request, self.query_extra, body.as_body())
+        self.send(body)
     }
 
     /// Send body data as JSON.
@@ -624,17 +631,8 @@ impl RequestBuilder<WithBody> {
     /// ```
     #[cfg(feature = "json")]
     pub fn send_json(self, data: impl serde::ser::Serialize) -> Result<Response<Body>, Error> {
-        let mut request = self.builder.body(())?;
         let body = SendBody::from_json(&data)?;
-
-        if !request.headers().has_content_type() {
-            request.headers_mut().append(
-                http::header::CONTENT_TYPE,
-                HeaderValue::from_static("application/json; charset=utf-8"),
-            );
-        }
-
-        do_call(self.agent, request, self.query_extra, body)
+        self.send(body)
     }
 }
 

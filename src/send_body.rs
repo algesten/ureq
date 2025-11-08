@@ -20,6 +20,7 @@ pub struct SendBody<'a> {
     inner: BodyInner<'a>,
     size: Option<Result<u64, Error>>,
     ended: bool,
+    content_type: Option<HeaderValue>,
 }
 
 impl<'a> SendBody<'a> {
@@ -45,6 +46,7 @@ impl<'a> SendBody<'a> {
             inner: BodyInner::OwnedReader(Box::new(file)),
             size: Some(size),
             ended: false,
+            content_type: None,
         }
     }
 
@@ -55,8 +57,15 @@ impl<'a> SendBody<'a> {
     ) -> Result<SendBody<'static>, crate::Error> {
         let json = serde_json::to_vec_pretty(value)?;
         let len = json.len() as u64;
-        let body = (Some(len), BodyInner::ByteVec(io::Cursor::new(json))).into();
+        let body: SendBody = (Some(len), BodyInner::ByteVec(io::Cursor::new(json))).into();
+        let body =
+            body.with_content_type(HeaderValue::from_static("application/json; charset=utf-8"));
         Ok(body)
+    }
+
+    pub(crate) fn with_content_type(mut self, content_type: HeaderValue) -> Self {
+        self.content_type = Some(content_type);
+        self
     }
 
     pub(crate) fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
@@ -160,12 +169,18 @@ impl<'a> SendBody<'a> {
             inner: BodyInner::ByteSlice(bytes),
             size: Some(Ok(bytes.len() as u64)),
             ended: false,
+            content_type: None,
         }
     }
 
     #[cfg(feature = "multipart")]
     pub(crate) fn size(&self) -> Option<u64> {
         self.size.as_ref().and_then(|r| r.as_ref().ok()).copied()
+    }
+
+    /// Get the content type for this body, if any.
+    pub(crate) fn take_content_type(&mut self) -> Option<HeaderValue> {
+        self.content_type.take()
     }
 }
 
@@ -178,6 +193,7 @@ impl<'a> io::Read for ReadAdapter<'a> {
 }
 
 use http::Response;
+use ureq_proto::http::HeaderValue;
 use ureq_proto::BodyMode;
 
 /// Trait for common types to send in POST, PUT or PATCH.
@@ -249,6 +265,7 @@ impl<'a> AsSendBody for SendBody<'a> {
             },
             size: self.size.take(),
             ended: self.ended,
+            content_type: self.content_type.take(),
         }
     }
 }
@@ -319,6 +336,7 @@ impl AsSendBody for &File {
             inner: BodyInner::Reader(self),
             size: Some(size),
             ended: false,
+            content_type: None,
         }
     }
 }
@@ -331,6 +349,7 @@ impl AsSendBody for File {
             inner: BodyInner::Reader(self),
             size: Some(size),
             ended: false,
+            content_type: None,
         }
     }
 }
@@ -384,6 +403,7 @@ impl<'a> From<(Option<u64>, BodyInner<'a>)> for SendBody<'a> {
             inner,
             size: size.map(Ok),
             ended: false,
+            content_type: None,
         }
     }
 }

@@ -1,5 +1,9 @@
 # Unreleased
 
+# 3.1.4
+
+  * Set content-type with new Multipart form #1133
+
 # 3.1.3
 
   * Fix short read with multi-byte charset #1131

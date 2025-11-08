@@ -12,7 +12,7 @@
 //! Please provide API feedback in this issue: [issue-1128](https://github.com/algesten/ureq/issues/1128).
 //!
 use mime_guess::Mime;
-use ureq_proto::http;
+use ureq_proto::http::{self, HeaderValue};
 
 use crate::{util::private::Private, AsSendBody, Error, SendBody};
 use std::io::{self, Read};
@@ -25,6 +25,9 @@ const BOUNDARY_SUFFIX_LEN: usize = 16;
 ///
 /// Use this to send multipart form data, which is commonly used for file uploads
 /// and forms with mixed content types.
+///
+/// When using [`RequestBuilder::send()`](crate::RequestBuilder::send) with a `Form`,
+/// the `Content-Type: multipart/form-data; boundary=...` header is automatically set.
 ///
 /// # Examples
 ///
@@ -284,8 +287,9 @@ impl<'a> AsSendBody for Form<'a> {
         use crate::send_body::BodyInner;
 
         let size = self.calculate_size();
-        let inner = BodyInner::Reader(self);
-        (size, inner).into()
+        let content_type = format!("multipart/form-data; boundary={}", self.boundary());
+        let body: SendBody = (size, BodyInner::Reader(self)).into();
+        body.with_content_type(HeaderValue::from_str(&content_type).unwrap())
     }
 }
 
@@ -700,5 +704,18 @@ mod tests {
         assert!(result.is_err());
 
         assert!(matches!(result, Err(Error::InvalidMimeType(_))));
+    }
+
+    #[test]
+    fn test_form_sets_content_type() {
+        let mut form = Form::new().text("field", "value");
+        let mut body = form.as_body();
+
+        let content_type = body.take_content_type();
+        assert!(content_type.is_some());
+        let ct = content_type.unwrap();
+        let ct_str = ct.to_str().unwrap();
+        assert!(ct_str.starts_with("multipart/form-data; boundary="));
+        assert!(ct_str.contains(&form.boundary()));
     }
 }
