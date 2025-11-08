@@ -274,7 +274,37 @@ fn setup_default_handlers(handlers: &mut Vec<TestHandler>) {
     );
 
     maybe_add(
-        TestHandler::new("/post", |_uri, _req, w| {
+        TestHandler::new("/post", |_uri, req, w| {
+            // Check if there's an x-verify-content-type header to verify against
+            if let Some(expected_ct) = req.headers().get("x-verify-content-type") {
+                let expected_ct_str = expected_ct.to_str().unwrap();
+                let actual_ct = req.headers().get("content-type");
+
+                match actual_ct {
+                    Some(ct) => {
+                        let actual_ct_str = ct.to_str().unwrap();
+                        if expected_ct_str.starts_with("multipart/form-data") {
+                            // For multipart, just check it starts with the expected prefix
+                            assert!(
+                                actual_ct_str.starts_with("multipart/form-data; boundary="),
+                                "Expected multipart/form-data with boundary, got: {}",
+                                actual_ct_str
+                            );
+                        } else {
+                            assert_eq!(
+                                actual_ct_str, expected_ct_str,
+                                "Content-Type mismatch: expected '{}', got '{}'",
+                                expected_ct_str, actual_ct_str
+                            );
+                        }
+                    }
+                    None => panic!(
+                        "Expected Content-Type '{}' but no Content-Type header found",
+                        expected_ct_str
+                    ),
+                }
+            }
+
             write!(
                 w,
                 "HTTP/1.1 200 OK\r\n\

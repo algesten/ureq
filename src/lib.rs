@@ -930,6 +930,56 @@ pub(crate) mod test {
     }
 
     #[test]
+    fn test_send_form_content_type() {
+        init_test_log();
+
+        // These tests verify that the methods work correctly with the test infrastructure
+        // The actual Content-Type verification happens at the transport level
+        let form_data = [("key1", "value1"), ("key2", "value2")];
+        let mut res = post("http://httpbin.org/post")
+            .header("x-verify-content-type", "application/x-www-form-urlencoded")
+            .send_form(form_data)
+            .unwrap();
+
+        let _txt = res.body_mut().read_to_string().unwrap();
+    }
+
+    #[test]
+    #[cfg(feature = "json")]
+    fn test_send_json_content_type() {
+        use serde_json::json;
+
+        init_test_log();
+
+        let data = json!({"key": "value"});
+        let mut res = post("http://httpbin.org/post")
+            .header("x-verify-content-type", "application/json; charset=utf-8")
+            .send_json(&data)
+            .unwrap();
+
+        let _txt = res.body_mut().read_to_string().unwrap();
+    }
+
+    #[test]
+    #[cfg(feature = "multipart")]
+    fn test_send_multipart_content_type() {
+        use crate::unversioned::multipart::Form;
+
+        init_test_log();
+
+        let form = Form::new()
+            .text("field1", "value1")
+            .text("field2", "value2");
+
+        let mut res = post("http://httpbin.org/post")
+            .header("x-verify-content-type", "multipart/form-data")
+            .send(form)
+            .unwrap();
+
+        let _txt = res.body_mut().read_to_string().unwrap();
+    }
+
+    #[test]
     fn redirect_max_with_error() {
         init_test_log();
         let agent: Agent = Config::builder().max_redirects(3).build().into();
