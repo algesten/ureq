@@ -74,7 +74,12 @@ impl<R: io::Read> io::Read for CharCodec<R> {
             }
         }
 
-        // guaranteed to be on a char boundary by encoding_rs
+        // The output_buf contains UTF-8 data produced by decode_to_utf8(), which guarantees
+        // char boundaries. When we have an encoder (converting UTF-8 to another encoding),
+        // encode_from_utf8() returns input_used on char boundaries, so consume() maintains
+        // the invariant. When we have no encoder (already UTF-8), we copy arbitrary byte
+        // amounts, but that's safe because we never need to parse it as UTF-8 - we just
+        // pass the bytes through.
         let bytes = self.output_buf.unconsumed();
 
         let amount = if let Some(enc) = &mut self.enc {
@@ -122,6 +127,7 @@ impl<R> fmt::Debug for CharCodec<R> {
 #[cfg(all(test, feature = "_test"))]
 mod test {
     use super::*;
+    use std::io::Read;
 
     #[test]
     fn create_encodings() {
@@ -190,5 +196,88 @@ mod test {
                 "{CHAR_COUNT} * {case_name}",
             );
         }
+    }
+
+    /// Helper that limits reads to 1-3 bytes at a time to force partial reads
+    struct SlowReader<'a> {
+        data: &'a [u8],
+        pos: usize,
+    }
+
+    impl<'a> SlowReader<'a> {
+        fn new(data: &'a [u8]) -> Self {
+            SlowReader { data, pos: 0 }
+        }
+    }
+
+    impl<'a> io::Read for SlowReader<'a> {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            if self.pos >= self.data.len() {
+                return Ok(0);
+            }
+            // Read 1-3 bytes at a time
+            let max_read = 3.min(buf.len()).min(self.data.len() - self.pos);
+            let amount = 1.max(max_read);
+            buf[..amount].copy_from_slice(&self.data[self.pos..self.pos + amount]);
+            self.pos += amount;
+            Ok(amount)
+        }
+    }
+
+    #[test]
+    fn char_boundary_utf8_to_utf8_small_reads() {
+        // Test UTF-8 to UTF-8 with multibyte chars and small reads
+        let input = "åäö🎉café";
+        let input_bytes = input.as_bytes();
+
+        let mut codec = CharCodec::new(
+            SlowReader::new(input_bytes),
+            encoding_rs::UTF_8,
+            encoding_rs::UTF_8,
+        );
+
+        // Read in very small chunks
+        let mut result = Vec::new();
+        let mut buf = [0u8; 2];
+        loop {
+            let n = codec.read(&mut buf).unwrap();
+            if n == 0 {
+                break;
+            }
+            result.extend_from_slice(&buf[..n]);
+        }
+
+        let output = String::from_utf8(result).unwrap();
+        assert_eq!(output, input);
+    }
+
+    #[test]
+    fn char_boundary_iso8859_to_utf8_small_reads() {
+        // Test ISO-8859-15 to UTF-8 - this doesn't use encoder but tests decoder
+        let input = "café";
+
+        // Encode to ISO-8859-15 first
+        let (encoded, _, _) = encoding_rs::ISO_8859_15.encode(input);
+
+        // Decode back to UTF-8 through CharCodec with slow reader
+        let mut codec = CharCodec::new(
+            SlowReader::new(&encoded),
+            encoding_rs::ISO_8859_15,
+            encoding_rs::UTF_8,
+        );
+
+        // Read in very small chunks to force partial reads
+        let mut result = Vec::new();
+        let mut buf = [0u8; 1];
+        loop {
+            let n = codec.read(&mut buf).unwrap();
+            if n == 0 {
+                break;
+            }
+            result.extend_from_slice(&buf[..n]);
+        }
+
+        let output = String::from_utf8(result).unwrap();
+        assert_eq!(output, input);
     }
 }
