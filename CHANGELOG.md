@@ -1,5 +1,7 @@
 # Unreleased
 
+# 3.1.3
+
   * Fix short read with multi-byte charset #1131
   * Replace rustls-pemfile usage with rustls-pki-types #1122
   * Support for env NO_PROXY and proxy config #1118
