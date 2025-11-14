@@ -1125,7 +1125,9 @@ pub(crate) mod test {
             .expect("to send correctly");
 
         let ret = response.body_mut().read_to_string().unwrap();
-        assert!(ret.contains("\"Content-Length\": \"1072\""));
+        let content_length_lf = ret.contains("\"Content-Length\": \"1072\"");
+        let content_length_crlf = ret.contains("\"Content-Length\": \"1093\"");
+        assert!(content_length_lf || content_length_crlf);
     }
 
     #[test]
