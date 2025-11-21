@@ -1,5 +1,8 @@
 # Unreleased
 
+  * Make socks5:// locally resolve before calling proxy #1138
+  * Add socks5h:// which DOESN'T locally resolve before calling proxy #1138
+
 # 3.1.4
 
   * Set content-type with new Multipart form #1133

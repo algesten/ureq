@@ -175,7 +175,8 @@ fn connect_proxy<'a, T: ToTargetAddr + 'a>(
 
             Socks4Stream::connect(proxy_addr, target_addr, "")?.into_inner()
         }
-        ProxyProtocol::Socks5 => {
+
+        ProxyProtocol::Socks5 | ProxyProtocol::Socks5h => {
             if let Some(username) = proxy.username() {
                 // Connect with authentication.
                 let password = proxy.password().unwrap_or("");
@@ -186,6 +187,7 @@ fn connect_proxy<'a, T: ToTargetAddr + 'a>(
             }
             .into_inner()
         }
+
         _ => unreachable!(), // HTTP(s) proxies.
     };
 

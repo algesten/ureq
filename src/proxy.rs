@@ -23,6 +23,8 @@ pub enum ProxyProtocol {
     Socks4A,
     /// SOCKS5 proxy
     Socks5,
+    /// SOCKS5h proxy (proxy can resolve domain name)
+    Socks5h,
 }
 
 impl ProxyProtocol {
@@ -30,12 +32,18 @@ impl ProxyProtocol {
         match self {
             ProxyProtocol::Http => 80,
             ProxyProtocol::Https => 443,
-            ProxyProtocol::Socks4 | ProxyProtocol::Socks4A | ProxyProtocol::Socks5 => 1080,
+            ProxyProtocol::Socks4
+            | ProxyProtocol::Socks4A
+            | ProxyProtocol::Socks5
+            | ProxyProtocol::Socks5h => 1080,
         }
     }
 
     pub(crate) fn is_socks(&self) -> bool {
-        matches!(self, Self::Socks4 | Self::Socks4A | Self::Socks5)
+        matches!(
+            self,
+            Self::Socks4 | Self::Socks4A | Self::Socks5 | Self::Socks5h
+        )
     }
 
     pub(crate) fn is_connect(&self) -> bool {
@@ -48,7 +56,8 @@ impl ProxyProtocol {
             ProxyProtocol::Https => false,
             ProxyProtocol::Socks4 => true, // we must locally resolve before using proxy
             ProxyProtocol::Socks4A => false,
-            ProxyProtocol::Socks5 => false,
+            ProxyProtocol::Socks5 => true, // we must locally resolve before using proxy
+            ProxyProtocol::Socks5h => false,
         }
     }
 }
@@ -429,6 +438,7 @@ impl TryFrom<&str> for ProxyProtocol {
             "socks4a" => Ok(ProxyProtocol::Socks4A),
             "socks" => Ok(ProxyProtocol::Socks5),
             "socks5" => Ok(ProxyProtocol::Socks5),
+            "socks5h" => Ok(ProxyProtocol::Socks5h),
             _ => Err(Error::InvalidProxyUrl),
         }
     }
@@ -452,6 +462,7 @@ impl fmt::Display for ProxyProtocol {
             ProxyProtocol::Socks4 => write!(f, "SOCKS4"),
             ProxyProtocol::Socks4A => write!(f, "SOCKS4a"),
             ProxyProtocol::Socks5 => write!(f, "SOCKS5"),
+            ProxyProtocol::Socks5h => write!(f, "SOCKS5h"),
         }
     }
 }
@@ -598,6 +609,7 @@ mod tests {
         assert_eq!(proxy.host(), "localhost");
         assert_eq!(proxy.port(), 9999);
         assert_eq!(proxy.inner.proto, ProxyProtocol::Socks4);
+        assert!(proxy.resolve_target());
     }
 
     #[test]
@@ -608,6 +620,7 @@ mod tests {
         assert_eq!(proxy.host(), "localhost");
         assert_eq!(proxy.port(), 9999);
         assert_eq!(proxy.inner.proto, ProxyProtocol::Socks4A);
+        assert!(!proxy.resolve_target());
     }
 
     #[test]
@@ -618,6 +631,7 @@ mod tests {
         assert_eq!(proxy.host(), "localhost");
         assert_eq!(proxy.port(), 9999);
         assert_eq!(proxy.inner.proto, ProxyProtocol::Socks5);
+        assert!(proxy.resolve_target());
     }
 
     #[test]
@@ -628,6 +642,18 @@ mod tests {
         assert_eq!(proxy.host(), "localhost");
         assert_eq!(proxy.port(), 9999);
         assert_eq!(proxy.inner.proto, ProxyProtocol::Socks5);
+        assert!(proxy.resolve_target());
+    }
+
+    #[test]
+    fn parse_proxy_socks5h_user_pass_server_port() {
+        let proxy = Proxy::new("socks5h://user:p@ssw0rd@localhost:9999").unwrap();
+        assert_eq!(proxy.username(), Some("user"));
+        assert_eq!(proxy.password(), Some("p@ssw0rd"));
+        assert_eq!(proxy.host(), "localhost");
+        assert_eq!(proxy.port(), 9999);
+        assert_eq!(proxy.inner.proto, ProxyProtocol::Socks5h);
+        assert!(!proxy.resolve_target());
     }
 
     #[test]
