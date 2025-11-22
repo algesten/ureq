@@ -1,5 +1,6 @@
 # Unreleased
 
+  * ureq-proto 0.5.3 to fix unsolicited 100-continue #1139
   * Make socks5:// locally resolve before calling proxy #1138
   * Add socks5h:// which DOESN'T locally resolve before calling proxy #1138
 
