@@ -134,34 +134,36 @@ jobs:
           cargo +${{steps.toolchain.outputs.name}} test \
           --no-default-features --features "_test ${{ matrix.feature }}"
 
-  cargo-deny:
-    name: cargo-deny
+  # Disable cargo-deny until this is sorted: https://github.com/EmbarkStudios/cargo-deny/issues/804
+  #
+  # cargo-deny:
+  #   name: cargo-deny
 
-    # TODO: remove this matrix when https://github.com/EmbarkStudios/cargo-deny/issues/324 is resolved
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - aarch64-apple-ios
-          - aarch64-linux-android
-          - i686-pc-windows-gnu
-          - i686-pc-windows-msvc
-          - i686-unknown-linux-gnu
-          - wasm32-unknown-unknown
-          - x86_64-apple-darwin
-          - x86_64-apple-ios
-          - x86_64-pc-windows-gnu
-          - x86_64-pc-windows-msvc
-          - x86_64-unknown-linux-gnu
-          - x86_64-unknown-redox
+  #   # TODO: remove this matrix when https://github.com/EmbarkStudios/cargo-deny/issues/324 is resolved
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       platform:
+  #         - aarch64-apple-ios
+  #         - aarch64-linux-android
+  #         - i686-pc-windows-gnu
+  #         - i686-pc-windows-msvc
+  #         - i686-unknown-linux-gnu
+  #         - wasm32-unknown-unknown
+  #         - x86_64-apple-darwin
+  #         - x86_64-apple-ios
+  #         - x86_64-pc-windows-gnu
+  #         - x86_64-pc-windows-msvc
+  #         - x86_64-unknown-linux-gnu
+  #         - x86_64-unknown-redox
 
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        persist-credentials: false
-    - uses: EmbarkStudios/cargo-deny-action@v2
-      with:
-        command: check
-        log-level: error
-        arguments: --all-features --target ${{ matrix.platform }}
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - uses: actions/checkout@v4
+  #     with:
+  #       persist-credentials: false
+  #   - uses: EmbarkStudios/cargo-deny-action@v2
+  #     with:
+  #       command: check
+  #       log-level: error
+  #       arguments: --all-features --target ${{ matrix.platform }}
