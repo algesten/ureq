@@ -51,7 +51,7 @@ pub use connect::ConnectProxyConnector;
 #[cfg(feature = "_test")]
 mod test;
 #[cfg(feature = "_test")]
-pub use test::set_handler;
+pub use test::{set_handler, set_handler_cb};
 
 #[cfg(feature = "socks-proxy")]
 mod socks;

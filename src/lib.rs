@@ -1022,6 +1022,41 @@ pub(crate) mod test {
     }
 
     #[test]
+    #[cfg(feature = "_test")]
+    fn post_redirect_to_get_removes_content_length() {
+        // Regression test for issue #1135
+        // When a POST with body redirects to GET, Content-Length should not be sent
+        use crate::transport::{set_handler, set_handler_cb};
+        init_test_log();
+
+        // POST endpoint that redirects to GET
+        set_handler(
+            "/post-redirect",
+            301,
+            &[("Location", "http://example.com/get")],
+            &[],
+        );
+
+        // GET endpoint - verifies Content-Length header is NOT present
+        set_handler_cb("/get", 200, &[], b"success", |req| {
+            // Assert that Content-Length is not present on the GET request
+            assert!(
+                req.headers().get("content-length").is_none(),
+                "Content-Length header should not be present on GET request after redirect"
+            );
+        });
+
+        // POST with body that redirects to GET
+        let mut res = post("http://example.org/post-redirect")
+            .send("test body")
+            .unwrap();
+
+        assert_eq!(res.status(), 200);
+        let body = res.body_mut().read_to_string().unwrap();
+        assert_eq!(body, "success");
+    }
+
+    #[test]
     fn redirect_history_none() {
         init_test_log();
         let res = get("http://httpbin.org/redirect-to?url=%2Fget")

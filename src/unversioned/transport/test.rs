@@ -100,6 +100,42 @@ pub fn set_handler(pattern: &'static str, status: u16, headers: &[(&str, &str)],
     HANDLERS.with(|h| (*h).borrow_mut().push(handler));
 }
 
+/// Helper for **_test** feature tests that need to inspect the request.
+#[cfg(feature = "_test")]
+#[doc(hidden)]
+pub fn set_handler_cb(
+    pattern: &'static str,
+    status: u16,
+    headers: &[(&str, &str)],
+    body: &[u8],
+    cb: impl Fn(&Request<()>) + Send + Sync + 'static,
+) {
+    // Convert headers to a big string
+    let mut headers_s = String::new();
+    for (k, v) in headers {
+        headers_s.push_str(&format!("{}: {}\r\n", k, v));
+    }
+
+    // Convert body to an owned vec
+    let body = body.to_vec();
+
+    let handler = TestHandler::new(pattern, move |_uri, req, w| {
+        // Run the request check (can panic if assertions fail)
+        cb(&req);
+
+        write!(
+            w,
+            "HTTP/1.1 {} OK\r\n\
+            {}\
+            \r\n",
+            status, headers_s
+        )?;
+        w.write_all(&body)
+    });
+
+    HANDLERS.with(|h| (*h).borrow_mut().push(handler));
+}
+
 #[derive(Clone)]
 struct TestHandler {
     pattern: &'static str,

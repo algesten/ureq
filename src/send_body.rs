@@ -182,6 +182,15 @@ impl<'a> SendBody<'a> {
     pub(crate) fn take_content_type(&mut self) -> Option<HeaderValue> {
         self.content_type.take()
     }
+
+    pub(crate) fn remove(&mut self) {
+        *self = SendBody {
+            inner: BodyInner::None,
+            size: None,
+            ended: false,
+            content_type: None,
+        }
+    }
 }
 
 struct ReadAdapter<'a>(SendBody<'a>);
