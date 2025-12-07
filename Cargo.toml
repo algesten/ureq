@@ -93,6 +93,9 @@ serde_json = { version = "1.0.120", optional = true, default-features = false, f
 mime_guess = { version = "2.0.5", optional = true }
 getrandom = { version = "0.2.15", optional = true }
 
+[target.'cfg(windows)'.dependencies]
+winreg = "0.55"
+
 [dev-dependencies]
 env_logger = "0.11.7"
 auto-args = "0.3.0"
