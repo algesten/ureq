@@ -18,7 +18,7 @@ rust-version = "1.71.1"
 features = ["rustls", "platform-verifier", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset", "json", "multipart", "_test", "_doc"]
 
 [features]
-default = ["rustls", "gzip"]
+default = ["rustls", "gzip", "win-system-proxy"]
 
 ######## SUPPORTED FEATURES
 
@@ -26,6 +26,7 @@ rustls = ["rustls-no-provider", "_ring"]
 native-tls = ["dep:native-tls", "dep:der", "_tls", "dep:webpki-root-certs"]
 platform-verifier = ["dep:rustls-platform-verifier"]
 socks-proxy = ["dep:socks"]
+win-system-proxy = ["dep:winreg"]
 cookies = ["dep:cookie_store", "_url"]
 gzip = ["dep:flate2"]
 brotli = ["dep:brotli-decompressor"]
@@ -94,7 +95,7 @@ mime_guess = { version = "2.0.5", optional = true }
 getrandom = { version = "0.2.15", optional = true }
 
 [target.'cfg(windows)'.dependencies]
-winreg = "0.55"
+winreg = { version = "0.55", optional = true }
 
 [dev-dependencies]
 env_logger = "0.11.7"

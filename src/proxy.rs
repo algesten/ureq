@@ -9,7 +9,7 @@ use crate::http;
 use crate::util::{AuthorityExt, DebugUri};
 use crate::Error;
 
-#[cfg(windows)]
+#[cfg(all(windows, feature = "win-system-proxy"))]
 const REGISTRY_PATH: &str = r#"Software\Microsoft\Windows\CurrentVersion\Internet Settings"#;
 
 /// Proxy protocol
@@ -238,7 +238,7 @@ impl Proxy {
             }
         }
 
-        #[cfg(windows)]
+        #[cfg(all(windows, feature = "win-system-proxy"))]
         {
             use winreg::{
                 enums::{HKEY_CURRENT_USER, KEY_READ},
@@ -264,7 +264,7 @@ impl Proxy {
                     Self::new_with_flag(&format!("http://{proxy}"), no_proxy, true, None).ok()
                 })
         }
-        #[cfg(not(windows))]
+        #[cfg(not(all(windows, feature = "win-system-proxy")))]
         None
     }
 
@@ -550,7 +550,7 @@ impl NoProxy {
             }
         }
 
-        #[cfg(windows)]
+        #[cfg(all(windows, feature = "win-system-proxy"))]
         {
             use winreg::{
                 enums::{HKEY_CURRENT_USER, KEY_READ},
@@ -576,7 +576,7 @@ impl NoProxy {
                         .collect(),
                 })
         }
-        #[cfg(not(windows))]
+        #[cfg(not(all(windows, feature = "win-system-proxy")))]
         None
     }
 
