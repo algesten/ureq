@@ -240,10 +240,8 @@ impl Proxy {
 
         #[cfg(all(windows, feature = "win-system-proxy"))]
         {
-            use winreg::{
-                enums::{HKEY_CURRENT_USER, KEY_READ},
-                RegKey,
-            };
+            use winreg::enums::{HKEY_CURRENT_USER, KEY_READ};
+            use winreg::RegKey;
 
             let registry = RegKey::predef(HKEY_CURRENT_USER);
             let Ok(ie_settings) = registry.open_subkey_with_flags(REGISTRY_PATH, KEY_READ) else {
