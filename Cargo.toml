@@ -18,7 +18,7 @@ rust-version = "1.71.1"
 features = ["rustls", "platform-verifier", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset", "json", "multipart", "_test", "_doc"]
 
 [features]
-default = ["rustls", "gzip", "win-system-proxy"]
+default = ["rustls", "gzip"]
 
 ######## SUPPORTED FEATURES
 
