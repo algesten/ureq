@@ -9,6 +9,9 @@ use crate::http;
 use crate::util::{AuthorityExt, DebugUri};
 use crate::Error;
 
+#[cfg(all(windows, feature = "win-system-proxy"))]
+const REGISTRY_PATH: &str = r#"Software\Microsoft\Windows\CurrentVersion\Internet Settings"#;
+
 /// Proxy protocol
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[non_exhaustive]
@@ -226,15 +229,40 @@ impl Proxy {
             "http_proxy",
         ];
 
+        let no_proxy = NoProxy::try_from_env();
         for attempt in TRY_ENV {
             if let Ok(env) = std::env::var(attempt) {
-                let no_proxy = NoProxy::try_from_env();
-                if let Ok(proxy) = Self::new_with_flag(&env, no_proxy, true, None) {
+                if let Ok(proxy) = Self::new_with_flag(&env, no_proxy.clone(), true, None) {
                     return Some(proxy);
                 }
             }
         }
 
+        #[cfg(all(windows, feature = "win-system-proxy"))]
+        {
+            use winreg::enums::{HKEY_CURRENT_USER, KEY_READ};
+            use winreg::RegKey;
+
+            let registry = RegKey::predef(HKEY_CURRENT_USER);
+            let Ok(ie_settings) = registry.open_subkey_with_flags(REGISTRY_PATH, KEY_READ) else {
+                return None;
+            };
+
+            let enabled = ie_settings
+                .get_value::<u32, _>("ProxyEnable")
+                .is_ok_and(|enable| enable == 1);
+            if !enabled {
+                return None;
+            }
+
+            ie_settings
+                .get_value::<String, _>("ProxyServer")
+                .ok()
+                .and_then(|proxy| {
+                    Self::new_with_flag(&format!("http://{proxy}"), no_proxy, true, None).ok()
+                })
+        }
+        #[cfg(not(all(windows, feature = "win-system-proxy")))]
         None
     }
 
@@ -470,6 +498,7 @@ impl fmt::Display for ProxyProtocol {
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 enum NoProxyEntry {
     ExactHost(String),
+    HostPrefix(String),
     HostSuffix(String),
     MatchAll,
 }
@@ -519,6 +548,31 @@ impl NoProxy {
             }
         }
 
+        #[cfg(all(windows, feature = "win-system-proxy"))]
+        {
+            use winreg::enums::{HKEY_CURRENT_USER, KEY_READ};
+            use winreg::RegKey;
+
+            let registry = RegKey::predef(HKEY_CURRENT_USER);
+            let Ok(ie_settings) = registry.open_subkey_with_flags(REGISTRY_PATH, KEY_READ) else {
+                return None;
+            };
+
+            ie_settings
+                .get_value::<String, _>("ProxyOverride")
+                .ok()
+                .map(|no_proxy| NoProxy {
+                    inner: no_proxy
+                        .split(";")
+                        .map(str::trim)
+                        // bypass <local>, which tells windows to bypass intranet addresses
+                        .filter(|&s| s != "<local>")
+                        .map(NoProxyEntry::try_parse)
+                        .flatten()
+                        .collect(),
+                })
+        }
+        #[cfg(not(all(windows, feature = "win-system-proxy")))]
         None
     }
 
@@ -535,6 +589,13 @@ impl NoProxyEntry {
                 Self::HostSuffix(u.chars().skip(1).collect::<String>().to_ascii_lowercase())
             }
             u if u.starts_with(".") => Self::HostSuffix(u.to_ascii_lowercase()),
+            u if u.ends_with("*") => Self::HostPrefix(
+                u.chars()
+                    .take(u.len() - 1)
+                    .collect::<String>()
+                    .to_ascii_lowercase(),
+            ),
+            u if u.ends_with(".") => Self::HostPrefix(u.to_ascii_lowercase()),
             _ => Self::ExactHost(u.to_ascii_lowercase()),
         };
         Some(entry)
@@ -550,6 +611,19 @@ impl NoProxyEntry {
                 } else {
                     // Slow path: convert host to lowercase and compare
                     pattern == &host.to_ascii_lowercase()
+                }
+            }
+            NoProxyEntry::HostPrefix(prefix) => {
+                if host.len() < prefix.len() {
+                    return false;
+                }
+                let host_prefix = &host[..prefix.len()];
+                // Fast path: if host prefix is already lowercase, do direct comparison
+                if host_prefix.chars().all(|c| !c.is_ascii_uppercase()) {
+                    prefix == host_prefix
+                } else {
+                    // Slow path: convert host prefix to lowercase and compare
+                    prefix == &host_prefix.to_ascii_lowercase()
                 }
             }
             NoProxyEntry::HostSuffix(suffix) => {
