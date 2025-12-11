@@ -5,8 +5,6 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use http::Uri;
-
 use crate::middleware::{Middleware, MiddlewareChain};
 use crate::{http, Body, Error};
 use crate::{Agent, AsSendBody, Proxy, RequestBuilder};
@@ -188,16 +186,6 @@ impl Config {
     /// Cloning the config does not incur heap allocations.
     pub fn new_agent(&self) -> Agent {
         self.clone().into()
-    }
-
-    pub(crate) fn connect_proxy_uri(&self) -> Option<&Uri> {
-        let proxy = self.https_proxy.as_ref()?;
-
-        if !proxy.protocol().is_connect() {
-            return None;
-        }
-
-        Some(proxy.uri())
     }
 
     pub(crate) fn max_redirects_do_error(&self) -> bool {
