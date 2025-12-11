@@ -33,8 +33,18 @@ impl<In: Transport> Connector<In> for ConnectProxyConnector {
             return Ok(Some(Either::A(transport)));
         }
 
+        let proxy = if details.traffic_type == &http::uri::Scheme::HTTP {
+            details.config.proxy_http()
+        } else {
+            details.config.proxy_https()
+        };
+
         // If we're using a CONNECT proxy, we need to resolve that hostname.
-        let maybe_connect_uri = details.config.connect_proxy_uri();
+        let maybe_connect_uri = if proxy.is_some_and(|p| p.protocol().is_connect()) {
+            proxy.map(|p| p.uri())
+        } else {
+            None
+        };
 
         let Some(connect_uri) = maybe_connect_uri else {
             // Not using CONNECT
@@ -45,11 +55,7 @@ impl<In: Transport> Connector<In> for ConnectProxyConnector {
         let target_addrs = &details.addrs;
 
         // Check if this host matches NO_PROXY
-        let is_no_proxy = details
-            .config
-            .proxy()
-            .map(|p| p.is_no_proxy(target))
-            .unwrap_or(false);
+        let is_no_proxy = proxy.map(|p| p.is_no_proxy(target)).unwrap_or(false);
 
         if is_no_proxy {
             return Ok(None);
@@ -67,6 +73,7 @@ impl<In: Transport> Connector<In> for ConnectProxyConnector {
         // ConnectionDetails to establish a connection to the CONNECT
         // proxy itself.
         let proxy_details = ConnectionDetails {
+            traffic_type: details.traffic_type,
             uri: connect_uri,
             addrs: proxy_addrs,
             config: &proxy_config,
@@ -80,7 +87,7 @@ impl<In: Transport> Connector<In> for ConnectProxyConnector {
         let transport = (details.run_connector)(&proxy_details)?;
 
         // unwrap is ok because connect_proxy_uri() above checks it.
-        let proxy = details.config.proxy().unwrap();
+        let proxy = proxy.unwrap();
 
         let mut w = TransportAdapter::new(transport);
 
