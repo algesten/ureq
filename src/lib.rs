@@ -280,7 +280,7 @@
 //!
 //! By enabling the **json** feature, the library supports serde json.
 //!
-//! This is enabled by default.
+//! This is disabled by default.
 //!
 //! * [`request.send_json()`] send body as json.
 //! * [`body.read_json()`] transform response to json.
