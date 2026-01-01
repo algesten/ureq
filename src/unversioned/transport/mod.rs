@@ -209,11 +209,16 @@ pub struct ConnectionDetails<'a> {
     pub resolver: &'a dyn Resolver,
 
     /// Current time.
+    ///
+    /// Time the ConnectionDetails was created.
     pub now: Instant,
 
     /// The next timeout for making the connection.
     // TODO(martin): Make mechanism to lower duration for each step in the connector chain.
     pub timeout: NextTimeout,
+
+    /// Provides the current time.
+    pub current_time: Arc<dyn Fn() -> Instant + Send + Sync + 'static>,
 
     /// Run the connector chain.
     ///

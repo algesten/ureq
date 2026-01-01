@@ -74,6 +74,7 @@ impl<In: Transport> Connector<In> for ConnectProxyConnector {
             resolver: details.resolver,
             now: details.now,
             timeout: details.timeout,
+            current_time: details.current_time.clone(),
             run_connector: details.run_connector.clone(),
         };
 

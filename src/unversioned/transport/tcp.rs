@@ -1,10 +1,12 @@
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
+use std::sync::Arc;
 use std::{fmt, io, time};
 
 use crate::config::Config;
+use crate::unversioned::transport::time::Instant;
 use crate::util::IoResultExt;
-use crate::Error;
+use crate::{Error, Timeout};
 
 use super::chain::Either;
 use super::ResolvedSocketAddrs;
@@ -32,7 +34,13 @@ impl<In: Transport> Connector<In> for TcpConnector {
         }
 
         let config = &details.config;
-        let stream = try_connect(&details.addrs, details.timeout, config)?;
+        let stream = try_connect(
+            &details.addrs,
+            details.now,
+            details.timeout,
+            details.current_time.clone(),
+            config,
+        )?;
 
         let buffers = LazyBuffers::new(config.input_buffer_size(), config.output_buffer_size());
         let transport = TcpTransport::new(stream, buffers);
@@ -43,11 +51,48 @@ impl<In: Transport> Connector<In> for TcpConnector {
 
 fn try_connect(
     addrs: &ResolvedSocketAddrs,
+    start: Instant,
     timeout: NextTimeout,
+    current_time: Arc<dyn Fn() -> Instant + Send + Sync + 'static>,
     config: &Config,
 ) -> Result<TcpStream, Error> {
+    // The idea here is to give each attempt a budget of the total time to try.
+    // For a host returning multiple addresses, we share the budget between them
+    // using a geometric series that sums to exactly the total budget.
+    //
+    // Background: https://curl.se/mail/lib-2021-01/0037.html
+    //
+    // Example: Timeout is 10 seconds, and the host returns 4 addresses.
+    //
+    // Address 0: 5.33 seconds (53.3% of budget)
+    // Address 1: 2.67 seconds (26.7% of budget)
+    // Address 2: 1.33 seconds (13.3% of budget)
+    // Address 3: 0.67 seconds (6.7% of budget)
+    // Sum: 10.0 seconds
+    //
+    // For a single address, it gets the full budget (100%).
+    // We cap the lowest to 10ms.
+    //
+    const MIN_PER_ADDRESS_TIMEOUT: Duration = Duration::from_millis(10);
+
+    let num_addrs = addrs.len();
+
+    // Pre-calculate the total weight for the geometric series.
+    // For weights [1, 1/2, 1/4, 1/8, ...], the sum is 2 * (1 - 1/2^n)
+    let total_weight = 2.0 * (1.0 - 0.5_f64.powi(num_addrs as i32));
+
+    // Start with weight 1.0 for the first address, then halve for each subsequent.
+    let mut weight = 1.0_f64;
+
     for addr in addrs {
-        match try_connect_single(*addr, timeout, config) {
+        // Calculate this address's timeout using geometric series.
+        let per_addr = timeout.not_zero().map(|t| {
+            let secs = t.as_secs_f64() * weight / total_weight;
+            let timeout = Duration::from_millis((secs * 1000.0) as u64);
+            timeout.max(MIN_PER_ADDRESS_TIMEOUT)
+        });
+
+        match try_connect_single(*addr, per_addr, config) {
             // First that connects
             Ok(v) => return Ok(v),
             // Intercept ConnectionRefused to try next addrs
@@ -55,9 +100,21 @@ fn try_connect(
                 trace!("{} connection refused", addr);
                 continue;
             }
+            Err(Error::Timeout(_)) => {
+                // Check if we hit the overall global timeout for the connect.
+                let elapsed = current_time().duration_since(start);
+                if elapsed > timeout.after {
+                    return Err(Error::Timeout(timeout.reason));
+                }
+
+                // We still got time to try the next address.
+            }
             // Other errors bail
             Err(e) => return Err(e),
         }
+
+        // Halve the weight for the next address
+        weight /= 2.0;
     }
 
     debug!("Failed to connect to any resolved address");
@@ -69,12 +126,12 @@ fn try_connect(
 
 fn try_connect_single(
     addr: SocketAddr,
-    timeout: NextTimeout,
+    per_addr: Option<Duration>,
     config: &Config,
 ) -> Result<TcpStream, Error> {
     trace!("Try connect TcpStream to {}", addr);
 
-    let maybe_stream = if let Some(when) = timeout.not_zero() {
+    let maybe_stream = if let Some(when) = per_addr {
         TcpStream::connect_timeout(&addr, *when)
     } else {
         TcpStream::connect(addr)
@@ -84,7 +141,8 @@ fn try_connect_single(
     let stream = match maybe_stream {
         Ok(v) => v,
         Err(e) if e.kind() == io::ErrorKind::TimedOut => {
-            return Err(Error::Timeout(timeout.reason))
+            // The value passed here is ignored by the parent try_connect().
+            return Err(Error::Timeout(Timeout::Connect));
         }
         Err(e) => return Err(e.into()),
     };

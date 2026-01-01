@@ -1,7 +1,7 @@
 //! Internal time wrappers
 
 use std::cmp::Ordering;
-use std::ops::{Add, Deref};
+use std::ops::{Add, Deref, Div};
 use std::time;
 
 /// Wrapper for [`std::time::Instant`] that provides additional time points in the past or future
@@ -28,8 +28,13 @@ impl Duration {
     const ZERO: Duration = Duration::Exact(time::Duration::ZERO);
 
     /// Creates a duration from seconds.
-    pub fn from_secs(secs: u64) -> Duration {
+    pub const fn from_secs(secs: u64) -> Duration {
         Duration::Exact(time::Duration::from_secs(secs))
+    }
+
+    /// Creates a duration from milliseconds.
+    pub const fn from_millis(millis: u64) -> Duration {
+        Duration::Exact(time::Duration::from_millis(millis))
     }
 
     /// Tells if this duration will ever happen.
@@ -85,6 +90,17 @@ impl Add<Duration> for Instant {
             (Instant::Exact(_), Duration::NotHappening) => Instant::NotHappening,
             (Instant::NotHappening, Duration::Exact(_)) => Instant::NotHappening,
             (Instant::NotHappening, Duration::NotHappening) => Instant::NotHappening,
+        }
+    }
+}
+
+impl Div<u32> for Duration {
+    type Output = Duration;
+
+    fn div(self, rhs: u32) -> Self::Output {
+        match self {
+            Duration::Exact(d) => Duration::Exact(d / rhs),
+            Duration::NotHappening => Duration::NotHappening,
         }
     }
 }
