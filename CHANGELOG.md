@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Timeout per resolved ip for try_connect #1152
   * Fix body header bug on redirect #1140
   * ureq-proto 0.5.3 to fix unsolicited 100-continue #1139
   * Make socks5:// locally resolve before calling proxy #1138

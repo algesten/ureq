@@ -840,7 +840,7 @@ pub struct Timeouts {
     /// Max duration for doing the DNS lookup when establishing the connection
     pub resolve: Option<Duration>,
 
-    /// Max duration for establishing the connection
+    /// Max duration for establishing the connection.
     pub connect: Option<Duration>,
 
     /// Max duration for sending the request, but not the request body.

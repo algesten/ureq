@@ -117,6 +117,10 @@ impl CallTimings {
         }
     }
 
+    pub(crate) fn current_time(&self) -> Arc<dyn Fn() -> Instant + Send + Sync + 'static> {
+        self.current_time.0.clone()
+    }
+
     pub(crate) fn now(&self) -> Instant {
         self.current_time.now()
     }
