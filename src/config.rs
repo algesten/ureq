@@ -5,8 +5,6 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use http::Uri;
-
 use crate::middleware::{Middleware, MiddlewareChain};
 use crate::{http, Body, Error};
 use crate::{Agent, AsSendBody, Proxy, RequestBuilder};
@@ -152,7 +150,8 @@ pub struct Config {
     ip_family: IpFamily,
     #[cfg(feature = "_tls")]
     tls_config: TlsConfig,
-    proxy: Option<Proxy>,
+    http_proxy: Option<Proxy>,
+    https_proxy: Option<Proxy>,
     no_delay: bool,
     max_redirects: u32,
     max_redirects_will_error: bool,
@@ -189,23 +188,14 @@ impl Config {
         self.clone().into()
     }
 
-    pub(crate) fn connect_proxy_uri(&self) -> Option<&Uri> {
-        let proxy = self.proxy.as_ref()?;
-
-        if !proxy.protocol().is_connect() {
-            return None;
-        }
-
-        Some(proxy.uri())
-    }
-
     pub(crate) fn max_redirects_do_error(&self) -> bool {
         self.max_redirects > 0 && self.max_redirects_will_error
     }
 
     pub(crate) fn clone_without_proxy(&self) -> Self {
         let mut c = self.clone();
-        c.proxy = None;
+        c.http_proxy = None;
+        c.https_proxy = None;
         c
     }
 }
@@ -243,11 +233,18 @@ impl Config {
         &self.tls_config
     }
 
-    /// Proxy configuration.
+    /// Proxy configuration. Get the proxy used for HTTP traffic.
     ///
     /// Picked up from environment when using [`Config::default()`] or
-    pub fn proxy(&self) -> Option<&Proxy> {
-        self.proxy.as_ref()
+    pub fn proxy_http(&self) -> Option<&Proxy> {
+        self.http_proxy.as_ref()
+    }
+
+    /// Proxy configuration. Get the proxy used for HTTPS traffic.
+    ///
+    /// Picked up from environment when using [`Config::default()`] or
+    pub fn proxy_https(&self) -> Option<&Proxy> {
+        self.https_proxy.as_ref()
     }
 
     /// Disable Nagle's algorithm
@@ -464,12 +461,31 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
         self
     }
 
-    /// Proxy configuration.
+    /// Proxy configuration. Set the proxy for both HTTP and HTTPS traffic.
     ///
     /// Picked up from environment when using [`Config::default()`] or
     /// [`Agent::new_with_defaults()`][crate::Agent::new_with_defaults].
     pub fn proxy(mut self, v: Option<Proxy>) -> Self {
-        self.config().proxy = v;
+        self.config().http_proxy = v.clone();
+        self.config().https_proxy = v;
+        self
+    }
+
+    /// Proxy configuration. Set the proxy for HTTP traffic.
+    ///
+    /// Picked up from environment when using [`Config::default()`] or
+    /// [`Agent::new_with_defaults()`][crate::Agent::new_with_defaults].
+    pub fn proxy_http(mut self, v: Option<Proxy>) -> Self {
+        self.config().http_proxy = v;
+        self
+    }
+
+    /// Proxy configuration. Set the proxy for HTTPS traffic.
+    ///
+    /// Picked up from environment when using [`Config::default()`] or
+    /// [`Agent::new_with_defaults()`][crate::Agent::new_with_defaults].
+    pub fn proxy_https(mut self, v: Option<Proxy>) -> Self {
+        self.config().https_proxy = v;
         self
     }
 
@@ -867,13 +883,16 @@ pub(crate) static DEFAULT_USER_AGENT: &str =
 
 impl Default for Config {
     fn default() -> Self {
+        let (http_proxy, https_proxy) = Proxy::try_from_env();
+
         Self {
             http_status_as_error: true,
             https_only: false,
             ip_family: IpFamily::Any,
             #[cfg(feature = "_tls")]
             tls_config: TlsConfig::default(),
-            proxy: Proxy::try_from_env(),
+            http_proxy,
+            https_proxy,
             no_delay: true,
             max_redirects: 10,
             max_redirects_will_error: true,
@@ -950,7 +969,8 @@ impl fmt::Debug for Config {
         dbg.field("http_status_as_error", &self.http_status_as_error)
             .field("https_only", &self.https_only)
             .field("ip_family", &self.ip_family)
-            .field("proxy", &self.proxy)
+            .field("http_proxy", &self.http_proxy)
+            .field("https_proxy", &self.https_proxy)
             .field("no_delay", &self.no_delay)
             .field("max_redirects", &self.max_redirects)
             .field("redirect_auth_headers", &self.redirect_auth_headers)
