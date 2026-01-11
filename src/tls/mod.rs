@@ -175,7 +175,7 @@ impl TlsConfigBuilder {
 
     /// The set of trusted root certificates to use to validate server certificates.
     ///
-    /// Defaults to `WebPki` if `webpki-root` feature is enabled, otherwise `PlatformVerifier`.
+    /// Defaults to `WebPki` if `webpki-roots` feature is enabled, otherwise `PlatformVerifier`.
     pub fn root_certs(mut self, v: RootCerts) -> Self {
         self.config.root_certs = v;
         self
