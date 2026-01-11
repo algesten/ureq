@@ -109,7 +109,7 @@ impl TlsConfig {
 
     /// The set of trusted root certificates to use to validate server certificates.
     ///
-    /// Defaults to `WebPki`.
+    /// Defaults to `WebPki` if `webpki-roots` feature is enabled, otherwise `PlatformVerifier`.
     pub fn root_certs(&self) -> &RootCerts {
         &self.root_certs
     }
@@ -175,7 +175,7 @@ impl TlsConfigBuilder {
 
     /// The set of trusted root certificates to use to validate server certificates.
     ///
-    /// Defaults to `WebPki`.
+    /// Defaults to `WebPki` if `webpki-root` feature is enabled, otherwise `PlatformVerifier`.
     pub fn root_certs(mut self, v: RootCerts) -> Self {
         self.config.root_certs = v;
         self
@@ -300,6 +300,8 @@ pub enum RootCerts {
     /// * For **rustls**, this uses the `rustls-platform-verifier` crate. It requires
     ///   the feature **platform-verifier**.
     /// * For **native-tls**, this uses the roots that native-tls loads by default.
+    ///
+    /// This is the default value if the feature **webpki-roots** is disabled.
     PlatformVerifier,
 
     /// Use Mozilla's root certificates instead of the platform.
@@ -307,7 +309,8 @@ pub enum RootCerts {
     /// This is useful when you can't trust the system roots, such as in
     /// environments where TLS is intercepted and decrypted by a proxy (MITM attack).
     ///
-    /// This is the default value.
+    /// This is the default value if the feature **webpki-roots** is enabled.
+    #[cfg(feature = "webpki-roots")]
     WebPki,
 }
 
@@ -330,7 +333,10 @@ impl Default for TlsConfig {
         Self {
             provider,
             client_cert: None,
+            #[cfg(feature = "webpki-roots")]
             root_certs: RootCerts::WebPki,
+            #[cfg(not(feature = "webpki-roots"))]
+            root_certs: RootCerts::PlatformVerifier,
             use_sni: true,
             disable_verification: false,
             #[cfg(feature = "_rustls")]

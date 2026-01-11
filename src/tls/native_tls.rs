@@ -139,6 +139,7 @@ fn build_connector(tls_config: &TlsConfig) -> Result<CachedNativeTlsConnector, E
                 // We only use the built-in roots.
                 builder.disable_built_in_roots(false);
             }
+            #[cfg(feature = "webpki-roots")]
             RootCerts::WebPki => {
                 // Only use the specific roots.
                 builder.disable_built_in_roots(true);

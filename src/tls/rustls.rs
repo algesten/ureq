@@ -180,7 +180,10 @@ fn build_config(tls_config: &TlsConfig) -> Result<CachedRustlConfig, Error> {
             }
             #[cfg(not(feature = "platform-verifier"))]
             RootCerts::PlatformVerifier => {
-                panic!("Rustls + PlatformVerifier requires feature: platform-verifier");
+                panic!(
+                    "Rustls + PlatformVerifier requires feature: platform-verifier. \
+                     PlatformVerifier is the intended default root trust option if `webpki-roots` is disabled"
+                );
             }
             #[cfg(feature = "platform-verifier")]
             RootCerts::PlatformVerifier => builder
@@ -189,6 +192,7 @@ fn build_config(tls_config: &TlsConfig) -> Result<CachedRustlConfig, Error> {
                 .with_custom_certificate_verifier(Arc::new(
                     rustls_platform_verifier::Verifier::new(provider)?,
                 )),
+            #[cfg(feature = "webpki-roots")]
             RootCerts::WebPki => {
                 let root_store = RootCertStore {
                     roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
