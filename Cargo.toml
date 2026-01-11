@@ -22,8 +22,8 @@ default = ["rustls", "gzip"]
 
 ######## SUPPORTED FEATURES
 
-rustls = ["rustls-no-provider", "_ring"]
-native-tls = ["dep:native-tls", "dep:der", "_tls", "dep:webpki-root-certs"]
+rustls = ["rustls-no-provider", "_ring", "rustls-webpki-roots"]
+native-tls = ["native-tls-no-default", "dep:der", "_tls", "native-tls-webpki-roots"]
 platform-verifier = ["dep:rustls-platform-verifier"]
 socks-proxy = ["dep:socks"]
 win-system-proxy = ["dep:winreg"]
@@ -33,6 +33,8 @@ brotli = ["dep:brotli-decompressor"]
 charset = ["dep:encoding_rs"]
 json = ["dep:serde", "dep:serde_json", "cookie_store?/serde_json"]
 multipart = ["dep:mime_guess", "dep:getrandom"]
+rustls-webpki-roots = ["dep:webpki-roots"]
+native-tls-webpki-roots = ["dep:webpki-root-certs"]
 
 ######## UNSTABLE FEATURES.
 # Might be removed or changed in a minor version.
@@ -40,7 +42,13 @@ multipart = ["dep:mime_guess", "dep:getrandom"]
 # Rustls CryptoProviders are not picked up from feature flags alone. They must be
 # configured on Agent. This feature flag makes it possible to compile ureq with
 # rustls, but without ring.
-rustls-no-provider = ["dep:rustls", "_tls", "dep:webpki-roots", "_rustls"]
+# When webpki-roots is disabled you have to enable `platform-verifier` or provide root
+# certs manually.
+rustls-no-provider = ["dep:rustls", "_tls", "_rustls"]
+
+# When webpki-roots is disabled, you have to enable `platform-verifier` or provide root
+# certs manually.
+native-tls-no-default = ["dep:native-tls", "dep:der", "_tls"]
 
 # Supported as long as native-tls supports this.
 vendored = ["native-tls?/vendored"]
