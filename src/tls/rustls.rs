@@ -180,10 +180,7 @@ fn build_config(tls_config: &TlsConfig) -> Result<CachedRustlConfig, Error> {
             }
             #[cfg(not(feature = "platform-verifier"))]
             RootCerts::PlatformVerifier => {
-                panic!(
-                    "Rustls + PlatformVerifier requires feature: platform-verifier. \
-                     PlatformVerifier is the intended default root trust option if `webpki-roots` is disabled"
-                );
+                panic!("Rustls + PlatformVerifier requires feature: platform-verifier");
             }
             #[cfg(feature = "platform-verifier")]
             RootCerts::PlatformVerifier => builder
@@ -198,6 +195,10 @@ fn build_config(tls_config: &TlsConfig) -> Result<CachedRustlConfig, Error> {
                     roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
                 };
                 builder.with_root_certificates(root_store)
+            }
+            #[cfg(not(feature = "webpki-roots"))]
+            RootCerts::WebPki => {
+                panic!("WebPki is disabled. You need to explicitly configure root certs on Agent");
             }
         }
     };

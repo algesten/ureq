@@ -148,6 +148,10 @@ fn build_connector(tls_config: &TlsConfig) -> Result<CachedNativeTlsConnector, E
                     .map(|c| c.as_ref());
                 add_valid_der(certs, &mut builder);
             }
+            #[cfg(not(feature = "webpki-roots"))]
+            RootCerts::WebPki => {
+                panic!("WebPki is disabled. You need to explicitly configure root certs on Agent");
+            }
         }
     }
 
