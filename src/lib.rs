@@ -161,9 +161,9 @@
 //!
 //! These features are unstable and might change in a minor version.
 //!
-//! * **rustls-no-provider** Enables rustls, but does not enable any [`CryptoProvider`] such as `ring`.
-//!   Providers other than the default (currently `ring`) are never picked up from feature flags alone.
-//!   It must be configured on the agent.
+//! * **rustls-no-provider** Enables rustls, but does not enable webpki and any [`CryptoProvider`] such as `ring`.
+//   Root certs and providers other than the default (currently `ring`) are never picked up from feature flags alone.
+//   They must be configured on the agent.
 //!
 //! * **vendored** compiles and statically links to a copy of non-Rust vendors (e.g. OpenSSL from `native-tls`)
 //!

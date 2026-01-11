@@ -157,7 +157,7 @@ The default enabled features are: **rustls** and **gzip**.
 
 These features are unstable and might change in a minor version.
 
-* **rustls-no-default** Enables rustls, but does not enable webpki and any [`CryptoProvider`] such as `ring`.
+* **rustls-no-provider** Enables rustls, but does not enable webpki and any [`CryptoProvider`] such as `ring`.
   Root certs and providers other than the default (currently `ring`) are never picked up from feature flags alone.
   They must be configured on the agent.
 

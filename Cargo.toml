@@ -22,7 +22,7 @@ default = ["rustls", "gzip"]
 
 ######## SUPPORTED FEATURES
 
-rustls = ["rustls-no-default", "_ring", "webpki-roots"]
+rustls = ["rustls-no-provider", "_ring", "webpki-roots"]
 native-tls = ["native-tls-no-default", "dep:der", "_tls", "webpki-roots"]
 platform-verifier = ["dep:rustls-platform-verifier"]
 socks-proxy = ["dep:socks"]
@@ -43,7 +43,7 @@ webpki-roots = ["dep:webpki-roots"]
 # rustls, but without ring.
 # When webpki-roots is disabled, PlatformVerifier is used by default for root certs,
 # so you have to enable `platform-verifier` or provide root certs manually.
-rustls-no-default = ["dep:rustls", "_tls", "_rustls"]
+rustls-no-provider = ["dep:rustls", "_tls", "_rustls"]
 
 # When webpki-roots is disabled, native-tls will use the system root certs by default.
 native-tls-no-default = ["dep:native-tls", "dep:der", "_tls"]
