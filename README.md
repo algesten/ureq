@@ -152,14 +152,19 @@ The default enabled features are: **rustls** and **gzip**.
   library defaults to Rust's built in `utf-8`
 * **json** enables JSON sending and receiving via serde_json
 * **multipart** enables multipart/form-data sending via [`unversioned::multipart`]
+* **rustls-webpki-roots** enables the webpki-roots crate for root certificates when using rustls.
+* **native-tls-webpki-roots** enables the webpki-root-certs crate for root certificates when using native-tls.
 
 #### Unstable
 
 These features are unstable and might change in a minor version.
 
-* **rustls-no-provider** Enables rustls, but does not enable any [`CryptoProvider`] such as `ring`.
-  Providers other than the default (currently `ring`) are never picked up from feature flags alone.
-  It must be configured on the agent.
+* **rustls-no-provider** Enables rustls, but does not enable webpki and any [`CryptoProvider`] such as `ring`.
+  Root certs and providers other than the default (currently `ring`) are never picked up from feature flags alone.
+  They must be configured on the agent.
+
+* **native-tls-no-default** Enables native-tls, but does not enable webpki.
+  Root certs are never picked up from feature flags alone. They must be configured on the agent.
 
 * **vendored** compiles and statically links to a copy of non-Rust vendors (e.g. OpenSSL from `native-tls`)
 
