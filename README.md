@@ -152,6 +152,8 @@ The default enabled features are: **rustls** and **gzip**.
   library defaults to Rust's built in `utf-8`
 * **json** enables JSON sending and receiving via serde_json
 * **multipart** enables multipart/form-data sending via [`unversioned::multipart`]
+* **rustls-webpki-roots** enables the webpki-roots crate for root certificates when using rustls.
+* **native-tls-webpki-roots** enables the webpki-root-certs crate for root certificates when using native-tls.
 
 #### Unstable
 
