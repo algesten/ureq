@@ -189,14 +189,14 @@ fn build_config(tls_config: &TlsConfig) -> Result<CachedRustlConfig, Error> {
                 .with_custom_certificate_verifier(Arc::new(
                     rustls_platform_verifier::Verifier::new(provider)?,
                 )),
-            #[cfg(feature = "webpki-roots")]
+            #[cfg(feature = "rustls-webpki-roots")]
             RootCerts::WebPki => {
                 let root_store = RootCertStore {
                     roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
                 };
                 builder.with_root_certificates(root_store)
             }
-            #[cfg(not(feature = "webpki-roots"))]
+            #[cfg(not(feature = "rustls-webpki-roots"))]
             RootCerts::WebPki => {
                 panic!("WebPki is disabled. You need to explicitly configure root certs on Agent");
             }
