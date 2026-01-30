@@ -193,6 +193,11 @@ impl Body {
     /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn content_length(&self) -> Option<u64> {
+        // After transparent decompression, the original Content-Length no longer
+        // reflects the actual body size, so we return None.
+        if self.info.is_decompressing() {
+            return None;
+        }
         match self.info.body_mode {
             BodyMode::NoBody => None,
             BodyMode::LengthDelimited(v) => Some(v),

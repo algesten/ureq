@@ -115,11 +115,18 @@ mod test {
             res.headers().get("content-encoding"),
         );
 
-        // Content-Length must be removed (it referred to compressed size)
+        // Content-Length header must be removed (it referred to compressed size)
         assert!(
             res.headers().get("content-length").is_none(),
-            "Content-Length should be stripped after gzip decompression, got: {:?}",
+            "Content-Length header should be stripped after gzip decompression, got: {:?}",
             res.headers().get("content-length"),
+        );
+
+        // Body::content_length() must also return None after decompression
+        assert!(
+            res.body().content_length().is_none(),
+            "Body::content_length() should return None after gzip decompression, got: {:?}",
+            res.body().content_length(),
         );
 
         // Other headers must be preserved
