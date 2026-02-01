@@ -647,6 +647,17 @@ impl ResponseInfo {
         }
     }
 
+    /// Returns true if the body will be decompressed (gzip or brotli).
+    pub(crate) fn is_decompressing(&self) -> bool {
+        match self.content_encoding {
+            #[cfg(feature = "gzip")]
+            ContentEncoding::Gzip => true,
+            #[cfg(feature = "brotli")]
+            ContentEncoding::Brotli => true,
+            _ => false,
+        }
+    }
+
     /// Whether the mime type indicats text.
     fn is_text(&self) -> bool {
         self.mime_type

@@ -99,7 +99,7 @@ pub(crate) fn run(
         }
     };
 
-    let (parts, _) = response.into_parts();
+    let (mut parts, _) = response.into_parts();
 
     let recv_body_mode = handler
         .call
@@ -108,6 +108,15 @@ pub(crate) fn run(
         .unwrap_or(BodyMode::NoBody);
 
     let info = ResponseInfo::new(&parts.headers, recv_body_mode);
+
+    // If the body will be decompressed, strip Content-Encoding and Content-Length
+    // from the response headers. The Content-Length no longer matches the
+    // decompressed body size, and Content-Encoding no longer applies since
+    // the body is delivered to the caller already decompressed (RFC 9110 §8.7).
+    if info.is_decompressing() {
+        parts.headers.remove(http::header::CONTENT_ENCODING);
+        parts.headers.remove(http::header::CONTENT_LENGTH);
+    }
 
     let body = Body::new(handler, info);
 
