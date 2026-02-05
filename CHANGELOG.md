@@ -1,5 +1,7 @@
 # Unreleased
 
+# 3.2.0
+
   * Strip Content-Encoding/Content-Length headers after decompression #1156
   * Timeout per resolved ip for try_connect #1152
   * Fix body header bug on redirect #1140
