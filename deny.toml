@@ -59,20 +59,7 @@ targets = [
 #        └── ureq v3.0.9
 #
 
-# 2025-08-17: getrandom is bumped in other crates, but ring holds it back.
-#             See https://github.com/briansmith/ring/issues/2341
-#
-#   ├ getrandom v0.2.16
-#     └── ring v0.17.14
-#         ├── rustls v0.23.31
-#         │   ├── rustls-platform-verifier v0.6.1
-#         │   │   └── ureq v3.0.12
-#   ├ getrandom v0.3.3
-#     └── tempfile v3.20.0
-#         └── native-tls v0.2.14
-#             └── ureq v3.0.12
-
-exclude = ["windows-sys", "security-framework", "getrandom"]
+exclude = ["windows-sys", "security-framework"]
 
 [advisories]
 yanked = "deny"
@@ -83,9 +70,7 @@ multiple-versions = "deny"
 wildcards = "allow"        # at least until https://github.com/EmbarkStudios/cargo-deny/issues/241 is fixed
 deny = []
 
-skip = [
-  { name = "bitflags" }, # Unfortunate duplicate dependency due to old version beeing pulled in by `security-framework`
-]
+skip = []
 skip-tree = []
 
 
