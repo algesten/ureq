@@ -112,6 +112,7 @@ serde = { version = "1.0.204", features = ["std", "derive"] }
 assert_no_alloc = "1.1.2"
 # Enable aws-lc-rs for tests so we can demonstrate using ureq without compiling ring.
 rustls = { version = "0.23", features = ["aws-lc-rs"] }
+rustls-platform-verifier = { version = "0.5.1" }
 
 [[example]]
 name = "cureq"
