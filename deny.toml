@@ -76,7 +76,14 @@ exclude = ["windows-sys", "security-framework", "getrandom"]
 
 [advisories]
 yanked = "deny"
-ignore = []
+ignore = [
+  # time >=0.3.47 requires edition 2024 (Rust 1.85+), incompatible with our MSRV 1.71.1.
+  # The vulnerability is stack exhaustion in time's RFC 2822 parser (cfws/comment recursion).
+  # This code path is not reachable through ureq: the cookie crate parses Expires headers
+  # using custom FormatItem descriptions (HTTP date formats), and cookie_store uses Rfc3339
+  # for serde. Neither ever invokes the Rfc2822 parser.
+  "RUSTSEC-2026-0009",
+]
 
 [bans]
 multiple-versions = "deny"
