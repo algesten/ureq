@@ -27,8 +27,8 @@ anyone who wants a low-overhead HTTP client that just gets the job done. Works
 very well with HTTP APIs. Its features include cookies, JSON, HTTP proxies,
 HTTPS, charset decoding, and is based on the API of the `http` crate.
 
-Ureq is in pure Rust for safety and ease of understanding. It avoids using
-`unsafe` directly. It uses blocking I/O instead of async I/O, because that keeps
+Ureq is in pure Rust for safety and ease of understanding. It forbids
+`unsafe` code. It uses blocking I/O instead of async I/O, because that keeps
 the API simple and keeps dependencies to a minimum. For TLS, ureq uses
 rustls or native-tls.
 
