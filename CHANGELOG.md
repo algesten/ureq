@@ -1,5 +1,7 @@
 # Unreleased
 
+  * Switch archived utf-8 crate for utf8-zero #1163
+
 # 3.2.0
 
   * Strip Content-Encoding/Content-Length headers after decompression #1156
