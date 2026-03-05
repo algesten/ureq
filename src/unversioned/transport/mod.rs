@@ -181,6 +181,12 @@ where
 
 /// The parameters needed to create a [`Transport`].
 pub struct ConnectionDetails<'a> {
+    /// The type of traffic that will be sent over the connection.
+    ///
+    /// Specfically, the type of traffic of the request. Even if using a HTTPS
+    /// proxy, this can be HTTP if the request is being forwarded to a HTTP target.
+    pub traffic_type: &'a http::uri::Scheme,
+
     /// Full uri that is being requested.
     ///
     /// In the case of CONNECT (HTTP) proxy, this is the URI of the
@@ -429,7 +435,13 @@ mod no_proxy {
             chained: Option<In>,
         ) -> Result<Option<Self::Out>, Error> {
             if chained.is_none() {
-                if let Some(proxy) = details.config.proxy() {
+                let proxy = if details.traffic_type == &crate::transport::Scheme::HTTP {
+                    details.config.proxy_http()
+                } else {
+                    details.config.proxy_https()
+                };
+
+                if let Some(proxy) = proxy {
                     if proxy.protocol().is_socks() {
                         if proxy.is_from_env() {
                             warn!(
@@ -440,7 +452,7 @@ mod no_proxy {
                             // If a user bothered to manually create a Config.proxy setting,
                             // and it's not honored, assume it's a serious error.
                             panic!(
-                                "Enable feature socks-proxy to use
+                                "Enable feature socks-proxy to use \
                                 manually configured proxy"
                             );
                         }

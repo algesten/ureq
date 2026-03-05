@@ -33,7 +33,13 @@ impl<In: Transport> Connector<In> for SocksConnector {
         details: &ConnectionDetails,
         chained: Option<In>,
     ) -> Result<Option<Self::Out>, Error> {
-        let proxy = match details.config.proxy() {
+        let proxy = if details.traffic_type == &crate::transport::Scheme::HTTP {
+            details.config.proxy_http()
+        } else {
+            details.config.proxy_https()
+        };
+
+        let proxy = match proxy {
             Some(v) if v.protocol().is_socks() => v,
             // If there is no proxy configured, or it isn't a SOCKS proxy, use whatever is chained.
             _ => {
@@ -52,11 +58,7 @@ impl<In: Transport> Connector<In> for SocksConnector {
             .resolve(proxy.uri(), details.config, details.timeout)?;
 
         // Check if this host is not supposed to be proxied.
-        let is_no_proxy = details
-            .config
-            .proxy()
-            .map(|p| p.is_no_proxy(details.uri))
-            .unwrap_or(false);
+        let is_no_proxy = proxy.is_no_proxy(details.uri);
 
         if is_no_proxy {
             return Ok(None);
