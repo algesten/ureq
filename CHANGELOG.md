@@ -1,5 +1,7 @@
 # Unreleased
 
+# 3.2.1
+
   * Switch archived utf-8 crate for utf8-zero #1163
 
 # 3.2.0
