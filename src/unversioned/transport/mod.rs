@@ -24,12 +24,12 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use http::uri::Scheme;
 use http::Uri;
+use http::uri::Scheme;
 
+use crate::Error;
 use crate::config::Config;
 use crate::http;
-use crate::Error;
 
 use super::resolver::{ResolvedSocketAddrs, Resolver};
 

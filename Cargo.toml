@@ -8,11 +8,11 @@ repository = "https://github.com/algesten/ureq"
 readme = "README.md"
 keywords = ["web", "request", "https", "http", "client"]
 categories = ["web-programming::http-client"]
-edition = "2018"
+edition = "2024"
 exclude = ["/cargo_deny.sh", "/deny.toml", "/test.sh"]
 
 # MSRV
-rust-version = "1.71.1"
+rust-version = "1.85"
 
 [package.metadata.docs.rs]
 features = ["rustls", "platform-verifier", "native-tls", "socks-proxy", "cookies", "gzip", "brotli", "charset", "json", "multipart", "_test", "_doc"]
@@ -79,10 +79,8 @@ webpki-roots = { version = "1.0.0", optional = true, default-features = false }
 webpki-root-certs = { version = "1.0.0", optional = true, default-features = false }
 
 rustls = { version = "0.23.22", optional = true, default-features = false, features = ["logging", "std", "tls12"] }
-# held back on 0.2.12 to avoid double dependency on windows-sys (0.59.0, 0.52.0)
-# native-tls 0.2.13 requires MSRV 1.82. We keep 0.2.12 until we decide to bunp MSRV
-native-tls = { version = "0.2.12", optional = true, default-features = false }
-der = { version = "0.7.9", optional = true, default-features = false, features = ["pem", "std"] }
+native-tls = { version = "0.2.14", optional = true, default-features = false }
+der = { version = "0.8.0", optional = true, default-features = false, features = ["pem", "std"] }
 
 socks = { version = "0.3.4", optional = true }
 
@@ -100,10 +98,10 @@ serde = { version = "1.0.138", optional = true, default-features = false, featur
 serde_json = { version = "1.0.120", optional = true, default-features = false, features = ["std"] }
 
 mime_guess = { version = "2.0.5", optional = true }
-getrandom = { version = "0.2.15", optional = true }
+getrandom = { version = "0.4", optional = true }
 
 [target.'cfg(windows)'.dependencies]
-winreg = { version = "0.55", optional = true }
+winreg = { version = "0.56", optional = true }
 
 [dev-dependencies]
 env_logger = "0.11.7"

@@ -14,7 +14,7 @@
 use mime_guess::Mime;
 use ureq_proto::http::{self, HeaderValue};
 
-use crate::{util::private::Private, AsSendBody, Error, SendBody};
+use crate::{AsSendBody, Error, SendBody, util::private::Private};
 use std::io::{self, Read};
 use std::path::Path;
 
@@ -133,7 +133,7 @@ impl<'a> Form<'a> {
         // only present in the dependencies if we use native-tls. In
         // all other cases we have getrandom already.
         let mut random_bytes = [0u8; BOUNDARY_SUFFIX_LEN];
-        getrandom::getrandom(&mut random_bytes).expect("failed to generate random boundary");
+        getrandom::fill(&mut random_bytes).expect("failed to generate random boundary");
 
         // *2 since we're using hex encoding
         let mut boundary = String::with_capacity(BOUNDARY_PREFIX.len() + BOUNDARY_SUFFIX_LEN * 2);

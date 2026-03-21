@@ -8,9 +8,9 @@ use http::header::{DATE, HOST, LOCATION, SERVER, TRANSFER_ENCODING, USER_AGENT};
 use http::uri::{Authority, Scheme};
 use http::{HeaderMap, HeaderName, HeaderValue, Method, Response, Uri, Version};
 
+use crate::Error;
 use crate::http;
 use crate::proxy::ProxyProtocol;
-use crate::Error;
 
 pub(crate) mod private {
     pub trait Private {}

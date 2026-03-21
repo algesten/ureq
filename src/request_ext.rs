@@ -1,6 +1,6 @@
 use crate::config::typestate::RequestExtScope;
 use crate::config::{Config, ConfigBuilder, RequestLevelConfig};
-use crate::{http, Agent, AsSendBody, Body, Error};
+use crate::{Agent, AsSendBody, Body, Error, http};
 use std::ops::Deref;
 use ureq_proto::http::{Request, Response};
 

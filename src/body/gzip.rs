@@ -2,8 +2,8 @@ use std::io;
 
 use flate2::read::MultiGzDecoder;
 
-use crate::error::is_wrapped_ureq_error;
 use crate::Error;
+use crate::error::is_wrapped_ureq_error;
 
 pub(crate) struct GzipDecoder<R>(MultiGzDecoder<R>);
 
@@ -28,9 +28,9 @@ impl<R: io::Read> io::Read for GzipDecoder<R> {
 
 #[cfg(all(test, feature = "_test"))]
 mod test {
+    use crate::Agent;
     use crate::test::init_test_log;
     use crate::transport::set_handler;
-    use crate::Agent;
 
     // Test that a stream gets returned to the pool if it is gzip encoded and the gzip
     // decoder reads the exact amount from a chunked stream, not past the 0. This
@@ -75,8 +75,8 @@ mod test {
 
     /// Gzip-compress a byte slice using flate2.
     fn gzip_compress(data: &[u8]) -> Vec<u8> {
-        use flate2::write::GzEncoder;
         use flate2::Compression;
+        use flate2::write::GzEncoder;
         use std::io::Write;
         let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
         encoder.write_all(data).unwrap();

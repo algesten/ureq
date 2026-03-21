@@ -8,8 +8,8 @@ use crate::unversioned::transport::time::Instant;
 use crate::util::IoResultExt;
 use crate::{Error, Timeout};
 
-use super::chain::Either;
 use super::ResolvedSocketAddrs;
+use super::chain::Either;
 
 use super::time::Duration;
 use super::{Buffers, ConnectionDetails, Connector, LazyBuffers, NextTimeout, Transport};

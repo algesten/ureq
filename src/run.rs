@@ -1,23 +1,23 @@
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, LazyLock};
 use std::{io, mem};
 
 use http::uri::Scheme;
-use http::{header, HeaderValue, Method, Request, Response, Uri};
+use http::{HeaderValue, Method, Request, Response, Uri, header};
+use ureq_proto::BodyMode;
 use ureq_proto::client::state::{Await100, RecvBody, RecvResponse, Redirect, SendRequest};
 use ureq_proto::client::state::{Prepare, SendBody as SendBodyState};
 use ureq_proto::client::{Await100Result, RecvBodyResult};
 use ureq_proto::client::{RecvResponseResult, SendRequestResult};
-use ureq_proto::BodyMode;
 
 use crate::body::ResponseInfo;
-use crate::config::{Config, RequestLevelConfig, DEFAULT_USER_AGENT};
+use crate::config::{Config, DEFAULT_USER_AGENT, RequestLevelConfig};
 use crate::http;
 use crate::pool::Connection;
 use crate::request::ForceSendBody;
 use crate::response::{RedirectHistory, ResponseUri};
 use crate::timings::{CallTimings, CurrentTime};
-use crate::transport::time::{Duration, Instant};
 use crate::transport::ConnectionDetails;
+use crate::transport::time::{Duration, Instant};
 use crate::util::{DebugRequest, DebugResponse, DebugUri, HeaderMapExt, UriExt};
 use crate::{Agent, Body, Error, SendBody, Timeout};
 
@@ -299,9 +299,7 @@ fn add_headers(
     }
 
     {
-        static ACCEPTS: OnceLock<String> = OnceLock::new();
-
-        let accepts = ACCEPTS.get_or_init(|| {
+        static ACCEPTS: LazyLock<String> = LazyLock::new(|| {
             #[allow(unused_mut)]
             let mut value = String::with_capacity(10);
             #[cfg(feature = "gzip")]
@@ -312,6 +310,8 @@ fn add_headers(
             value.push_str("br");
             value
         });
+
+        let accepts = &*ACCEPTS;
 
         if !has_header_accept_enc {
             if let Some(v) = config.accept_encoding().as_str(accepts) {

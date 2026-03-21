@@ -1,5 +1,5 @@
-use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
 use std::borrow::Cow;
 use std::fmt;
 use std::io::Write;
@@ -7,11 +7,11 @@ use ureq_proto::parser::try_parse_response;
 
 use http::StatusCode;
 
+use crate::Error;
 use crate::config::DEFAULT_USER_AGENT;
 use crate::http;
 use crate::transport::{ConnectionDetails, Connector, Either, Transport, TransportAdapter};
 use crate::util::{SchemeExt, UriExt};
-use crate::Error;
 
 /// Connector for CONNECT proxy settings.
 ///

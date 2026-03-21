@@ -57,7 +57,7 @@ jobs:
   build_versions:
     strategy:
       matrix:
-        rust: [stable, beta, 1.71.1]
+        rust: [stable, beta, 1.85]
     runs-on: "ubuntu-latest"
     steps:
       - uses: actions/checkout@v4

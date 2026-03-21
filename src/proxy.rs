@@ -5,9 +5,9 @@ use ureq_proto::http::uri::{PathAndQuery, Scheme};
 
 use http::Uri;
 
+use crate::Error;
 use crate::http;
 use crate::util::{AuthorityExt, DebugUri};
-use crate::Error;
 
 #[cfg(all(windows, feature = "win-system-proxy"))]
 const REGISTRY_PATH: &str = r#"Software\Microsoft\Windows\CurrentVersion\Internet Settings"#;
@@ -240,8 +240,8 @@ impl Proxy {
 
         #[cfg(all(windows, feature = "win-system-proxy"))]
         {
-            use winreg::enums::{HKEY_CURRENT_USER, KEY_READ};
             use winreg::RegKey;
+            use winreg::enums::{HKEY_CURRENT_USER, KEY_READ};
 
             let registry = RegKey::predef(HKEY_CURRENT_USER);
             let Ok(ie_settings) = registry.open_subkey_with_flags(REGISTRY_PATH, KEY_READ) else {
@@ -550,8 +550,8 @@ impl NoProxy {
 
         #[cfg(all(windows, feature = "win-system-proxy"))]
         {
-            use winreg::enums::{HKEY_CURRENT_USER, KEY_READ};
             use winreg::RegKey;
+            use winreg::enums::{HKEY_CURRENT_USER, KEY_READ};
 
             let registry = RegKey::predef(HKEY_CURRENT_USER);
             let Ok(ie_settings) = registry.open_subkey_with_flags(REGISTRY_PATH, KEY_READ) else {

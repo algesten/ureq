@@ -1,7 +1,7 @@
 use std::{fmt, io};
 
-use crate::http;
 use crate::Timeout;
+use crate::http;
 
 /// Errors from ureq.
 #[derive(Debug)]
@@ -199,7 +199,7 @@ impl Error {
         if let Self::Io(e) = self {
             e
         } else {
-            io::Error::new(io::ErrorKind::Other, self)
+            io::Error::other(self)
         }
     }
 

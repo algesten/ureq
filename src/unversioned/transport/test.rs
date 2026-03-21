@@ -9,8 +9,8 @@ use std::{fmt, io, thread};
 use http::{Method, Request, Uri};
 use ureq_proto::parser::try_parse_request;
 
-use crate::http;
 use crate::Error;
+use crate::http;
 
 use super::chain::Either;
 use super::time::Duration;
@@ -649,9 +649,7 @@ struct TxWrite(mpsc::SyncSender<Vec<u8>>);
 
 impl io::Write for TxWrite {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.0
-            .send(buf.to_vec())
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        self.0.send(buf.to_vec()).map_err(io::Error::other)?;
         Ok(buf.len())
     }
 

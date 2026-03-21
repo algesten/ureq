@@ -5,15 +5,15 @@ use std::sync::{Arc, OnceLock};
 
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::crypto::CryptoProvider;
-use rustls::{ClientConfig, ClientConnection, RootCertStore, StreamOwned, ALL_VERSIONS};
+use rustls::{ALL_VERSIONS, ClientConfig, ClientConnection, RootCertStore, StreamOwned};
 use rustls_pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs1KeyDer, PrivatePkcs8KeyDer};
 use rustls_pki_types::{PrivateSec1KeyDer, ServerName};
 
+use crate::Error;
 use crate::tls::cert::KeyKind;
 use crate::tls::{RootCerts, TlsProvider};
 use crate::transport::{Buffers, ConnectionDetails, Connector, LazyBuffers};
 use crate::transport::{Either, NextTimeout, Transport, TransportAdapter};
-use crate::Error;
 
 use super::TlsConfig;
 

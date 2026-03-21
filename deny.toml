@@ -59,12 +59,13 @@ targets = [
 #        └── ureq v3.0.9
 #
 
-exclude = ["windows-sys", "security-framework"]
+# getrandom: ureq uses 0.4, ring pulls 0.2, cc/jobserver pulls 0.3.
+exclude = ["windows-sys", "security-framework", "getrandom"]
 
 [advisories]
 yanked = "deny"
 ignore = [
-  # time >=0.3.47 requires edition 2024 (Rust 1.85+), incompatible with our MSRV 1.71.1.
+  # cookie_store 0.22.0 pulls time < 0.3.47. cookie_store 0.22.1 fixes it but requires MSRV 1.88.
   # The vulnerability is stack exhaustion in time's RFC 2822 parser (cfws/comment recursion).
   # This code path is not reachable through ureq: the cookie crate parses Expires headers
   # using custom FormatItem descriptions (HTTP date formats), and cookie_store uses Rfc3339

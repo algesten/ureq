@@ -6,7 +6,7 @@ use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 mod cert;
-pub use cert::{parse_pem, Certificate, PemItem, PrivateKey};
+pub use cert::{Certificate, PemItem, PrivateKey, parse_pem};
 
 #[cfg(feature = "_rustls")]
 pub(crate) mod rustls;
@@ -279,12 +279,12 @@ impl ClientCert {
 
     /// Client certificate chain.
     pub fn certs(&self) -> &[Certificate<'static>] {
-        &self.0 .0
+        &self.0.0
     }
 
     /// Client certificate private key.
     pub fn private_key(&self) -> &PrivateKey<'static> {
-        &self.0 .1
+        &self.0.1
     }
 }
 

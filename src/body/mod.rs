@@ -3,12 +3,12 @@ use std::io;
 use std::sync::Arc;
 
 pub use build::BodyBuilder;
-use ureq_proto::http::header;
 use ureq_proto::BodyMode;
+use ureq_proto::http::header;
 
+use crate::Error;
 use crate::http;
 use crate::run::BodyHandler;
-use crate::Error;
 
 use self::limit::LimitReader;
 use self::lossy::LossyUtf8Reader;
@@ -942,9 +942,9 @@ impl<'a> io::Read for BodySourceRef<'a> {
 
 #[cfg(all(test, feature = "_test"))]
 mod test {
+    use crate::Error;
     use crate::test::init_test_log;
     use crate::transport::set_handler;
-    use crate::Error;
 
     #[test]
     fn content_type_without_charset() {

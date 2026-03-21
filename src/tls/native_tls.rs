@@ -4,9 +4,9 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::{fmt, io};
 
 use crate::tls::{RootCerts, TlsProvider};
-use crate::{transport::time::Duration, transport::*, Error};
-use der::pem::LineEnding;
+use crate::{Error, transport::time::Duration, transport::*};
 use der::Document;
+use der::pem::LineEnding;
 use native_tls::{Certificate, HandshakeError, Identity, TlsConnector};
 use native_tls::{TlsConnectorBuilder, TlsStream};
 
@@ -415,5 +415,5 @@ fn capture_error(e: io::Error, capture: &Arc<Mutex<Option<Error>>>) -> io::Error
     let mut lock = capture.lock().unwrap();
     *lock = Some(error);
 
-    io::Error::new(io::ErrorKind::Other, "fake error towards native-tls")
+    io::Error::other("fake error towards native-tls")
 }
