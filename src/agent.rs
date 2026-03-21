@@ -14,7 +14,7 @@ use crate::pool::ConnectionPool;
 use crate::request::ForceSendBody;
 use crate::resolver::{DefaultResolver, Resolver};
 use crate::send_body::AsSendBody;
-use crate::transport::{boxed_connector, Connector, DefaultConnector, Transport};
+use crate::transport::{Connector, DefaultConnector, Transport, boxed_connector};
 use crate::unversioned::transport::{ConnectionDetails, RunConnector};
 use crate::{Error, RequestBuilder, SendBody};
 use crate::{WithBody, WithoutBody};

@@ -8,8 +8,8 @@ use std::time::Duration;
 use http::Uri;
 
 use crate::middleware::{Middleware, MiddlewareChain};
-use crate::{http, Body, Error};
 use crate::{Agent, AsSendBody, Proxy, RequestBuilder};
+use crate::{Body, Error, http};
 
 #[cfg(feature = "_tls")]
 use crate::tls::TlsConfig;
@@ -776,11 +776,7 @@ impl AutoHeaderValue {
             AutoHeaderValue::Provided(v) => v.as_str(),
         };
 
-        if x.is_empty() {
-            None
-        } else {
-            Some(x)
-        }
+        if x.is_empty() { None } else { Some(x) }
     }
 }
 
@@ -796,33 +792,33 @@ impl<S: AsRef<str>> From<S> for AutoHeaderValue {
 impl ConfigBuilder<AgentScope> {
     /// Finalize the config
     pub fn build(self) -> Config {
-        self.0 .0
+        self.0.0
     }
 }
 
 impl<Any> ConfigBuilder<RequestScope<Any>> {
     /// Finalize the config
     pub fn build(self) -> RequestBuilder<Any> {
-        self.0 .0
+        self.0.0
     }
 }
 
 impl<S: AsSendBody> ConfigBuilder<HttpCrateScope<S>> {
     /// Finalize the config
     pub fn build(self) -> http::Request<S> {
-        self.0 .0
+        self.0.0
     }
 }
 
 impl<'a, S: AsSendBody> ConfigBuilder<RequestExtScope<'a, S>> {
     /// Finalize the config
     pub fn build(self) -> WithAgent<'a, S> {
-        self.0 .0
+        self.0.0
     }
 
     /// Run the request with the agent in the ConfigBuilder
     pub fn run(self) -> Result<Response<Body>, Error> {
-        self.0 .0.run()
+        self.0.0.run()
     }
 }
 

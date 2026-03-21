@@ -4,7 +4,7 @@ use std::iter::Enumerate;
 use std::ops::Deref;
 use std::str::Chars;
 
-use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
+use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 
 /// AsciiSet for characters that need to be percent-encoded in URL query parameters.
 ///

@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use ureq::tls::TlsConfig;
-use ureq::{config::Config, Agent, Proxy};
+use ureq::{Agent, Proxy, config::Config};
 
 // Use this example with something like mitmproxy
 // $ mitmproxy --listen-port 8080

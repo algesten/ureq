@@ -4,7 +4,7 @@ use std::net::TcpStream;
 
 use crate::body::{Body, BodyReader};
 use crate::util::private::Private;
-use crate::{http, Error};
+use crate::{Error, http};
 
 /// Request body for sending data via POST, PUT and PATCH.
 ///
@@ -202,8 +202,8 @@ impl<'a> io::Read for ReadAdapter<'a> {
 }
 
 use http::Response;
-use ureq_proto::http::HeaderValue;
 use ureq_proto::BodyMode;
+use ureq_proto::http::HeaderValue;
 
 /// Trait for common types to send in POST, PUT or PATCH.
 ///
@@ -390,9 +390,6 @@ impl AsSendBody for Stdin {
         (None, BodyInner::Reader(self)).into()
     }
 }
-
-// MSRV 1.78
-// impl_into_body!(&Stdin, Reader);
 
 #[cfg(target_family = "unix")]
 use std::os::unix::net::UnixStream;

@@ -39,9 +39,9 @@ impl<R: io::Read> io::Read for LimitReader<R> {
 mod test {
     use std::io;
 
+    use crate::Error;
     use crate::test::init_test_log;
     use crate::transport::set_handler;
-    use crate::Error;
 
     #[test]
     fn short_read() {

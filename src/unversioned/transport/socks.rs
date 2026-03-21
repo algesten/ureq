@@ -6,12 +6,12 @@ use std::{io, thread};
 
 use socks::{Socks4Stream, Socks5Stream, ToTargetAddr};
 
+use crate::Error;
 use crate::proxy::{Proxy, ProxyProtocol};
 use crate::util::UriExt;
-use crate::Error;
 
-use super::chain::Either;
 use super::ResolvedSocketAddrs;
+use super::chain::Either;
 
 use super::tcp::TcpTransport;
 use super::{ConnectionDetails, Connector, LazyBuffers, NextTimeout, Transport};
@@ -117,8 +117,7 @@ fn try_connect<'a, T: ToTargetAddr + fmt::Debug + Send + 'a + Clone>(
                 Err(Error::Io(e)) if e.kind() == io::ErrorKind::ConnectionRefused => {
                     trace!(
                         "{} -> {:?} proxy connection refused",
-                        proxy_addr,
-                        target_addr
+                        proxy_addr, target_addr
                     );
                     continue;
                 }

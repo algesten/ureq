@@ -3,8 +3,8 @@ use std::process;
 use std::time::Duration;
 
 use auto_args::AutoArgs;
-use ureq::tls::TlsConfig;
 use ureq::Agent;
+use ureq::tls::TlsConfig;
 
 #[derive(Debug, AutoArgs)]
 struct Opt {

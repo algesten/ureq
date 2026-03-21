@@ -10,11 +10,11 @@ use crate::config::typestate::RequestScope;
 use crate::config::{Config, ConfigBuilder, RequestLevelConfig};
 use crate::http;
 use crate::query::form_url_enc;
-use crate::query::{parse_query_params, QueryParam};
+use crate::query::{QueryParam, parse_query_params};
 use crate::send_body::AsSendBody;
-use crate::util::private::Private;
 use crate::util::HeaderMapExt;
 use crate::util::UriExt;
+use crate::util::private::Private;
 use crate::{Agent, Error, SendBody};
 
 /// Transparent wrapper around [`http::request::Builder`].

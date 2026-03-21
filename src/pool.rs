@@ -2,16 +2,16 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::sync::{Arc, Mutex, Weak};
 
-use http::uri::{Authority, Scheme};
 use http::Uri;
+use http::uri::{Authority, Scheme};
 
+use crate::Error;
 use crate::config::Config;
 use crate::http;
 use crate::proxy::Proxy;
 use crate::transport::time::{Duration, Instant};
 use crate::transport::{Buffers, ConnectionDetails, Connector, NextTimeout, Transport};
 use crate::util::DebugAuthority;
-use crate::Error;
 
 pub(crate) struct ConnectionPool {
     connector: Box<dyn Connector<Out = Box<dyn Transport>>>,
@@ -303,9 +303,9 @@ impl fmt::Debug for Connection {
 impl fmt::Debug for PoolKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("PoolKey")
-            .field("scheme", &self.0 .0)
-            .field("authority", &DebugAuthority(&self.0 .1))
-            .field("proxy", &self.0 .2)
+            .field("scheme", &self.0.0)
+            .field("authority", &DebugAuthority(&self.0.1))
+            .field("proxy", &self.0.2)
             .finish()
     }
 }

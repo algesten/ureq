@@ -2,8 +2,8 @@ use std::io;
 
 use brotli_decompressor::Decompressor;
 
-use crate::error::is_wrapped_ureq_error;
 use crate::Error;
+use crate::error::is_wrapped_ureq_error;
 
 pub(crate) struct BrotliDecoder<R: io::Read>(Decompressor<R>);
 
