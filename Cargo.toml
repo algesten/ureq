@@ -1,6 +1,6 @@
 [package]
 name = "ureq"
-version = "3.2.1"
+version = "3.3.0"
 authors = ["Martin Algesten <martin@algesten.se>", "Jacob Hoffman-Andrews <ureq@hoffman-andrews.com>"]
 description = "Simple, safe HTTP client"
 license = "MIT OR Apache-2.0"
@@ -66,7 +66,7 @@ _doc = ["rustls?/aws-lc-rs"]
 
 [dependencies]
 base64 = "0.22.1"
-ureq-proto = { version = "0.5.3", default-features = false, features = ["client"] }
+ureq-proto = { version = "0.6.0", default-features = false, features = ["client"] }
 # ureq-proto = { path = "../ureq-proto", default-features = false, features = ["client"] }
 log = "0.4.25"
 utf8-zero = "0.8.1"
