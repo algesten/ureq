@@ -80,8 +80,15 @@ impl Middleware for DigestAuthMiddleware {
         let request = http::Request::from_parts(parts.clone(), body);
         let agent = next.agent;
 
-        // TODO (jacksongoode): Should be able to catch 401 without http_status_as_error(false)
-        // but headers are lost in the returned error.
+        // Use middleware_config to set http_status_as_error(false) on this request
+        // so we can inspect the 401 response body and headers.
+        // This is always Some when called from within middleware.
+        let request = request
+            .middleware_config()
+            .expect("middleware_config requires AgentInstance in request extensions")
+            .http_status_as_error(false)
+            .build();
+
         let response = next.handle(request)?;
 
         if response.status() == http::StatusCode::UNAUTHORIZED {
@@ -94,6 +101,11 @@ impl Middleware for DigestAuthMiddleware {
 
                 // TODO (jacksongoode): Should preserve and send original body.
                 let retry_request = http::Request::from_parts(parts, SendBody::none());
+                // Also set http_status_as_error(false) on retry in case credentials are invalid
+                let retry_request = agent
+                    .configure_request(retry_request)
+                    .http_status_as_error(false)
+                    .build();
                 return agent.run(retry_request);
             }
         }
