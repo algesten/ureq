@@ -1,4 +1,5 @@
 use crate::middleware::{Middleware, MiddlewareNext};
+use crate::request_ext::RequestExt;
 use crate::{http, http::HeaderValue, Body, Error, SendBody};
 use digest_auth::{AuthContext, AuthorizationHeader, WwwAuthenticateHeader};
 use std::str::FromStr;
@@ -14,11 +15,6 @@ use std::str::FromStr;
 ///
 /// In other cases, this middleware acts as a no-op forwarder of requests and responses.
 ///
-/// **Note**: This middleware requires [`http_status_as_error(false)`] to be configured
-/// on the agent, as it needs to respond to 401's rather than treat them as errors.
-///
-/// [`http_status_as_error(false)`]: crate::config::ConfigBuilder::http_status_as_error
-///
 /// ```
 /// let arbitrary_username = "MyUsername";
 /// let arbitrary_password = "MyPassword";
@@ -27,7 +23,6 @@ use std::str::FromStr;
 /// # let url = String::new();
 ///
 /// let agent: ureq::Agent = ureq::config::Config::builder()
-///     .http_status_as_error(false)  // Required for digest auth
 ///     .middleware(digest_auth_middleware)
 ///     .build()
 ///     .into();
@@ -99,7 +94,7 @@ impl Middleware for DigestAuthMiddleware {
                     .headers
                     .insert(http::header::AUTHORIZATION, challenge_answer_header);
 
-                // TODO (jacksongoode): Should preserve and send original body.
+                // TODO: Preserve and send original body on retry
                 let retry_request = http::Request::from_parts(parts, SendBody::none());
                 // Also set http_status_as_error(false) on retry in case credentials are invalid
                 let retry_request = agent

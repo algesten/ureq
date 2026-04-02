@@ -1238,7 +1238,6 @@ pub(crate) mod test {
         );
         let agent: Agent = crate::config::Config::builder()
             .timeout_global(Some(Duration::from_secs(5)))
-            .http_status_as_error(false)
             .middleware(digest_auth_middleware)
             .build()
             .into();
@@ -1262,7 +1261,6 @@ pub(crate) mod test {
         );
         let agent: Agent = crate::config::Config::builder()
             .timeout_global(Some(Duration::from_secs(5)))
-            .http_status_as_error(false)
             .middleware(digest_auth_middleware)
             .build()
             .into();
