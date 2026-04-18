@@ -1,5 +1,7 @@
 # Unreleased
 
+  * RequestExt::middleware_config for conf inside middleware #1169
+
 # 3.3.0
 
   * Bump MSRV 1.71 -> 1.85, edition 2024 #1167
