@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::{fmt, io};
 
 use crate::tls::{RootCerts, TlsProvider};
+use crate::util::AuthorityExt;
 use crate::{Error, transport::time::Duration, transport::*};
 use der::Document;
 use der::pem::LineEnding;
@@ -57,7 +58,7 @@ impl<In: Transport> Connector<In> for NativeTlsConnector {
             .uri
             .authority()
             .expect("uri authority for tls")
-            .host()
+            .host_bare()
             .to_string();
 
         let adapter = ErrorCapture::wrap(TransportAdapter::new(transport.boxed()));

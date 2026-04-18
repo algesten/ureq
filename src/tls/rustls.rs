@@ -14,6 +14,7 @@ use crate::tls::cert::KeyKind;
 use crate::tls::{RootCerts, TlsProvider};
 use crate::transport::{Buffers, ConnectionDetails, Connector, LazyBuffers};
 use crate::transport::{Either, NextTimeout, Transport, TransportAdapter};
+use crate::util::AuthorityExt;
 
 use super::TlsConfig;
 
@@ -62,7 +63,7 @@ impl<In: Transport> Connector<In> for RustlsConnector {
             .uri
             .authority()
             .expect("uri authority for tls")
-            .host()
+            .host_bare()
             .try_into()
             .map_err(|e| {
                 debug!("rustls invalid dns name: {}", e);
