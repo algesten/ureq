@@ -1,6 +1,6 @@
 # Unreleased
 
-  * Strip brackets from IPv6-literal hosts before TLS SNI/ServerName #1168
+  * Strip brackets from IPv6-literal hosts before TLS SNI/ServerName #1171
   * RequestExt::middleware_config for conf inside middleware #1169
 
 # 3.3.0
