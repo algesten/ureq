@@ -20,6 +20,8 @@ pub(crate) trait AuthorityExt {
     fn userinfo(&self) -> Option<&str>;
     fn username(&self) -> Option<&str>;
     fn password(&self) -> Option<&str>;
+    #[allow(unused)]
+    fn host_bare(&self) -> &str;
 }
 
 // NB: Treating &str with direct indexes is OK, since Uri parsed the Authority,
@@ -38,6 +40,17 @@ impl AuthorityExt for Authority {
     fn password(&self) -> Option<&str> {
         self.userinfo()
             .and_then(|a| a.rfind(':').map(|i| &a[i + 1..]))
+    }
+
+    // Per RFC 3986, IPv6 literals in a URI authority are wrapped in square
+    // brackets (e.g. `[::1]`). `Authority::host()` returns that bracketed
+    // form. Consumers like rustls' `ServerName` expect the bare form and
+    // reject the brackets, so strip them here.
+    fn host_bare(&self) -> &str {
+        let host = self.host();
+        host.strip_prefix('[')
+            .and_then(|s| s.strip_suffix(']'))
+            .unwrap_or(host)
     }
 }
 
@@ -395,5 +408,32 @@ impl HeaderMapExt for HeaderMap {
 
     fn has_location(&self) -> bool {
         self.contains_key(LOCATION)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn authority(uri: &str) -> Authority {
+        uri.parse::<Uri>().unwrap().authority().unwrap().clone()
+    }
+
+    #[test]
+    fn host_bare_strips_ipv6_brackets() {
+        assert_eq!(authority("https://[::1]/").host_bare(), "::1");
+        assert_eq!(
+            authority("https://[fe80::1000:ff:fe00:1234]:8443/").host_bare(),
+            "fe80::1000:ff:fe00:1234"
+        );
+    }
+
+    #[test]
+    fn host_bare_leaves_dns_and_ipv4_untouched() {
+        assert_eq!(authority("https://example.com/").host_bare(), "example.com");
+        assert_eq!(
+            authority("https://127.0.0.1:8443/").host_bare(),
+            "127.0.0.1"
+        );
     }
 }
