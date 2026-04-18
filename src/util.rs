@@ -20,6 +20,7 @@ pub(crate) trait AuthorityExt {
     fn userinfo(&self) -> Option<&str>;
     fn username(&self) -> Option<&str>;
     fn password(&self) -> Option<&str>;
+    #[allow(unused)]
     fn host_bare(&self) -> &str;
 }
 
@@ -430,6 +431,9 @@ mod tests {
     #[test]
     fn host_bare_leaves_dns_and_ipv4_untouched() {
         assert_eq!(authority("https://example.com/").host_bare(), "example.com");
-        assert_eq!(authority("https://127.0.0.1:8443/").host_bare(), "127.0.0.1");
+        assert_eq!(
+            authority("https://127.0.0.1:8443/").host_bare(),
+            "127.0.0.1"
+        );
     }
 }
