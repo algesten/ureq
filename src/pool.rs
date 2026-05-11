@@ -151,7 +151,7 @@ impl Connection {
     }
 
     fn age(&self, now: Instant) -> Duration {
-        now.duration_since(now)
+        now.duration_since(self.last_use)
     }
 
     fn is_open(&mut self) -> bool {
