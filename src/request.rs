@@ -251,6 +251,27 @@ impl<Any> RequestBuilder<Any> {
         );
         self
     }
+
+    #[cfg(feature = "serde-query")]
+    /// Sets multi query parameters from serde compatible object.
+    pub fn query_serde<T: serde::Serialize>(mut self, object: T) -> Self {
+        let serializer = crate::serde::query::QueryVisitor::escaped(&mut self.query_extra);
+        object
+            .serialize(serializer)
+            .expect("serialize query params from object");
+        self
+    }
+
+    #[cfg(feature = "serde-query")]
+    /// Sets multi query parameters from serde compatible object.
+    pub fn query_serde_raw<T: serde::Serialize>(mut self, object: T) -> Self {
+        let serializer = crate::serde::query::QueryVisitor::raw(&mut self.query_extra);
+        object
+            .serialize(serializer)
+            .expect("serialize query params from object");
+        self
+    }
+
     /// Overrides the URI for this request.
     ///
     /// Typically this is set via `ureq::get(<uri>)` or `Agent::get(<uri>)`. This
