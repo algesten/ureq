@@ -107,7 +107,7 @@ winreg = { version = "0.56", optional = true }
 env_logger = "0.11.7"
 auto-args = "0.3.0"
 serde = { version = "1.0.204", features = ["std", "derive"] }
-assert_no_alloc = "1.1.2"
+assert_no_alloc = { version = "1.1.2", default-features = false }
 # Enable aws-lc-rs for tests so we can demonstrate using ureq without compiling ring.
 rustls = { version = "0.23", features = ["aws-lc-rs"] }
 
