@@ -1256,7 +1256,7 @@ pub(crate) mod test {
     }
 
     #[test]
-    #[cfg(all(feature = "_test", feature = "_rustls"))]
+    #[cfg(all(feature = "_test", feature = "_ring"))]
     fn https_connect_proxy_to_https_target() {
         init_test_log();
 

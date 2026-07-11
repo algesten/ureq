@@ -84,7 +84,7 @@ impl TestHandler {
         }
     }
 
-    #[cfg(feature = "_rustls")]
+    #[cfg(feature = "_ring")]
     fn new_tls_tunnel(
         pattern: &'static str,
         handler: impl Fn(Uri, Request<()>, &mut dyn io::Read, &mut dyn Write) -> io::Result<()>
@@ -171,7 +171,7 @@ struct TestHandler {
 #[derive(Clone)]
 enum Handler {
     Http(Arc<dyn Fn(Uri, Request<()>, &mut dyn Write) -> io::Result<()> + Sync + Send>),
-    #[cfg(feature = "_rustls")]
+    #[cfg(feature = "_ring")]
     TlsTunnel(
         Arc<
             dyn Fn(Uri, Request<()>, &mut dyn io::Read, &mut dyn Write) -> io::Result<()>
@@ -208,7 +208,7 @@ fn test_run(
                 Handler::Http(handler) => {
                     handler(uri, req, &mut writer).expect("test handler to not fail")
                 }
-                #[cfg(feature = "_rustls")]
+                #[cfg(feature = "_ring")]
                 Handler::TlsTunnel(handler) => handler(uri, req, &mut reader, &mut writer)
                     .expect("test TLS tunnel handler to not fail"),
             }
@@ -518,7 +518,7 @@ fn setup_default_handlers(handlers: &mut Vec<TestHandler>) {
         handlers,
     );
 
-    #[cfg(feature = "_rustls")]
+    #[cfg(feature = "_ring")]
     maybe_add(
         TestHandler::new_tls_tunnel("https-connect-proxy", |_uri, req, reader, writer| {
             use rustls::{ServerConfig, ServerConnection, StreamOwned};
@@ -877,20 +877,20 @@ impl Transport for TestTransport {
 
 const HANGUP: &[u8] = b"<hangup>";
 
-#[cfg(feature = "_rustls")]
+#[cfg(feature = "_ring")]
 struct TestDuplex<'a> {
     reader: &'a mut dyn io::Read,
     writer: &'a mut dyn Write,
 }
 
-#[cfg(feature = "_rustls")]
+#[cfg(feature = "_ring")]
 impl io::Read for TestDuplex<'_> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.reader.read(buf)
     }
 }
 
-#[cfg(feature = "_rustls")]
+#[cfg(feature = "_ring")]
 impl Write for TestDuplex<'_> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.writer.write(buf)
