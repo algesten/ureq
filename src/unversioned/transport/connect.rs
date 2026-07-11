@@ -10,9 +10,8 @@ use http::StatusCode;
 use crate::Error;
 use crate::config::DEFAULT_USER_AGENT;
 use crate::http;
-use crate::transport::{
-    Buffers, ConnectionDetails, Connector, Either, NextTimeout, Transport, TransportAdapter,
-};
+use crate::transport::{Buffers, ConnectionDetails, Connector, Either};
+use crate::transport::{NextTimeout, Transport, TransportAdapter};
 use crate::util::{SchemeExt, UriExt};
 
 /// Connector for CONNECT proxy settings.
