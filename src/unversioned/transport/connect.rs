@@ -10,7 +10,8 @@ use http::StatusCode;
 use crate::Error;
 use crate::config::DEFAULT_USER_AGENT;
 use crate::http;
-use crate::transport::{ConnectionDetails, Connector, Either, Transport, TransportAdapter};
+use crate::transport::{Buffers, ConnectionDetails, Connector, Either};
+use crate::transport::{NextTimeout, Transport, TransportAdapter};
 use crate::util::{SchemeExt, UriExt};
 
 /// Connector for CONNECT proxy settings.
@@ -149,7 +150,34 @@ impl<In: Transport> Connector<In> for ConnectProxyConnector {
             }
         }
 
-        Ok(Some(Either::B(transport)))
+        // CONNECT establishes a new connection context for the target. The transport
+        // might have TLS to the proxy, but it does not have TLS to the target yet.
+        Ok(Some(Either::B(TunnelTransport(transport).boxed())))
+    }
+}
+
+#[derive(Debug)]
+struct TunnelTransport(Box<dyn Transport>);
+
+impl Transport for TunnelTransport {
+    fn buffers(&mut self) -> &mut dyn Buffers {
+        self.0.buffers()
+    }
+
+    fn transmit_output(&mut self, amount: usize, timeout: NextTimeout) -> Result<(), Error> {
+        self.0.transmit_output(amount, timeout)
+    }
+
+    fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
+        self.0.await_input(timeout)
+    }
+
+    fn is_open(&mut self) -> bool {
+        self.0.is_open()
+    }
+
+    fn is_tls(&self) -> bool {
+        false
     }
 }
 

@@ -1256,6 +1256,27 @@ pub(crate) mod test {
     }
 
     #[test]
+    #[cfg(all(feature = "_test", feature = "_ring"))]
+    fn https_connect_proxy_to_https_target() {
+        init_test_log();
+
+        let proxy = Proxy::new("https://proxy.test/https-connect-proxy").unwrap();
+        let tls = tls::TlsConfig::builder().disable_verification(true).build();
+        let agent = Agent::config_builder()
+            .proxy(Some(proxy))
+            .tls_config(tls)
+            .build()
+            .new_agent();
+
+        let mut response = agent
+            .get("https://example.com/through-https-proxy")
+            .call()
+            .unwrap();
+
+        assert_eq!(response.body_mut().read_to_string().unwrap(), "ok");
+    }
+
+    #[test]
     fn ensure_reasonable_stack_sizes() {
         macro_rules! ensure {
             ($type:ty, $size:tt) => {

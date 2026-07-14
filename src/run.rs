@@ -144,7 +144,7 @@ fn call_run(
     timings: &mut CallTimings,
 ) -> Result<CallResult, Error> {
     let uri = call.uri().clone();
-    debug!("{} {:?}", call.method(), &DebugUri(call.uri()));
+    debug!("{} {:?}", call.method(), DebugUri(call.uri()));
 
     if config.https_only() && uri.scheme() != Some(&Scheme::HTTPS) {
         return Err(Error::RequireHttpsOnly(uri.to_string()));

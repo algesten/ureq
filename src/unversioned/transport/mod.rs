@@ -304,7 +304,8 @@ pub trait Transport: Debug + Send + Sync + 'static {
     /// for connection pooling to work.
     fn is_open(&mut self) -> bool;
 
-    /// Whether the transport is TLS.
+    /// Whether the transport has established TLS to the endpoint in the current
+    /// connection context.
     ///
     /// Defaults to `false`, override in TLS transports.
     fn is_tls(&self) -> bool {
