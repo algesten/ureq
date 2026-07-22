@@ -170,7 +170,9 @@ impl Proxy {
             ));
 
             match self.proto {
-                Proto::HTTP => format!("Proxy-Authorization: basic {}\r\n", creds),
+                // "Basic" in canonical casing: the scheme is case-insensitive per
+                // RFC 9110, but some proxies reject the lowercase form outright.
+                Proto::HTTP => format!("Proxy-Authorization: Basic {}\r\n", creds),
                 _ => String::new(),
             }
         } else {
