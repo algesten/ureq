@@ -5,5 +5,5 @@ edition = "2021"
 
 
 [dependencies]
-mbedtls = { version = "0.11.0" }
+mbedtls = { version = "0.13.0", features=["ssl","x509"] }
 ureq = { path = "../.." }
