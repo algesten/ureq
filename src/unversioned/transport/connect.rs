@@ -117,7 +117,9 @@ impl<In: Transport> Connector<In> for ConnectProxyConnector {
             let user = proxy.username().unwrap_or_default();
             let pass = proxy.password().unwrap_or_default();
             let creds = BASE64_STANDARD.encode(format!("{}:{}", user, pass));
-            write!(w, "Proxy-Authorization: basic {}\r\n", creds)?;
+            // "Basic" in canonical casing: the scheme is case-insensitive per
+            // RFC 9110, but some proxies reject the lowercase form outright.
+            write!(w, "Proxy-Authorization: Basic {}\r\n", creds)?;
         }
 
         write!(w, "\r\n")?;
