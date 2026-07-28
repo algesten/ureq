@@ -51,7 +51,10 @@ impl DigestAuthMiddleware {
             .ok()?;
         let mut challenge = WwwAuthenticateHeader::from_str(challenge_string).ok()?;
 
-        let path = uri.path();
+        let path = uri
+            .path_and_query()
+            .map(|pq| pq.as_str())
+            .unwrap_or_else(|| uri.path());
         let context = AuthContext::new(&self.username, &self.password, path);
         let auth_header: AuthorizationHeader = challenge.respond(&context).ok()?;
 
