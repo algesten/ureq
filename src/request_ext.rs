@@ -2,16 +2,19 @@ use crate::agent::AgentInstance;
 use crate::config::typestate::RequestExtScope;
 use crate::config::{Config, ConfigBuilder, RequestLevelConfig};
 use crate::typestate::HttpCrateScope;
-use crate::util::private::Private;
 use crate::{Agent, AsSendBody, Body, Error, http};
 use std::ops::Deref;
 use ureq_proto::http::{Request, Response};
+
+mod private {
+    pub trait Sealed {}
+}
 
 /// Extension trait for [`http::Request<impl AsSendBody>`].
 ///
 /// Adds additional convenience methods to the `Request` that are not available
 /// in the plain http API.
-pub trait RequestExt<S>: Private
+pub trait RequestExt<S>: private::Sealed
 where
     S: AsSendBody,
 {
@@ -155,7 +158,7 @@ pub enum AgentRef<'a> {
     Borrowed(&'a Agent),
 }
 
-impl<S: AsSendBody> Private for http::Request<S> {}
+impl<S: AsSendBody> private::Sealed for http::Request<S> {}
 
 impl<S: AsSendBody> RequestExt<S> for http::Request<S> {
     fn with_agent<'a>(self, agent: impl Into<AgentRef<'a>>) -> WithAgent<'a, S> {
