@@ -65,8 +65,9 @@ _rustls = []
 _doc = ["rustls?/aws-lc-rs"]
 
 [dependencies]
-base64 = "0.22.1"
-ureq-proto = { version = "0.6.0", default-features = false, features = ["client"] }
+# default-features=false to get without simd-unsafe
+base64 = { version = "0.23.1", default-features = false, features = ["std"] }
+ureq-proto = { version = "0.6.1", default-features = false, features = ["client"] }
 # ureq-proto = { path = "../ureq-proto", default-features = false, features = ["client"] }
 log = "0.4.25"
 utf8-zero = "0.8.1"
@@ -87,7 +88,7 @@ socks = { version = "0.3.4", optional = true }
 # cookie_store uses Url, while http-crate has its own Uri.
 # Keep url crate in lockstep with cookie_store.
 cookie_store = { version = "0.22", optional = true, default-features = false, features = ["preserve_order"] }
-# ureq-proto forces url=2.5.4. This optional dep documents the situation in cookie_store.
+# This optional dep ensures ureq and cookie_store use the same url version.
 url = { version = "2.3.1", optional = true, default-features = false }
 
 flate2 = { version = "1.0.30", optional = true }

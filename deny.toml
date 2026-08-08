@@ -23,7 +23,7 @@ targets = [
   { triple = "x86_64-unknown-redox" },
 ]
 
-# getrandom: ureq uses 0.4, ring pulls 0.2, cc/jobserver pulls 0.3.
+# getrandom: ureq and cc/jobserver use 0.4, while ring pulls 0.2.
 exclude = ["getrandom"]
 
 [advisories]
@@ -52,18 +52,11 @@ confidence-threshold = 0.92 # We want really high confidence when inferring lice
 allow = [
   "Apache-2.0 WITH LLVM-exception", # https://spdx.org/licenses/LLVM-exception.html
   "Apache-2.0",                     # https://tldrlegal.com/license/apache-license-2.0-(apache-2.0)
-  "BSD-2-Clause",                   # https://tldrlegal.com/license/bsd-2-clause-license-(freebsd)
   "BSD-3-Clause",                   # https://tldrlegal.com/license/bsd-3-clause-license-(revised)
-  "BSL-1.0",                        # https://tldrlegal.com/license/boost-software-license-1.0-explained
   "CC0-1.0",                        # https://creativecommons.org/publicdomain/zero/1.0/
   "ISC",                            # https://tldrlegal.com/license/-isc-license
-  "LicenseRef-UFL-1.0",             # https://tldrlegal.com/license/ubuntu-font-license,-1.0 - no official SPDX, see https://github.com/emilk/egui/issues/2321
   "MIT-0",                          # https://choosealicense.com/licenses/mit-0/
   "MIT",                            # https://tldrlegal.com/license/mit-license
-  "MPL-2.0",                        # https://www.mozilla.org/en-US/MPL/2.0/FAQ/ - see Q11. Used by webpki-roots on Linux.
-  "OFL-1.1",                        # https://spdx.org/licenses/OFL-1.1.html
-  "OpenSSL",                        # https://www.openssl.org/source/license.html - used on Linux
-  "Unicode-DFS-2016",               # https://spdx.org/licenses/Unicode-DFS-2016.html
   "Unicode-3.0",                    # https://www.unicode.org/license.txt
   "Zlib",                           # https://tldrlegal.com/license/zlib-libpng-license-(zlib)
   "CDLA-Permissive-2.0",            # https://cdla.dev/permissive-2-0/
