@@ -396,7 +396,7 @@ fn connect(
         request_level,
         now: timings.now(),
         timeout: timings.next_timeout(Timeout::Connect),
-        current_time: timings.current_time().clone(),
+        current_time: timings.current_time(),
         run_connector: agent.run_connector.clone(),
     };
 
