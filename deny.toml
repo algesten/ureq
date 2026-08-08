@@ -23,7 +23,7 @@ targets = [
   { triple = "x86_64-unknown-redox" },
 ]
 
-# getrandom: ureq uses 0.4, ring pulls 0.2, cc/jobserver pulls 0.3.
+# getrandom: ureq and cc/jobserver use 0.4, while ring pulls 0.2.
 exclude = ["getrandom"]
 
 [advisories]
