@@ -1,5 +1,7 @@
 # Unreleased
 
+# 3.4.0
+
   * Seal RequestExt (technically breaking) #1189
   * Send canonical Basic authentication scheme to CONNECT proxies #1185
   * Establish target TLS through HTTPS CONNECT proxies #1183
