@@ -1,7 +1,10 @@
 # Unreleased
 
   * Seal RequestExt (technically breaking) #1189
+  * Send canonical Basic authentication scheme to CONNECT proxies #1185
   * Establish target TLS through HTTPS CONNECT proxies #1183
+  * Update rustls-platform-verifier to 0.7.0 #1174
+  * Fix pooled connections never aging out according to max_idle_age #1172
   * Strip brackets from IPv6-literal hosts before TLS SNI/ServerName #1171
   * RequestExt::middleware_config for conf inside middleware #1169
 
