@@ -312,7 +312,7 @@ impl fmt::Debug for PoolKey {
 
 impl<'a, 'b> From<&'a ConnectionDetails<'b>> for PoolKey {
     fn from(details: &'a ConnectionDetails) -> Self {
-        PoolKey::new(details.uri, details.config.proxy())
+        PoolKey::new(details.uri, details.config.proxy_http())
     }
 }
 
