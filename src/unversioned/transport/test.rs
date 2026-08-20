@@ -9,8 +9,8 @@ use std::{fmt, io, thread};
 use http::{Method, Request, Uri};
 use ureq_proto::parser::try_parse_request;
 
-use crate::http;
 use crate::Error;
+use crate::http;
 
 use super::chain::Either;
 use super::time::Duration;
@@ -35,6 +35,21 @@ impl<In: Transport> Connector<In> for TestConnector {
             return Ok(chained.map(Either::A));
         }
         let config = details.config;
+
+        // Let ConnectProxyConnector handle the target connection. Its recursive
+        // connection to the proxy uses a config without a proxy and is intercepted
+        // by this connector, keeping the entire test in memory.
+        let proxy = if details.traffic_type == &http::uri::Scheme::HTTP {
+            config.proxy_http()
+        } else {
+            config.proxy_https()
+        };
+        let use_connect_proxy =
+            proxy.is_some_and(|p| p.protocol().is_connect() && !p.is_no_proxy(details.uri));
+        if use_connect_proxy {
+            trace!("Defer to CONNECT proxy");
+            return Ok(None);
+        }
 
         let uri = details.uri.clone();
         debug!("Test uri: {}", uri);
@@ -68,7 +83,21 @@ impl TestHandler {
     ) -> Self {
         TestHandler {
             pattern,
-            handler: Arc::new(handler),
+            handler: Handler::Http(Arc::new(handler)),
+        }
+    }
+
+    #[cfg(feature = "_ring")]
+    fn new_tls_tunnel(
+        pattern: &'static str,
+        handler: impl Fn(Uri, Request<()>, &mut dyn io::Read, &mut dyn Write) -> io::Result<()>
+        + Send
+        + Sync
+        + 'static,
+    ) -> Self {
+        TestHandler {
+            pattern,
+            handler: Handler::TlsTunnel(Arc::new(handler)),
         }
     }
 }
@@ -139,7 +168,20 @@ pub fn set_handler_cb(
 #[derive(Clone)]
 struct TestHandler {
     pattern: &'static str,
-    handler: Arc<dyn Fn(Uri, Request<()>, &mut dyn Write) -> io::Result<()> + Sync + Send>,
+    handler: Handler,
+}
+
+#[derive(Clone)]
+enum Handler {
+    Http(Arc<dyn Fn(Uri, Request<()>, &mut dyn Write) -> io::Result<()> + Sync + Send>),
+    #[cfg(feature = "_ring")]
+    TlsTunnel(
+        Arc<
+            dyn Fn(Uri, Request<()>, &mut dyn io::Read, &mut dyn Write) -> io::Result<()>
+                + Sync
+                + Send,
+        >,
+    ),
 }
 
 fn test_run(
@@ -165,7 +207,14 @@ fn test_run(
 
     for handler in handlers {
         if uri_s.contains(handler.pattern) {
-            (handler.handler)(uri, req, &mut writer).expect("test handler to not fail");
+            match handler.handler {
+                Handler::Http(handler) => {
+                    handler(uri, req, &mut writer).expect("test handler to not fail")
+                }
+                #[cfg(feature = "_ring")]
+                Handler::TlsTunnel(handler) => handler(uri, req, &mut reader, &mut writer)
+                    .expect("test TLS tunnel handler to not fail"),
+            }
             return;
         }
     }
@@ -472,6 +521,65 @@ fn setup_default_handlers(handlers: &mut Vec<TestHandler>) {
         handlers,
     );
 
+    #[cfg(feature = "_ring")]
+    maybe_add(
+        TestHandler::new_tls_tunnel("https-connect-proxy", |_uri, req, reader, writer| {
+            use rustls::{ServerConfig, ServerConnection, StreamOwned};
+            use rustls_pki_types::pem::PemObject;
+            use rustls_pki_types::{CertificateDer, PrivateKeyDer, PrivateSec1KeyDer};
+
+            assert_eq!(req.method(), Method::CONNECT);
+            assert_eq!(req.uri(), "example.com:443");
+
+            write!(writer, "HTTP/1.1 200 Connection established\r\n\r\n")?;
+            writer.flush()?;
+
+            let cert = CertificateDer::from_pem_slice(include_bytes!("testdata/cert.pem"))
+                .expect("valid test certificate");
+            let key = PrivateSec1KeyDer::from_pem_slice(include_bytes!("testdata/key.pem"))
+                .expect("valid test key");
+            let provider = Arc::new(rustls::crypto::ring::default_provider());
+            let config = ServerConfig::builder_with_provider(provider)
+                .with_safe_default_protocol_versions()
+                .expect("default TLS versions")
+                .with_no_client_auth()
+                .with_single_cert(vec![cert], PrivateKeyDer::Sec1(key))
+                .expect("matching test certificate and key");
+            let connection = ServerConnection::new(Arc::new(config)).expect("TLS server");
+            let socket = TestDuplex { reader, writer };
+            let mut stream = StreamOwned::new(connection, socket);
+
+            let mut request_bytes = Vec::new();
+            loop {
+                let mut input = [0_u8; 1024];
+                let amount = io::Read::read(&mut stream, &mut input)?;
+                if amount == 0 {
+                    return Err(io::Error::new(
+                        io::ErrorKind::UnexpectedEof,
+                        "TLS client closed before sending a request",
+                    ));
+                }
+                request_bytes.extend_from_slice(&input[..amount]);
+                if request_bytes.windows(4).any(|v| v == b"\r\n\r\n") {
+                    break;
+                }
+            }
+
+            let (_, request) = try_parse_request::<100>(&request_bytes)
+                .expect("valid HTTP request through TLS tunnel")
+                .expect("complete HTTP request through TLS tunnel");
+            assert_eq!(request.method(), Method::GET);
+            assert_eq!(request.uri(), "/through-https-proxy");
+
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"
+            )?;
+            stream.flush()
+        }),
+        handlers,
+    );
+
     maybe_add(
         TestHandler::new("/fnord", |_uri, req, w| {
             assert_eq!(req.method().as_str(), "FNORD");
@@ -649,9 +757,7 @@ struct TxWrite(mpsc::SyncSender<Vec<u8>>);
 
 impl io::Write for TxWrite {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.0
-            .send(buf.to_vec())
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        self.0.send(buf.to_vec()).map_err(io::Error::other)?;
         Ok(buf.len())
     }
 
@@ -773,6 +879,30 @@ impl Transport for TestTransport {
 }
 
 const HANGUP: &[u8] = b"<hangup>";
+
+#[cfg(feature = "_ring")]
+struct TestDuplex<'a> {
+    reader: &'a mut dyn io::Read,
+    writer: &'a mut dyn Write,
+}
+
+#[cfg(feature = "_ring")]
+impl io::Read for TestDuplex<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.reader.read(buf)
+    }
+}
+
+#[cfg(feature = "_ring")]
+impl Write for TestDuplex<'_> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.writer.write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.writer.flush()
+    }
+}
 
 // Workaround for std::mpsc::Receiver not being Sync
 struct SyncReceiver<T>(Mutex<Receiver<T>>);

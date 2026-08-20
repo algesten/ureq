@@ -1,23 +1,23 @@
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, LazyLock};
 use std::{io, mem};
 
 use http::uri::Scheme;
-use http::{header, HeaderValue, Method, Request, Response, Uri};
+use http::{HeaderValue, Method, Request, Response, Uri, header};
+use ureq_proto::BodyMode;
 use ureq_proto::client::state::{Await100, RecvBody, RecvResponse, Redirect, SendRequest};
 use ureq_proto::client::state::{Prepare, SendBody as SendBodyState};
 use ureq_proto::client::{Await100Result, RecvBodyResult};
 use ureq_proto::client::{RecvResponseResult, SendRequestResult};
-use ureq_proto::BodyMode;
 
 use crate::body::ResponseInfo;
-use crate::config::{Config, RequestLevelConfig, DEFAULT_USER_AGENT};
+use crate::config::{Config, DEFAULT_USER_AGENT, RequestLevelConfig};
 use crate::http;
 use crate::pool::Connection;
 use crate::request::ForceSendBody;
 use crate::response::{RedirectHistory, ResponseUri};
 use crate::timings::{CallTimings, CurrentTime};
-use crate::transport::time::{Duration, Instant};
 use crate::transport::ConnectionDetails;
+use crate::transport::time::{Duration, Instant};
 use crate::util::{DebugRequest, DebugResponse, DebugUri, HeaderMapExt, UriExt};
 use crate::{Agent, Body, Error, SendBody, Timeout};
 
@@ -108,7 +108,7 @@ pub(crate) fn run(
         }
     };
 
-    let (parts, _) = response.into_parts();
+    let (mut parts, _) = response.into_parts();
 
     let recv_body_mode = handler
         .call
@@ -117,6 +117,15 @@ pub(crate) fn run(
         .unwrap_or(BodyMode::NoBody);
 
     let info = ResponseInfo::new(&parts.headers, recv_body_mode);
+
+    // If the body will be decompressed, strip Content-Encoding and Content-Length
+    // from the response headers. The Content-Length no longer matches the
+    // decompressed body size, and Content-Encoding no longer applies since
+    // the body is delivered to the caller already decompressed (RFC 9110 §8.7).
+    if info.is_decompressing() {
+        parts.headers.remove(http::header::CONTENT_ENCODING);
+        parts.headers.remove(http::header::CONTENT_LENGTH);
+    }
 
     let body = Body::new(handler, info);
 
@@ -145,7 +154,7 @@ fn call_run(
     timings: &mut CallTimings,
 ) -> Result<CallResult, Error> {
     let uri = call.uri().clone();
-    debug!("{} {:?}", call.method(), &DebugUri(call.uri()));
+    debug!("{} {:?}", call.method(), DebugUri(call.uri()));
 
     if config.https_only() && uri.scheme() != Some(&Scheme::HTTPS) {
         return Err(Error::RequireHttpsOnly(uri.to_string()));
@@ -300,9 +309,7 @@ fn add_headers(
     }
 
     {
-        static ACCEPTS: OnceLock<String> = OnceLock::new();
-
-        let accepts = ACCEPTS.get_or_init(|| {
+        static ACCEPTS: LazyLock<String> = LazyLock::new(|| {
             #[allow(unused_mut)]
             let mut value = String::with_capacity(10);
             #[cfg(feature = "gzip")]
@@ -313,6 +320,8 @@ fn add_headers(
             value.push_str("br");
             value
         });
+
+        let accepts = &*ACCEPTS;
 
         if !has_header_accept_enc {
             if let Some(v) = config.accept_encoding().as_str(accepts) {
@@ -405,6 +414,7 @@ fn connect(
         request_level,
         now: timings.now(),
         timeout: timings.next_timeout(Timeout::Connect),
+        current_time: timings.current_time(),
         run_connector: agent.run_connector.clone(),
     };
 

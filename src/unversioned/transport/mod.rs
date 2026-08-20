@@ -24,12 +24,12 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use http::uri::Scheme;
 use http::Uri;
+use http::uri::Scheme;
 
+use crate::Error;
 use crate::config::Config;
 use crate::http;
-use crate::Error;
 
 use super::resolver::{ResolvedSocketAddrs, Resolver};
 
@@ -215,11 +215,16 @@ pub struct ConnectionDetails<'a> {
     pub resolver: &'a dyn Resolver,
 
     /// Current time.
+    ///
+    /// Time the ConnectionDetails was created.
     pub now: Instant,
 
     /// The next timeout for making the connection.
     // TODO(martin): Make mechanism to lower duration for each step in the connector chain.
     pub timeout: NextTimeout,
+
+    /// Provides the current time.
+    pub current_time: Arc<dyn Fn() -> Instant + Send + Sync + 'static>,
 
     /// Run the connector chain.
     ///
@@ -305,7 +310,8 @@ pub trait Transport: Debug + Send + Sync + 'static {
     /// for connection pooling to work.
     fn is_open(&mut self) -> bool;
 
-    /// Whether the transport is TLS.
+    /// Whether the transport has established TLS to the endpoint in the current
+    /// connection context.
     ///
     /// Defaults to `false`, override in TLS transports.
     fn is_tls(&self) -> bool {

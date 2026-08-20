@@ -1,6 +1,6 @@
 use std::io;
 
-use utf8::DecodeError;
+use utf8_zero::DecodeError;
 
 use crate::util::ConsumeBuf;
 
@@ -24,7 +24,7 @@ impl<R> LossyUtf8Reader<R> {
     }
 
     fn process_input(&mut self) -> usize {
-        match utf8::decode(self.input.unconsumed()) {
+        match utf8_zero::decode(self.input.unconsumed()) {
             Ok(_) => {
                 // Entire input is valid
                 self.input.unconsumed().len()

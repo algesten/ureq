@@ -1,14 +1,20 @@
+use crate::agent::AgentInstance;
 use crate::config::typestate::RequestExtScope;
 use crate::config::{Config, ConfigBuilder, RequestLevelConfig};
-use crate::{http, Agent, AsSendBody, Body, Error};
+use crate::typestate::HttpCrateScope;
+use crate::{Agent, AsSendBody, Body, Error, http};
 use std::ops::Deref;
 use ureq_proto::http::{Request, Response};
+
+mod private {
+    pub trait Sealed {}
+}
 
 /// Extension trait for [`http::Request<impl AsSendBody>`].
 ///
 /// Adds additional convenience methods to the `Request` that are not available
 /// in the plain http API.
-pub trait RequestExt<S>
+pub trait RequestExt<S>: private::Sealed
 where
     S: AsSendBody,
 {
@@ -90,6 +96,16 @@ where
     ///             .run();
     /// ```
     fn with_agent<'a>(self, agent: impl Into<AgentRef<'a>>) -> WithAgent<'a, S>;
+
+    /// Returns a [`ConfigBuilder`] for configuring the request.
+    ///
+    /// This is only to be used from within [`Middleware`](crate::middleware::Middleware).
+    ///
+    /// Returns `None` if not called from within a [`Middleware`](crate::middleware::Middleware).
+    ///
+    /// Any usage beyond from inside a middleware, synchronously with handling the request, is
+    /// incorrect usage and might break without notice.
+    fn middleware_config(self) -> Option<ConfigBuilder<HttpCrateScope<S>>>;
 }
 
 /// Wrapper struct that holds a [`Request`] associated with an [`Agent`].
@@ -142,12 +158,19 @@ pub enum AgentRef<'a> {
     Borrowed(&'a Agent),
 }
 
+impl<S: AsSendBody> private::Sealed for http::Request<S> {}
+
 impl<S: AsSendBody> RequestExt<S> for http::Request<S> {
     fn with_agent<'a>(self, agent: impl Into<AgentRef<'a>>) -> WithAgent<'a, S> {
         WithAgent {
             agent: agent.into(),
             request: self,
         }
+    }
+
+    fn middleware_config(self) -> Option<ConfigBuilder<HttpCrateScope<S>>> {
+        let instance = self.extensions().get::<AgentInstance>()?.clone();
+        Some(instance.0.configure_request(self))
     }
 }
 
@@ -177,7 +200,9 @@ impl Deref for AgentRef<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::SendBody;
     use crate::config::RequestLevelConfig;
+    use crate::middleware::MiddlewareNext;
     use std::time::Duration;
 
     #[test]
@@ -314,5 +339,46 @@ mod tests {
             request_config.0.timeouts().per_call,
             Some(Duration::from_secs(60))
         );
+    }
+
+    #[test]
+    fn middleware_config_none() {
+        let request = http::Request::builder()
+            .method(http::Method::GET)
+            .uri("http://foo.bar")
+            .body(())
+            .unwrap();
+
+        assert!(request.middleware_config().is_none());
+    }
+
+    #[test]
+    fn middleware_config() {
+        fn my_middleware(
+            req: Request<SendBody>,
+            next: MiddlewareNext,
+        ) -> Result<Response<Body>, crate::Error> {
+            let config = req.middleware_config().unwrap();
+            let req = config.build();
+            let mut ret = next.handle(req)?;
+            ret.extensions_mut().insert("worked".to_string());
+            Ok(ret)
+        }
+
+        let agent = Agent::config_builder()
+            .middleware(my_middleware)
+            .build()
+            .new_agent();
+
+        let request = http::Request::builder()
+            .method(http::Method::GET)
+            .uri("http://httpbin.org/get")
+            .body(())
+            .unwrap();
+
+        let request = request.with_agent(&agent);
+
+        let ret = request.run().unwrap();
+        assert_eq!(ret.extensions().get::<String>().unwrap(), "worked");
     }
 }

@@ -3,12 +3,12 @@ use std::io;
 use std::sync::Arc;
 
 pub use build::BodyBuilder;
-use ureq_proto::http::header;
 use ureq_proto::BodyMode;
+use ureq_proto::http::header;
 
+use crate::Error;
 use crate::http;
 use crate::run::BodyHandler;
-use crate::Error;
 
 use self::limit::LimitReader;
 use self::lossy::LossyUtf8Reader;
@@ -193,6 +193,11 @@ impl Body {
     /// # Ok::<_, ureq::Error>(())
     /// ```
     pub fn content_length(&self) -> Option<u64> {
+        // After transparent decompression, the original Content-Length no longer
+        // reflects the actual body size, so we return None.
+        if self.info.is_decompressing() {
+            return None;
+        }
         match self.info.body_mode {
             BodyMode::NoBody => None,
             BodyMode::LengthDelimited(v) => Some(v),
@@ -647,6 +652,17 @@ impl ResponseInfo {
         }
     }
 
+    /// Returns true if the body will be decompressed (gzip or brotli).
+    pub(crate) fn is_decompressing(&self) -> bool {
+        match self.content_encoding {
+            #[cfg(feature = "gzip")]
+            ContentEncoding::Gzip => true,
+            #[cfg(feature = "brotli")]
+            ContentEncoding::Brotli => true,
+            _ => false,
+        }
+    }
+
     /// Whether the mime type indicats text.
     fn is_text(&self) -> bool {
         self.mime_type
@@ -926,9 +942,9 @@ impl<'a> io::Read for BodySourceRef<'a> {
 
 #[cfg(all(test, feature = "_test"))]
 mod test {
+    use crate::Error;
     use crate::test::init_test_log;
     use crate::transport::set_handler;
-    use crate::Error;
 
     #[test]
     fn content_type_without_charset() {

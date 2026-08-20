@@ -1,5 +1,5 @@
-use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
 use std::borrow::Cow;
 use std::fmt;
 use std::io::Write;
@@ -7,11 +7,12 @@ use ureq_proto::parser::try_parse_response;
 
 use http::StatusCode;
 
+use crate::Error;
 use crate::config::DEFAULT_USER_AGENT;
 use crate::http;
-use crate::transport::{ConnectionDetails, Connector, Either, Transport, TransportAdapter};
+use crate::transport::{Buffers, ConnectionDetails, Connector, Either};
+use crate::transport::{NextTimeout, Transport, TransportAdapter};
 use crate::util::{SchemeExt, UriExt};
-use crate::Error;
 
 /// Connector for CONNECT proxy settings.
 ///
@@ -81,12 +82,13 @@ impl<In: Transport> Connector<In> for ConnectProxyConnector {
             resolver: details.resolver,
             now: details.now,
             timeout: details.timeout,
+            current_time: details.current_time.clone(),
             run_connector: details.run_connector.clone(),
         };
 
         let transport = (details.run_connector)(&proxy_details)?;
 
-        // unwrap is ok because connect_proxy_uri() above checks it.
+        // unwrap is ok because maybe_connect_uri above checks it.
         let proxy = proxy.unwrap();
 
         let mut w = TransportAdapter::new(transport);
@@ -122,7 +124,9 @@ impl<In: Transport> Connector<In> for ConnectProxyConnector {
             let user = proxy.username().unwrap_or_default();
             let pass = proxy.password().unwrap_or_default();
             let creds = BASE64_STANDARD.encode(format!("{}:{}", user, pass));
-            write!(w, "Proxy-Authorization: basic {}\r\n", creds)?;
+            // "Basic" in canonical casing: the scheme is case-insensitive per
+            // RFC 9110, but some proxies reject the lowercase form outright.
+            write!(w, "Proxy-Authorization: Basic {}\r\n", creds)?;
         }
 
         write!(w, "\r\n")?;
@@ -155,7 +159,34 @@ impl<In: Transport> Connector<In> for ConnectProxyConnector {
             }
         }
 
-        Ok(Some(Either::B(transport)))
+        // CONNECT establishes a new connection context for the target. The transport
+        // might have TLS to the proxy, but it does not have TLS to the target yet.
+        Ok(Some(Either::B(TunnelTransport(transport).boxed())))
+    }
+}
+
+#[derive(Debug)]
+struct TunnelTransport(Box<dyn Transport>);
+
+impl Transport for TunnelTransport {
+    fn buffers(&mut self) -> &mut dyn Buffers {
+        self.0.buffers()
+    }
+
+    fn transmit_output(&mut self, amount: usize, timeout: NextTimeout) -> Result<(), Error> {
+        self.0.transmit_output(amount, timeout)
+    }
+
+    fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
+        self.0.await_input(timeout)
+    }
+
+    fn is_open(&mut self) -> bool {
+        self.0.is_open()
+    }
+
+    fn is_tls(&self) -> bool {
+        false
     }
 }
 

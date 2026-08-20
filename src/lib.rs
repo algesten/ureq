@@ -23,8 +23,8 @@
 //! very well with HTTP APIs. Its features include cookies, JSON, HTTP proxies,
 //! HTTPS, charset decoding, and is based on the API of the `http` crate.
 //!
-//! Ureq is in pure Rust for safety and ease of understanding. It avoids using
-//! `unsafe` directly. It uses blocking I/O instead of async I/O, because that keeps
+//! Ureq is in pure Rust for safety and ease of understanding. It forbids
+//! `unsafe` code. It uses blocking I/O instead of async I/O, because that keeps
 //! the API simple and keeps dependencies to a minimum. For TLS, ureq uses
 //! rustls or native-tls.
 //!
@@ -156,14 +156,19 @@
 //!   library defaults to Rust's built in `utf-8`
 //! * **json** enables JSON sending and receiving via serde_json
 //! * **multipart** enables multipart/form-data sending via [`unversioned::multipart`]
+//! * **rustls-webpki-roots** enables the webpki-roots crate for root certificates when using rustls.
+//! * **native-tls-webpki-roots** enables the webpki-root-certs crate for root certificates when using native-tls.
 //!
 //! ### Unstable
 //!
 //! These features are unstable and might change in a minor version.
 //!
-//! * **rustls-no-provider** Enables rustls, but does not enable any [`CryptoProvider`] such as `ring`.
-//!   Providers other than the default (currently `ring`) are never picked up from feature flags alone.
-//!   It must be configured on the agent.
+//! * **rustls-no-provider** Enables rustls, but does not enable webpki and any [`CryptoProvider`] such as `ring`.
+//!   Root certs and providers other than the default (currently `ring`) are never picked up from feature flags alone.
+//!   They must be configured on the agent.
+//!
+//! * **native-tls-no-default** Enables native-tls, but does not enable webpki.
+//!   Root certs are never picked up from feature flags alone. They must be configured on the agent.
 //!
 //! * **vendored** compiles and statically links to a copy of non-Rust vendors (e.g. OpenSSL from `native-tls`)
 //!
@@ -275,7 +280,7 @@
 //!
 //! By enabling the **json** feature, the library supports serde json.
 //!
-//! This is enabled by default.
+//! This is disabled by default.
 //!
 //! * [`request.send_json()`] send body as json.
 //! * [`body.read_json()`] transform response to json.
@@ -1248,6 +1253,27 @@ pub(crate) mod test {
 
         let mut res = agent.get("http://httpbin.org/get").call().unwrap();
         res.body_mut().read_to_string().unwrap();
+    }
+
+    #[test]
+    #[cfg(all(feature = "_test", feature = "_ring"))]
+    fn https_connect_proxy_to_https_target() {
+        init_test_log();
+
+        let proxy = Proxy::new("https://proxy.test/https-connect-proxy").unwrap();
+        let tls = tls::TlsConfig::builder().disable_verification(true).build();
+        let agent = Agent::config_builder()
+            .proxy(Some(proxy))
+            .tls_config(tls)
+            .build()
+            .new_agent();
+
+        let mut response = agent
+            .get("https://example.com/through-https-proxy")
+            .call()
+            .unwrap();
+
+        assert_eq!(response.body_mut().read_to_string().unwrap(), "ok");
     }
 
     #[test]

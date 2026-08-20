@@ -1,5 +1,27 @@
 # Unreleased
 
+# 3.4.0
+
+  * Seal RequestExt (technically breaking) #1189
+  * Send canonical Basic authentication scheme to CONNECT proxies #1185
+  * Establish target TLS through HTTPS CONNECT proxies #1183
+  * Update rustls-platform-verifier to 0.7.0 #1174
+  * Fix pooled connections never aging out according to max_idle_age #1172
+  * Strip brackets from IPv6-literal hosts before TLS SNI/ServerName #1171
+  * RequestExt::middleware_config for conf inside middleware #1169
+
+# 3.3.0
+
+  * Bump MSRV 1.71 -> 1.85, edition 2024 #1167
+
+# 3.2.1
+
+  * Switch archived utf-8 crate for utf8-zero #1163
+
+# 3.2.0
+
+  * Strip Content-Encoding/Content-Length headers after decompression #1156
+  * Timeout per resolved ip for try_connect #1152
   * Fix body header bug on redirect #1140
   * ureq-proto 0.5.3 to fix unsolicited 100-continue #1139
   * Make socks5:// locally resolve before calling proxy #1138

@@ -5,15 +5,16 @@ use std::sync::{Arc, OnceLock};
 
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::crypto::CryptoProvider;
-use rustls::{ClientConfig, ClientConnection, RootCertStore, StreamOwned, ALL_VERSIONS};
+use rustls::{ALL_VERSIONS, ClientConfig, ClientConnection, RootCertStore, StreamOwned};
 use rustls_pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs1KeyDer, PrivatePkcs8KeyDer};
 use rustls_pki_types::{PrivateSec1KeyDer, ServerName};
 
+use crate::Error;
 use crate::tls::cert::KeyKind;
 use crate::tls::{RootCerts, TlsProvider};
 use crate::transport::{Buffers, ConnectionDetails, Connector, LazyBuffers};
 use crate::transport::{Either, NextTimeout, Transport, TransportAdapter};
-use crate::Error;
+use crate::util::AuthorityExt;
 
 use super::TlsConfig;
 
@@ -62,7 +63,7 @@ impl<In: Transport> Connector<In> for RustlsConnector {
             .uri
             .authority()
             .expect("uri authority for tls")
-            .host()
+            .host_bare()
             .try_into()
             .map_err(|e| {
                 debug!("rustls invalid dns name: {}", e);
@@ -189,11 +190,16 @@ fn build_config(tls_config: &TlsConfig) -> Result<CachedRustlConfig, Error> {
                 .with_custom_certificate_verifier(Arc::new(
                     rustls_platform_verifier::Verifier::new(provider)?,
                 )),
+            #[cfg(feature = "rustls-webpki-roots")]
             RootCerts::WebPki => {
                 let root_store = RootCertStore {
                     roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
                 };
                 builder.with_root_certificates(root_store)
+            }
+            #[cfg(not(feature = "rustls-webpki-roots"))]
+            RootCerts::WebPki => {
+                panic!("WebPki is disabled. You need to explicitly configure root certs on Agent");
             }
         }
     };

@@ -6,9 +6,9 @@ use std::sync::{Mutex, MutexGuard};
 use cookie_store::CookieStore;
 use http::Uri;
 
+use crate::Error;
 use crate::http;
 use crate::util::UriExt;
-use crate::Error;
 
 #[cfg(feature = "json")]
 use std::io;

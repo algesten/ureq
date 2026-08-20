@@ -8,6 +8,7 @@
 
 # Note: running just `cargo deny check` without a `--target` can result in
 # false positives due to https://github.com/EmbarkStudios/cargo-deny/issues/324
+[graph]
 targets = [
   { triple = "aarch64-apple-darwin" },
   { triple = "i686-pc-windows-gnu" },
@@ -22,70 +23,26 @@ targets = [
   { triple = "x86_64-unknown-redox" },
 ]
 
-# 2025-03-13: We get double windows-sys crates in our build deps due to aws-lc-rs/bindgen
-#             The dep all other crates use is 0.59.0. Ideally we don't want to ignore this, but
-#             for now it appears to be the only solution.
-# 2025-08-17: The situation is getting worse, not better. We have 4 different versions
-#             now via various dependencies (previously 2).
-#
-# windows-sys v0.45.0
-# └── jni v0.21.1
-#     └── rustls-platform-verifier v0.6.1
-#         └── ureq v3.0.12 (/Users/martin/dev/ureq)
-#
-# windows-sys v0.52.0
-# └── ring v0.17.14
-#     ├── rustls v0.23.31
-#     │   ├── rustls-platform-verifier v0.6.1
-#
-# windows-sys v0.59.0
-# ├── rustix v0.38.44
-# │   ├── tempfile v3.15.0
-# │   │   ├── native-tls v0.2.12
-# │   │   │   └── ureq v3.0.12 (/Users/martin/dev/ureq)
-# │   │   └── ureq v3.0.12 (/Users/martin/dev/ureq)
-
-
-# 2025-03-17: security-framework differs between native-tls and rustls-platform-verifier.
-#             Hopefully only very few people end up using both rustls and native-tls at
-#             the same time.
-# 2025-08-17: This is still the case. Different versions, same situation.
-#
-#  = security-framework v2.11.1
-#    └── native-tls v0.2.14
-#        └── ureq v3.0.9
-#  = security-framework v3.2.0
-#    └── rustls-platform-verifier v0.5.1
-#        └── ureq v3.0.9
-#
-
-# 2025-08-17: getrandom is bumped in other crates, but ring holds it back.
-#             See https://github.com/briansmith/ring/issues/2341
-#
-#   ├ getrandom v0.2.16
-#     └── ring v0.17.14
-#         ├── rustls v0.23.31
-#         │   ├── rustls-platform-verifier v0.6.1
-#         │   │   └── ureq v3.0.12
-#   ├ getrandom v0.3.3
-#     └── tempfile v3.20.0
-#         └── native-tls v0.2.14
-#             └── ureq v3.0.12
-
-exclude = ["windows-sys", "security-framework", "getrandom"]
+# getrandom: ureq and cc/jobserver use 0.4, while ring pulls 0.2.
+exclude = ["getrandom"]
 
 [advisories]
 yanked = "deny"
-ignore = []
+ignore = [
+  # cookie_store 0.22.0 pulls time < 0.3.47. cookie_store 0.22.1 fixes it but requires MSRV 1.88.
+  # The vulnerability is stack exhaustion in time's RFC 2822 parser (cfws/comment recursion).
+  # This code path is not reachable through ureq: the cookie crate parses Expires headers
+  # using custom FormatItem descriptions (HTTP date formats), and cookie_store uses Rfc3339
+  # for serde. Neither ever invokes the Rfc2822 parser.
+  "RUSTSEC-2026-0009",
+]
 
 [bans]
 multiple-versions = "deny"
 wildcards = "allow"        # at least until https://github.com/EmbarkStudios/cargo-deny/issues/241 is fixed
 deny = []
 
-skip = [
-  { name = "bitflags" }, # Unfortunate duplicate dependency due to old version beeing pulled in by `security-framework`
-]
+skip = []
 skip-tree = []
 
 
@@ -95,18 +52,11 @@ confidence-threshold = 0.92 # We want really high confidence when inferring lice
 allow = [
   "Apache-2.0 WITH LLVM-exception", # https://spdx.org/licenses/LLVM-exception.html
   "Apache-2.0",                     # https://tldrlegal.com/license/apache-license-2.0-(apache-2.0)
-  "BSD-2-Clause",                   # https://tldrlegal.com/license/bsd-2-clause-license-(freebsd)
   "BSD-3-Clause",                   # https://tldrlegal.com/license/bsd-3-clause-license-(revised)
-  "BSL-1.0",                        # https://tldrlegal.com/license/boost-software-license-1.0-explained
   "CC0-1.0",                        # https://creativecommons.org/publicdomain/zero/1.0/
   "ISC",                            # https://tldrlegal.com/license/-isc-license
-  "LicenseRef-UFL-1.0",             # https://tldrlegal.com/license/ubuntu-font-license,-1.0 - no official SPDX, see https://github.com/emilk/egui/issues/2321
   "MIT-0",                          # https://choosealicense.com/licenses/mit-0/
   "MIT",                            # https://tldrlegal.com/license/mit-license
-  "MPL-2.0",                        # https://www.mozilla.org/en-US/MPL/2.0/FAQ/ - see Q11. Used by webpki-roots on Linux.
-  "OFL-1.1",                        # https://spdx.org/licenses/OFL-1.1.html
-  "OpenSSL",                        # https://www.openssl.org/source/license.html - used on Linux
-  "Unicode-DFS-2016",               # https://spdx.org/licenses/Unicode-DFS-2016.html
   "Unicode-3.0",                    # https://www.unicode.org/license.txt
   "Zlib",                           # https://tldrlegal.com/license/zlib-libpng-license-(zlib)
   "CDLA-Permissive-2.0",            # https://cdla.dev/permissive-2-0/

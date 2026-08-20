@@ -4,9 +4,10 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::{fmt, io};
 
 use crate::tls::{RootCerts, TlsProvider};
-use crate::{transport::time::Duration, transport::*, Error};
-use der::pem::LineEnding;
+use crate::util::AuthorityExt;
+use crate::{Error, transport::time::Duration, transport::*};
 use der::Document;
+use der::pem::LineEnding;
 use native_tls::{Certificate, HandshakeError, Identity, TlsConnector};
 use native_tls::{TlsConnectorBuilder, TlsStream};
 
@@ -57,7 +58,7 @@ impl<In: Transport> Connector<In> for NativeTlsConnector {
             .uri
             .authority()
             .expect("uri authority for tls")
-            .host()
+            .host_bare()
             .to_string();
 
         let adapter = ErrorCapture::wrap(TransportAdapter::new(transport.boxed()));
@@ -139,6 +140,7 @@ fn build_connector(tls_config: &TlsConfig) -> Result<CachedNativeTlsConnector, E
                 // We only use the built-in roots.
                 builder.disable_built_in_roots(false);
             }
+            #[cfg(feature = "native-tls-webpki-roots")]
             RootCerts::WebPki => {
                 // Only use the specific roots.
                 builder.disable_built_in_roots(true);
@@ -146,6 +148,10 @@ fn build_connector(tls_config: &TlsConfig) -> Result<CachedNativeTlsConnector, E
                     .iter()
                     .map(|c| c.as_ref());
                 add_valid_der(certs, &mut builder);
+            }
+            #[cfg(not(feature = "native-tls-webpki-roots"))]
+            RootCerts::WebPki => {
+                panic!("WebPki is disabled. You need to explicitly configure root certs on Agent");
             }
         }
     }
@@ -410,5 +416,5 @@ fn capture_error(e: io::Error, capture: &Arc<Mutex<Option<Error>>>) -> io::Error
     let mut lock = capture.lock().unwrap();
     *lock = Some(error);
 
-    io::Error::new(io::ErrorKind::Other, "fake error towards native-tls")
+    io::Error::other("fake error towards native-tls")
 }

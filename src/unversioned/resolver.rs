@@ -16,14 +16,14 @@ use std::sync::mpsc::{self, RecvTimeoutError};
 use std::thread::{self};
 use std::vec::IntoIter;
 
-use http::uri::{Authority, Scheme};
 use http::Uri;
+use http::uri::{Authority, Scheme};
 
+use crate::Error;
 use crate::config::Config;
 use crate::http;
 use crate::transport::NextTimeout;
 use crate::util::{SchemeExt, UriExt};
-use crate::Error;
 
 /// Trait for name resolvers.
 pub trait Resolver: Debug + Send + Sync + 'static {
