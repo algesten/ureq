@@ -742,15 +742,25 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
 
     /// Max duration for receiving the response headers, but not the body
     ///
+    /// This stops applying once the response headers have been received.
+    /// Reading the body is covered separately by [`timeout_recv_body`].
+    ///
     /// Defaults to `None`.
+    ///
+    /// [`timeout_recv_body`]: ConfigBuilder::timeout_recv_body
     pub fn timeout_recv_response(mut self, v: Option<Duration>) -> Self {
         self.config().timeouts.recv_response = v;
         self
     }
 
-    /// Max duration for receiving the response body.
+    /// Max total duration for receiving the response body.
+    ///
+    /// This starts when the response headers have been received, see
+    /// [`timeout_recv_response`]. The budget is not restarted for each read.
     ///
     /// Defaults to `None`.
+    ///
+    /// [`timeout_recv_response`]: ConfigBuilder::timeout_recv_response
     pub fn timeout_recv_body(mut self, v: Option<Duration>) -> Self {
         self.config().timeouts.recv_body = v;
         self
@@ -860,7 +870,7 @@ pub struct Timeouts {
     /// Max duration for receiving the response headers, but not the body
     pub recv_response: Option<Duration>,
 
-    /// Max duration for receiving the response body.
+    /// Max total duration for receiving the response body.
     pub recv_body: Option<Duration>,
 }
 
