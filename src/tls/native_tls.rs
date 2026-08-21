@@ -5,7 +5,7 @@ use std::{fmt, io};
 
 use crate::tls::{RootCerts, TlsProvider};
 use crate::util::AuthorityExt;
-use crate::{Error, transport::time::Duration, transport::*};
+use crate::{Error, transport::*};
 use der::Document;
 use der::pem::LineEnding;
 use native_tls::{Certificate, HandshakeError, Identity, TlsConnector};
@@ -61,8 +61,28 @@ impl<In: Transport> Connector<In> for NativeTlsConnector {
             .host_bare()
             .to_string();
 
-        let adapter = ErrorCapture::wrap(TransportAdapter::new(transport.boxed()));
-        let stream = LazyStream::Unstarted(Some((connector, domain, adapter)));
+        let mut adapter = ErrorCapture::wrap(TransportAdapter::new(transport.boxed()));
+        adapter.get_mut().set_timeout(details.timeout);
+        let capture = adapter.capture();
+
+        let result = connector.connect(&domain, adapter).map_err(|e| match e {
+            HandshakeError::Failure(e) => e,
+            HandshakeError::WouldBlock(_) => unreachable!(),
+        });
+
+        let stream = match result {
+            Ok(v) => v,
+            Err(e) => {
+                // Preserve the underlying transport error, such as a timeout,
+                // instead of the less specific native-tls error.
+                let mut lock = capture.lock().unwrap();
+                if let Some(error) = lock.take() {
+                    return Err(error);
+                }
+
+                return Err(e.into());
+            }
+        };
 
         let buffers = LazyBuffers::new(
             details.config.input_buffer_size(),
@@ -218,7 +238,7 @@ fn pemify(der: &[u8], label: &'static str) -> Result<String, Error> {
 
 pub struct NativeTlsTransport {
     buffers: LazyBuffers,
-    stream: LazyStream,
+    stream: TlsStream<ErrorCapture<TransportAdapter>>,
 }
 
 impl Transport for NativeTlsTransport {
@@ -227,7 +247,7 @@ impl Transport for NativeTlsTransport {
     }
 
     fn transmit_output(&mut self, amount: usize, timeout: NextTimeout) -> Result<(), Error> {
-        let stream = self.stream.handshaken(timeout)?;
+        let stream = &mut self.stream;
         stream.get_mut().get_mut().set_timeout(timeout);
 
         let output = &self.buffers.output()[..amount];
@@ -243,7 +263,7 @@ impl Transport for NativeTlsTransport {
     }
 
     fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
-        let stream = self.stream.handshaken(timeout)?;
+        let stream = &mut self.stream;
         stream.get_mut().get_mut().set_timeout(timeout);
 
         let input = self.buffers.input_append_buf();
@@ -273,15 +293,7 @@ impl Transport for NativeTlsTransport {
     }
 
     fn is_open(&mut self) -> bool {
-        let timeout = NextTimeout {
-            after: Duration::Exact(std::time::Duration::from_secs(1)),
-            reason: crate::Timeout::Global,
-        };
-
-        self.stream
-            .handshaken(timeout)
-            .map(|c| c.get_mut().get_mut().get_mut().is_open())
-            .unwrap_or(false)
+        self.stream.get_mut().get_mut().get_mut().is_open()
     }
 
     fn is_tls(&self) -> bool {
@@ -289,54 +301,6 @@ impl Transport for NativeTlsTransport {
     }
 }
 
-/// Helper to delay the handshake until we are starting IO.
-/// This normalizes native-tls to behave like rustls.
-enum LazyStream {
-    Unstarted(Option<(Arc<TlsConnector>, String, ErrorCapture<TransportAdapter>)>),
-    Started(TlsStream<ErrorCapture<TransportAdapter>>),
-}
-
-impl LazyStream {
-    fn handshaken(
-        &mut self,
-        timeout: NextTimeout,
-    ) -> Result<&mut TlsStream<ErrorCapture<TransportAdapter>>, Error> {
-        match self {
-            LazyStream::Unstarted(v) => {
-                let (conn, domain, mut adapter) = v.take().unwrap();
-
-                // Respect timeout during TLS handshake
-                adapter.get_mut().set_timeout(timeout);
-                let capture = adapter.capture();
-
-                let result = conn.connect(&domain, adapter).map_err(|e| match e {
-                    HandshakeError::Failure(e) => e,
-                    HandshakeError::WouldBlock(_) => unreachable!(),
-                });
-
-                let stream = match result {
-                    Ok(v) => v,
-                    Err(e) => {
-                        // The error might originate in a Error::Timeout in the underlying adapter.
-                        // If so, we receive that error in this mpsc::Receiver. That's a more specific
-                        // error than the NativeTls::Error type.
-                        let mut lock = capture.lock().unwrap();
-                        if let Some(error) = lock.take() {
-                            return Err(error);
-                        }
-
-                        return Err(e.into());
-                    }
-                };
-
-                *self = LazyStream::Started(stream);
-                // Next time we hit the other match arm
-                self.handshaken(timeout)
-            }
-            LazyStream::Started(v) => Ok(v),
-        }
-    }
-}
 impl fmt::Debug for NativeTlsConnector {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("NativeTlsConnector").finish()

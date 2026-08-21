@@ -72,11 +72,11 @@ impl<In: Transport> Connector<In> for RustlsConnector {
 
         let name = name_borrowed.to_owned();
 
-        let conn = ClientConnection::new(config, name)?;
-        let stream = StreamOwned {
-            conn,
-            sock: TransportAdapter::new(transport.boxed()),
-        };
+        let mut conn = ClientConnection::new(config, name)?;
+        let mut sock = TransportAdapter::new(transport.boxed());
+        sock.set_timeout(details.timeout);
+        conn.complete_io(&mut sock)?;
+        let stream = StreamOwned { conn, sock };
 
         let buffers = LazyBuffers::new(
             details.config.input_buffer_size(),

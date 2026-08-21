@@ -376,4 +376,109 @@ mod test {
         let c = TlsConfig::default();
         assert_no_alloc(|| c.clone());
     }
+
+    #[cfg(any(feature = "_rustls", feature = "native-tls"))]
+    mod handshake {
+        use std::sync::Arc;
+
+        use crate::tls::{TlsConfig, TlsProvider};
+        use crate::transport::time::{Duration, Instant};
+        use crate::transport::{Buffers, ConnectionDetails, Connector, LazyBuffers};
+        use crate::transport::{NextTimeout, Transport};
+        use crate::unversioned::resolver::{DefaultResolver, Resolver};
+        use crate::{Agent, Error, Timeout};
+
+        #[derive(Debug)]
+        struct TimeoutTransport {
+            buffers: LazyBuffers,
+            timeout: NextTimeout,
+        }
+
+        impl Transport for TimeoutTransport {
+            fn buffers(&mut self) -> &mut dyn Buffers {
+                &mut self.buffers
+            }
+
+            fn transmit_output(
+                &mut self,
+                _amount: usize,
+                timeout: NextTimeout,
+            ) -> Result<(), Error> {
+                assert_eq!(timeout, self.timeout);
+                Err(Error::Timeout(timeout.reason))
+            }
+
+            fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
+                assert_eq!(timeout, self.timeout);
+                Err(Error::Timeout(timeout.reason))
+            }
+
+            fn is_open(&mut self) -> bool {
+                true
+            }
+        }
+
+        fn check_timeout(connector: impl Connector<TimeoutTransport>, tls_config: TlsConfig) {
+            let config = Agent::config_builder()
+                .proxy(None)
+                .tls_config(tls_config)
+                .build();
+            let uri = "https://example.com/".parse().unwrap();
+            let resolver = DefaultResolver::default();
+
+            for reason in [Timeout::Connect, Timeout::Global] {
+                let timeout = NextTimeout {
+                    after: Duration::from_secs(7),
+                    reason,
+                };
+                let details = ConnectionDetails {
+                    uri: &uri,
+                    addrs: resolver.empty(),
+                    resolver: &resolver,
+                    config: &config,
+                    request_level: false,
+                    now: Instant::now(),
+                    timeout,
+                    current_time: Arc::new(Instant::now),
+                    run_connector: Arc::new(|_| unreachable!("TLS must use the chained transport")),
+                };
+                let transport = TimeoutTransport {
+                    buffers: LazyBuffers::new(1024, 1024),
+                    timeout,
+                };
+
+                let error = connector.connect(&details, Some(transport)).unwrap_err();
+                assert!(
+                    matches!(error, Error::Timeout(actual) if actual == reason),
+                    "{error:?}"
+                );
+            }
+        }
+
+        #[test]
+        #[cfg(feature = "_rustls")]
+        fn rustls_uses_connection_timeout() {
+            let tls_config = TlsConfig::builder()
+                .provider(TlsProvider::Rustls)
+                .disable_verification(true)
+                .unversioned_rustls_crypto_provider(Arc::new(
+                    ::rustls::crypto::aws_lc_rs::default_provider(),
+                ))
+                .build();
+            check_timeout(crate::tls::rustls::RustlsConnector::default(), tls_config);
+        }
+
+        #[test]
+        #[cfg(feature = "native-tls")]
+        fn native_tls_uses_connection_timeout() {
+            let tls_config = TlsConfig::builder()
+                .provider(TlsProvider::NativeTls)
+                .disable_verification(true)
+                .build();
+            check_timeout(
+                crate::tls::native_tls::NativeTlsConnector::default(),
+                tls_config,
+            );
+        }
+    }
 }
