@@ -1051,3 +1051,73 @@ impl<'output, T: Type> ser::SerializeSeq for QueryFieldPairSeqVisitor<'output, T
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::QueryVisitor;
+    use std::collections::BTreeMap;
+
+    use serde::Serialize;
+
+    #[test]
+    fn should_serde_encode_query_from_map() {
+        let mut query = BTreeMap::new();
+        query.insert("key 1", "value 1");
+        query.insert("key 2", "value 2");
+
+        let mut output = Vec::new();
+        query
+            .serialize(QueryVisitor::escaped(&mut output))
+            .expect("to serialize");
+        assert_eq!(output.len(), 2);
+        assert_eq!(output[0].as_str(), "key%201=value%201");
+        assert_eq!(output[1].as_str(), "key%202=value%202");
+
+        output.clear();
+        query
+            .serialize(QueryVisitor::raw(&mut output))
+            .expect("to serialize");
+        assert_eq!(output[0].as_str(), "key 1=value 1");
+        assert_eq!(output[1].as_str(), "key 2=value 2");
+    }
+
+    #[test]
+    fn should_serde_encode_query_from_seq() {
+        let query = [("key 1", "value 1"), ("key 2", "value 2")];
+
+        let mut output = Vec::new();
+        query
+            .serialize(QueryVisitor::escaped(&mut output))
+            .expect("to serialize");
+        assert_eq!(output.len(), 2);
+        assert_eq!(output[0].as_str(), "key%201=value%201");
+        assert_eq!(output[1].as_str(), "key%202=value%202");
+
+        output.clear();
+        query
+            .serialize(QueryVisitor::raw(&mut output))
+            .expect("to serialize");
+        assert_eq!(output[0].as_str(), "key 1=value 1");
+        assert_eq!(output[1].as_str(), "key 2=value 2");
+    }
+
+    #[test]
+    fn should_serde_encode_query_from_tuple() {
+        let query = (("key 1", "value 1"), ("key 2", "value 2"));
+
+        let mut output = Vec::new();
+        query
+            .serialize(QueryVisitor::escaped(&mut output))
+            .expect("to serialize");
+        assert_eq!(output.len(), 2);
+        assert_eq!(output[0].as_str(), "key%201=value%201");
+        assert_eq!(output[1].as_str(), "key%202=value%202");
+
+        output.clear();
+        query
+            .serialize(QueryVisitor::raw(&mut output))
+            .expect("to serialize");
+        assert_eq!(output[0].as_str(), "key 1=value 1");
+        assert_eq!(output[1].as_str(), "key 2=value 2");
+    }
+}
