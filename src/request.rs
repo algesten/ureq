@@ -254,6 +254,18 @@ impl<Any> RequestBuilder<Any> {
 
     #[cfg(feature = "serde-query")]
     /// Sets multi query parameters from serde compatible object.
+    ///
+    /// For example, to set `?format=json&dest=%2Flogin`
+    /// ```
+    /// let query = [
+    ///     ("format", "json"),
+    ///     ("dest", "/login"),
+    /// ];
+    ///
+    /// let request = ureq::get("http://httpbin.org/get")
+    ///    .query_serde(query)
+    ///    .call()?;
+    /// # Ok::<_, ureq::Error>(())
     pub fn query_serde<T: serde::Serialize>(mut self, object: T) -> Self {
         let serializer = crate::serde::query::QueryVisitor::escaped(&mut self.query_extra);
         object
@@ -264,6 +276,20 @@ impl<Any> RequestBuilder<Any> {
 
     #[cfg(feature = "serde-query")]
     /// Sets multi query parameters from serde compatible object.
+    ///
+    /// For example, to set `?format=json&dest=/login` without encoding:
+    ///
+    /// ```
+    /// let query = [
+    ///     ("format", "json"),
+    ///     ("dest", "/login"),
+    /// ];
+    ///
+    /// let response = ureq::get("http://httpbin.org/get")
+    ///    .query_serde_raw(query)
+    ///    .call()?;
+    /// # Ok::<_, ureq::Error>(())
+    /// ```
     pub fn query_serde_raw<T: serde::Serialize>(mut self, object: T) -> Self {
         let serializer = crate::serde::query::QueryVisitor::raw(&mut self.query_extra);
         object
