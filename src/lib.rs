@@ -1429,4 +1429,64 @@ pub(crate) mod test {
         let err = Error::HostNotFound;
         is_sync(err);
     }
+
+    #[test]
+    fn recv_body_timeout_is_total() {
+        use std::io::Write;
+        use std::thread;
+        use std::time::Duration;
+
+        init_test_log();
+
+        // Server sends the response headers immediately, but the body only
+        // after the recv_body budget has expired.
+        fn respond(w: &mut dyn Write) -> io::Result<()> {
+            w.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\n")?;
+            thread::sleep(Duration::from_millis(900));
+            w.write_all(b"body")
+        }
+
+        #[cfg(feature = "_test")]
+        let url = {
+            crate::transport::set_handler_raw("/slow-body", respond);
+            "http://example.org/slow-body".to_string()
+        };
+
+        #[cfg(not(feature = "_test"))]
+        let url = {
+            use std::io::Read;
+            use std::net::TcpListener;
+
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let addr = listener.local_addr().unwrap();
+
+            thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut buf = [0u8; 4096];
+                let _ = stream.read(&mut buf);
+                let _ = respond(&mut stream);
+            });
+
+            format!("http://{}/slow-body", addr)
+        };
+
+        let agent: Agent = Agent::config_builder()
+            .timeout_recv_body(Some(Duration::from_millis(500)))
+            .build()
+            .into();
+
+        let mut res = agent.get(url).call().unwrap();
+
+        // Let the body budget run out before issuing the first read. Transports
+        // cannot set a zero socket timeout, so without an explicit expiry check
+        // this read would be granted a fresh grace period instead of failing.
+        thread::sleep(Duration::from_millis(700));
+
+        let err = res.body_mut().read_to_string().unwrap_err();
+        assert!(
+            matches!(err, Error::Timeout(Timeout::RecvBody)),
+            "unexpected error: {:?}",
+            err
+        );
+    }
 }

@@ -51,7 +51,7 @@ impl Timeout {
             Timeout::SendRequest => &[Timeout::Connect],
             Timeout::Await100 => &[Timeout::SendRequest],
             Timeout::SendBody => &[Timeout::SendRequest, Timeout::Await100],
-            Timeout::RecvResponse => &[Timeout::SendRequest, Timeout::SendBody],
+            Timeout::RecvResponse => &[Timeout::SendRequest, Timeout::Await100, Timeout::SendBody],
             Timeout::RecvBody => &[Timeout::RecvResponse],
             _ => &[],
         };
@@ -62,9 +62,7 @@ impl Timeout {
     /// All timeouts to check
     fn timeouts_to_check(&self) -> impl Iterator<Item = Timeout> {
         // Always check Global and PerCall
-        once(*self)
-            .chain(self.preceeding())
-            .chain([Timeout::Global, Timeout::PerCall])
+        once(*self).chain([Timeout::Global, Timeout::PerCall])
     }
 
     /// Get the corresponding configured timeout
@@ -156,12 +154,17 @@ impl CallTimings {
         let (reason, at) = timeout
             .timeouts_to_check()
             .filter_map(|to_check| {
-                let time = if to_check == timeout {
-                    now
-                } else {
-                    self.time_of(to_check)?
-                };
                 let timeout = to_check.configured_timeout(&self.timeouts)?;
+                // Global and PerCall record their starts. Other timestamps
+                // record completion, which starts the next phase's budget.
+                let time = match to_check {
+                    Timeout::Global | Timeout::PerCall => self.time_of(to_check),
+                    _ => to_check
+                        .preceeding()
+                        .filter_map(|previous| self.time_of(previous))
+                        .max(),
+                }
+                .expect("timeout has no recorded start");
                 Some((to_check, time + timeout))
             })
             .min_by(|a, b| a.1.cmp(&b.1))
@@ -232,5 +235,144 @@ impl fmt::Display for Timeout {
             Timeout::RecvBody => "receive body",
         };
         write!(f, "{}", r)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::sync::Mutex;
+    use std::time::Duration as StdDuration;
+
+    use super::*;
+
+    fn with_clock(timeouts: Timeouts) -> (CallTimings, Arc<Mutex<Instant>>) {
+        let clock = Arc::new(Mutex::new(Instant::now()));
+        let current_time = CurrentTime(Arc::new({
+            let clock = Arc::clone(&clock);
+            move || *clock.lock().unwrap()
+        }));
+        (CallTimings::new(timeouts, current_time), clock)
+    }
+
+    #[test]
+    fn response_timeout_does_not_limit_body() {
+        let (mut timings, clock) = with_clock(Timeouts {
+            recv_response: Some(StdDuration::from_secs(10)),
+            ..Timeouts::default()
+        });
+        for phase in [
+            Timeout::Resolve,
+            Timeout::Connect,
+            Timeout::SendRequest,
+            Timeout::RecvResponse,
+        ] {
+            timings.record_time(phase);
+        }
+        let start = timings.now();
+        *clock.lock().unwrap() = start + Duration::from_secs(20);
+        assert_eq!(
+            timings.next_timeout(Timeout::RecvBody),
+            NextTimeout {
+                after: Duration::NotHappening,
+                reason: Timeout::Global
+            }
+        );
+    }
+
+    #[test]
+    fn phase_budget_starts_after_latest_predecessor() {
+        use Timeout::*;
+
+        let cases: &[(Timeout, &[Timeout], u64)] = &[
+            (Resolve, &[], 10),
+            (Connect, &[Resolve], 10),
+            (SendRequest, &[Resolve, Connect], 2),
+            (Await100, &[Resolve, Connect, SendRequest], 3),
+            (SendBody, &[Resolve, Connect, SendRequest], 20),
+            (SendBody, &[Resolve, Connect, SendRequest, Await100], 20),
+            (RecvResponse, &[Resolve, Connect, SendRequest], 30),
+            (RecvResponse, &[Resolve, Connect, SendRequest, SendBody], 30),
+            (RecvResponse, &[Resolve, Connect, SendRequest, Await100], 30),
+            (
+                RecvResponse,
+                &[Resolve, Connect, SendRequest, Await100, SendBody],
+                30,
+            ),
+            (RecvBody, &[Resolve, Connect, SendRequest, RecvResponse], 40),
+        ];
+        for &(phase, predecessors, budget) in cases {
+            let (mut timings, clock) = with_clock(Timeouts {
+                resolve: Some(StdDuration::from_secs(10)),
+                connect: Some(StdDuration::from_secs(10)),
+                send_request: Some(StdDuration::from_secs(2)),
+                await_100: Some(StdDuration::from_secs(3)),
+                send_body: Some(StdDuration::from_secs(20)),
+                recv_response: Some(StdDuration::from_secs(30)),
+                recv_body: Some(StdDuration::from_secs(40)),
+                ..Timeouts::default()
+            });
+            let mut start = timings.now();
+            for &predecessor in predecessors {
+                start = start + Duration::from_secs(1);
+                *clock.lock().unwrap() = start;
+                timings.record_time(predecessor);
+            }
+            for elapsed in [0, 1, budget, budget + 1] {
+                *clock.lock().unwrap() = start + Duration::from_secs(elapsed);
+                assert_eq!(
+                    timings.next_timeout(phase),
+                    NextTimeout {
+                        after: Duration::from_secs(budget.saturating_sub(elapsed)),
+                        reason: phase,
+                    },
+                    "{phase:?} after {predecessors:?}, elapsed {elapsed}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn redirects_reset_per_call_but_not_global_budget() {
+        let (mut timings, clock) = with_clock(Timeouts {
+            global: Some(StdDuration::from_secs(30)),
+            per_call: Some(StdDuration::from_secs(10)),
+            resolve: Some(StdDuration::from_secs(20)),
+            ..Timeouts::default()
+        });
+        let start = timings.now();
+        *clock.lock().unwrap() = start + Duration::from_secs(4);
+        assert_eq!(
+            timings.next_timeout(Timeout::Resolve),
+            NextTimeout {
+                after: Duration::from_secs(6),
+                reason: Timeout::PerCall
+            }
+        );
+        for elapsed in [6, 12, 18, 24] {
+            *clock.lock().unwrap() = start + Duration::from_secs(elapsed);
+            timings = timings.new_call();
+            let remaining = 30 - elapsed;
+            assert_eq!(
+                timings.next_timeout(Timeout::Resolve),
+                NextTimeout {
+                    after: Duration::from_secs(remaining.min(10)),
+                    reason: if remaining < 10 {
+                        Timeout::Global
+                    } else {
+                        Timeout::PerCall
+                    },
+                }
+            );
+        }
+        for elapsed in [27, 30, 31] {
+            *clock.lock().unwrap() = start + Duration::from_secs(elapsed);
+            assert_eq!(
+                timings.next_timeout(Timeout::Global),
+                NextTimeout {
+                    after: Duration::from_secs(30_u64.saturating_sub(elapsed)),
+                    reason: Timeout::Global,
+                }
+            );
+        }
     }
 }

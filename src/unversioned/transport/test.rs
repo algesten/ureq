@@ -162,6 +162,18 @@ pub fn set_handler_cb(
     HANDLERS.with(|h| (*h).borrow_mut().push(handler));
 }
 
+/// Helper for **_test** feature tests that need full control over the response bytes.
+#[cfg(feature = "_test")]
+#[doc(hidden)]
+pub fn set_handler_raw(
+    pattern: &'static str,
+    handler: impl Fn(&mut dyn Write) -> io::Result<()> + Send + Sync + 'static,
+) {
+    let handler = TestHandler::new(pattern, move |_uri, _req, w| handler(w));
+
+    HANDLERS.with(|h| (*h).borrow_mut().push(handler));
+}
+
 #[derive(Clone)]
 struct TestHandler {
     pattern: &'static str,
