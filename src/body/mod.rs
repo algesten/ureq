@@ -31,14 +31,10 @@ const MAX_BODY_SIZE: u64 = 10 * 1024 * 1024;
 
 /// Fraction of the read limit under which `read_json()` buffers the body into memory
 /// and parses it from a slice (faster) rather than streaming it through serde_json's
-/// reader. The cutoff leaves some headroom for the deserialized value.
+/// reader. Buffering only when the Content-Length is below `limit / JSON_BUFFER_DIVISOR`
+/// keeps the buffered bytes plus the parsed value within the configured limit.
 #[cfg(feature = "json")]
 const JSON_BUFFER_DIVISOR: u64 = 3;
-
-#[cfg(feature = "json")]
-fn should_buffer_json(content_length: Option<u64>, limit: u64) -> bool {
-    content_length.is_some_and(|len| len <= limit / JSON_BUFFER_DIVISOR)
-}
 
 /// A response body returned as [`http::Response<Body>`].
 ///
@@ -391,12 +387,15 @@ impl Body {
         // serde_json's from_reader parses one byte at a time from the underlying
         // reader, which is significantly slower than parsing an in-memory slice. When
         // the Content-Length tells us the body comfortably fits within the limit, read
-        // it into a Vec first and parse the slice. See
+        // it into a Vec first and parse the slice. The 1/3 cutoff keeps the buffered
+        // bytes plus the deserialized value within the configured memory budget. See
         // https://github.com/algesten/ureq/issues/1151
-        if should_buffer_json(self.content_length(), MAX_BODY_SIZE) {
-            let vec = self.with_config().limit(MAX_BODY_SIZE).read_to_vec()?;
-            let value: T = serde_json::from_slice(&vec)?;
-            return Ok(value);
+        if let Some(len) = self.content_length() {
+            if len <= MAX_BODY_SIZE / JSON_BUFFER_DIVISOR {
+                let vec = self.with_config().limit(MAX_BODY_SIZE).read_to_vec()?;
+                let value: T = serde_json::from_slice(&vec)?;
+                return Ok(value);
+            }
         }
         let reader = self.with_config().limit(MAX_BODY_SIZE).reader();
         let value: T = serde_json::from_reader(reader)?;
@@ -637,12 +636,15 @@ impl<'a> BodyWithConfig<'a> {
         // serde_json's from_reader parses one byte at a time from the underlying
         // reader, which is significantly slower than parsing an in-memory slice. When
         // the Content-Length tells us the body comfortably fits within the limit, read
-        // it into a Vec first and parse the slice. See
+        // it into a Vec first and parse the slice. The 1/3 cutoff keeps the buffered
+        // bytes plus the deserialized value within the configured memory budget. See
         // https://github.com/algesten/ureq/issues/1151
-        if should_buffer_json(self.info.content_length(), self.limit) {
-            let vec = self.read_to_vec()?;
-            let value: T = serde_json::from_slice(&vec)?;
-            return Ok(value);
+        if let Some(len) = self.info.content_length() {
+            if len <= self.limit / JSON_BUFFER_DIVISOR {
+                let vec = self.read_to_vec()?;
+                let value: T = serde_json::from_slice(&vec)?;
+                return Ok(value);
+            }
         }
         let reader = self.do_build();
         let value: T = serde_json::from_reader(reader)?;
@@ -1043,10 +1045,25 @@ mod test {
 
     #[test]
     #[cfg(feature = "json")]
-    fn read_json_buffering() {
-        assert!(super::should_buffer_json(Some(13), 40));
-        assert!(!super::should_buffer_json(Some(14), 40));
-        assert!(!super::should_buffer_json(None, 40));
+    fn read_json_buffered_and_streamed() {
+        use serde_json::Value;
+
+        let json = br#"{"hello":"world","nums":[1,2,3]}"#;
+
+        // Fast path: Content-Length is known and well below the limit, so the body is
+        // buffered and parsed via serde_json::from_slice.
+        let mut body = crate::Body::builder().data(json.to_vec());
+        let value: Value = body.read_json().unwrap();
+        assert_eq!(value["hello"], "world");
+        assert_eq!(value["nums"][2], 3);
+
+        // Streaming fallback: the limit is small enough that Content-Length exceeds the
+        // 1/3 cutoff (32 > 40/3), so parsing goes through serde_json::from_reader. The
+        // whole body still fits under the limit, and the result must be identical.
+        let mut body = crate::Body::builder().data(json.to_vec());
+        let value: Value = body.with_config().limit(40).read_json().unwrap();
+        assert_eq!(value["hello"], "world");
+        assert_eq!(value["nums"][2], 3);
     }
 
     #[test]

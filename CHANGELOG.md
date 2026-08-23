@@ -1,7 +1,5 @@
 # Unreleased
 
-  * Speed up read_json for responses with a known, small body size #1191
-
 # 3.4.0
 
   * Seal RequestExt (technically breaking) #1189
