@@ -21,7 +21,7 @@ pub enum Timeout {
     /// Timeout in the resolver.
     Resolve,
 
-    /// Timeout while opening the connection.
+    /// Timeout while opening the connection, including any TLS handshake.
     Connect,
 
     /// Timeout while sending the request headers.

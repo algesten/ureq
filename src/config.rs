@@ -696,17 +696,26 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
 
     /// Max duration for establishing the connection
     ///
-    /// For a TLS connection this includes opening the socket and doing the TLS handshake.
+    /// This covers opening the socket, negotiating with any proxy, and for a
+    /// TLS connection, completing the TLS handshake. The handshake is done as
+    /// part of connecting, so it is not covered by [`timeout_send_request`].
     ///
     /// Defaults to `None`.
+    ///
+    /// [`timeout_send_request`]: ConfigBuilder::timeout_send_request
     pub fn timeout_connect(mut self, v: Option<Duration>) -> Self {
         self.config().timeouts.connect = v;
         self
     }
 
-    /// Max duration for sending the request, but not the request body.
+    /// Max duration for sending the request headers, but not the request body.
+    ///
+    /// This starts after the connection (including any TLS handshake) is
+    /// established, see [`timeout_connect`].
     ///
     /// Defaults to `None`.
+    ///
+    /// [`timeout_connect`]: ConfigBuilder::timeout_connect
     pub fn timeout_send_request(mut self, v: Option<Duration>) -> Self {
         self.config().timeouts.send_request = v;
         self
@@ -739,7 +748,7 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
         self
     }
 
-    /// Max duration for receving the response body.
+    /// Max duration for receiving the response body.
     ///
     /// Defaults to `None`.
     pub fn timeout_recv_body(mut self, v: Option<Duration>) -> Self {
@@ -836,7 +845,7 @@ pub struct Timeouts {
     /// Max duration for doing the DNS lookup when establishing the connection
     pub resolve: Option<Duration>,
 
-    /// Max duration for establishing the connection.
+    /// Max duration for establishing the connection, including any TLS handshake.
     pub connect: Option<Duration>,
 
     /// Max duration for sending the request, but not the request body.
@@ -851,7 +860,7 @@ pub struct Timeouts {
     /// Max duration for receiving the response headers, but not the body
     pub recv_response: Option<Duration>,
 
-    /// Max duration for receving the response body.
+    /// Max duration for receiving the response body.
     pub recv_body: Option<Duration>,
 }
 
