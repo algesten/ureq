@@ -84,6 +84,10 @@ fn try_connect(
     // Start with weight 1.0 for the first address, then halve for each subsequent.
     let mut weight = 1.0_f64;
 
+    // The most recent per-address failure, so that a host whose every address
+    // fails reports what actually happened instead of a synthesized refusal.
+    let mut last_err = None;
+
     for addr in addrs {
         // Calculate this address's timeout using geometric series.
         let per_addr = timeout.not_zero().map(|t| {
@@ -95,9 +99,10 @@ fn try_connect(
         match try_connect_single(*addr, per_addr, config) {
             // First that connects
             Ok(v) => return Ok(v),
-            // Intercept ConnectionRefused to try next addrs
-            Err(Error::Io(e)) if e.kind() == io::ErrorKind::ConnectionRefused => {
-                trace!("{} connection refused", addr);
+            // Intercept errors that concern only this address to try next addrs
+            Err(Error::Io(e)) if is_addr_specific_error(&e) => {
+                trace!("{} failed: {}", addr, e);
+                last_err = Some(e);
                 continue;
             }
             Err(Error::Timeout(_)) => {
@@ -118,10 +123,39 @@ fn try_connect(
     }
 
     debug!("Failed to connect to any resolved address");
-    Err(Error::Io(io::Error::new(
-        io::ErrorKind::ConnectionRefused,
-        "Connection refused",
-    )))
+    Err(Error::Io(last_err.unwrap_or_else(|| {
+        io::Error::new(io::ErrorKind::ConnectionRefused, "Connection refused")
+    })))
+}
+
+/// Whether a failed connect concerns only the address tried, meaning the next
+/// resolved address might still succeed.
+///
+/// `ConnectionRefused` means this address answered and said no. The
+/// unreachable/unavailable kinds mean the local network stack rejected this
+/// address at routing level without asking anything: the typical case is a
+/// host whose resolver returns IPv6 addresses first but which has no IPv6
+/// route, where the AAAA connect fails instantly while the A record would
+/// have worked (#1184). Browsers and curl mask that condition by moving on to
+/// the next address, which is the behavior matched here.
+fn is_addr_specific_error(e: &io::Error) -> bool {
+    // On Windows, a VPN or firewall can surface the blocked address family as
+    // WSAEACCES, which maps to the unstable ErrorKind::Uncategorized and is
+    // therefore matched by raw os error (#1184).
+    #[cfg(windows)]
+    const WSAEACCES: i32 = 10013;
+    #[cfg(windows)]
+    if e.raw_os_error() == Some(WSAEACCES) {
+        return true;
+    }
+
+    matches!(
+        e.kind(),
+        io::ErrorKind::ConnectionRefused
+            | io::ErrorKind::HostUnreachable
+            | io::ErrorKind::NetworkUnreachable
+            | io::ErrorKind::AddrNotAvailable
+    )
 }
 
 fn try_connect_single(
@@ -275,5 +309,37 @@ impl fmt::Debug for TcpTransport {
         f.debug_struct("TcpTransport")
             .field("addr", &self.stream.peer_addr().ok())
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn addr_specific_errors_try_the_next_addr() {
+        for kind in [
+            io::ErrorKind::ConnectionRefused,
+            io::ErrorKind::HostUnreachable,
+            io::ErrorKind::NetworkUnreachable,
+            io::ErrorKind::AddrNotAvailable,
+        ] {
+            assert!(
+                is_addr_specific_error(&io::Error::from(kind)),
+                "{kind:?} should move on to the next address"
+            );
+        }
+        for kind in [io::ErrorKind::TimedOut, io::ErrorKind::PermissionDenied] {
+            assert!(
+                !is_addr_specific_error(&io::Error::from(kind)),
+                "{kind:?} should bail"
+            );
+        }
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn wsaeacces_tries_the_next_addr() {
+        assert!(is_addr_specific_error(&io::Error::from_raw_os_error(10013)));
     }
 }
