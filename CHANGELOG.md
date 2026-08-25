@@ -1,5 +1,7 @@
 # Unreleased
 
+  * Try the next resolved address on unreachable/unavailable connect errors #1195
+
 # 3.4.1
 
   * Bump ureq-proto to 0.6.2 (fixes to parsing and headers) #1199
