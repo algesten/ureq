@@ -18,6 +18,7 @@
    <img src="https://img.shields.io/crates/d/ureq.svg?style=flat-square"
      alt="Crates.io downloads" />
  </a>
+<a href="https://inspect.software/software/algesten/ureq"><img src="https://raw.githubusercontent.com/inspect-software/badges/main/v1/a/algesten/ureq.svg" alt="inspect.software score badge for algesten/ureq" /></a>
 </div>
 
 A simple, safe HTTP client.
