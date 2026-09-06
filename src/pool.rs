@@ -131,6 +131,14 @@ impl Connection {
     }
 
     pub fn reuse(mut self, now: Instant) {
+        if !self.transport.buffers().input().is_empty() {
+            // Unconsumed input means the server sent more bytes than the body
+            // we read. Same condition as the probe below, only the bytes are
+            // already in our buffer instead of still in the socket.
+            debug!("Unconsumed input. Closing connection");
+            return;
+        }
+
         if !self.transport.is_open() {
             // The purpose of probing is that is_open() for tcp connector attempts
             // to read some more bytes. If that succeeds, the connection is considered
@@ -332,5 +340,24 @@ mod test {
     fn poolkey_new() {
         // Test that PoolKey::new() does not panic on unrecognized schemes.
         PoolKey::new(&Uri::from_static("zzz://example.com"), None);
+    }
+
+    #[test]
+    fn no_reuse_with_unconsumed_input() {
+        use crate::test::init_test_log;
+        use crate::transport::set_handler;
+
+        init_test_log();
+
+        // The body is 5 bytes, but the server sends 9. The 4 extra bytes end
+        // up in the input buffer. A connection with unconsumed input must not
+        // go back into the pool.
+        set_handler("/trailing", 200, &[("content-length", "5")], b"hellojunk");
+
+        let agent = crate::Agent::new_with_defaults();
+        let mut res = agent.get("https://example.test/trailing").call().unwrap();
+        assert_eq!(res.body_mut().read_to_string().unwrap(), "hello");
+
+        assert_eq!(agent.pool_count(), 0);
     }
 }
