@@ -67,7 +67,7 @@ _doc = ["rustls?/aws-lc-rs"]
 [dependencies]
 # default-features=false to get without simd-unsafe
 base64 = { version = "0.23.1", default-features = false, features = ["std"] }
-ureq-proto = { version = "0.6.1", default-features = false, features = ["client"] }
+ureq-proto = { version = "0.6.2", default-features = false, features = ["client"] }
 # ureq-proto = { path = "../ureq-proto", default-features = false, features = ["client"] }
 log = "0.4.25"
 utf8-zero = "0.8.1"
