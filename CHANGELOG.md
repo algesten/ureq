@@ -1,7 +1,7 @@
 # Unreleased
 
+  * Bump ureq-proto to 0.6.2 (fixes to parsing and headers) #1199
   * Do not pool connections with unconsumed buffered input #1198
-  * Bump ureq-proto to 0.6.2
   * Fix timeout budgets restarting and applying to later phases #1194
   * Complete TLS handshake during connect so timeout_connect covers it #1193
   * Speed up read_json for responses with a known, small body size #1191
