@@ -110,9 +110,7 @@ impl ProxyProtocol {
 ///     .unwrap();
 ///
 /// // Read proxy settings from environment variables
-/// if let Some(proxy) = Proxy::try_from_env() {
-///     // Use proxy from environment
-/// }
+/// let (http_proxy, https_proxy) = Proxy::try_from_env();
 /// ```
 #[derive(Clone, Eq, Hash, PartialEq)]
 pub struct Proxy {
@@ -126,6 +124,24 @@ struct ProxyInner {
     from_env: bool,
     resolve_target: bool,
     no_proxy: Option<NoProxy>,
+    ty: ProxyType,
+}
+
+#[derive(Debug, Copy, Clone, Eq, Hash, PartialEq)]
+pub enum ProxyType {
+    Http,
+    Https,
+    All,
+}
+
+impl ProxyType {
+    const fn as_env_vars(&self) -> &[&str] {
+        match self {
+            Self::All => &["ALL_PROXY", "all_proxy"],
+            Self::Https => &["HTTPS_PROXY", "https_proxy"],
+            Self::Http => &["HTTP_PROXY", "http_proxy"],
+        }
+    }
 }
 
 impl Proxy {
@@ -151,7 +167,7 @@ impl Proxy {
     /// * `john:smith@socks.google.com:8000`
     /// * `localhost`
     pub fn new(proxy: &str) -> Result<Self, Error> {
-        Self::new_with_flag(proxy, None, false, None)
+        Self::new_with_flag(proxy, None, false, None, ProxyType::All)
     }
 
     /// Creates a proxy config using a builder.
@@ -164,6 +180,7 @@ impl Proxy {
             password: None,
             resolve_target: p.default_resolve_target(),
             no_proxy: None,
+            ty: ProxyType::All,
         }
     }
 
@@ -172,6 +189,7 @@ impl Proxy {
         no_proxy: Option<NoProxy>,
         from_env: bool,
         resolve_target: Option<bool>,
+        ty: ProxyType,
     ) -> Result<Self, Error> {
         let mut uri = proxy.parse::<Uri>().or(Err(Error::InvalidProxyUrl))?;
 
@@ -198,6 +216,7 @@ impl Proxy {
             from_env,
             resolve_target,
             no_proxy,
+            ty,
         };
 
         Ok(Self {
@@ -219,23 +238,16 @@ impl Proxy {
     /// exact hostnames, wildcard suffixes, and dot suffixes.
     ///
     /// Returns `None` if no environment variable is set or the URI is invalid.
-    pub fn try_from_env() -> Option<Self> {
-        const TRY_ENV: &[&str] = &[
-            "ALL_PROXY",
-            "all_proxy",
-            "HTTPS_PROXY",
-            "https_proxy",
-            "HTTP_PROXY",
-            "http_proxy",
-        ];
+    pub fn try_from_env() -> (Option<Self>, Option<Self>) {
+        const TRY_HTTP: &[ProxyType] = &[ProxyType::Http, ProxyType::All];
+        const TRY_HTTPS: &[ProxyType] = &[ProxyType::Https, ProxyType::All];
 
         let no_proxy = NoProxy::try_from_env();
-        for attempt in TRY_ENV {
-            if let Ok(env) = std::env::var(attempt) {
-                if let Ok(proxy) = Self::new_with_flag(&env, no_proxy.clone(), true, None) {
-                    return Some(proxy);
-                }
-            }
+        let http_proxy = Self::try_from_env_helper(TRY_HTTP, no_proxy.clone());
+        let https_proxy = Self::try_from_env_helper(TRY_HTTPS, no_proxy.clone());
+
+        if http_proxy.is_some() || https_proxy.is_some() {
+            return (http_proxy, https_proxy);
         }
 
         #[cfg(all(windows, feature = "win-system-proxy"))]
@@ -245,24 +257,48 @@ impl Proxy {
 
             let registry = RegKey::predef(HKEY_CURRENT_USER);
             let Ok(ie_settings) = registry.open_subkey_with_flags(REGISTRY_PATH, KEY_READ) else {
-                return None;
+                return (None, None);
             };
 
             let enabled = ie_settings
                 .get_value::<u32, _>("ProxyEnable")
                 .is_ok_and(|enable| enable == 1);
             if !enabled {
-                return None;
+                return (None, None);
             }
 
             ie_settings
                 .get_value::<String, _>("ProxyServer")
                 .ok()
                 .and_then(|proxy| {
-                    Self::new_with_flag(&format!("http://{proxy}"), no_proxy, true, None).ok()
+                    Self::new_with_flag(
+                        &format!("http://{proxy}"),
+                        no_proxy,
+                        true,
+                        None,
+                        ProxyType::All,
+                    )
+                    .ok()
                 })
+                .map(|proxy| (proxy, proxy.clone()))
         }
+
         #[cfg(not(all(windows, feature = "win-system-proxy")))]
+        (None, None)
+    }
+
+    fn try_from_env_helper(tys: &[ProxyType], no_proxy: Option<NoProxy>) -> Option<Proxy> {
+        for ty in tys {
+            for var in ty.as_env_vars() {
+                if let Ok(env) = std::env::var(var) {
+                    if let Ok(proxy) = Self::new_with_flag(&env, no_proxy.clone(), true, None, *ty)
+                    {
+                        return Some(proxy);
+                    }
+                }
+            }
+        }
+
         None
     }
 
@@ -361,6 +397,7 @@ pub struct ProxyBuilder {
     password: Option<String>,
     resolve_target: bool,
     no_proxy: Option<NoProxy>,
+    ty: ProxyType,
 }
 
 impl ProxyBuilder {
@@ -432,6 +469,22 @@ impl ProxyBuilder {
         self
     }
 
+    /// Only allow HTTP traffic to be sent through this proxy.
+    ///
+    /// Default of builder is to allow HTTP and HTTPS traffic.
+    pub fn http_only(mut self) -> Self {
+        self.ty = ProxyType::Http;
+        self
+    }
+
+    /// Only allow HTTPS traffic to be sent through this proxy.
+    ///
+    /// Default of builder is to allow HTTP and HTTPS traffic.
+    pub fn https_only(mut self) -> Self {
+        self.ty = ProxyType::Https;
+        self
+    }
+
     /// Construct the [`Proxy`]
     pub fn build(self) -> Result<Proxy, Error> {
         let host = self.host.as_deref().unwrap_or("localhost");
@@ -451,7 +504,13 @@ impl ProxyBuilder {
         // validation and normalization in new_with_flag. This could be refactored
         // in the future.
         let proxy = format!("{}://{}{}:{}", self.protocol, userpass, host, port);
-        Proxy::new_with_flag(&proxy, self.no_proxy, false, Some(self.resolve_target))
+        Proxy::new_with_flag(
+            &proxy,
+            self.no_proxy,
+            false,
+            Some(self.resolve_target),
+            self.ty,
+        )
     }
 }
 
@@ -1001,13 +1060,13 @@ mod tests {
 
     #[test]
     fn proxy_empty_env_url() {
-        let result = Proxy::new_with_flag("", None, false, None);
+        let result = Proxy::new_with_flag("", None, false, None, ProxyType::All);
         assert!(result.is_err());
     }
 
     #[test]
     fn proxy_invalid_env_url() {
-        let result = Proxy::new_with_flag("r32/?//52:**", None, false, None);
+        let result = Proxy::new_with_flag("r32/?//52:**", None, false, None, ProxyType::All);
         assert!(result.is_err());
     }
 

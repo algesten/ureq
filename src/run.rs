@@ -40,6 +40,14 @@ pub(crate) fn run(
         .map(|rl| (Arc::new(rl.0), true))
         .unwrap_or_else(|| (agent.config.clone(), false));
 
+    let traffic_type = request.uri().scheme().cloned().unwrap_or(
+        if request.uri().port_u16().unwrap_or(80) == 443 {
+            http::uri::Scheme::HTTPS
+        } else {
+            http::uri::Scheme::HTTP
+        },
+    );
+
     let force_send_body = request.extensions_mut().remove::<ForceSendBody>().is_some();
 
     let mut redirect_history: Option<Vec<Uri>> =
@@ -71,6 +79,7 @@ pub(crate) fn run(
             agent,
             &config,
             request_level,
+            &traffic_type,
             call,
             &mut body,
             redirect_count,
@@ -137,6 +146,7 @@ fn call_run(
     agent: &Agent,
     config: &Config,
     request_level: bool,
+    traffic_type: &Scheme,
     mut call: Call<Prepare>,
     body: &mut SendBody,
     redirect_count: u32,
@@ -152,7 +162,7 @@ fn call_run(
 
     add_headers(&mut call, agent, config, body, &uri)?;
 
-    let mut connection = connect(agent, config, request_level, &uri, timings)?;
+    let mut connection = connect(agent, config, request_level, traffic_type, &uri, timings)?;
 
     let mut call = call.proceed();
 
@@ -362,6 +372,7 @@ fn connect(
     agent: &Agent,
     config: &Config,
     request_level: bool,
+    traffic_type: &Scheme,
     uri: &Uri,
     timings: &mut CallTimings,
 ) -> Result<Connection, Error> {
@@ -369,14 +380,20 @@ fn connect(
     // cannot make requests with partial uri like "/path".
     uri.ensure_valid_url()?;
 
-    let is_proxy = config.proxy().is_some();
+    let is_proxy = config.proxy_http().is_some();
 
     // For most proxy configs, the proxy itself should resolve the host name we are connecting to.
     // However for SOCKS4, we must do it and pass the resolved IP to the proxy.
-    let is_proxy_local_resolve = config.proxy().map(|p| p.resolve_target()).unwrap_or(false);
+    let is_proxy_local_resolve = config
+        .proxy_http()
+        .map(|p| p.resolve_target())
+        .unwrap_or(false);
 
     // Tells if this host matches NO_PROXY
-    let is_no_proxy = config.proxy().map(|p| p.is_no_proxy(uri)).unwrap_or(false);
+    let is_no_proxy = config
+        .proxy_http()
+        .map(|p| p.is_no_proxy(uri))
+        .unwrap_or(false);
 
     let addrs = if is_no_proxy || !is_proxy || is_proxy_local_resolve {
         agent
@@ -389,6 +406,7 @@ fn connect(
     timings.record_time(Timeout::Resolve);
 
     let details = ConnectionDetails {
+        traffic_type,
         uri,
         addrs,
         resolver: &*agent.resolver,
