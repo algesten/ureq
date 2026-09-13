@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Bump ureq-proto to 0.6.3 (fixes network-path references in redirects)
   * Bypass pooling for request connection settings incompatible with the Agent #1201
   * Try the next resolved address on unreachable/unavailable connect errors #1195
 
