@@ -400,7 +400,11 @@ fn connect(
         run_connector: agent.run_connector.clone(),
     };
 
-    let connection = agent.pool.connect(&details, config.max_idle_age().into())?;
+    let connection = agent.pool.connect(
+        &details,
+        config.max_idle_age().into(),
+        config.can_share_pool_with(&agent.config),
+    )?;
 
     if details.needs_tls() && !connection.is_tls() {
         return Err(Error::TlsRequired);

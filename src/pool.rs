@@ -30,10 +30,11 @@ impl ConnectionPool {
         &self,
         details: &ConnectionDetails,
         max_idle_age: Duration,
+        can_share_pool: bool,
     ) -> Result<Connection, Error> {
         let key = details.into();
 
-        {
+        if can_share_pool {
             let mut pool = self.pool.lock().unwrap();
             pool.purge(details.now);
 
@@ -49,7 +50,13 @@ impl ConnectionPool {
             transport,
             key,
             last_use: details.now,
-            pool: Arc::downgrade(&self.pool),
+            pool: if can_share_pool {
+                Arc::downgrade(&self.pool)
+            } else {
+                // An incompatible request must neither borrow from nor return
+                // its newly established connection to the Agent's pool.
+                Weak::new()
+            },
             position_per_host: None,
         };
 
@@ -359,5 +366,199 @@ mod test {
         assert_eq!(res.body_mut().read_to_string().unwrap(), "hello");
 
         assert_eq!(agent.pool_count(), 0);
+    }
+}
+
+#[cfg(test)]
+mod config_pooling_tests {
+    use super::*;
+    use crate::Agent;
+    use crate::transport::LazyBuffers;
+    use crate::unversioned::resolver::DefaultResolver;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[derive(Debug)]
+    struct CountingConnector(Arc<AtomicUsize>);
+
+    impl Connector for CountingConnector {
+        type Out = TestTransport;
+
+        fn connect(
+            &self,
+            _: &ConnectionDetails,
+            _: Option<()>,
+        ) -> Result<Option<Self::Out>, Error> {
+            let id = self.0.fetch_add(1, Ordering::SeqCst) + 1;
+            Ok(Some(TestTransport {
+                id,
+                buffers: LazyBuffers::new(1024, 1024),
+            }))
+        }
+    }
+
+    #[derive(Debug)]
+    struct TestTransport {
+        id: usize,
+        buffers: LazyBuffers,
+    }
+
+    impl Transport for TestTransport {
+        fn buffers(&mut self) -> &mut dyn Buffers {
+            &mut self.buffers
+        }
+        fn transmit_output(&mut self, _: usize, _: NextTimeout) -> Result<(), Error> {
+            Ok(())
+        }
+        fn await_input(&mut self, _: NextTimeout) -> Result<bool, Error> {
+            let body = self.id.to_string();
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            self.buffers.input_append_buf()[..response.len()].copy_from_slice(response.as_bytes());
+            self.buffers.input_appended(response.len());
+            Ok(true)
+        }
+        fn is_open(&mut self) -> bool {
+            true
+        }
+        fn is_tls(&self) -> bool {
+            true
+        }
+    }
+
+    fn agent(config: Config) -> Agent {
+        Agent::with_parts(
+            config,
+            CountingConnector(Arc::new(AtomicUsize::new(0))),
+            DefaultResolver::default(),
+        )
+    }
+
+    fn request(agent: &Agent, config: Config) -> String {
+        let mut req = http::Request::get("https://127.0.0.1/").body(()).unwrap();
+        req.extensions_mut()
+            .insert(crate::config::RequestLevelConfig(config));
+        agent.run(req).unwrap().body_mut().read_to_string().unwrap()
+    }
+
+    fn check_override(config: Config) {
+        let base = Agent::config_builder().proxy(None).build();
+        check_configs(base, config);
+    }
+
+    fn check_configs(base: Config, config: Config) {
+        let agent = agent(base.clone());
+        assert_eq!(request(&agent, base.clone()), "1");
+        assert_eq!(
+            request(&agent, config.clone()),
+            "2",
+            "override must bypass existing connection"
+        );
+        assert_eq!(request(&agent, config), "3", "override must not enter pool");
+        assert_eq!(
+            request(&agent, base),
+            "1",
+            "Agent connection must remain reusable"
+        );
+    }
+
+    #[test]
+    fn connection_overrides_bypass_pool() {
+        check_override(Agent::config_builder().proxy(None).no_delay(false).build());
+        check_override(
+            Agent::config_builder()
+                .proxy(None)
+                .ip_family(crate::config::IpFamily::Ipv4Only)
+                .build(),
+        );
+        check_override(
+            Agent::config_builder()
+                .proxy(None)
+                .input_buffer_size(4096)
+                .build(),
+        );
+        check_override(
+            Agent::config_builder()
+                .proxy(None)
+                .output_buffer_size(4096)
+                .build(),
+        );
+        check_override(
+            Agent::config_builder()
+                .proxy(None)
+                .user_agent("custom")
+                .build(),
+        );
+    }
+
+    #[test]
+    fn request_settings_preserve_pooling() {
+        let base = Agent::config_builder().proxy(None).build();
+        let agent = agent(base.clone());
+        assert_eq!(request(&agent, base), "1");
+        let config = Agent::config_builder()
+            .proxy(None)
+            .https_only(true)
+            .http_status_as_error(false)
+            .timeout_global(Some(std::time::Duration::from_secs(10)))
+            .max_response_header_size(4096)
+            .build();
+        assert_eq!(request(&agent, config), "1");
+    }
+
+    #[test]
+    #[cfg(feature = "_tls")]
+    fn client_identity_isolation() {
+        use crate::tls::{Certificate, ClientCert, PrivateKey, TlsConfig};
+        // The transport is synthetic: these bytes identify credentials without
+        // performing a handshake. Response bodies identify actual connections.
+        let identity = |bytes: &'static [u8]| {
+            ClientCert::new_with_certs(
+                &[Certificate::from_der(bytes)],
+                PrivateKey::from_pem(
+                    b"-----BEGIN PRIVATE KEY-----\nQQ==\n-----END PRIVATE KEY-----\n",
+                )
+                .unwrap(),
+            )
+        };
+        let config = |cert| {
+            Agent::config_builder()
+                .proxy(None)
+                .tls_config(TlsConfig::builder().client_cert(cert).build())
+                .build()
+        };
+        let a = config(Some(identity(b"A")));
+        let b = config(Some(identity(b"B")));
+        let none = config(None);
+        check_configs(a.clone(), b);
+        check_configs(a.clone(), none.clone());
+        check_configs(none, a.clone());
+        let agent = agent(a.clone());
+        assert_eq!(request(&agent, a.clone()), "1");
+        assert_eq!(
+            request(&agent, a),
+            "1",
+            "cloned credentials can reuse connections"
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "_tls")]
+    fn tls_overrides_bypass_pool() {
+        use crate::tls::{RootCerts, TlsConfig, TlsProvider};
+        for tls in [
+            TlsConfig::builder().disable_verification(true).build(),
+            TlsConfig::builder().use_sni(false).build(),
+            TlsConfig::builder()
+                .provider(TlsProvider::NativeTls)
+                .build(),
+            TlsConfig::builder()
+                .root_certs(RootCerts::PlatformVerifier)
+                .build(),
+        ] {
+            check_override(Agent::config_builder().proxy(None).tls_config(tls).build());
+        }
     }
 }

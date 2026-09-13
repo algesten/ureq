@@ -145,6 +145,13 @@ use typestate::RequestScope;
 /// let response = agent.run(request);
 /// ```
 ///
+/// Request-level changes to connection settings (TLS, IP family, TCP_NODELAY,
+/// buffer sizes, or the configured User-Agent used for proxy CONNECT) bypass
+/// the Agent's pool when incompatible with its configuration. Such connections
+/// are not returned to the pool. Proxy settings are distinguished by the pool key.
+/// TLS credentials, explicit root sets, and custom crypto providers are compared
+/// by shared identity: cloning retains compatibility, independently constructing
+/// them may disable pooling even when their contents match.
 #[derive(Clone)]
 pub struct Config {
     http_status_as_error: bool,
@@ -175,6 +182,54 @@ pub struct Config {
 }
 
 impl Config {
+    /// Whether this configuration can use the Agent's connection pool.
+    ///
+    /// Keep this pattern exhaustive: every new field needs a pooling decision.
+    /// Custom connectors must still respect the Agent's connection-sharing boundary.
+    pub(crate) fn can_share_pool_with(&self, agent: &Self) -> bool {
+        let Self {
+            ip_family,
+            #[cfg(feature = "_tls")]
+            tls_config,
+            no_delay,
+            input_buffer_size,
+            output_buffer_size,
+            user_agent,
+            // Already separated by the pool key.
+            proxy: _,
+            // Applied to each request or response, independently of the transport.
+            http_status_as_error: _,
+            https_only: _,
+            max_redirects: _,
+            max_redirects_will_error: _,
+            redirect_auth_headers: _,
+            save_redirect_history: _,
+            accept: _,
+            accept_encoding: _,
+            timeouts: _,
+            max_response_header_size: _,
+            allow_non_standard_methods: _,
+            middleware: _,
+            // Pool capacity is Agent-only; idle age is checked during lookup.
+            max_idle_connections: _,
+            max_idle_connections_per_host: _,
+            max_idle_age: _,
+        } = self;
+
+        #[cfg(feature = "_tls")]
+        if !tls_config.can_share_pool_with(&agent.tls_config) {
+            return false;
+        }
+
+        *ip_family == agent.ip_family
+            && *no_delay == agent.no_delay
+            && *input_buffer_size == agent.input_buffer_size
+            && *output_buffer_size == agent.output_buffer_size
+            // User-Agent also participates in proxy CONNECT establishment.
+            && user_agent.as_str(DEFAULT_USER_AGENT)
+                == agent.user_agent.as_str(DEFAULT_USER_AGENT)
+    }
+
     /// A builder to make a bespoke configuration.
     ///
     /// The default values are already set.
@@ -238,6 +293,7 @@ impl Config {
     /// Config for TLS.
     ///
     /// This config is generic for all TLS connectors.
+    /// Request configurations incompatible with the Agent bypass its connection pool.
     #[cfg(feature = "_tls")]
     pub fn tls_config(&self) -> &TlsConfig {
         &self.tls_config
@@ -458,6 +514,7 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
     /// Config for TLS.
     ///
     /// This config is generic for all TLS connectors.
+    /// Request configurations incompatible with the Agent bypass its connection pool.
     #[cfg(feature = "_tls")]
     pub fn tls_config(mut self, v: TlsConfig) -> Self {
         self.config().tls_config = v;

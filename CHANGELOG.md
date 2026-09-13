@@ -1,5 +1,7 @@
 # Unreleased
 
+  * Bypass pooling for request connection settings incompatible with the Agent
+
   * Try the next resolved address on unreachable/unavailable connect errors #1195
 
 # 3.4.1
