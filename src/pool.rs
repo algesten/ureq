@@ -30,11 +30,11 @@ impl ConnectionPool {
         &self,
         details: &ConnectionDetails,
         max_idle_age: Duration,
-        can_share_pool: bool,
+        use_pool: bool,
     ) -> Result<Connection, Error> {
         let key = details.into();
 
-        if can_share_pool {
+        if use_pool {
             let mut pool = self.pool.lock().unwrap();
             pool.purge(details.now);
 
@@ -50,7 +50,7 @@ impl ConnectionPool {
             transport,
             key,
             last_use: details.now,
-            pool: if can_share_pool {
+            pool: if use_pool {
                 Arc::downgrade(&self.pool)
             } else {
                 // An incompatible request must neither borrow from nor return
