@@ -159,6 +159,13 @@ impl CallTimings {
                 // record completion, which starts the next phase's budget.
                 let time = match to_check {
                     Timeout::Global | Timeout::PerCall => self.time_of(to_check),
+
+                    // When enabled, body timeouts are reset for each send operation.
+                    Timeout::SendBody if self.timeouts.reset_send_body_timeout => Some(now),
+
+                    // When enabled, body timeouts are reset for each receive operation.
+                    Timeout::RecvBody if self.timeouts.reset_recv_body_timeout => Some(now),
+
                     _ => to_check
                         .preceeding()
                         .filter_map(|previous| self.time_of(previous))
@@ -171,7 +178,6 @@ impl CallTimings {
             .unwrap_or((Timeout::Global, Instant::NotHappening));
 
         let after = at.duration_since(now);
-
         NextTimeout { after, reason }
     }
 }
@@ -371,6 +377,48 @@ mod test {
                 NextTimeout {
                     after: Duration::from_secs(30_u64.saturating_sub(elapsed)),
                     reason: Timeout::Global,
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn resets_recv_body_timeout_after_each_read() {
+        let (timings, clock) = with_clock(Timeouts {
+            recv_body: Some(StdDuration::from_secs(5)),
+            reset_recv_body_timeout: true,
+            ..Timeouts::default()
+        });
+
+        let start = timings.now();
+        for elapsed in [1, 5, 9, 15] {
+            *clock.lock().unwrap() = start + Duration::from_secs(elapsed);
+            assert_eq!(
+                timings.next_timeout(Timeout::RecvBody),
+                NextTimeout {
+                    after: Duration::from_secs(5),
+                    reason: Timeout::RecvBody
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn resets_send_body_timeout_after_each_write() {
+        let (timings, clock) = with_clock(Timeouts {
+            send_body: Some(StdDuration::from_secs(5)),
+            reset_send_body_timeout: true,
+            ..Timeouts::default()
+        });
+
+        let start = timings.now();
+        for elapsed in [1, 5, 9, 15] {
+            *clock.lock().unwrap() = start + Duration::from_secs(elapsed);
+            assert_eq!(
+                timings.next_timeout(Timeout::SendBody),
+                NextTimeout {
+                    after: Duration::from_secs(5),
+                    reason: Timeout::SendBody
                 }
             );
         }

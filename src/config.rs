@@ -740,6 +740,14 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
         self
     }
 
+    /// Whether to reset the send request body timeout after each write
+    ///
+    /// Defaults to `false`.
+    pub fn reset_send_body_timeout(mut self, v: bool) -> Self {
+        self.config().timeouts.reset_send_body_timeout = v;
+        self
+    }
+
     /// Max duration for receiving the response headers, but not the body
     ///
     /// This stops applying once the response headers have been received.
@@ -763,6 +771,14 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
     /// [`timeout_recv_response`]: ConfigBuilder::timeout_recv_response
     pub fn timeout_recv_body(mut self, v: Option<Duration>) -> Self {
         self.config().timeouts.recv_body = v;
+        self
+    }
+
+    /// Whether to reset the response body timeout after each read
+    ///
+    /// Defaults to `false`.
+    pub fn reset_recv_body_timeout(mut self, v: bool) -> Self {
+        self.config().timeouts.reset_recv_body_timeout = v;
         self
     }
 }
@@ -867,11 +883,17 @@ pub struct Timeouts {
     /// Max duration for sending a request body (if there is one)
     pub send_body: Option<Duration>,
 
+    /// Whether to reset the response body timeout after each read
+    pub reset_send_body_timeout: bool,
+
     /// Max duration for receiving the response headers, but not the body
     pub recv_response: Option<Duration>,
 
     /// Max total duration for receiving the response body.
     pub recv_body: Option<Duration>,
+
+    /// Whether to reset the response body timeout after each read
+    pub reset_recv_body_timeout: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -920,8 +942,10 @@ impl Default for Timeouts {
             send_request: None,
             await_100: Some(Duration::from_secs(1)),
             send_body: None,
+            reset_send_body_timeout: false,
             recv_response: None,
             recv_body: None,
+            reset_recv_body_timeout: false,
         }
     }
 }
