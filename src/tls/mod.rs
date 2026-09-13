@@ -78,6 +78,46 @@ pub struct TlsConfig {
 }
 
 impl TlsConfig {
+    /// Conservatively compare connection settings without relying on hash equality.
+    /// Keep the pattern exhaustive so new TLS fields require an explicit decision.
+    pub(crate) fn can_share_pool_with(&self, agent: &Self) -> bool {
+        let Self {
+            provider,
+            client_cert,
+            root_certs,
+            use_sni,
+            disable_verification,
+            #[cfg(feature = "_rustls")]
+            rustls_crypto_provider,
+        } = self;
+
+        // Clones retain identity. Independently constructed credentials or root
+        // sets conservatively use fresh connections even if their bytes match.
+        let same_client = match (client_cert, &agent.client_cert) {
+            (None, None) => true,
+            (Some(a), Some(b)) => Arc::ptr_eq(&a.0, &b.0),
+            _ => false,
+        };
+        let same_roots = match (root_certs, &agent.root_certs) {
+            (RootCerts::WebPki, RootCerts::WebPki)
+            | (RootCerts::PlatformVerifier, RootCerts::PlatformVerifier) => true,
+            (RootCerts::Specific(a), RootCerts::Specific(b)) => Arc::ptr_eq(a, b),
+            _ => false,
+        };
+        #[cfg(feature = "_rustls")]
+        match (rustls_crypto_provider, &agent.rustls_crypto_provider) {
+            (None, None) => {}
+            (Some(a), Some(b)) if Arc::ptr_eq(a, b) => {}
+            _ => return false,
+        }
+
+        *provider == agent.provider
+            && same_client
+            && same_roots
+            && *use_sni == agent.use_sni
+            && *disable_verification == agent.disable_verification
+    }
+
     /// Builder to make a bespoke config.
     pub fn builder() -> TlsConfigBuilder {
         TlsConfigBuilder {
@@ -370,6 +410,31 @@ impl Hash for TlsConfig {
 mod test {
     use super::*;
     use assert_no_alloc::*;
+
+    #[test]
+    fn specific_roots_pool_by_identity() {
+        let roots = || RootCerts::new_with_certs(&[Certificate::from_der(b"root")]);
+        let a = TlsConfig::builder().root_certs(roots()).build();
+        assert!(a.can_share_pool_with(&a.clone()));
+        let b = TlsConfig::builder().root_certs(roots()).build();
+        assert!(!a.can_share_pool_with(&b));
+    }
+
+    #[test]
+    #[cfg(feature = "_rustls")]
+    fn crypto_providers_pool_by_identity() {
+        let provider = || Arc::new(::rustls::crypto::aws_lc_rs::default_provider());
+        let a = TlsConfig::builder()
+            .unversioned_rustls_crypto_provider(provider())
+            .build();
+        assert!(a.can_share_pool_with(&a.clone()));
+        let b = TlsConfig::builder()
+            .unversioned_rustls_crypto_provider(provider())
+            .build();
+        assert!(!a.can_share_pool_with(&b));
+        assert!(!a.can_share_pool_with(&TlsConfig::default()));
+        assert!(!TlsConfig::default().can_share_pool_with(&a));
+    }
 
     #[test]
     fn tls_config_clone_does_not_allocate() {
