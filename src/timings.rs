@@ -12,6 +12,12 @@ use crate::transport::time::{Duration, Instant};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Timeout {
+    /// Timeout for an individual transport read.
+    PerRead,
+
+    /// Timeout for an individual transport write.
+    PerWrite,
+
     /// Timeout for entire operation.
     Global,
 
@@ -68,6 +74,7 @@ impl Timeout {
     /// Get the corresponding configured timeout
     fn configured_timeout(&self, timeouts: &Timeouts) -> Option<Duration> {
         match self {
+            Timeout::PerRead | Timeout::PerWrite => None,
             Timeout::Global => timeouts.global,
             Timeout::PerCall => timeouts.per_call,
             Timeout::Resolve => timeouts.resolve,
@@ -85,6 +92,8 @@ impl Timeout {
 #[derive(Default, Debug)]
 pub(crate) struct CallTimings {
     timeouts: Box<Timeouts>,
+    per_read: Option<Duration>,
+    per_write: Option<Duration>,
     current_time: CurrentTime,
     times: Vec<(Timeout, Instant)>,
 }
@@ -99,9 +108,17 @@ impl CallTimings {
 
         CallTimings {
             timeouts: Box::new(timeouts),
+            per_read: None,
+            per_write: None,
             current_time,
             times,
         }
+    }
+
+    pub(crate) fn with_io_timeouts(mut self, config: &crate::config::Config) -> Self {
+        self.per_read = config.timeout_per_read().map(Into::into);
+        self.per_write = config.timeout_per_write().map(Into::into);
+        self
     }
 
     pub(crate) fn new_call(mut self) -> CallTimings {
@@ -110,6 +127,8 @@ impl CallTimings {
 
         CallTimings {
             timeouts: self.timeouts,
+            per_read: self.per_read,
+            per_write: self.per_write,
             current_time: self.current_time,
             times: self.times,
         }
@@ -172,7 +191,12 @@ impl CallTimings {
 
         let after = at.duration_since(now);
 
-        NextTimeout { after, reason }
+        NextTimeout {
+            after,
+            reason,
+            per_read: self.per_read,
+            per_write: self.per_write,
+        }
     }
 }
 
@@ -185,16 +209,59 @@ impl CurrentTime {
     }
 }
 
-/// A pair of [`Duration`] and [`Timeout`].
+/// Remaining phase budget and optional per-operation allowances.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NextTimeout {
     /// Duration until next timeout.
     pub after: Duration,
-    /// The name of the next timeout.s
+    /// The reason reported when the remaining budget expires.
     pub reason: Timeout,
+    /// Fresh allowance for each read. Transports should use [`Self::for_read`].
+    pub per_read: Option<Duration>,
+    /// Fresh allowance for each write. Transports should use [`Self::for_write`].
+    pub per_write: Option<Duration>,
+}
+
+impl Default for NextTimeout {
+    fn default() -> Self {
+        Self {
+            after: Duration::NotHappening,
+            reason: Timeout::Global,
+            per_read: None,
+            per_write: None,
+        }
+    }
 }
 
 impl NextTimeout {
+    /// Cap this budget by the allowance for an individual transport read.
+    pub fn for_read(self) -> Self {
+        self.capped(self.per_read, Timeout::PerRead)
+    }
+
+    /// Cap this budget by the allowance for an individual transport write.
+    pub fn for_write(self) -> Self {
+        self.capped(self.per_write, Timeout::PerWrite)
+    }
+
+    fn capped(mut self, limit: Option<Duration>, reason: Timeout) -> Self {
+        if let Some(limit) = limit {
+            if limit < self.after {
+                self.after = limit;
+                self.reason = reason;
+            }
+        }
+        self
+    }
+
+    pub(crate) fn check(self) -> Result<Self, crate::Error> {
+        if self.after.is_zero() {
+            Err(crate::Error::Timeout(self.reason))
+        } else {
+            Ok(self)
+        }
+    }
+
     /// Returns the duration of the timeout if the timeout must happen, but avoid instant timeouts
     ///
     /// If the timeout must happen but is zero, returns 1 second
@@ -224,6 +291,8 @@ impl Default for CurrentTime {
 impl fmt::Display for Timeout {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let r = match self {
+            Timeout::PerRead => "per read",
+            Timeout::PerWrite => "per write",
             Timeout::Global => "global",
             Timeout::PerCall => "per call",
             Timeout::Resolve => "resolve",
@@ -274,7 +343,8 @@ mod test {
             timings.next_timeout(Timeout::RecvBody),
             NextTimeout {
                 after: Duration::NotHappening,
-                reason: Timeout::Global
+                reason: Timeout::Global,
+                ..NextTimeout::default()
             }
         );
     }
@@ -324,6 +394,7 @@ mod test {
                     NextTimeout {
                         after: Duration::from_secs(budget.saturating_sub(elapsed)),
                         reason: phase,
+                        ..NextTimeout::default()
                     },
                     "{phase:?} after {predecessors:?}, elapsed {elapsed}"
                 );
@@ -345,7 +416,8 @@ mod test {
             timings.next_timeout(Timeout::Resolve),
             NextTimeout {
                 after: Duration::from_secs(6),
-                reason: Timeout::PerCall
+                reason: Timeout::PerCall,
+                ..NextTimeout::default()
             }
         );
         for elapsed in [6, 12, 18, 24] {
@@ -361,6 +433,7 @@ mod test {
                     } else {
                         Timeout::PerCall
                     },
+                    ..NextTimeout::default()
                 }
             );
         }
@@ -371,8 +444,101 @@ mod test {
                 NextTimeout {
                     after: Duration::from_secs(30_u64.saturating_sub(elapsed)),
                     reason: Timeout::Global,
+                    ..NextTimeout::default()
                 }
             );
+        }
+    }
+
+    #[test]
+    fn per_io_allowances_renew_but_total_budgets_do_not() {
+        for (phase, is_read) in [
+            (Timeout::SendRequest, false),
+            (Timeout::Await100, true),
+            (Timeout::SendBody, false),
+            (Timeout::RecvResponse, true),
+            (Timeout::RecvBody, true),
+        ] {
+            for total in [phase, Timeout::PerCall, Timeout::Global] {
+                let mut timeouts = Timeouts {
+                    await_100: None,
+                    ..Timeouts::default()
+                };
+                let budget = Some(StdDuration::from_secs(20));
+                match total {
+                    Timeout::SendRequest => timeouts.send_request = budget,
+                    Timeout::Await100 => timeouts.await_100 = budget,
+                    Timeout::SendBody => timeouts.send_body = budget,
+                    Timeout::RecvResponse => timeouts.recv_response = budget,
+                    Timeout::RecvBody => timeouts.recv_body = budget,
+                    Timeout::PerCall => timeouts.per_call = budget,
+                    Timeout::Global => timeouts.global = budget,
+                    _ => unreachable!(),
+                }
+                let config = crate::Agent::config_builder()
+                    .timeout_per_read(Some(StdDuration::from_secs(5)))
+                    .timeout_per_write(Some(StdDuration::from_secs(7)))
+                    .build();
+                let (timings, clock) = with_clock(timeouts);
+                let mut timings = timings.with_io_timeouts(&config);
+                for predecessor in [
+                    Timeout::Resolve,
+                    Timeout::Connect,
+                    Timeout::SendRequest,
+                    Timeout::Await100,
+                    Timeout::SendBody,
+                    Timeout::RecvResponse,
+                ] {
+                    if predecessor == phase {
+                        break;
+                    }
+                    timings.record_time(predecessor);
+                }
+                let start = timings.now();
+                for elapsed in [0, 8, 18, 20, 25] {
+                    *clock.lock().unwrap() = start + Duration::from_secs(elapsed);
+                    let next = timings.next_timeout(phase);
+                    let next = if is_read {
+                        next.for_read()
+                    } else {
+                        next.for_write()
+                    };
+                    let allowance = if is_read { 5 } else { 7 };
+                    assert_eq!(
+                        next.after,
+                        Duration::from_secs(allowance.min(20_u64.saturating_sub(elapsed)))
+                    );
+                    assert_eq!(
+                        next.reason,
+                        if elapsed >= 18 {
+                            total
+                        } else if is_read {
+                            Timeout::PerRead
+                        } else {
+                            Timeout::PerWrite
+                        }
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn io_limits_survive_redirects_without_limiting_dns_or_connect() {
+        let config = crate::Agent::config_builder()
+            .timeout_per_read(Some(StdDuration::ZERO))
+            .timeout_per_write(Some(StdDuration::from_secs(3)))
+            .build();
+        let (timings, _) = with_clock(Timeouts::default());
+        let timings = timings.with_io_timeouts(&config).new_call();
+        for phase in [Timeout::Resolve, Timeout::Connect] {
+            let next = timings.next_timeout(phase);
+            assert_eq!(next.after, Duration::NotHappening);
+            assert!(matches!(
+                next.for_read().check(),
+                Err(crate::Error::Timeout(Timeout::PerRead))
+            ));
+            assert_eq!(next.for_write().after, Duration::from_secs(3));
         }
     }
 }

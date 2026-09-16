@@ -457,6 +457,7 @@ mod test {
         struct TimeoutTransport {
             buffers: LazyBuffers,
             timeout: NextTimeout,
+            fail_read: bool,
         }
 
         impl Transport for TimeoutTransport {
@@ -469,12 +470,16 @@ mod test {
                 _amount: usize,
                 timeout: NextTimeout,
             ) -> Result<(), Error> {
-                assert_eq!(timeout, self.timeout);
-                Err(Error::Timeout(timeout.reason))
+                assert_eq!(timeout, self.timeout.for_write());
+                if self.fail_read {
+                    Ok(())
+                } else {
+                    Err(Error::Timeout(timeout.reason))
+                }
             }
 
             fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
-                assert_eq!(timeout, self.timeout);
+                assert_eq!(timeout, self.timeout.for_read());
                 Err(Error::Timeout(timeout.reason))
             }
 
@@ -491,10 +496,27 @@ mod test {
             let uri = "https://example.com/".parse().unwrap();
             let resolver = DefaultResolver::default();
 
-            for reason in [Timeout::Connect, Timeout::Global] {
+            for (reason, fail_read, per_read, per_write) in [
+                (Timeout::Connect, false, None, None),
+                (Timeout::Global, true, None, None),
+                (
+                    Timeout::Connect,
+                    true,
+                    Some(Duration::from_secs(2)),
+                    Some(Duration::from_secs(3)),
+                ),
+                (
+                    Timeout::Connect,
+                    false,
+                    Some(Duration::from_secs(2)),
+                    Some(Duration::from_secs(3)),
+                ),
+            ] {
                 let timeout = NextTimeout {
                     after: Duration::from_secs(7),
                     reason,
+                    per_read,
+                    per_write,
                 };
                 let details = ConnectionDetails {
                     uri: &uri,
@@ -510,9 +532,15 @@ mod test {
                 let transport = TimeoutTransport {
                     buffers: LazyBuffers::new(1024, 1024),
                     timeout,
+                    fail_read,
                 };
 
                 let error = connector.connect(&details, Some(transport)).unwrap_err();
+                let reason = if fail_read {
+                    timeout.for_read().reason
+                } else {
+                    timeout.for_write().reason
+                };
                 assert!(
                     matches!(error, Error::Timeout(actual) if actual == reason),
                     "{error:?}"

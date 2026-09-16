@@ -247,6 +247,7 @@ impl Transport for TcpTransport {
     }
 
     fn transmit_output(&mut self, amount: usize, timeout: NextTimeout) -> Result<(), Error> {
+        let timeout = timeout.for_write().check()?;
         maybe_update_timeout(
             timeout,
             &mut self.timeout_write,
@@ -265,6 +266,7 @@ impl Transport for TcpTransport {
     }
 
     fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
+        let timeout = timeout.for_read().check()?;
         // Proceed to fill the buffers from the TcpStream
         maybe_update_timeout(
             timeout,
@@ -350,6 +352,7 @@ mod test {
             NextTimeout {
                 after: Duration::from_secs(10),
                 reason: Timeout::Global,
+                ..NextTimeout::default()
             },
             Arc::new(move || start + elapsed),
             |addr, _| {
@@ -484,5 +487,29 @@ mod test {
     #[cfg(windows)]
     fn wsaeacces_tries_the_next_addr() {
         assert!(is_addr_specific_error(&io::Error::from_raw_os_error(10013)));
+    }
+
+    #[test]
+    fn socket_read_stall_reports_per_read() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let stream = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        let (_peer, _) = listener.accept().unwrap();
+        let mut transport = TcpTransport::new(stream, LazyBuffers::new(1024, 1024));
+        let timeout = NextTimeout {
+            per_read: Some(Duration::from_millis(20)),
+            per_write: Some(Duration::from_millis(30)),
+            ..NextTimeout::default()
+        };
+        let error = transport.await_input(timeout).unwrap_err();
+        assert!(
+            matches!(error, Error::Timeout(Timeout::PerRead)),
+            "{error:?}"
+        );
+        transport.buffers().output()[0] = b'x';
+        transport.transmit_output(1, timeout).unwrap();
+        assert_eq!(
+            transport.stream.write_timeout().unwrap(),
+            Some(std::time::Duration::from_millis(30))
+        );
     }
 }

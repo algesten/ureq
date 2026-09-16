@@ -1,5 +1,7 @@
 # Unreleased
 
+  * Add timeout_per_read and timeout_per_write independently of total phase budgets
+
 # 3.4.2
 
   * Bump ureq-proto to 0.6.3 (fixes network-path references in redirects)

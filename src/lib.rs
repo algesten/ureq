@@ -1490,3 +1490,6 @@ pub(crate) mod test {
         );
     }
 }
+
+#[cfg(test)]
+mod io_timeout_tests;
