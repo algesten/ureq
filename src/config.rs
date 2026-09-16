@@ -407,12 +407,24 @@ impl Config {
         &self.accept_encoding
     }
 
-    /// The timeout for each transport read. Defaults to `None`.
+    /// Max duration for each transport read
+    ///
+    /// See [`timeout_per_read`] for details.
+    ///
+    /// Defaults to `None`.
+    ///
+    /// [`timeout_per_read`]: ConfigBuilder::timeout_per_read
     pub fn timeout_per_read(&self) -> Option<Duration> {
         self.timeout_per_read
     }
 
-    /// The timeout for each transport write. Defaults to `None`.
+    /// Max duration for each transport write
+    ///
+    /// See [`timeout_per_write`] for details.
+    ///
+    /// Defaults to `None`.
+    ///
+    /// [`timeout_per_write`]: ConfigBuilder::timeout_per_write
     pub fn timeout_per_write(&self) -> Option<Duration> {
         self.timeout_per_write
     }
@@ -756,38 +768,37 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
         self
     }
 
-    /// Max duration for each transport read, including response headers and body,
-    /// TLS handshakes, and HTTP CONNECT proxy responses.
+    /// Max duration for each transport read
     ///
-    /// Each operation gets a fresh allowance, capped by the remaining phase,
-    /// per-call and global budgets. This does not change the total body timeout.
-    /// Time spent by the application between reads is not part of this allowance.
-    /// Buffered reads need not perform network I/O. Transport operations need not
-    /// correspond one-to-one with application reads or socket syscalls.
+    /// This covers headers, body, TLS handshakes and HTTP CONNECT responses.
+    /// The timeout restarts for each read. Phase, per-call and global timeouts
+    /// still apply, including the total body timeout set by [`timeout_recv_body`].
     ///
-    /// This does not limit DNS resolution, TCP connection establishment, or the
-    /// SOCKS negotiation performed internally by the SOCKS library.
+    /// This applies to transport I/O, not time spent between application reads
+    /// or reading buffered data. DNS, TCP connection establishment and SOCKS
+    /// negotiation are not covered.
     ///
-    /// Defaults to `None` (no per-read limit).
+    /// Defaults to `None`.
+    ///
+    /// [`timeout_recv_body`]: ConfigBuilder::timeout_recv_body
     pub fn timeout_per_read(mut self, v: Option<Duration>) -> Self {
         self.config().timeout_per_read = v;
         self
     }
 
-    /// Max duration for each transport write, including request headers and body,
-    /// TLS handshakes, and HTTP CONNECT proxy requests.
+    /// Max duration for each transport write
     ///
-    /// Each operation gets a fresh allowance, capped by the remaining phase,
-    /// per-call and global budgets. This does not change the total body timeout.
-    /// Reading data from an application-provided request body is not covered.
-    /// A successful socket write means the local socket accepted the bytes, not
-    /// that the peer consumed them. Buffering, TLS and partial socket writes mean
-    /// this is not a strict wall-clock deadline for an application write.
+    /// This covers headers, body, TLS handshakes and HTTP CONNECT requests.
+    /// The timeout restarts for each write. Phase, per-call and global timeouts
+    /// still apply, including the total body timeout set by [`timeout_send_body`].
     ///
-    /// This does not limit DNS resolution, TCP connection establishment, or the
-    /// SOCKS negotiation performed internally by the SOCKS library.
+    /// Socket buffering and partial writes mean this is not a total duration
+    /// for an application write. Reading from the request body, DNS, TCP
+    /// connection establishment and SOCKS negotiation are not covered.
     ///
-    /// Defaults to `None` (no per-write limit).
+    /// Defaults to `None`.
+    ///
+    /// [`timeout_send_body`]: ConfigBuilder::timeout_send_body
     pub fn timeout_per_write(mut self, v: Option<Duration>) -> Self {
         self.config().timeout_per_write = v;
         self

@@ -209,16 +209,16 @@ impl CurrentTime {
     }
 }
 
-/// Remaining phase budget and optional per-operation allowances.
+/// Remaining timeout and optional per-read and per-write timeouts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NextTimeout {
     /// Duration until next timeout.
     pub after: Duration,
     /// The reason reported when the remaining budget expires.
     pub reason: Timeout,
-    /// Fresh allowance for each read. Transports should use [`Self::for_read`].
+    /// Timeout for each read. See [`Self::for_read`].
     pub per_read: Option<Duration>,
-    /// Fresh allowance for each write. Transports should use [`Self::for_write`].
+    /// Timeout for each write. See [`Self::for_write`].
     pub per_write: Option<Duration>,
 }
 
@@ -234,14 +234,14 @@ impl Default for NextTimeout {
 }
 
 impl NextTimeout {
-    /// Cap this budget by the allowance for an individual transport read.
+    /// Limit the remaining timeout by the per-read timeout.
     ///
     /// Apply at the transport performing I/O, not at layers forwarding to another transport.
     pub fn for_read(self) -> Self {
         self.capped(self.per_read, Timeout::PerRead)
     }
 
-    /// Cap this budget by the allowance for an individual transport write.
+    /// Limit the remaining timeout by the per-write timeout.
     ///
     /// Apply at the transport performing I/O, not at layers forwarding to another transport.
     pub fn for_write(self) -> Self {
