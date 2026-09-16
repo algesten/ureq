@@ -113,7 +113,6 @@ impl Connection {
     }
 
     pub fn transmit_output(&mut self, amount: usize, timeout: NextTimeout) -> Result<(), Error> {
-        let timeout = timeout.for_write();
         // An already expired budget must fail here. Transports can't set a zero
         // socket timeout and would instead grant a short grace period per call.
         if timeout.after.is_zero() {
@@ -123,7 +122,6 @@ impl Connection {
     }
 
     pub fn maybe_await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
-        let timeout = timeout.for_read();
         if timeout.after.is_zero() {
             return Err(Error::Timeout(timeout.reason));
         }

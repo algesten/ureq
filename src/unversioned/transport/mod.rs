@@ -273,7 +273,9 @@ pub trait Transport: Debug + Send + Sync + 'static {
     ///
     /// The timeout should be used to abort the transmission if the amount can't be written in time.
     /// If that happens the transport must return an [`Error::Timeout`] instance.
-    /// Use [`NextTimeout::for_write`] to include the per-write allowance.
+    /// Before performing I/O, use [`NextTimeout::for_write`] to include the per-write allowance.
+    /// Transports forwarding to another transport must pass the timeout unchanged: a TLS write
+    /// may also need to read from the underlying transport.
     fn transmit_output(&mut self, amount: usize, timeout: NextTimeout) -> Result<(), Error>;
 
     /// Await input from the transport.
@@ -299,7 +301,9 @@ pub trait Transport: Debug + Send + Sync + 'static {
     /// 2. Followed by [`Buffers::input_appended()`] to report how many bytes were read.
     ///
     /// Returns `true` if it made progress, i.e. if it managed to fill the input buffer with any bytes.
-    /// Use [`NextTimeout::for_read`] to include the per-read allowance.
+    /// Before performing I/O, use [`NextTimeout::for_read`] to include the per-read allowance.
+    /// Transports forwarding to another transport must pass the timeout unchanged: a TLS read
+    /// may also need to write to the underlying transport.
     fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error>;
 
     /// Tell whether this transport is still functional. This must provide an accurate answer

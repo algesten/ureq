@@ -3,9 +3,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::config::Config;
-use crate::transport::{
-    Buffers, ConnectionDetails, Connector, LazyBuffers, NextTimeout, Transport,
-};
+use crate::transport::{Buffers, ConnectionDetails, Connector, LazyBuffers};
+use crate::transport::{NextTimeout, Transport};
 use crate::unversioned::resolver::DefaultResolver;
 use crate::{Agent, Error, Timeout};
 
@@ -46,6 +45,7 @@ impl Transport for ScriptTransport {
     }
 
     fn transmit_output(&mut self, _: usize, timeout: NextTimeout) -> Result<(), Error> {
+        let timeout = timeout.for_write().check()?;
         let mut state = self.script.0.lock().unwrap();
         state.writes.push(timeout);
         if state.fail_write {
@@ -55,6 +55,7 @@ impl Transport for ScriptTransport {
     }
 
     fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
+        let timeout = timeout.for_read().check()?;
         let mut state = self.script.0.lock().unwrap();
         state.reads.push(timeout);
         if state.fail_read {

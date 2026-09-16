@@ -235,11 +235,15 @@ impl Default for NextTimeout {
 
 impl NextTimeout {
     /// Cap this budget by the allowance for an individual transport read.
+    ///
+    /// Apply at the transport performing I/O, not at layers forwarding to another transport.
     pub fn for_read(self) -> Self {
         self.capped(self.per_read, Timeout::PerRead)
     }
 
     /// Cap this budget by the allowance for an individual transport write.
+    ///
+    /// Apply at the transport performing I/O, not at layers forwarding to another transport.
     pub fn for_write(self) -> Self {
         self.capped(self.per_write, Timeout::PerWrite)
     }

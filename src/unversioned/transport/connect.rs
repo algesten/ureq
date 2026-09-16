@@ -129,7 +129,7 @@ impl<In: Transport> Connector<In> for ConnectProxyConnector {
         let mut transport = w.into_inner();
 
         let response = loop {
-            let made_progress = transport.maybe_await_input(details.timeout.for_read().check()?)?;
+            let made_progress = transport.maybe_await_input(details.timeout)?;
             let buffers = transport.buffers();
             let input = buffers.input();
             let Some((used_input, response)) = try_parse_response::<20>(input)? else {

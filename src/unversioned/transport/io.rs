@@ -1,5 +1,8 @@
 use std::io;
 
+use crate::Timeout;
+
+use super::time::Duration;
 use super::{NextTimeout, Transport};
 
 /// Helper to turn a [`Transport`] into a std::io [`Read`](io::Read) and [`Write`](io::Write).
@@ -16,7 +19,11 @@ impl<T: Transport> TransportAdapter<T> {
     /// Creates a new adapter
     pub fn new(transport: T) -> Self {
         Self {
-            timeout: NextTimeout::default(),
+            timeout: NextTimeout {
+                after: Duration::NotHappening,
+                reason: Timeout::Global,
+                ..NextTimeout::default()
+            },
             transport,
         }
     }
@@ -50,7 +57,7 @@ impl<T: Transport> TransportAdapter<T> {
 impl<T: Transport> io::Read for TransportAdapter<T> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.transport
-            .maybe_await_input(self.timeout.for_read().check().map_err(|e| e.into_io())?)
+            .maybe_await_input(self.timeout)
             .map_err(|e| e.into_io())?;
         let input = self.transport.buffers().input();
 
@@ -69,10 +76,7 @@ impl<T: Transport> io::Write for TransportAdapter<T> {
         let max = buf.len().min(output.len());
         output[..max].copy_from_slice(&buf[..max]);
         self.transport
-            .transmit_output(
-                max,
-                self.timeout.for_write().check().map_err(|e| e.into_io())?,
-            )
+            .transmit_output(max, self.timeout)
             .map_err(|e| e.into_io())?;
 
         Ok(max)

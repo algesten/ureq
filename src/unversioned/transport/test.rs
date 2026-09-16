@@ -828,7 +828,8 @@ impl Transport for TestTransport {
         &mut self.buffers
     }
 
-    fn transmit_output(&mut self, amount: usize, _timeout: NextTimeout) -> Result<(), Error> {
+    fn transmit_output(&mut self, amount: usize, timeout: NextTimeout) -> Result<(), Error> {
+        timeout.for_write().check()?;
         let output = &self.buffers.output()[..amount];
         if self.tx.send(output.to_vec()).is_err() {
             self.connected_tx = false;
@@ -837,6 +838,7 @@ impl Transport for TestTransport {
     }
 
     fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
+        let timeout = timeout.for_read().check()?;
         if !self.connected_rx {
             return Err(Error::Io(io::Error::new(
                 io::ErrorKind::UnexpectedEof,

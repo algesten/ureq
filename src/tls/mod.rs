@@ -470,6 +470,7 @@ mod test {
                 _amount: usize,
                 timeout: NextTimeout,
             ) -> Result<(), Error> {
+                let timeout = timeout.for_write().check()?;
                 assert_eq!(timeout, self.timeout.for_write());
                 if self.fail_read {
                     Ok(())
@@ -479,6 +480,7 @@ mod test {
             }
 
             fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
+                let timeout = timeout.for_read().check()?;
                 assert_eq!(timeout, self.timeout.for_read());
                 Err(Error::Timeout(timeout.reason))
             }
