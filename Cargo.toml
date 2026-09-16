@@ -79,7 +79,7 @@ rustls-platform-verifier = { version = "0.7.0", optional = true, default-feature
 webpki-roots = { version = "1.0.0", optional = true, default-features = false }
 webpki-root-certs = { version = "1.0.0", optional = true, default-features = false }
 
-rustls = { version = "0.23.22", optional = true, default-features = false, features = ["logging", "std", "tls12"] }
+rustls = { version = "0.23.45", optional = true, default-features = false, features = ["logging", "std", "tls12"] }
 native-tls = { version = "0.2.14", optional = true, default-features = false }
 der = { version = "0.8.0", optional = true, default-features = false, features = ["pem", "std"] }
 
@@ -110,7 +110,7 @@ auto-args = "0.3.0"
 serde = { version = "1.0.204", features = ["std", "derive"] }
 assert_no_alloc = { version = "1.1.2", default-features = false }
 # Enable aws-lc-rs for tests so we can demonstrate using ureq without compiling ring.
-rustls = { version = "0.23", features = ["aws-lc-rs"] }
+rustls = { version = "0.23.45", features = ["aws-lc-rs"] }
 
 [[example]]
 name = "cureq"
