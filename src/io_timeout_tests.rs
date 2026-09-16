@@ -240,3 +240,70 @@ fn connect_proxy_negotiation_uses_both_limits() {
     assert_eq!(state.reads[0].reason, Timeout::PerRead);
     assert_eq!(*state.reads[0].after, Duration::from_secs(2));
 }
+
+#[test]
+fn layered_read_uses_write_allowance_for_protocol_output() {
+    use crate::transport::TransportAdapter;
+    use std::io::Write;
+
+    // TLS reads may emit protocol writes (for example, a KeyUpdate response).
+    struct ReadWrites(TransportAdapter<ScriptTransport>);
+
+    impl std::fmt::Debug for ReadWrites {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str("ReadWrites")
+        }
+    }
+
+    impl Transport for ReadWrites {
+        fn buffers(&mut self) -> &mut dyn Buffers {
+            self.0.get_mut().buffers()
+        }
+
+        fn transmit_output(&mut self, amount: usize, timeout: NextTimeout) -> Result<(), Error> {
+            self.0
+                .get_mut()
+                .transmit_output(amount, timeout.for_write())
+        }
+
+        fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
+            self.0.set_timeout(timeout);
+            self.0.write_all(b"protocol output")?;
+            self.0.get_mut().await_input(timeout.for_read())
+        }
+
+        fn is_open(&mut self) -> bool {
+            true
+        }
+    }
+
+    #[derive(Debug)]
+    struct Layered(Script);
+
+    impl Connector for Layered {
+        type Out = ReadWrites;
+
+        fn connect(
+            &self,
+            details: &ConnectionDetails,
+            _: Option<()>,
+        ) -> Result<Option<Self::Out>, Error> {
+            Ok(Some(ReadWrites(TransportAdapter::new(
+                self.0.connect(details, None)?.unwrap(),
+            ))))
+        }
+    }
+
+    let state = Arc::new(Mutex::new(State::default()));
+    state.lock().unwrap().responses.push_back(HEADERS);
+    let agent = Agent::with_parts(
+        config(),
+        Layered(Script(state.clone())),
+        DefaultResolver::default(),
+    );
+    let _response = agent.get("http://127.0.0.1/").call().unwrap();
+    let state = state.lock().unwrap();
+    let protocol_write = state.writes.last().unwrap();
+    assert_eq!(protocol_write.reason, Timeout::PerWrite);
+    assert_eq!(*protocol_write.after, Duration::from_secs(7));
+}
