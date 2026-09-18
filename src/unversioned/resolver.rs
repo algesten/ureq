@@ -180,6 +180,7 @@ mod test {
                 NextTimeout {
                     after: Duration::NotHappening,
                     reason: crate::Timeout::Global,
+                    ..NextTimeout::default()
                 },
             )
             .unwrap_err();

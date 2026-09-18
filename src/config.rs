@@ -169,6 +169,8 @@ pub struct Config {
     accept: AutoHeaderValue,
     accept_encoding: AutoHeaderValue,
     timeouts: Timeouts,
+    timeout_per_read: Option<Duration>,
+    timeout_per_write: Option<Duration>,
     max_response_header_size: usize,
     input_buffer_size: usize,
     output_buffer_size: usize,
@@ -207,6 +209,8 @@ impl Config {
             accept: _,
             accept_encoding: _,
             timeouts: _,
+            timeout_per_read: _,
+            timeout_per_write: _,
             max_response_header_size: _,
             allow_non_standard_methods: _,
             middleware: _,
@@ -403,7 +407,32 @@ impl Config {
         &self.accept_encoding
     }
 
-    /// All configured timeouts.
+    /// Max duration for each transport read
+    ///
+    /// See [`timeout_per_read`] for details.
+    ///
+    /// Defaults to `None`.
+    ///
+    /// [`timeout_per_read`]: ConfigBuilder::timeout_per_read
+    pub fn timeout_per_read(&self) -> Option<Duration> {
+        self.timeout_per_read
+    }
+
+    /// Max duration for each transport write
+    ///
+    /// See [`timeout_per_write`] for details.
+    ///
+    /// Defaults to `None`.
+    ///
+    /// [`timeout_per_write`]: ConfigBuilder::timeout_per_write
+    pub fn timeout_per_write(&self) -> Option<Duration> {
+        self.timeout_per_write
+    }
+
+    /// Total and phase timeout budgets.
+    ///
+    /// Per-operation limits are available via [`Self::timeout_per_read`] and
+    /// [`Self::timeout_per_write`].
     pub fn timeouts(&self) -> Timeouts {
         self.timeouts
     }
@@ -739,6 +768,42 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
         self
     }
 
+    /// Max duration for each transport read
+    ///
+    /// This covers headers, body, TLS handshakes and HTTP CONNECT responses.
+    /// The timeout restarts for each read. Phase, per-call and global timeouts
+    /// still apply, including the total body timeout set by [`timeout_recv_body`].
+    ///
+    /// This applies to transport I/O, not time spent between application reads
+    /// or reading buffered data. DNS, TCP connection establishment and SOCKS
+    /// negotiation are not covered.
+    ///
+    /// Defaults to `None`.
+    ///
+    /// [`timeout_recv_body`]: ConfigBuilder::timeout_recv_body
+    pub fn timeout_per_read(mut self, v: Option<Duration>) -> Self {
+        self.config().timeout_per_read = v;
+        self
+    }
+
+    /// Max duration for each transport write
+    ///
+    /// This covers headers, body, TLS handshakes and HTTP CONNECT requests.
+    /// The timeout restarts for each write. Phase, per-call and global timeouts
+    /// still apply, including the total body timeout set by [`timeout_send_body`].
+    ///
+    /// Socket buffering and partial writes mean this is not a total duration
+    /// for an application write. Reading from the request body, DNS, TCP
+    /// connection establishment and SOCKS negotiation are not covered.
+    ///
+    /// Defaults to `None`.
+    ///
+    /// [`timeout_send_body`]: ConfigBuilder::timeout_send_body
+    pub fn timeout_per_write(mut self, v: Option<Duration>) -> Self {
+        self.config().timeout_per_write = v;
+        self
+    }
+
     /// Max duration for doing the DNS lookup when establishing the connection
     ///
     /// Because most platforms do not have an async syscall for looking up
@@ -955,6 +1020,8 @@ impl Default for Config {
             accept: AutoHeaderValue::default(),
             accept_encoding: AutoHeaderValue::default(),
             timeouts: Timeouts::default(),
+            timeout_per_read: None,
+            timeout_per_write: None,
             max_response_header_size: 64 * 1024,
             input_buffer_size: 128 * 1024,
             output_buffer_size: 128 * 1024,
@@ -1029,6 +1096,8 @@ impl fmt::Debug for Config {
             .field("save_redirect_history", &self.save_redirect_history)
             .field("user_agent", &self.user_agent)
             .field("timeouts", &self.timeouts)
+            .field("timeout_per_read", &self.timeout_per_read)
+            .field("timeout_per_write", &self.timeout_per_write)
             .field("max_response_header_size", &self.max_response_header_size)
             .field("input_buffer_size", &self.input_buffer_size)
             .field("output_buffer_size", &self.output_buffer_size)

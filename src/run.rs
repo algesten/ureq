@@ -47,7 +47,7 @@ pub(crate) fn run(
 
     let timeouts = config.timeouts();
 
-    let mut timings = CallTimings::new(timeouts, CurrentTime::default());
+    let mut timings = CallTimings::new(timeouts, CurrentTime::default()).with_io_timeouts(&config);
 
     let mut call = Call::new(request)?;
 
@@ -447,8 +447,11 @@ fn await_100(
         let timeout = timings.next_timeout(Timeout::Await100);
 
         if timeout.after.is_zero() {
-            // Stop waiting for 100-continue.
-            break;
+            if timeout.reason == Timeout::Await100 {
+                // Stop waiting for 100-continue.
+                break;
+            }
+            return Err(Error::Timeout(timeout.reason));
         }
 
         match connection.maybe_await_input(timeout) {
@@ -464,7 +467,7 @@ fn await_100(
                     break;
                 }
             }
-            Err(Error::Timeout(_)) => {
+            Err(Error::Timeout(Timeout::Await100)) => {
                 // If we get a timeout while waiting for input, that is not an error,
                 // we progress to send the request body.
                 break;

@@ -22,6 +22,7 @@ impl<T: Transport> TransportAdapter<T> {
             timeout: NextTimeout {
                 after: Duration::NotHappening,
                 reason: Timeout::Global,
+                ..NextTimeout::default()
             },
             transport,
         }

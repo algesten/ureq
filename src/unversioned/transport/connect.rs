@@ -85,6 +85,7 @@ impl<In: Transport> Connector<In> for ConnectProxyConnector {
         let proxy = details.config.proxy().unwrap();
 
         let mut w = TransportAdapter::new(transport);
+        w.set_timeout(details.timeout);
 
         target.ensure_valid_url()?;
 
