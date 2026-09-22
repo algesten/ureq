@@ -1262,7 +1262,7 @@ pub(crate) mod test {
 
         for provider in [
             tls::TlsProvider::Rustls,
-            #[cfg(feature = "native-tls")]
+            #[cfg(feature = "native-tls-no-default")]
             tls::TlsProvider::NativeTls,
         ] {
             let proxy = Proxy::new("https://proxy.test/https-connect-proxy").unwrap();

@@ -46,8 +46,8 @@ native-tls-webpki-roots = ["dep:webpki-root-certs"]
 # certs manually.
 rustls-no-provider = ["dep:rustls", "_tls", "_rustls"]
 
-# When webpki-roots is disabled, you have to enable `platform-verifier` or provide root
-# certs manually.
+# Without bundled roots, configure RootCerts::PlatformVerifier to use the native
+# trust store, or provide root certs manually. No platform-verifier feature is needed.
 native-tls-no-default = ["dep:native-tls", "dep:der", "_tls"]
 
 # Supported as long as native-tls supports this.

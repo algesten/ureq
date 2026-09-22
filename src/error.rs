@@ -101,7 +101,7 @@ pub enum Error {
     /// *Note:* The wrapped error struct is not considered part of ureq API.
     /// Breaking changes in that struct will not be reflected in ureq
     /// major versions.
-    #[cfg(feature = "native-tls")]
+    #[cfg(feature = "native-tls-no-default")]
     NativeTls(native_tls::Error),
 
     /// An error providing DER encoded certificates or private keys to Native-TLS.
@@ -109,7 +109,7 @@ pub enum Error {
     /// *Note:* The wrapped error struct is not considered part of ureq API.
     /// Breaking changes in that struct will not be reflected in ureq
     /// major versions.
-    #[cfg(feature = "native-tls")]
+    #[cfg(feature = "native-tls-no-default")]
     Der(der::Error),
 
     /// An error with the cookies.
@@ -248,9 +248,9 @@ impl fmt::Display for Error {
             Error::Pem(v) => write!(f, "PEM: {:?}", v),
             #[cfg(feature = "_rustls")]
             Error::Rustls(v) => write!(f, "rustls: {}", v),
-            #[cfg(feature = "native-tls")]
+            #[cfg(feature = "native-tls-no-default")]
             Error::NativeTls(v) => write!(f, "native-tls: {}", v),
-            #[cfg(feature = "native-tls")]
+            #[cfg(feature = "native-tls-no-default")]
             Error::Der(v) => write!(f, "der: {}", v),
             #[cfg(feature = "cookies")]
             Error::Cookie(v) => write!(f, "cookie: {}", v),
@@ -297,14 +297,14 @@ impl From<rustls::Error> for Error {
     }
 }
 
-#[cfg(feature = "native-tls")]
+#[cfg(feature = "native-tls-no-default")]
 impl From<native_tls::Error> for Error {
     fn from(value: native_tls::Error) -> Self {
         Self::NativeTls(value)
     }
 }
 
-#[cfg(feature = "native-tls")]
+#[cfg(feature = "native-tls-no-default")]
 impl From<der::Error> for Error {
     fn from(value: der::Error) -> Self {
         Self::Der(value)

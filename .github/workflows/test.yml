@@ -88,6 +88,7 @@ jobs:
           - json
           - multipart
           - native-tls
+          - native-tls-no-default
     env:
       RUST_BACKTRACE: "1"
       RUSTFLAGS: "-D dead_code -D unused-variables -D unused"
@@ -118,6 +119,7 @@ jobs:
           - json
           - multipart
           - native-tls
+          - native-tls-no-default
           - rustls-no-provider
     env:
       RUST_BACKTRACE: "1"
@@ -133,6 +135,22 @@ jobs:
         run: |
           cargo +${{steps.toolchain.outputs.name}} test \
           --no-default-features --features "_test ${{ matrix.feature }}"
+
+  native_tls_handshake:
+    name: Native TLS handshake
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        feature: [native-tls, native-tls-no-default]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      # Do not enable _test: its transport bypasses the real TLS connector.
+      - name: Test native TLS connector
+        run: cargo test --no-default-features --features ${{ matrix.feature }} --test native_tls
 
   cargo-deny:
     name: cargo-deny

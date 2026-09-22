@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Fix native-tls-no-default enabling dependencies without enabling the TLS connector
   * Add timeout_per_read and timeout_per_write independently of total phase budgets
 
 # 3.4.2

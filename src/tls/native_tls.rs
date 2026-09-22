@@ -15,7 +15,7 @@ use super::TlsConfig;
 
 /// Wrapper for TLS using native-tls.
 ///
-/// Requires feature flag **native-tls**.
+/// Requires feature flag **native-tls** or **native-tls-no-default**.
 #[derive(Default)]
 pub struct NativeTlsConnector {
     connector: OnceLock<CachedNativeTlsConnector>,
