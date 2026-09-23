@@ -39,10 +39,13 @@ impl<In: Transport> Connector<In> for TestConnector {
         // Let ConnectProxyConnector handle the target connection. Its recursive
         // connection to the proxy uses a config without a proxy and is intercepted
         // by this connector, keeping the entire test in memory.
-        let use_connect_proxy = config.connect_proxy_uri().is_some()
-            && config
-                .proxy()
-                .is_some_and(|proxy| !proxy.is_no_proxy(details.uri));
+        let proxy = if details.traffic_type == &http::uri::Scheme::HTTP {
+            config.proxy_http()
+        } else {
+            config.proxy_https()
+        };
+        let use_connect_proxy =
+            proxy.is_some_and(|p| p.protocol().is_connect() && !p.is_no_proxy(details.uri));
         if use_connect_proxy {
             trace!("Defer to CONNECT proxy");
             return Ok(None);
