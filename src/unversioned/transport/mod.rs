@@ -15,7 +15,8 @@
 //! * TCP Sockets
 //! * SOCKS-proxy sockets
 //! * HTTPS/TLS using rustls (feature flag **rustls**)
-//! * HTTPS/TLS using native-tls (feature flag **native-tls** + [config](crate::tls::TlsProvider::NativeTls))
+//! * HTTPS/TLS using native-tls (feature flag **native-tls** or **native-tls-no-default**
+//!   + [config](crate::tls::TlsProvider::NativeTls))
 //!
 //! The [`Connector`] trait anticipates a chain of connectors that each decide
 //! whether to help perform the connection or not. It is for instance possible to make a
@@ -61,7 +62,7 @@ pub use self::socks::SocksConnector;
 #[cfg(feature = "_rustls")]
 pub use crate::tls::rustls::RustlsConnector;
 
-#[cfg(feature = "native-tls")]
+#[cfg(feature = "native-tls-no-default")]
 pub use crate::tls::native_tls::NativeTlsConnector;
 
 pub mod time;
@@ -394,7 +395,7 @@ impl Default for DefaultConnector {
         ));
 
         // As a fallback if rustls isn't enabled, use native-tls
-        #[cfg(feature = "native-tls")]
+        #[cfg(feature = "native-tls-no-default")]
         let inner = inner.chain(NativeTlsConnector::default());
 
         // Panic if the config calls for native-tls, the uri scheme is https and that

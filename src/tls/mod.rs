@@ -11,7 +11,7 @@ pub use cert::{Certificate, PemItem, PrivateKey, parse_pem};
 #[cfg(feature = "_rustls")]
 pub(crate) mod rustls;
 
-#[cfg(feature = "native-tls")]
+#[cfg(feature = "native-tls-no-default")]
 pub(crate) mod native_tls;
 
 /// Setting for which TLS provider to use.
@@ -35,8 +35,10 @@ pub enum TlsProvider {
     /// [Native-TLS](https://crates.io/crates/native-tls) for cases where it's important to
     /// use the TLS libraries installed on the host running ureq.
     ///
-    /// Requires the feature flag **native-tls** and that using an [`Agent`](crate::Agent) with
-    /// this config option set in the [`TlsConfig`].
+    /// Requires **native-tls** or **native-tls-no-default** and an [`Agent`](crate::Agent)
+    /// with this provider set in its [`TlsConfig`]. With **native-tls-no-default**, root
+    /// certificates must also be configured explicitly, for example with
+    /// [`RootCerts::PlatformVerifier`].
     ///
     /// The setting is never picked up automatically.
     NativeTls,
@@ -49,7 +51,7 @@ impl TlsProvider {
                 cfg!(feature = "_rustls")
             }
             TlsProvider::NativeTls => {
-                cfg!(feature = "native-tls")
+                cfg!(feature = "native-tls-no-default")
             }
         }
     }
@@ -442,7 +444,7 @@ mod test {
         assert_no_alloc(|| c.clone());
     }
 
-    #[cfg(any(feature = "_rustls", feature = "native-tls"))]
+    #[cfg(any(feature = "_rustls", feature = "native-tls-no-default"))]
     mod handshake {
         use std::sync::Arc;
 
@@ -564,7 +566,7 @@ mod test {
         }
 
         #[test]
-        #[cfg(feature = "native-tls")]
+        #[cfg(feature = "native-tls-no-default")]
         fn native_tls_uses_connection_timeout() {
             let tls_config = TlsConfig::builder()
                 .provider(TlsProvider::NativeTls)
