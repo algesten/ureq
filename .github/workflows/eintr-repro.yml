@@ -1,0 +1,42 @@
+name: EINTR reproduction
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/eintr-repro.yml
+      - repro/eintr/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reproduce:
+    name: Linux EINTR before and after
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      BASELINE: 8fcd72a7881354400c432157e1a60222d61efc5c
+      FIXED: 4ad65d551e5ff87a8c340160cd2c1805e4dd0425
+      RUST_BACKTRACE: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check repro formatting
+        run: cargo fmt --check --manifest-path repro/eintr/Cargo.toml
+      - name: Prepare baseline and PR source
+        run: |
+          git fetch --no-tags --depth=1 https://github.com/algesten/ureq.git "$BASELINE" "$FIXED"
+          git worktree add --detach "$RUNNER_TEMP/ureq-eintr-baseline" "$BASELINE"
+          git worktree add --detach "$RUNNER_TEMP/ureq-eintr-fixed" "$FIXED"
+      - name: Verify failure, controls, and proposed fix
+        run: |
+          python3 repro/eintr/check.py \
+            "$RUNNER_TEMP/ureq-eintr-baseline" \
+            "$RUNNER_TEMP/ureq-eintr-fixed"

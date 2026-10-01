@@ -1,0 +1,14 @@
+[package]
+name = "ureq-eintr-repro"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+default-run = "ureq-eintr-repro"
+
+[dependencies]
+libc = "0.2"
+ureq = { version = "=3.4.2", default-features = false }
+
+[patch.crates-io]
+ureq = { path = "../.." }
