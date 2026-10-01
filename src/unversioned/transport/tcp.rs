@@ -304,26 +304,17 @@ impl Transport for TcpTransport {
     }
 }
 
-/// Read into `buf`, and if a timeout is set and a signal interrupts the read, try again.
+/// Retry reads interrupted by a signal (EINTR) when a timeout applies.
 ///
-/// On Linux, when a socket has a read timeout (SO_RCVTIMEO), a signal that interrupts the read
-/// makes it fail with EINTR instead of carrying on. That includes a signal whose handler asked
-/// for SA_RESTART (see signal(7)), and even one that nothing handles if it still reaches this
-/// thread, like the SIGCHLD from a child process that another thread started with
-/// `std::process::Command`. Without this retry, that can fail the whole request.
-///
-/// Each retry only waits for what is left of `timeout`, so retries after EINTR cannot keep the
-/// read going past it. Once nothing is left, this returns `TimedOut`.
-///
-/// When there is no timeout, an interrupted read is not retried and the EINTR is returned as
-/// is. In that case the kernel already carries on with the read by itself, unless the signal's
-/// handler was installed without SA_RESTART. That means the program asked for the read to be
-/// interrupted, so we let it be.
+/// Linux does not restart socket reads with SO_RCVTIMEO, even with SA_RESTART.
+/// Retries use the remaining timeout; exhausted budgets return `TimedOut`.
+/// Without a timeout, preserve `Interrupted` for intentional signal interruptions.
+/// See <https://github.com/algesten/ureq/pull/1205> for the signal details.
 fn read_retrying_interrupts<R: Read>(
     reader: &mut R,
     buf: &mut [u8],
     timeout: Option<time::Duration>,
-    elapsed: impl Fn() -> time::Duration,
+    mut elapsed: impl FnMut() -> time::Duration,
     mut set_timeout: impl FnMut(&mut R, time::Duration) -> io::Result<()>,
 ) -> io::Result<usize> {
     loop {
@@ -554,13 +545,13 @@ mod test {
                 self.0.next().unwrap()
             }
         }
-        let elapsed = std::cell::RefCell::new(elapsed.into_iter());
+        let mut elapsed = elapsed.into_iter();
         let mut timeouts = vec![];
         let result = read_retrying_interrupts(
             &mut Script(outcomes.into_iter()),
             &mut [0; 8],
             timeout,
-            || elapsed.borrow_mut().next().unwrap(),
+            || elapsed.next().unwrap(),
             |_, left| {
                 timeouts.push(left);
                 Ok(())
