@@ -473,7 +473,7 @@ mod test {
                 timeout: NextTimeout,
             ) -> Result<(), Error> {
                 let timeout = timeout.for_write().check()?;
-                assert_eq!(timeout, self.timeout.for_write());
+                assert_remaining_timeout(timeout, self.timeout.for_write());
                 if self.fail_read {
                     Ok(())
                 } else {
@@ -483,13 +483,23 @@ mod test {
 
             fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
                 let timeout = timeout.for_read().check()?;
-                assert_eq!(timeout, self.timeout.for_read());
+                assert_remaining_timeout(timeout, self.timeout.for_read());
                 Err(Error::Timeout(timeout.reason))
             }
 
             fn is_open(&mut self) -> bool {
                 true
             }
+        }
+
+        fn assert_remaining_timeout(actual: NextTimeout, original: NextTimeout) {
+            assert_eq!(actual.reason, original.reason);
+            assert_eq!(actual.per_read, original.per_read);
+            assert_eq!(actual.per_write, original.per_write);
+            assert!(
+                actual.after <= original.after,
+                "remaining {actual:?} exceeded the original {original:?}"
+            );
         }
 
         fn check_timeout(connector: impl Connector<TimeoutTransport>, tls_config: TlsConfig) {
