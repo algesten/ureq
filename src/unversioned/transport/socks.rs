@@ -47,20 +47,15 @@ impl<In: Transport> Connector<In> for SocksConnector {
             return Ok(chained.map(Either::A));
         }
 
+        // Check if this host is not supposed to be proxied. A direct connection
+        // does not need the proxy, so do this before resolving it.
+        if proxy.is_no_proxy(details.uri) {
+            return Ok(None);
+        }
+
         let proxy_addrs = details
             .resolver
             .resolve(proxy.uri(), details.config, details.timeout)?;
-
-        // Check if this host is not supposed to be proxied.
-        let is_no_proxy = details
-            .config
-            .proxy()
-            .map(|p| p.is_no_proxy(details.uri))
-            .unwrap_or(false);
-
-        if is_no_proxy {
-            return Ok(None);
-        }
 
         let stream = if proxy.resolve_target() {
             // The target is already resolved by run().
@@ -196,5 +191,72 @@ fn connect_proxy<'a, T: ToTargetAddr + 'a>(
 impl fmt::Debug for SocksConnector {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SocksConnector").finish()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::io::{Read, Write};
+    use std::net::{IpAddr, TcpListener};
+    use std::thread;
+    use std::time::Duration;
+
+    use super::*;
+    use crate::Agent;
+    use crate::config::Config;
+    use crate::http::Uri;
+    use crate::transport::TcpConnector;
+    use crate::unversioned::resolver::Resolver;
+
+    // Resolves IP addresses only, so no test depends on DNS.
+    #[derive(Debug)]
+    struct IpOnly;
+
+    impl Resolver for IpOnly {
+        fn resolve(
+            &self,
+            uri: &Uri,
+            _: &Config,
+            _: NextTimeout,
+        ) -> Result<ResolvedSocketAddrs, Error> {
+            let (host, port) = uri.host_port();
+            let ip: IpAddr = host.parse().map_err(|_| Error::HostNotFound)?;
+            let mut addrs = self.empty();
+            addrs.push(SocketAddr::new(ip, port));
+            Ok(addrs)
+        }
+    }
+
+    // SOCKS, then plain TCP, without the in-memory transport of the _test feature.
+    fn agent(proxy: Proxy, timeout_global: Option<Duration>) -> Agent {
+        let config = Agent::config_builder()
+            .proxy(Some(proxy))
+            .timeout_global(timeout_global)
+            .build();
+        let connector = ().chain(SocksConnector::default()).chain(TcpConnector::default());
+        Agent::with_parts(config, connector, IpOnly)
+    }
+
+    fn respond_ok(stream: &mut TcpStream) {
+        let _ = stream.read(&mut [0; 4096]);
+        let response = b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok";
+        stream.write_all(response).unwrap();
+    }
+
+    #[test]
+    fn no_proxy_goes_direct_without_resolving_proxy() {
+        let server = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/", server.local_addr().unwrap());
+        thread::spawn(move || respond_ok(&mut server.accept().unwrap().0));
+
+        // IpOnly cannot resolve the proxy, like a proxy name that is not in DNS.
+        let proxy = Proxy::builder(ProxyProtocol::Socks5)
+            .host("proxy.invalid")
+            .no_proxy("127.0.0.1")
+            .build()
+            .unwrap();
+
+        let mut response = agent(proxy, None).get(&url).call().unwrap();
+        assert_eq!(response.body_mut().read_to_string().unwrap(), "ok");
     }
 }

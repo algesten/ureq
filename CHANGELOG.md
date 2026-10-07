@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Check NO_PROXY before resolving a SOCKS proxy, so excluded hosts connect directly
   * Clarify timeout budgets, phase boundaries, and proxy DNS #1213
   * Bump minimum rustls version to 0.23.46 for security fixes #1208
   * Bound TLS handshake I/O by the remaining connect/global timeout #1208
