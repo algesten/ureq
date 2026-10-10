@@ -191,6 +191,49 @@ impl Agent {
         self.jar.lock()
     }
 
+    /// Shut down the agent, interrupting its requests.
+    ///
+    /// Closes every connection the agent holds: the idle ones in the pool and the
+    /// ones in use by requests running on other threads (through clones of this
+    /// agent). A request blocked on a socket read or write returns an [`Error::Io`]
+    /// straight away, instead of waiting for the server or for a timeout. This
+    /// includes a response [`Body`] that is still being read.
+    ///
+    /// Clones share the pool, so this shuts down all of them. Afterwards they fail
+    /// new requests with an [`Error::Io`] of kind
+    /// [`NotConnected`](std::io::ErrorKind::NotConnected).
+    ///
+    /// Name resolution and a TCP connect in progress are not interrupted. They are
+    /// bounded by [`timeout_resolve`](ConfigBuilder::timeout_resolve) and
+    /// [`timeout_connect`](ConfigBuilder::timeout_connect). A connection that finishes
+    /// connecting after the shutdown fails like any other new request.
+    ///
+    /// Use this when the process must exit, or a worker must stop, without waiting
+    /// out the timeouts of requests in flight.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use std::thread;
+    /// use std::time::Duration;
+    ///
+    /// let agent = ureq::agent();
+    ///
+    /// let worker = {
+    ///     let agent = agent.clone();
+    ///     thread::spawn(move || agent.get("http://example.com/slow").call())
+    /// };
+    ///
+    /// thread::sleep(Duration::from_millis(100));
+    ///
+    /// // The worker's request fails with Error::Io instead of waiting for the server.
+    /// agent.shutdown();
+    /// assert!(worker.join().unwrap().is_err());
+    /// ```
+    pub fn shutdown(self) {
+        self.pool.shutdown();
+    }
+
     /// Run a [`http::Request<impl AsSendBody>`].
     ///
     /// Used to execute http crate [`http::Request`] directly on this agent.

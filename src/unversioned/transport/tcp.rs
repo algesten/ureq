@@ -1,6 +1,6 @@
 use std::io::{Read, Write};
-use std::net::{SocketAddr, TcpStream};
-use std::sync::Arc;
+use std::net::{Shutdown, SocketAddr, TcpStream};
+use std::sync::{Arc, Mutex, Weak};
 use std::{fmt, io, time};
 
 use crate::config::Config;
@@ -16,7 +16,9 @@ use super::{Buffers, ConnectionDetails, Connector, LazyBuffers, NextTimeout, Tra
 
 #[derive(Default)]
 /// Connector for regular TCP sockets.
-pub struct TcpConnector(());
+pub struct TcpConnector {
+    open: OpenSockets,
+}
 
 impl<In: Transport> Connector<In> for TcpConnector {
     type Out = Either<In, TcpTransport>;
@@ -44,8 +46,62 @@ impl<In: Transport> Connector<In> for TcpConnector {
 
         let buffers = LazyBuffers::new(config.input_buffer_size(), config.output_buffer_size());
         let transport = TcpTransport::new(stream, buffers);
+        self.open.track(&transport)?;
 
         Ok(Some(Either::B(transport)))
+    }
+
+    fn shutdown(&self) {
+        self.open.shutdown();
+    }
+}
+
+/// The sockets a connector has opened that are still in use.
+///
+/// A [`TcpTransport`] belongs to the call using it, which a connector cannot reach to
+/// close the socket. Instead the connector keeps a second handle to the socket here,
+/// so that [`Connector::shutdown()`] can shut it down. That interrupts a read or write
+/// blocked on the socket in any thread.
+#[derive(Debug, Default)]
+pub(crate) struct OpenSockets(Mutex<OpenSocketsInner>);
+
+#[derive(Debug, Default)]
+struct OpenSocketsInner {
+    /// Set once shut down. No sockets are accepted after that.
+    closed: bool,
+    /// Weak, so that dropping a transport closes its socket as before.
+    sockets: Vec<Weak<TcpStream>>,
+}
+
+impl OpenSockets {
+    /// Track the socket of a transport until the transport is dropped.
+    ///
+    /// Fails once shut down, so that a connection established while the shutdown
+    /// was in progress does not outlive it.
+    pub(crate) fn track(&self, transport: &TcpTransport) -> Result<(), Error> {
+        let mut inner = self.0.lock().unwrap();
+
+        if inner.closed {
+            return Err(Error::shut_down());
+        }
+
+        inner.sockets.retain(|s| s.strong_count() > 0);
+        inner.sockets.push(Arc::downgrade(&transport.stream));
+
+        Ok(())
+    }
+
+    /// Shut down every tracked socket and refuse new ones.
+    pub(crate) fn shutdown(&self) {
+        let mut inner = self.0.lock().unwrap();
+
+        inner.closed = true;
+
+        for stream in inner.sockets.drain(..).filter_map(|s| s.upgrade()) {
+            debug!("Shutdown: {:?}", stream.peer_addr().ok());
+            // An error means the socket is already closed or shut down.
+            let _ = stream.shutdown(Shutdown::Both);
+        }
     }
 }
 
@@ -207,7 +263,9 @@ fn try_connect_single(
 }
 
 pub struct TcpTransport {
-    stream: TcpStream,
+    /// Shared with [`OpenSockets`] (weakly) so the connector can shut the socket
+    /// down while this transport is in use. All I/O goes via `&TcpStream`.
+    stream: Arc<TcpStream>,
     buffers: LazyBuffers,
     timeout_write: Option<Duration>,
     timeout_read: Option<Duration>,
@@ -216,7 +274,7 @@ pub struct TcpTransport {
 impl TcpTransport {
     pub fn new(stream: TcpStream, buffers: LazyBuffers) -> TcpTransport {
         TcpTransport {
-            stream,
+            stream: Arc::new(stream),
             buffers,
             timeout_read: None,
             timeout_write: None,
@@ -256,7 +314,7 @@ impl Transport for TcpTransport {
         )?;
 
         let output = &self.buffers.output()[..amount];
-        match self.stream.write_all(output).normalize_would_block() {
+        match (&*self.stream).write_all(output).normalize_would_block() {
             Ok(v) => Ok(v),
             Err(e) if e.kind() == io::ErrorKind::TimedOut => Err(Error::Timeout(timeout.reason)),
             Err(e) => Err(e.into()),
@@ -277,8 +335,9 @@ impl Transport for TcpTransport {
 
         let input = self.buffers.input_append_buf();
         let started = time::Instant::now();
+        let mut stream = &*self.stream;
         let result = read_retrying_interrupts(
-            &mut self.stream,
+            &mut stream,
             input,
             timeout.not_zero().map(|t| *t),
             || started.elapsed(),
@@ -300,7 +359,7 @@ impl Transport for TcpTransport {
     }
 
     fn is_open(&mut self) -> bool {
-        probe_tcp_stream(&mut self.stream).unwrap_or(false)
+        probe_tcp_stream(&self.stream).unwrap_or(false)
     }
 }
 
@@ -334,7 +393,7 @@ fn read_retrying_interrupts<R: Read>(
     }
 }
 
-fn probe_tcp_stream(stream: &mut TcpStream) -> Result<bool, Error> {
+fn probe_tcp_stream(mut stream: &TcpStream) -> Result<bool, Error> {
     // Temporary do non-blocking IO
     stream.set_nonblocking(true)?;
 
@@ -609,6 +668,45 @@ mod test {
         let (result, timeouts) = scripted_read(vec![interrupted(), Ok(3)], None, vec![]);
         assert_eq!(result.unwrap_err().kind(), io::ErrorKind::Interrupted);
         assert!(timeouts.is_empty());
+    }
+
+    // A tracked socket blocked in a read on another thread is interrupted by
+    // shutdown, and no socket is tracked after it.
+    #[test]
+    fn open_sockets_shutdown_interrupts_read_and_refuses_new() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let connect = || {
+            let stream = TcpStream::connect(addr).unwrap();
+            let (peer, _) = listener.accept().unwrap();
+            (
+                TcpTransport::new(stream, LazyBuffers::new(1024, 1024)),
+                peer,
+            )
+        };
+
+        let open = OpenSockets::default();
+        let (mut transport, _peer) = connect();
+        open.track(&transport).unwrap();
+
+        let reader = std::thread::spawn(move || transport.await_input(NextTimeout::default()));
+        // Let the reader block.
+        std::thread::sleep(std::time::Duration::from_millis(50));
+
+        open.shutdown();
+
+        let result = reader.join().unwrap();
+        assert!(
+            matches!(result, Ok(false) | Err(Error::Io(_))),
+            "read must end without input: {result:?}"
+        );
+
+        let (late, _peer) = connect();
+        let result = open.track(&late);
+        assert!(
+            matches!(&result, Err(Error::Io(e)) if e.kind() == io::ErrorKind::NotConnected),
+            "{result:?}"
+        );
     }
 
     #[test]

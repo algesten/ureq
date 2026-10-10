@@ -1493,3 +1493,6 @@ pub(crate) mod test {
 
 #[cfg(test)]
 mod io_timeout_tests;
+
+#[cfg(test)]
+mod shutdown_tests;

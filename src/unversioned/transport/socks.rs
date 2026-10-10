@@ -13,7 +13,7 @@ use crate::util::UriExt;
 use super::ResolvedSocketAddrs;
 use super::chain::Either;
 
-use super::tcp::TcpTransport;
+use super::tcp::{OpenSockets, TcpTransport};
 use super::{ConnectionDetails, Connector, LazyBuffers, NextTimeout, Transport};
 
 /// Connector for SOCKS proxies.
@@ -23,7 +23,9 @@ use super::{ConnectionDetails, Connector, LazyBuffers, NextTimeout, Transport};
 /// The connector looks at the proxy settings in [`proxy`](crate::config::ConfigBuilder::proxy) to
 /// determine whether to attempt a proxy connection or not.
 #[derive(Default)]
-pub struct SocksConnector(());
+pub struct SocksConnector {
+    open: OpenSockets,
+}
 
 impl<In: Transport> Connector<In> for SocksConnector {
     type Out = Either<In, TcpTransport>;
@@ -83,8 +85,13 @@ impl<In: Transport> Connector<In> for SocksConnector {
             details.config.output_buffer_size(),
         );
         let transport = TcpTransport::new(stream, buffers);
+        self.open.track(&transport)?;
 
         Ok(Some(Either::B(transport)))
+    }
+
+    fn shutdown(&self) {
+        self.open.shutdown();
     }
 }
 

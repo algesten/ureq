@@ -207,6 +207,11 @@ impl Error {
         trace!("UnexpectedEof reason: {}", reason);
         io::Error::new(io::ErrorKind::UnexpectedEof, "Peer disconnected").into()
     }
+
+    /// The error for a connection refused after [`Agent::shutdown()`](crate::Agent::shutdown).
+    pub(crate) fn shut_down() -> Error {
+        io::Error::new(io::ErrorKind::NotConnected, "Agent is shut down").into()
+    }
 }
 
 pub(crate) fn is_wrapped_ureq_error(e: &io::Error) -> bool {

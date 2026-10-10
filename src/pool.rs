@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
-use std::fmt;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, Weak};
+use std::{fmt, mem};
 
 use http::Uri;
 use http::uri::{Authority, Scheme};
@@ -16,6 +17,8 @@ use crate::util::DebugAuthority;
 pub(crate) struct ConnectionPool {
     connector: Box<dyn Connector<Out = Box<dyn Transport>>>,
     pool: Arc<Mutex<Pool>>,
+    /// Set by [`shutdown()`](Self::shutdown). No connections are made after that.
+    closed: AtomicBool,
 }
 
 impl ConnectionPool {
@@ -23,6 +26,7 @@ impl ConnectionPool {
         ConnectionPool {
             connector,
             pool: Arc::new(Mutex::new(Pool::new(config))),
+            closed: AtomicBool::new(false),
         }
     }
 
@@ -32,6 +36,10 @@ impl ConnectionPool {
         max_idle_age: Duration,
         use_pool: bool,
     ) -> Result<Connection, Error> {
+        if self.closed.load(Ordering::SeqCst) {
+            return Err(Error::shut_down());
+        }
+
         let key = details.into();
 
         if use_pool {
@@ -70,6 +78,25 @@ impl ConnectionPool {
             .ok_or(Error::ConnectionFailed)?;
 
         Ok(transport)
+    }
+
+    /// Close every connection, idle or lent out, and refuse new ones.
+    ///
+    /// Lent out connections are closed via the connector, which keeps its own handle
+    /// to them. That interrupts calls blocked on them in other threads.
+    pub fn shutdown(&self) {
+        self.closed.store(true, Ordering::SeqCst);
+
+        self.connector.shutdown();
+
+        let idle = {
+            let mut pool = self.pool.lock().unwrap();
+            mem::take(&mut pool.lru)
+        };
+
+        // Dropping closes the idle connections. Done outside the lock in case
+        // a transport does blocking work when dropped.
+        drop(idle);
     }
 
     #[cfg(test)]
