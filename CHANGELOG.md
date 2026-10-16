@@ -1,5 +1,7 @@
 # Unreleased
 
+  * Bump minimum rustls version to 0.23.46 for security fixes #1208
+  * Bound TLS handshake I/O by the remaining connect/global timeout #1208
   * Retry socket reads interrupted by a signal (EINTR) when a timeout applies (technically breaking) #1205
   * Fix native-tls-no-default enabling dependencies without enabling the TLS connector
   * Add timeout_per_read and timeout_per_write independently of total phase budgets

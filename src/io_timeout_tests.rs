@@ -291,6 +291,7 @@ fn layered_read_uses_write_allowance_for_protocol_output() {
         ) -> Result<Option<Self::Out>, Error> {
             Ok(Some(ReadWrites(TransportAdapter::new(
                 self.0.connect(details, None)?.unwrap(),
+                details.current_time.clone(),
             ))))
         }
     }

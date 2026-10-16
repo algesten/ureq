@@ -1,8 +1,9 @@
 use std::io;
+use std::sync::Arc;
 
 use crate::Timeout;
 
-use super::time::Duration;
+use super::time::{Duration, Instant};
 use super::{NextTimeout, Transport};
 
 /// Helper to turn a [`Transport`] into a std::io [`Read`](io::Read) and [`Write`](io::Write).
@@ -12,18 +13,25 @@ use super::{NextTimeout, Transport};
 /// [`NativeTlsConnector`](crate::unversioned::transport::NativeTlsConnector).
 pub struct TransportAdapter<T: Transport = Box<dyn Transport>> {
     timeout: NextTimeout,
+    timeout_set_at: Instant,
+    current_time: Arc<dyn Fn() -> Instant + Send + Sync + 'static>,
     transport: T,
 }
 
 impl<T: Transport> TransportAdapter<T> {
-    /// Creates a new adapter
-    pub fn new(transport: T) -> Self {
+    /// Creates a new adapter using the provided clock.
+    pub fn new(
+        transport: T,
+        current_time: Arc<dyn Fn() -> Instant + Send + Sync + 'static>,
+    ) -> Self {
         Self {
             timeout: NextTimeout {
                 after: Duration::NotHappening,
                 reason: Timeout::Global,
                 ..NextTimeout::default()
             },
+            timeout_set_at: current_time(),
+            current_time,
             transport,
         }
     }
@@ -31,6 +39,13 @@ impl<T: Transport> TransportAdapter<T> {
     /// Set a new value of the timeout.
     pub fn set_timeout(&mut self, timeout: NextTimeout) {
         self.timeout = timeout;
+        self.timeout_set_at = (self.current_time)();
+    }
+
+    fn timeout_now(&self) -> NextTimeout {
+        let mut timeout = self.timeout;
+        timeout.after = remaining_after(timeout.after, self.timeout_set_at, (self.current_time)());
+        timeout
     }
 
     /// Reference to the adapted transport
@@ -54,10 +69,23 @@ impl<T: Transport> TransportAdapter<T> {
     }
 }
 
+fn remaining_after(after: Duration, started: Instant, now: Instant) -> Duration {
+    if after.is_not_happening() {
+        return after;
+    }
+    match (after, now.duration_since(started)) {
+        (Duration::Exact(limit), Duration::Exact(elapsed)) => {
+            Duration::Exact(limit.saturating_sub(elapsed))
+        }
+        (Duration::Exact(_), Duration::NotHappening) => Duration::from_secs(0),
+        (Duration::NotHappening, _) => Duration::NotHappening,
+    }
+}
+
 impl<T: Transport> io::Read for TransportAdapter<T> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.transport
-            .maybe_await_input(self.timeout)
+            .maybe_await_input(self.timeout_now())
             .map_err(|e| e.into_io())?;
         let input = self.transport.buffers().input();
 
@@ -76,7 +104,7 @@ impl<T: Transport> io::Write for TransportAdapter<T> {
         let max = buf.len().min(output.len());
         output[..max].copy_from_slice(&buf[..max]);
         self.transport
-            .transmit_output(max, self.timeout)
+            .transmit_output(max, self.timeout_now())
             .map_err(|e| e.into_io())?;
 
         Ok(max)
@@ -84,5 +112,119 @@ impl<T: Transport> io::Write for TransportAdapter<T> {
 
     fn flush(&mut self) -> io::Result<()> {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::Error;
+    use crate::transport::Buffers;
+    use crate::unversioned::transport::LazyBuffers;
+    use std::sync::Mutex;
+
+    #[derive(Debug)]
+    struct RecordingTransport {
+        buffers: LazyBuffers,
+        seen: Vec<Duration>,
+    }
+
+    impl Transport for RecordingTransport {
+        fn buffers(&mut self) -> &mut dyn Buffers {
+            &mut self.buffers
+        }
+
+        fn transmit_output(&mut self, _: usize, timeout: NextTimeout) -> Result<(), Error> {
+            let timeout = timeout.check()?;
+            self.seen.push(timeout.after);
+            Ok(())
+        }
+
+        fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
+            let timeout = timeout.check()?;
+            self.seen.push(timeout.after);
+            let buf = self.buffers.input_append_buf();
+            buf[0] = 1;
+            self.buffers.input_appended(1);
+            Ok(true)
+        }
+
+        fn is_open(&mut self) -> bool {
+            true
+        }
+    }
+
+    #[test]
+    fn adapter_io_uses_remaining_timeout_budget() {
+        use std::io::{Read, Write};
+
+        let clock = Arc::new(Mutex::new(Instant::now()));
+        let current_time = {
+            let clock = Arc::clone(&clock);
+            Arc::new(move || *clock.lock().unwrap())
+        };
+        let mut adapter = TransportAdapter::new(
+            RecordingTransport {
+                buffers: LazyBuffers::new(16, 16),
+                seen: Vec::new(),
+            },
+            current_time,
+        );
+        adapter.set_timeout(NextTimeout {
+            after: Duration::from_secs(2),
+            reason: Timeout::Connect,
+            ..NextTimeout::default()
+        });
+
+        adapter.write_all(&[1]).unwrap();
+        {
+            let mut now = *clock.lock().unwrap();
+            now = now + Duration::from_millis(750);
+            *clock.lock().unwrap() = now;
+        }
+        adapter.read_exact(&mut [0]).unwrap();
+        {
+            let mut now = *clock.lock().unwrap();
+            now = now + Duration::from_millis(750);
+            *clock.lock().unwrap() = now;
+        }
+        adapter.write_all(&[1]).unwrap();
+
+        let seen = adapter.into_inner().seen;
+        assert_eq!(seen[0], Duration::from_secs(2));
+        assert_eq!(seen[1], Duration::from_millis(1250));
+        assert_eq!(seen[2], Duration::from_millis(500));
+    }
+
+    #[test]
+    fn adapter_io_times_out_when_the_budget_is_spent() {
+        use std::io::Read;
+
+        let start = Instant::now();
+        let clock = Arc::new(Mutex::new(start));
+        let current_time = {
+            let clock = Arc::clone(&clock);
+            Arc::new(move || *clock.lock().unwrap())
+        };
+        let mut adapter = TransportAdapter::new(
+            RecordingTransport {
+                buffers: LazyBuffers::new(16, 16),
+                seen: Vec::new(),
+            },
+            current_time,
+        );
+        adapter.set_timeout(NextTimeout {
+            after: Duration::from_secs(1),
+            reason: Timeout::Connect,
+            ..NextTimeout::default()
+        });
+        *clock.lock().unwrap() = start + Duration::from_secs(1);
+
+        let error = adapter.read_exact(&mut [0]).unwrap_err();
+        let inner = error
+            .get_ref()
+            .and_then(|e| e.downcast_ref::<Error>())
+            .expect("ureq timeout");
+        assert!(matches!(inner, Error::Timeout(Timeout::Connect)));
     }
 }
