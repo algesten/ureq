@@ -61,10 +61,10 @@ impl<In: Transport> Connector<In> for NativeTlsConnector {
             .host_bare()
             .to_string();
 
-        let mut adapter = ErrorCapture::wrap(TransportAdapter::new(transport.boxed()));
-        adapter
-            .get_mut()
-            .set_current_time(details.current_time.clone());
+        let mut adapter = ErrorCapture::wrap(TransportAdapter::new(
+            transport.boxed(),
+            details.current_time.clone(),
+        ));
         adapter.get_mut().set_timeout(details.timeout);
         let capture = adapter.capture();
 

@@ -19,27 +19,21 @@ pub struct TransportAdapter<T: Transport = Box<dyn Transport>> {
 }
 
 impl<T: Transport> TransportAdapter<T> {
-    /// Creates a new adapter
-    pub fn new(transport: T) -> Self {
+    /// Creates a new adapter using the provided clock.
+    pub fn new(
+        transport: T,
+        current_time: Arc<dyn Fn() -> Instant + Send + Sync + 'static>,
+    ) -> Self {
         Self {
             timeout: NextTimeout {
                 after: Duration::NotHappening,
                 reason: Timeout::Global,
                 ..NextTimeout::default()
             },
-            timeout_set_at: Instant::now(),
-            current_time: Arc::new(Instant::now),
+            timeout_set_at: current_time(),
+            current_time,
             transport,
         }
-    }
-
-    /// Use the call clock so remaining timeout tracks the same time source as timings.
-    pub(crate) fn set_current_time(
-        &mut self,
-        current_time: Arc<dyn Fn() -> Instant + Send + Sync + 'static>,
-    ) {
-        self.current_time = current_time;
-        self.timeout_set_at = (self.current_time)();
     }
 
     /// Set a new value of the timeout.
@@ -124,9 +118,9 @@ impl<T: Transport> io::Write for TransportAdapter<T> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::Error;
     use crate::transport::Buffers;
     use crate::unversioned::transport::LazyBuffers;
-    use crate::Error;
     use std::sync::Mutex;
 
     #[derive(Debug)]
@@ -169,11 +163,13 @@ mod test {
             let clock = Arc::clone(&clock);
             Arc::new(move || *clock.lock().unwrap())
         };
-        let mut adapter = TransportAdapter::new(RecordingTransport {
-            buffers: LazyBuffers::new(16, 16),
-            seen: Vec::new(),
-        });
-        adapter.set_current_time(current_time);
+        let mut adapter = TransportAdapter::new(
+            RecordingTransport {
+                buffers: LazyBuffers::new(16, 16),
+                seen: Vec::new(),
+            },
+            current_time,
+        );
         adapter.set_timeout(NextTimeout {
             after: Duration::from_secs(2),
             reason: Timeout::Connect,
@@ -210,11 +206,13 @@ mod test {
             let clock = Arc::clone(&clock);
             Arc::new(move || *clock.lock().unwrap())
         };
-        let mut adapter = TransportAdapter::new(RecordingTransport {
-            buffers: LazyBuffers::new(16, 16),
-            seen: Vec::new(),
-        });
-        adapter.set_current_time(current_time);
+        let mut adapter = TransportAdapter::new(
+            RecordingTransport {
+                buffers: LazyBuffers::new(16, 16),
+                seen: Vec::new(),
+            },
+            current_time,
+        );
         adapter.set_timeout(NextTimeout {
             after: Duration::from_secs(1),
             reason: Timeout::Connect,
