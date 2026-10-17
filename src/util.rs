@@ -34,12 +34,12 @@ impl AuthorityExt for Authority {
 
     fn username(&self) -> Option<&str> {
         self.userinfo()
-            .map(|a| a.rfind(':').map(|i| &a[..i]).unwrap_or(a))
+            .map(|a| a.find(':').map(|i| &a[..i]).unwrap_or(a))
     }
 
     fn password(&self) -> Option<&str> {
         self.userinfo()
-            .and_then(|a| a.rfind(':').map(|i| &a[i + 1..]))
+            .and_then(|a| a.find(':').map(|i| &a[i + 1..]))
     }
 
     // Per RFC 3986, IPv6 literals in a URI authority are wrapped in square

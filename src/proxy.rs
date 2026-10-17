@@ -123,6 +123,8 @@ pub struct Proxy {
 struct ProxyInner {
     proto: ProxyProtocol,
     uri: Uri,
+    username: Option<String>,
+    password: Option<String>,
     from_env: bool,
     resolve_target: bool,
     no_proxy: Option<NoProxy>,
@@ -135,6 +137,10 @@ impl Proxy {
     ///
     /// * `proxy` - a str of format `<protocol>://<user>:<password>@<host>:port` . All parts
     ///   except host are optional.
+    ///
+    /// Percent-encode the username and password in the URI. They are decoded exactly once,
+    /// and `+` is preserved as a literal plus sign. Use `%25` for a literal percent sign.
+    /// Credentials that decode to invalid UTF-8 return [`Error::InvalidProxyUrl`].
     ///
     /// ###  Protocols
     ///
@@ -177,7 +183,9 @@ impl Proxy {
 
         // The uri must have an authority part (with the host), or
         // it is invalid.
-        let _ = uri.authority().ok_or(Error::InvalidProxyUrl)?;
+        let authority = uri.authority().ok_or(Error::InvalidProxyUrl)?;
+        let username = authority.username().map(decode_userinfo).transpose()?;
+        let password = authority.password().map(decode_userinfo).transpose()?;
 
         let scheme = match uri.scheme_str() {
             Some(v) => v,
@@ -195,6 +203,8 @@ impl Proxy {
         let inner = ProxyInner {
             proto,
             uri,
+            username,
+            password,
             from_env,
             resolve_target,
             no_proxy,
@@ -294,14 +304,14 @@ impl Proxy {
             .unwrap_or_else(|| self.inner.proto.default_port())
     }
 
-    /// The username of the proxy uri
+    /// The decoded username of the proxy URI.
     pub fn username(&self) -> Option<&str> {
-        self.inner.uri.authority().and_then(|a| a.username())
+        self.inner.username.as_deref()
     }
 
-    /// The password of the proxy uri
+    /// The decoded password of the proxy URI.
     pub fn password(&self) -> Option<&str> {
-        self.inner.uri.authority().and_then(|a| a.password())
+        self.inner.password.as_deref()
     }
 
     /// Whether this proxy setting was created manually or from
@@ -382,6 +392,8 @@ impl ProxyBuilder {
 
     /// Set the username
     ///
+    /// The value is used verbatim and percent-encoded when constructing the proxy URI.
+    ///
     /// Defaults to none. Invalid usernames surface in [`ProxyBuilder::build()`].
     pub fn username(mut self, v: &str) -> Self {
         self.username = Some(v.to_string());
@@ -389,6 +401,8 @@ impl ProxyBuilder {
     }
 
     /// Set the password
+    ///
+    /// The value is used verbatim and percent-encoded when constructing the proxy URI.
     ///
     /// If you want to set only a password, no username, i.e. `https://secret@foo.com`,
     /// you need to set it as [`ProxyBuilder::username()`].
@@ -439,10 +453,22 @@ impl ProxyBuilder {
 
         let mut userpass = String::new();
         if let Some(username) = self.username {
-            userpass.push_str(&username);
+            userpass.push_str(
+                &percent_encoding::utf8_percent_encode(
+                    &username,
+                    percent_encoding::NON_ALPHANUMERIC,
+                )
+                .to_string(),
+            );
             if let Some(password) = self.password {
                 userpass.push(':');
-                userpass.push_str(&password);
+                userpass.push_str(
+                    &percent_encoding::utf8_percent_encode(
+                        &password,
+                        percent_encoding::NON_ALPHANUMERIC,
+                    )
+                    .to_string(),
+                );
             }
             userpass.push('@');
         }
@@ -453,6 +479,13 @@ impl ProxyBuilder {
         let proxy = format!("{}://{}{}:{}", self.protocol, userpass, host, port);
         Proxy::new_with_flag(&proxy, self.no_proxy, false, Some(self.resolve_target))
     }
+}
+
+fn decode_userinfo(value: &str) -> Result<String, Error> {
+    percent_encoding::percent_decode_str(value)
+        .decode_utf8()
+        .map(|value| value.into_owned())
+        .map_err(|_| Error::InvalidProxyUrl)
 }
 
 impl TryFrom<&str> for ProxyProtocol {
@@ -738,6 +771,20 @@ mod tests {
         assert_eq!(proxy.host(), "localhost");
         assert_eq!(proxy.port(), 9999);
         assert_eq!(proxy.inner.proto, ProxyProtocol::Http);
+    }
+
+    #[test]
+    fn parse_proxy_decodes_userinfo_once() {
+        let proxy = Proxy::new("http://u%40ser:p%2540ss+word@localhost:3128").unwrap();
+        assert_eq!(proxy.username(), Some("u@ser"));
+        assert_eq!(proxy.password(), Some("p%40ss+word"));
+    }
+
+    #[test]
+    fn parse_proxy_password_keeps_colons_after_separator() {
+        let proxy = Proxy::new("http://user:p%3Ass:tail@localhost:3128").unwrap();
+        assert_eq!(proxy.username(), Some("user"));
+        assert_eq!(proxy.password(), Some("p:ss:tail"));
     }
 
     #[test]
@@ -1063,5 +1110,18 @@ mod tests {
         assert_eq!(proxy.password(), Some("kulgrej"));
         assert_eq!(proxy.is_from_env(), false);
         assert_eq!(proxy.resolve_target(), false);
+    }
+
+    #[test]
+    fn proxy_builder_encodes_userinfo_values() {
+        let proxy = Proxy::builder(ProxyProtocol::Http)
+            .username("user/name")
+            .password("p:ss ?#é")
+            .build()
+            .unwrap();
+
+        assert_eq!(proxy.username(), Some("user/name"));
+        assert_eq!(proxy.password(), Some("p:ss ?#é"));
+        assert_eq!(proxy.host(), "localhost");
     }
 }
