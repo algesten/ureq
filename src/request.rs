@@ -94,6 +94,22 @@ impl<Any> RequestBuilder<Any> {
         self
     }
 
+    /// Appends a header with its exact name spelling on the HTTP/1 wire.
+    ///
+    /// Use this for servers that incorrectly compare header names case-sensitively.
+    /// Names and values are validated as with [`Self::header`]; values can contain
+    /// non-UTF-8 bytes, but cannot contain line breaks. This appends, rather than
+    /// replaces, existing values. Normal headers retain their normal spelling.
+    ///
+    /// Spelling belongs to the value's position among headers with the same name.
+    /// Later mutation through [`Self::headers_mut`] can change that association.
+    /// Removed headers remain removed. HTTP/2 requires lowercase names; this
+    /// method does not enable HTTP/2 support.
+    pub fn header_raw(mut self, name: &str, value: &[u8]) -> Self {
+        self.builder = ureq_proto::client::header_raw(self.builder, name, value);
+        self
+    }
+
     /// Get header on this request builder.
     ///
     /// When builder has error returns `None`.
@@ -721,6 +737,30 @@ mod test {
     use crate::test::init_test_log;
 
     use super::*;
+
+    #[test]
+    fn raw_header_builder_validation_and_values() {
+        let builder = crate::get("http://q.test")
+            .header("X-Typed", "normal")
+            .header_raw("X-SECRET", &[0xff]);
+        let headers = builder.headers_ref().unwrap();
+        assert_eq!(headers["x-typed"], "normal");
+        assert_eq!(headers["x-secret"].as_bytes(), &[0xff]);
+        assert!(
+            crate::get("http://q.test")
+                .header_raw("X Bad", b"ok")
+                .builder
+                .body(())
+                .is_err()
+        );
+        assert!(
+            crate::get("http://q.test")
+                .header_raw("X-Good", b"bad\r\nInjected: yes")
+                .builder
+                .body(())
+                .is_err()
+        );
+    }
 
     #[test]
     fn disallow_empty_host() {
