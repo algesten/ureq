@@ -369,7 +369,7 @@ mod test {
     use super::*;
     use crate::config::Config;
     use crate::http::Uri;
-    use crate::transport::{NextTimeout, TcpConnector};
+    use crate::transport::{Buffers, NextTimeout, TcpConnector};
     use crate::unversioned::resolver::{ResolvedSocketAddrs, Resolver};
     use crate::{Agent, Timeout};
 
@@ -695,6 +695,87 @@ mod test {
 
     const GRANTED4: &[u8] = &[0, 90, 0, 0, 0, 0, 0, 0];
     const SUCCEEDED5: &[u8] = &[5, 0, 0, 1, 0, 0, 0, 0, 0, 0];
+
+    #[derive(Debug)]
+    struct ReadAheadTransport {
+        buffers: LazyBuffers,
+        replies: Cursor<Vec<u8>>,
+        reads: usize,
+    }
+
+    impl Transport for ReadAheadTransport {
+        fn buffers(&mut self) -> &mut dyn Buffers {
+            &mut self.buffers
+        }
+
+        fn transmit_output(&mut self, _: usize, timeout: NextTimeout) -> Result<(), Error> {
+            timeout.for_write().check()?;
+            Ok(())
+        }
+
+        fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
+            timeout.for_read().check()?;
+            self.reads += 1;
+            let len = self.replies.read(self.buffers.input_append_buf())?;
+            self.buffers.input_appended(len);
+            Ok(len > 0)
+        }
+
+        fn is_open(&mut self) -> bool {
+            true
+        }
+    }
+
+    // rust-socks #17 lost application data read alongside the SOCKS reply when
+    // its temporary BufReader was dropped. Exercise actual adapter read-ahead
+    // and retain the unread data when handing the transport back to the caller.
+    // https://github.com/sfackler/rust-socks/pull/17
+    #[test]
+    fn handshake_read_ahead_preserves_application_data() {
+        let application = b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok";
+        for (proxy, target, replies) in [
+            ("socks4://proxy", IPV4, GRANTED4.to_vec()),
+            ("socks4a://proxy", DOMAIN, GRANTED4.to_vec()),
+            ("socks5://proxy", IPV4, [&[5, 0][..], SUCCEEDED5].concat()),
+            (
+                "socks5h://proxy",
+                DOMAIN,
+                [&[5, 0, 5, 0, 0, 3, 4][..], b"host", &[0, 0]].concat(),
+            ),
+            (
+                "socks5://user:pass@proxy",
+                IPV6,
+                [&[5, 2, 1, 0, 5, 0, 0, 4][..], &[0; 18]].concat(),
+            ),
+        ] {
+            let proxy = Proxy::new(proxy).unwrap();
+            let transport = ReadAheadTransport {
+                buffers: LazyBuffers::new(512, 512),
+                replies: Cursor::new([replies, application.to_vec()].concat()),
+                reads: 0,
+            };
+            let current_time = Arc::new(crate::transport::time::Instant::now);
+            let mut adapter = TransportAdapter::new(transport, current_time.clone());
+            handshake(&mut adapter, &proxy, target).unwrap();
+
+            let transport = adapter.into_inner();
+            assert_eq!(
+                transport.reads, 1,
+                "reply and application data must be read together"
+            );
+            assert_eq!(transport.buffers.input(), application);
+
+            let mut adapter = TransportAdapter::new(transport, current_time);
+            let mut received = vec![0; application.len()];
+            adapter.read_exact(&mut received).unwrap();
+            assert_eq!(received, application);
+            assert_eq!(
+                adapter.into_inner().reads,
+                1,
+                "use the retained input buffer"
+            );
+        }
+    }
 
     #[test]
     fn handshakes() {
