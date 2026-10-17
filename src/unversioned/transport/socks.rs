@@ -9,6 +9,7 @@ use crate::util::{AuthorityExt, UriExt};
 use super::chain::Either;
 
 use super::tcp::{self, TcpTransport};
+use super::time::Instant;
 use super::{ConnectionDetails, Connector, LazyBuffers, Transport, TransportAdapter};
 
 /// Connector for SOCKS proxies.
@@ -50,16 +51,29 @@ impl<In: Transport> Connector<In> for SocksConnector {
 
         let target = Target::new(details, proxy)?;
 
-        let proxy_addrs = details
-            .resolver
-            .resolve(proxy.uri(), details.config, details.timeout)?;
+        // Keep all setup steps within the budget that started before this connector.
+        let timeout_at = |now: Instant| {
+            let mut timeout = details.timeout;
+            if !timeout.after.is_not_happening() {
+                let elapsed = now.duration_since(details.now);
+                timeout.after = timeout.after.saturating_sub(*elapsed).into();
+            }
+            timeout.check()
+        };
+
+        let proxy_addrs = details.resolver.resolve(
+            proxy.uri(),
+            details.config,
+            timeout_at((details.current_time)())?,
+        )?;
 
         // Connect to the proxy like TcpConnector connects to a server, within the
         // connect timeout and trying each resolved address.
+        let now = (details.current_time)();
         let stream = tcp::try_connect(
             &proxy_addrs,
-            details.now,
-            details.timeout,
+            now,
+            timeout_at(now)?,
             details.current_time.clone(),
             details.config,
         )?;
@@ -69,13 +83,13 @@ impl<In: Transport> Connector<In> for SocksConnector {
             details.config.output_buffer_size(),
         );
 
-        // Like the CONNECT proxy handshake, the SOCKS handshake goes through the
-        // transport, which gives every read and write the connect timeout.
+        // The adapter deducts elapsed time between handshake reads and writes,
+        // while TcpTransport also enforces the per-read and per-write limits.
         let mut w = TransportAdapter::new(
             TcpTransport::new(stream, buffers),
             details.current_time.clone(),
         );
-        w.set_timeout(details.timeout);
+        w.set_timeout(timeout_at((details.current_time)())?);
 
         trace!("Try connect {} -> {:?}", proxy.protocol(), target);
         handshake(&mut w, proxy, target)?;
@@ -348,6 +362,7 @@ impl fmt::Debug for SocksConnector {
 mod test {
     use std::io::Cursor;
     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, TcpListener, TcpStream};
+    use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::{Duration, Instant};
 
@@ -375,6 +390,160 @@ mod test {
             addrs.push(SocketAddr::new(ip, port));
             Ok(addrs)
         }
+    }
+
+    // Advance the shared clock to simulate time spent before and during proxy DNS.
+    #[derive(Debug)]
+    struct TimedProxyResolver {
+        elapsed: Arc<Mutex<Duration>>,
+        lookup_time: Duration,
+        seen: Mutex<Option<NextTimeout>>,
+    }
+
+    impl Resolver for TimedProxyResolver {
+        fn resolve(
+            &self,
+            uri: &Uri,
+            config: &Config,
+            timeout: NextTimeout,
+        ) -> Result<ResolvedSocketAddrs, Error> {
+            *self.seen.lock().unwrap() = Some(timeout);
+            *self.elapsed.lock().unwrap() += self.lookup_time;
+            IpOnly.resolve(uri, config, timeout)
+        }
+    }
+
+    fn connect_with_elapsed(
+        proxy: Proxy,
+        resolver: &TimedProxyResolver,
+        timeout: NextTimeout,
+    ) -> Result<(), Error> {
+        let uri: Uri = "http://127.0.0.1:1/".parse().unwrap();
+        let config = Agent::config_builder().proxy(Some(proxy)).build();
+        let mut addrs = resolver.empty();
+        addrs.push("127.0.0.1:1".parse().unwrap());
+        let elapsed = Arc::clone(&resolver.elapsed);
+        let details = ConnectionDetails {
+            uri: &uri,
+            addrs,
+            config: &config,
+            request_level: false,
+            resolver,
+            now: crate::transport::time::Instant::now(),
+            timeout,
+            current_time: Arc::new(move || {
+                crate::transport::time::Instant::now() + (*elapsed.lock().unwrap()).into()
+            }),
+            run_connector: Arc::new(|_| unreachable!()),
+        };
+        SocksConnector::default()
+            .connect(&details, None::<()>)
+            .map(|_| ())
+    }
+
+    #[test]
+    fn proxy_lookup_preserves_remaining_budget() {
+        for reason in [Timeout::Global, Timeout::PerCall, Timeout::Connect] {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let proxy =
+                Proxy::new(&format!("socks5h://{}", listener.local_addr().unwrap())).unwrap();
+            let hung_up = thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(3)))
+                    .unwrap();
+                stream.read_to_end(&mut Vec::new()).is_ok()
+            });
+            let resolver = TimedProxyResolver {
+                elapsed: Arc::new(Mutex::new(Duration::from_millis(250))),
+                lookup_time: Duration::from_millis(500),
+                seen: Mutex::new(None),
+            };
+            let timeout = NextTimeout {
+                after: Duration::from_secs(1).into(),
+                reason,
+                per_read: Some(Duration::from_secs(2).into()),
+                per_write: Some(Duration::from_secs(3).into()),
+            };
+            let start = Instant::now();
+            let result = connect_with_elapsed(proxy, &resolver, timeout);
+            let elapsed = start.elapsed();
+            assert!(hung_up.join().unwrap(), "{reason}: connection left open");
+            assert!(matches!(result, Err(Error::Timeout(actual)) if actual == reason));
+
+            let seen = resolver.seen.lock().unwrap().unwrap();
+            assert!(seen.after <= Duration::from_millis(750).into(), "{seen:?}");
+            assert_eq!(seen.reason, reason);
+            assert_eq!(seen.per_read, timeout.per_read);
+            assert_eq!(seen.per_write, timeout.per_write);
+            // The lookup leaves 250 ms for the handshake. Allow scheduling slack,
+            // but distinguish that from restarting the full one-second budget.
+            assert!(
+                elapsed < Duration::from_millis(750),
+                "{reason}: {elapsed:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn expired_proxy_lookup_does_not_open_socket() {
+        for reason in [Timeout::Global, Timeout::PerCall, Timeout::Connect] {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            listener.set_nonblocking(true).unwrap();
+            let proxy =
+                Proxy::new(&format!("socks5h://{}", listener.local_addr().unwrap())).unwrap();
+            let resolver = TimedProxyResolver {
+                elapsed: Arc::new(Mutex::new(Duration::ZERO)),
+                lookup_time: Duration::from_secs(1),
+                seen: Mutex::new(None),
+            };
+            let result = connect_with_elapsed(
+                proxy,
+                &resolver,
+                NextTimeout {
+                    after: Duration::from_secs(1).into(),
+                    reason,
+                    per_read: Some(Duration::from_millis(20).into()),
+                    ..NextTimeout::default()
+                },
+            );
+            assert!(matches!(result, Err(Error::Timeout(actual)) if actual == reason));
+            let error = listener.accept().unwrap_err();
+            assert_eq!(error.kind(), io::ErrorKind::WouldBlock);
+        }
+    }
+
+    #[test]
+    fn proxy_lookup_does_not_spend_per_read_limit() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let proxy = Proxy::new(&format!("socks5h://{}", listener.local_addr().unwrap())).unwrap();
+        let hung_up = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            stream.read_to_end(&mut Vec::new()).is_ok()
+        });
+        let resolver = TimedProxyResolver {
+            elapsed: Arc::new(Mutex::new(Duration::from_millis(250))),
+            lookup_time: Duration::from_secs(2),
+            seen: Mutex::new(None),
+        };
+        let start = Instant::now();
+        let result = connect_with_elapsed(
+            proxy,
+            &resolver,
+            NextTimeout {
+                per_read: Some(Duration::from_millis(100).into()),
+                ..NextTimeout::default()
+            },
+        );
+        let elapsed = start.elapsed();
+        assert!(hung_up.join().unwrap(), "connection left open");
+        assert!(matches!(result, Err(Error::Timeout(Timeout::PerRead))));
+        assert!(elapsed >= Duration::from_millis(80), "{elapsed:?}");
+        let seen = resolver.seen.lock().unwrap().unwrap();
+        assert!(seen.after.is_not_happening());
     }
 
     // SOCKS, then plain TCP, without the in-memory transport of the _test feature.

@@ -779,13 +779,13 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
 
     /// Max duration for each transport read
     ///
-    /// This covers headers, body, TLS handshakes and HTTP CONNECT responses.
+    /// This covers headers, body, TLS handshakes, HTTP CONNECT responses, and
+    /// SOCKS handshakes.
     /// The timeout restarts for each read. Phase, per-call and global timeouts
     /// still apply, including the total body timeout set by [`timeout_recv_body`].
     ///
     /// This applies to transport I/O, not time spent between application reads
-    /// or reading buffered data. DNS, TCP connection establishment and SOCKS
-    /// negotiation are not covered.
+    /// or reading buffered data. DNS and TCP connection establishment are not covered.
     ///
     /// Defaults to `None`.
     ///
@@ -797,13 +797,14 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
 
     /// Max duration for each transport write
     ///
-    /// This covers headers, body, TLS handshakes and HTTP CONNECT requests.
+    /// This covers headers, body, TLS handshakes, HTTP CONNECT requests, and
+    /// SOCKS handshakes.
     /// The timeout restarts for each write. Phase, per-call and global timeouts
     /// still apply, including the total body timeout set by [`timeout_send_body`].
     ///
     /// Socket buffering and partial writes mean this is not a total duration
     /// for an application write. Reading from the request body, DNS, TCP
-    /// connection establishment and SOCKS negotiation are not covered.
+    /// connection establishment are not covered.
     ///
     /// Defaults to `None`.
     ///
