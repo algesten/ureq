@@ -658,14 +658,17 @@ mod test {
 
     impl Read for Script {
         fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-            self.replies.read(buf)
+            // Force fragmented I/O even when a whole reply is available.
+            let len = buf.len().min(1);
+            self.replies.read(&mut buf[..len])
         }
     }
 
     impl Write for Script {
         fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-            self.sent.extend_from_slice(buf);
-            Ok(buf.len())
+            let len = buf.len().min(1);
+            self.sent.extend_from_slice(&buf[..len]);
+            Ok(len)
         }
 
         fn flush(&mut self) -> io::Result<()> {
@@ -709,6 +712,13 @@ mod test {
                 &[GRANTED4],
             ),
             (
+                // ureq has always sent an empty SOCKS4 user id.
+                "socks4://user:pass@proxy",
+                IPV4,
+                &[&[4, 1, 0, 80, 10, 0, 0, 1, 0]],
+                &[GRANTED4],
+            ),
+            (
                 "socks5://proxy",
                 IPV4,
                 &[&[5, 1, 0], &[5, 1, 0, 1, 10, 0, 0, 1, 0, 80]],
@@ -746,13 +756,19 @@ mod test {
         ];
 
         for (proxy, target, sent, replies) in cases {
-            let (result, script) = script(proxy, *target, replies);
+            let proxy_config = Proxy::new(proxy).unwrap();
+            let mut script = Script {
+                replies: Cursor::new([replies.concat(), b"application data".to_vec()].concat()),
+                sent: vec![],
+            };
+            let result = handshake(&mut script, &proxy_config, *target);
             result.unwrap_or_else(|e| panic!("{proxy}: {e}"));
             assert_eq!(script.sent, sent.concat(), "{proxy}");
 
-            // Nothing is left unread to be mistaken for the HTTP response.
-            let replies = script.replies.get_ref().len() as u64;
-            assert_eq!(script.replies.position(), replies, "{proxy}");
+            // Consume exactly the reply, leaving application bytes for the caller.
+            let mut remaining = Vec::new();
+            script.read_to_end(&mut remaining).unwrap();
+            assert_eq!(remaining, b"application data", "{proxy}");
         }
     }
 
@@ -816,5 +832,156 @@ mod test {
         // A reply cut short is an error, not a connection.
         let (result, _) = script("socks5://proxy", IPV4, &[&[5, 0], &[5, 0, 0, 1, 0, 0]]);
         assert_eq!(result.unwrap_err().kind(), UnexpectedEof);
+    }
+
+    #[test]
+    fn domain_name_length() {
+        let proxy = Proxy::new("socks5h://proxy").unwrap();
+        for len in [1, 254, 255, 256] {
+            let host = "x".repeat(len);
+            let mut script = Script {
+                replies: Cursor::new([&[5, 0][..], SUCCEEDED5].concat()),
+                sent: vec![],
+            };
+            let result = handshake(&mut script, &proxy, Target::Domain(&host, 443));
+            if len == 256 {
+                let error = result.unwrap_err();
+                assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+                assert_eq!(error.to_string(), "domain name too long");
+                assert_eq!(script.sent, [5, 1, 0]);
+            } else {
+                result.unwrap();
+                assert_eq!(
+                    script.sent,
+                    [
+                        &[5, 1, 0, 5, 1, 0, 3, len as u8][..],
+                        host.as_bytes(),
+                        &[1, 187]
+                    ]
+                    .concat()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn every_truncated_reply_is_an_error() {
+        let domain_reply = [&[5, 0, 0, 3, 255][..], &[b'x'; 255], &[0, 0]].concat();
+        let ipv6_reply = [&[5, 0, 0, 4][..], &[0; 18]].concat();
+        for (proxy, reply) in [
+            ("socks4://proxy", GRANTED4.to_vec()),
+            ("socks4a://proxy", GRANTED4.to_vec()),
+            ("socks5://proxy", [&[5, 0][..], SUCCEEDED5].concat()),
+            ("socks5://proxy", [&[5, 0][..], &domain_reply].concat()),
+            ("socks5://proxy", [&[5, 0][..], &ipv6_reply].concat()),
+            (
+                "socks5://user:pass@proxy",
+                [&[5, 2, 1, 0][..], SUCCEEDED5].concat(),
+            ),
+        ] {
+            let proxy = Proxy::new(proxy).unwrap();
+            for len in 0..=reply.len() {
+                let mut script = Script {
+                    replies: Cursor::new(reply[..len].to_vec()),
+                    sent: vec![],
+                };
+                let result = handshake(&mut script, &proxy, IPV4);
+                if len == reply.len() {
+                    result.unwrap();
+                    assert_eq!(script.replies.position(), len as u64);
+                } else {
+                    let error = result.unwrap_err();
+                    assert_eq!(error.kind(), io::ErrorKind::UnexpectedEof, "prefix {len}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn malformed_handshake_replies() {
+        use io::ErrorKind::{InvalidData, Other};
+        let cases: &[(&str, Parts, io::ErrorKind, &str)] = &[
+            (
+                "socks4://proxy",
+                &[&[4, 90, 0, 0, 0, 0, 0, 0]],
+                InvalidData,
+                "invalid response version",
+            ),
+            (
+                "socks4://proxy",
+                &[&[0, 94, 0, 0, 0, 0, 0, 0]],
+                InvalidData,
+                "invalid response code",
+            ),
+            (
+                "socks5://proxy",
+                &[&[4, 0]],
+                InvalidData,
+                "invalid response version",
+            ),
+            (
+                "socks5://proxy",
+                &[&[5, 0], &[4, 0]],
+                InvalidData,
+                "invalid response version",
+            ),
+            (
+                "socks5://proxy",
+                &[&[5, 0], &[5, 0, 1, 1]],
+                InvalidData,
+                "invalid reserved byte",
+            ),
+            (
+                "socks5://proxy",
+                &[&[5, 0], &[5, 0, 0, 2]],
+                Other,
+                "unsupported address type",
+            ),
+            (
+                "socks5://user:pass@proxy",
+                &[&[5, 2], &[2, 0]],
+                InvalidData,
+                "invalid response version",
+            ),
+        ];
+        for (proxy, replies, kind, reason) in cases {
+            let (result, _) = script(proxy, IPV4, replies);
+            let error = result.unwrap_err();
+            assert_eq!(error.kind(), *kind, "{proxy}: {error}");
+            assert_eq!(error.to_string(), *reason, "{proxy}");
+        }
+    }
+
+    #[test]
+    fn proxy_failure_codes() {
+        for (code, reason) in [
+            (1, "general SOCKS server failure"),
+            (2, "connection not allowed by ruleset"),
+            (3, "network unreachable"),
+            (4, "host unreachable"),
+            (5, "connection refused"),
+            (6, "TTL expired"),
+            (7, "command not supported"),
+            (8, "address kind not supported"),
+            (255, "unknown error"),
+        ] {
+            let mut script = Script {
+                replies: Cursor::new(vec![5, 0, 5, code]),
+                sent: vec![],
+            };
+            let proxy = Proxy::new("socks5://proxy").unwrap();
+            let error = handshake(&mut script, &proxy, IPV4).unwrap_err();
+            assert_eq!(error.kind(), io::ErrorKind::Other);
+            assert_eq!(error.to_string(), reason);
+        }
+        for code in [92, 93] {
+            let mut script = Script {
+                replies: Cursor::new(vec![0, code, 0, 0, 0, 0, 0, 0]),
+                sent: vec![],
+            };
+            let proxy = Proxy::new("socks4://proxy").unwrap();
+            let error = handshake(&mut script, &proxy, IPV4).unwrap_err();
+            assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+        }
     }
 }
