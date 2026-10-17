@@ -546,6 +546,114 @@ mod test {
         assert!(seen.after.is_not_happening());
     }
 
+    #[cfg(any(feature = "_rustls", feature = "native-tls-no-default"))]
+    fn tls_after_socks_preserves_remaining_budget<C>(
+        make_tls: impl Fn() -> C,
+        tls_config: crate::tls::TlsConfig,
+    ) where
+        C: Connector<Either<(), TcpTransport>>,
+    {
+        let mut elapsed_by_reason = Vec::new();
+        for reason in [Timeout::Global, Timeout::PerCall, Timeout::Connect] {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let proxy =
+                Proxy::new(&format!("socks5h://{}", listener.local_addr().unwrap())).unwrap();
+            let peer = thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(3)))
+                    .unwrap();
+                let mut greeting = [0; 3];
+                stream.read_exact(&mut greeting).unwrap();
+                assert_eq!(greeting, [5, 1, 0]);
+                stream.write_all(&[5, 0]).unwrap();
+                let mut request = [0; 10];
+                stream.read_exact(&mut request).unwrap();
+                assert_eq!(request, [5, 1, 0, 1, 127, 0, 0, 1, 1, 187]);
+                stream.write_all(SUCCEEDED5).unwrap();
+
+                // SOCKS succeeds, then the target accepts ClientHello and stays silent.
+                let mut tls_header = [0; 3];
+                stream.read_exact(&mut tls_header).unwrap();
+                assert_eq!(&tls_header[..2], &[22, 3]);
+                stream.read_to_end(&mut Vec::new()).is_ok()
+            });
+            let resolver = TimedProxyResolver {
+                elapsed: Arc::new(Mutex::new(Duration::ZERO)),
+                lookup_time: Duration::from_millis(750),
+                seen: Mutex::new(None),
+            };
+            let uri: Uri = "https://127.0.0.1/".parse().unwrap();
+            let config = Agent::config_builder()
+                .proxy(Some(proxy))
+                .tls_config(tls_config.clone())
+                .build();
+            let elapsed = Arc::clone(&resolver.elapsed);
+            let details = ConnectionDetails {
+                uri: &uri,
+                addrs: resolver.empty(),
+                config: &config,
+                request_level: false,
+                resolver: &resolver,
+                now: crate::transport::time::Instant::now(),
+                timeout: NextTimeout {
+                    after: Duration::from_secs(1).into(),
+                    reason,
+                    ..NextTimeout::default()
+                },
+                current_time: Arc::new(move || {
+                    crate::transport::time::Instant::now() + (*elapsed.lock().unwrap()).into()
+                }),
+                run_connector: Arc::new(|_| unreachable!()),
+            };
+            let start = Instant::now();
+            let result = SocksConnector::default()
+                .chain(make_tls())
+                .connect(&details, None::<()>);
+            let elapsed = start.elapsed();
+            assert!(peer.join().unwrap(), "{reason}: connection left open");
+            assert!(
+                matches!(result, Err(Error::Timeout(actual)) if actual == reason),
+                "{reason}: {result:?}"
+            );
+            elapsed_by_reason.push((reason, elapsed));
+        }
+        // Proxy DNS spent 750 ms of the shared second. TLS has 250 ms left;
+        // allow scheduling slack while detecting a restarted full second.
+        assert!(
+            elapsed_by_reason
+                .iter()
+                .all(|(_, elapsed)| *elapsed < Duration::from_millis(750)),
+            "{elapsed_by_reason:?}"
+        );
+    }
+
+    #[cfg(feature = "_rustls")]
+    #[test]
+    fn rustls_after_socks_uses_remaining_budget() {
+        tls_after_socks_preserves_remaining_budget(
+            crate::transport::RustlsConnector::default,
+            crate::tls::TlsConfig::builder()
+                .disable_verification(true)
+                .unversioned_rustls_crypto_provider(Arc::new(
+                    rustls::crypto::aws_lc_rs::default_provider(),
+                ))
+                .build(),
+        );
+    }
+
+    #[cfg(feature = "native-tls-no-default")]
+    #[test]
+    fn native_tls_after_socks_uses_remaining_budget() {
+        tls_after_socks_preserves_remaining_budget(
+            crate::transport::NativeTlsConnector::default,
+            crate::tls::TlsConfig::builder()
+                .provider(crate::tls::TlsProvider::NativeTls)
+                .disable_verification(true)
+                .build(),
+        );
+    }
+
     // SOCKS, then plain TCP, without the in-memory transport of the _test feature.
     fn agent(proxy: Proxy, timeout_global: Option<Duration>) -> Agent {
         let config = Agent::config_builder()
