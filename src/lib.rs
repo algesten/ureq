@@ -76,6 +76,44 @@
 //! # Ok(())}
 //! ```
 //!
+//! ## Timeouts
+//!
+//! Configure timeouts on an [`Agent`] or override them per request through
+//! [`ConfigBuilder`]. Global, per-call, and phase timeouts
+//! measure total elapsed time. Each network operation uses the shortest applicable
+//! remaining budget. Per-read and per-write limits restart for each transport
+//! operation while the total budgets keep running.
+//!
+//! | Setting | Budget |
+//! | --- | --- |
+//! | `timeout_global` | Entire operation, including redirects and reading the response body. |
+//! | `timeout_per_call` | One HTTP exchange, including its body; reset for each redirect. |
+//! | `timeout_resolve` | Local target hostname resolution. |
+//! | `timeout_connect` | Proxy DNS, socket connection attempts, proxy negotiation, and TLS handshakes. |
+//! | `timeout_send_request` | Sending all request headers after connection setup. |
+//! | `timeout_await_100` | Waiting for `100 Continue` before uploading the body. |
+//! | `timeout_send_body` | Sending the entire request body. |
+//! | `timeout_recv_response` | Waiting for and receiving complete response headers. |
+//! | `timeout_recv_body` | Receiving the entire response body, starting after complete response headers. |
+//! | `timeout_per_read` | Each transport read, subject to the remaining total budgets. |
+//! | `timeout_per_write` | Each transport write, subject to the remaining total budgets. |
+//!
+//! A phase budget stops applying once that phase finishes. For example, a completed
+//! connection's `timeout_connect` does not limit the later response body transfer.
+//! A redirect starts new per-call and phase budgets while preserving the global
+//! budget. See the individual [`ConfigBuilder`] methods for
+//! protocol coverage and phase boundaries.
+//!
+//! Global, per-call, and response body budgets continue after a response is returned
+//! and while the application consumes its body. Time between body reads counts
+//! toward these budgets. Timeouts are checked during network I/O; they do not
+//! interrupt application code or a user-provided request body reader.
+//!
+//! `None` disables only that limit. All limits default to `None` except
+//! `timeout_await_100`, which defaults to one second. When that wait expires, ureq
+//! proceeds with the upload. Other timeouts are reported as [`Error::Timeout`],
+//! including through [`std::io::Error`] when using the body's [`std::io::Read`] API.
+//!
 //! ## JSON
 //!
 //! Ureq supports sending and receiving json, if you enable the **json** feature:
@@ -498,7 +536,9 @@
 //! [webpki-roots]: https://crates.io/crates/webpki-roots
 //! [`Arc`]: https://doc.rust-lang.org/std/sync/struct.Arc.html
 //! [`Agent`]: https://docs.rs/ureq/latest/ureq/struct.Agent.html
+//! [`ConfigBuilder`]: https://docs.rs/ureq/latest/ureq/config/struct.ConfigBuilder.html
 //! [`Error`]: https://docs.rs/ureq/latest/ureq/enum.Error.html
+//! [`Error::Timeout`]: https://docs.rs/ureq/latest/ureq/enum.Error.html#variant.Timeout
 //! [`http_status_as_error()`]: https://docs.rs/ureq/latest/ureq/config/struct.ConfigBuilder.html#method.http_status_as_error
 //! [SCT]: https://en.wikipedia.org/wiki/Certificate_Transparency
 //! [CRL]: https://en.wikipedia.org/wiki/Certificate_revocation_list
@@ -508,6 +548,7 @@
 //! [`AsSendBody`]: https://docs.rs/ureq/latest/ureq/trait.AsSendBody.html
 //! [`SendBody::from_json()`]: https://docs.rs/ureq/latest/ureq/struct.SendBody.html#method.from_json
 //! [`std::io::Read`]: https://doc.rust-lang.org/std/io/trait.Read.html
+//! [`std::io::Error`]: https://doc.rust-lang.org/std/io/struct.Error.html
 //! [`SendBody::from_reader()`]: https://docs.rs/ureq/latest/ureq/struct.SendBody.html#method.from_reader
 //! [`SendBody::from_owned_reader()`]: https://docs.rs/ureq/latest/ureq/struct.SendBody.html#method.from_owned_reader
 //! [`Body`]: https://docs.rs/ureq/latest/ureq/struct.Body.html

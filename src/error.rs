@@ -32,7 +32,9 @@ pub enum Error {
 
     /// Error raised if the request hits any configured timeout.
     ///
-    /// By default no timeouts are set, which means this error can't happen.
+    /// Timeouts that return this error are disabled by default. The default one-second
+    /// [`100-continue wait`](crate::config::ConfigBuilder::timeout_await_100)
+    /// instead proceeds with sending the request body when it expires.
     Timeout(Timeout),
 
     /// Error when resolving a hostname fails.
