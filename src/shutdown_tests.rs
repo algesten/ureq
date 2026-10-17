@@ -165,3 +165,41 @@ fn shutdown_refuses_new_requests() {
     // Refused before connecting.
     assert!(accepted.try_recv().is_err());
 }
+
+#[test]
+#[cfg(feature = "socks-proxy")]
+fn shutdown_interrupts_socks_handshake() {
+    use crate::Proxy;
+    use crate::transport::SocksConnector;
+
+    // The proxy accepts the connection but never answers the handshake.
+    let (proxy_url, accepted) = serve(b"");
+    let proxy_addr = proxy_url
+        .trim_start_matches("http://")
+        .trim_end_matches('/');
+    let proxy = Proxy::new(&format!("socks5://{proxy_addr}")).unwrap();
+
+    init_test_log();
+    let config = Agent::config_builder().proxy(Some(proxy)).build();
+    let agent = Agent::with_parts(config, SocksConnector::default(), LoopbackResolver);
+
+    let worker = {
+        let agent = agent.clone();
+        spawn(move || agent.get("http://127.0.0.1:1/").call().map(|_| ()))
+    };
+
+    // The connector registers the proxy socket before the handshake, which now
+    // waits for the proxy to answer.
+    let _conn = accepted
+        .recv_timeout(PROMPTLY)
+        .expect("proxy to be connected");
+
+    let start = Instant::now();
+    agent.shutdown();
+
+    let result = worker
+        .recv_timeout(PROMPTLY)
+        .expect("shutdown to interrupt the handshake");
+    assert!(result.is_err(), "{result:?}");
+    assert!(start.elapsed() < PROMPTLY);
+}

@@ -15,7 +15,7 @@ use crate::request::ForceSendBody;
 use crate::resolver::{DefaultResolver, Resolver};
 use crate::send_body::AsSendBody;
 use crate::transport::{Connector, DefaultConnector, Transport, boxed_connector};
-use crate::unversioned::transport::{ConnectionDetails, RunConnector};
+use crate::unversioned::transport::{ConnectionDetails, RegisterShutdown, RunConnector};
 use crate::{Error, RequestBuilder, SendBody};
 use crate::{WithBody, WithoutBody};
 
@@ -96,6 +96,7 @@ pub struct Agent {
     pub(crate) jar: Arc<crate::cookies::SharedCookieJar>,
 
     pub(crate) run_connector: Arc<RunConnector>,
+    pub(crate) register_shutdown: Arc<RegisterShutdown>,
 }
 
 impl Agent {
@@ -145,6 +146,8 @@ impl Agent {
             Arc::new(move |details: &ConnectionDetails| pool.run_connector(details))
         };
 
+        let register_shutdown = pool.register_shutdown();
+
         Agent {
             config: Arc::new(config),
             pool,
@@ -154,6 +157,7 @@ impl Agent {
             jar: Arc::new(crate::cookies::SharedCookieJar::new()),
 
             run_connector,
+            register_shutdown,
         }
     }
 
@@ -197,7 +201,12 @@ impl Agent {
     /// ones in use by requests running on other threads (through clones of this
     /// agent). A request blocked on a socket read or write returns an [`Error::Io`]
     /// straight away, instead of waiting for the server or for a timeout. This
-    /// includes a response [`Body`] that is still being read.
+    /// includes a response [`Body`] that is still being read. A TLS, SOCKS or
+    /// CONNECT handshake in progress fails too.
+    ///
+    /// A custom [`Connector`] that creates its own transports takes part by
+    /// registering them via
+    /// [`ConnectionDetails::register_shutdown`](crate::unversioned::transport::ConnectionDetails::register_shutdown).
     ///
     /// Clones share the pool, so this shuts down all of them. Afterwards they fail
     /// new requests with an [`Error::Io`] of kind

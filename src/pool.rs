@@ -1,5 +1,4 @@
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use std::{fmt, mem};
 
@@ -11,14 +10,13 @@ use crate::config::Config;
 use crate::http;
 use crate::proxy::Proxy;
 use crate::transport::time::{Duration, Instant};
-use crate::transport::{Buffers, ConnectionDetails, Connector, NextTimeout, Transport};
+use crate::transport::{Buffers, ConnectionDetails, Connector, NextTimeout};
+use crate::transport::{RegisterShutdown, ShutdownHandle, Transport};
 use crate::util::DebugAuthority;
 
 pub(crate) struct ConnectionPool {
     connector: Box<dyn Connector<Out = Box<dyn Transport>>>,
     pool: Arc<Mutex<Pool>>,
-    /// Set by [`shutdown()`](Self::shutdown). No connections are made after that.
-    closed: AtomicBool,
 }
 
 impl ConnectionPool {
@@ -26,7 +24,6 @@ impl ConnectionPool {
         ConnectionPool {
             connector,
             pool: Arc::new(Mutex::new(Pool::new(config))),
-            closed: AtomicBool::new(false),
         }
     }
 
@@ -36,19 +33,22 @@ impl ConnectionPool {
         max_idle_age: Duration,
         use_pool: bool,
     ) -> Result<Connection, Error> {
-        if self.closed.load(Ordering::SeqCst) {
-            return Err(Error::shut_down());
-        }
-
         let key = details.into();
 
-        if use_pool {
+        {
             let mut pool = self.pool.lock().unwrap();
-            pool.purge(details.now);
 
-            if let Some(conn) = pool.get(&key, max_idle_age, details.now) {
-                debug!("Use pooled: {:?}", key);
-                return Ok(conn);
+            if pool.closed {
+                return Err(Error::shut_down());
+            }
+
+            if use_pool {
+                pool.purge(details.now);
+
+                if let Some(conn) = pool.get(&key, max_idle_age, details.now) {
+                    debug!("Use pooled: {:?}", key);
+                    return Ok(conn);
+                }
             }
         }
 
@@ -80,22 +80,37 @@ impl ConnectionPool {
         Ok(transport)
     }
 
-    /// Close every connection, idle or lent out, and refuse new ones.
+    /// The [`RegisterShutdown`] for [`ConnectionDetails`], which tracks transports
+    /// in this pool until [`shutdown()`](Self::shutdown).
+    pub fn register_shutdown(&self) -> Arc<RegisterShutdown> {
+        let pool = Arc::downgrade(&self.pool);
+        Arc::new(move |handle| match pool.upgrade() {
+            Some(pool) => pool.lock().unwrap().register_shutdown(handle),
+            // Without the pool there is no agent left to shut down.
+            None => Ok(()),
+        })
+    }
+
+    /// Close every connection, idle or in use, and refuse new ones.
     ///
-    /// Lent out connections are closed via the connector, which keeps its own handle
-    /// to them. That interrupts calls blocked on them in other threads.
+    /// Connections in use are shut down through the handles their connectors
+    /// registered. That interrupts calls blocked on them in other threads.
     pub fn shutdown(&self) {
-        self.closed.store(true, Ordering::SeqCst);
-
-        self.connector.shutdown();
-
-        let idle = {
+        let (idle, handles) = {
             let mut pool = self.pool.lock().unwrap();
-            mem::take(&mut pool.lru)
+            pool.closed = true;
+            (
+                mem::take(&mut pool.lru),
+                mem::take(&mut pool.shutdown_handles),
+            )
         };
 
-        // Dropping closes the idle connections. Done outside the lock in case
-        // a transport does blocking work when dropped.
+        // Transport I/O happens outside the lock.
+        for handle in handles.iter().filter_map(Weak::upgrade) {
+            handle.shutdown();
+        }
+
+        // Dropping closes the idle connections.
         drop(idle);
     }
 
@@ -192,6 +207,11 @@ impl Connection {
 
         let mut pool = arc.lock().unwrap();
 
+        if pool.closed {
+            debug!("Pool shut down: {:?}", self.key);
+            return;
+        }
+
         pool.add(self);
         pool.purge(now);
     }
@@ -246,6 +266,11 @@ struct Pool {
     max_idle_connections: usize,
     max_idle_connections_per_host: usize,
     max_idle_age: Duration,
+    /// Every transport the connectors created, idle or in use, until dropped.
+    /// Weak, so that dropping a transport closes it as before.
+    shutdown_handles: Vec<Weak<dyn ShutdownHandle>>,
+    /// Set by [`ConnectionPool::shutdown()`]. No connections are made after that.
+    closed: bool,
 }
 
 impl Pool {
@@ -255,10 +280,31 @@ impl Pool {
             max_idle_connections: config.max_idle_connections(),
             max_idle_connections_per_host: config.max_idle_connections_per_host(),
             max_idle_age: config.max_idle_age().into(),
+            shutdown_handles: Vec::new(),
+            closed: false,
         }
     }
 
+    fn register_shutdown(&mut self, handle: Weak<dyn ShutdownHandle>) -> Result<(), Error> {
+        // Checked under the same lock as shutdown(), so that a connection made
+        // while the shutdown runs cannot escape it.
+        if self.closed {
+            return Err(Error::shut_down());
+        }
+
+        self.prune_shutdown_handles();
+        self.shutdown_handles.push(handle);
+
+        Ok(())
+    }
+
+    fn prune_shutdown_handles(&mut self) {
+        self.shutdown_handles.retain(|h| h.strong_count() > 0);
+    }
+
     fn purge(&mut self, now: Instant) {
+        self.prune_shutdown_handles();
+
         while self.lru.len() > self.max_idle_connections || self.front_is_too_old(now) {
             self.lru.pop_front();
         }
@@ -587,5 +633,63 @@ mod config_pooling_tests {
         ] {
             check_override(Agent::config_builder().proxy(None).tls_config(tls).build());
         }
+    }
+}
+
+#[cfg(test)]
+mod shutdown_registry_tests {
+    use super::*;
+    use crate::transport::{TcpConnector, boxed_connector};
+    use std::io;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    #[derive(Default)]
+    struct Flag(AtomicBool);
+
+    impl ShutdownHandle for Flag {
+        fn shutdown(&self) {
+            self.0.store(true, Ordering::SeqCst);
+        }
+    }
+
+    fn weak(flag: &Arc<Flag>) -> Weak<dyn ShutdownHandle> {
+        Arc::downgrade(flag) as Weak<dyn ShutdownHandle>
+    }
+
+    fn handle_count(pool: &ConnectionPool) -> usize {
+        pool.pool.lock().unwrap().shutdown_handles.len()
+    }
+
+    #[test]
+    fn shutdown_reaches_live_handles_and_refuses_new_ones() {
+        let connector = boxed_connector(TcpConnector::default());
+        let pool = ConnectionPool::new(connector, &Config::default());
+        let register = pool.register_shutdown();
+
+        let live = Arc::new(Flag::default());
+        let dropped = Arc::new(Flag::default());
+        register(weak(&live)).unwrap();
+        register(weak(&dropped)).unwrap();
+        assert_eq!(handle_count(&pool), 2);
+
+        // The pool only holds a Weak. The entry of a dropped transport is pruned.
+        drop(dropped);
+        let other = Arc::new(Flag::default());
+        register(weak(&other)).unwrap();
+        assert_eq!(handle_count(&pool), 2);
+
+        pool.shutdown();
+        assert!(live.0.load(Ordering::SeqCst));
+        assert!(other.0.load(Ordering::SeqCst));
+
+        // Registration takes the same lock as the shutdown, so a transport
+        // created while the shutdown runs cannot escape it.
+        let late = Arc::new(Flag::default());
+        let err = register(weak(&late)).unwrap_err();
+        assert!(
+            matches!(&err, Error::Io(e) if e.kind() == io::ErrorKind::NotConnected),
+            "{err:?}"
+        );
+        assert!(!late.0.load(Ordering::SeqCst));
     }
 }

@@ -24,11 +24,6 @@ where
         let f_out = self.0.connect(details, chained)?;
         self.1.connect(details, f_out)
     }
-
-    fn shutdown(&self) {
-        self.0.shutdown();
-        self.1.shutdown();
-    }
 }
 
 impl<In, First, Second> ChainedConnector<In, First, Second> {

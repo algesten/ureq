@@ -8,7 +8,7 @@ use crate::util::{AuthorityExt, UriExt};
 
 use super::chain::Either;
 
-use super::tcp::{self, OpenSockets, TcpTransport};
+use super::tcp::{self, TcpTransport};
 use super::time::Instant;
 use super::{ConnectionDetails, Connector, LazyBuffers, Transport, TransportAdapter};
 
@@ -19,9 +19,7 @@ use super::{ConnectionDetails, Connector, LazyBuffers, Transport, TransportAdapt
 /// The connector looks at the proxy settings in [`proxy`](crate::config::ConfigBuilder::proxy) to
 /// determine whether to attempt a proxy connection or not.
 #[derive(Default)]
-pub struct SocksConnector {
-    open: OpenSockets,
-}
+pub struct SocksConnector(());
 
 impl<In: Transport> Connector<In> for SocksConnector {
     type Out = Either<In, TcpTransport>;
@@ -85,7 +83,7 @@ impl<In: Transport> Connector<In> for SocksConnector {
             details.config.output_buffer_size(),
         );
         let transport = TcpTransport::new(stream, buffers);
-        self.open.track(&transport)?;
+        (details.register_shutdown)(transport.shutdown_handle())?;
 
         // The adapter deducts elapsed time between handshake reads and writes,
         // while TcpTransport also enforces the per-read and per-write limits.
@@ -97,10 +95,6 @@ impl<In: Transport> Connector<In> for SocksConnector {
         debug!("{} connected -> {:?}", proxy.protocol(), target);
 
         Ok(Some(Either::B(w.into_inner())))
-    }
-
-    fn shutdown(&self) {
-        self.open.shutdown();
     }
 }
 
@@ -440,6 +434,7 @@ mod test {
                 crate::transport::time::Instant::now() + (*elapsed.lock().unwrap()).into()
             }),
             run_connector: Arc::new(|_| unreachable!()),
+            register_shutdown: Arc::new(|_| Ok(())),
         };
         SocksConnector::default()
             .connect(&details, None::<()>)
@@ -610,6 +605,7 @@ mod test {
                     crate::transport::time::Instant::now() + (*elapsed.lock().unwrap()).into()
                 }),
                 run_connector: Arc::new(|_| unreachable!()),
+                register_shutdown: Arc::new(|_| Ok(())),
             };
             let start = Instant::now();
             let result = SocksConnector::default()
