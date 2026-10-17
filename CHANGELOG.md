@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Add Agent::shutdown() to interrupt requests in flight and close all connections
   * Preserve validated request header casing with RequestBuilder::header_raw #1214
   * Decode proxy URL credentials once; literal percent signs must be escaped as %25 #1215
   * Encode ProxyBuilder credentials and preserve colons in proxy passwords #1215

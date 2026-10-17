@@ -226,6 +226,7 @@ fn connect_proxy_negotiation_uses_both_limits() {
         },
         current_time: Arc::new(Instant::now),
         run_connector: Arc::new(move |details| Ok(script.connect(details, None)?.unwrap().boxed())),
+        register_shutdown: Arc::new(|_| Ok(())),
     };
     ConnectProxyConnector::default()
         .connect(&details, None::<()>)

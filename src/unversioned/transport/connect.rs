@@ -77,6 +77,7 @@ impl<In: Transport> Connector<In> for ConnectProxyConnector {
             timeout: details.timeout,
             current_time: details.current_time.clone(),
             run_connector: details.run_connector.clone(),
+            register_shutdown: details.register_shutdown.clone(),
         };
 
         let transport = (details.run_connector)(&proxy_details)?;

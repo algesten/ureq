@@ -1,6 +1,6 @@
 use std::io::{Read, Write};
-use std::net::{SocketAddr, TcpStream};
-use std::sync::Arc;
+use std::net::{Shutdown, SocketAddr, TcpStream};
+use std::sync::{Arc, Weak};
 use std::{fmt, io, time};
 
 use crate::config::Config;
@@ -12,7 +12,8 @@ use super::ResolvedSocketAddrs;
 use super::chain::Either;
 
 use super::time::Duration;
-use super::{Buffers, ConnectionDetails, Connector, LazyBuffers, NextTimeout, Transport};
+use super::{Buffers, ConnectionDetails, Connector, LazyBuffers, NextTimeout};
+use super::{ShutdownHandle, Transport};
 
 #[derive(Default)]
 /// Connector for regular TCP sockets.
@@ -44,8 +45,17 @@ impl<In: Transport> Connector<In> for TcpConnector {
 
         let buffers = LazyBuffers::new(config.input_buffer_size(), config.output_buffer_size());
         let transport = TcpTransport::new(stream, buffers);
+        (details.register_shutdown)(transport.shutdown_handle())?;
 
         Ok(Some(Either::B(transport)))
+    }
+}
+
+impl ShutdownHandle for TcpStream {
+    fn shutdown(&self) {
+        debug!("Shutdown: {:?}", self.peer_addr().ok());
+        // An error means the socket is already closed or shut down.
+        let _ = TcpStream::shutdown(self, Shutdown::Both);
     }
 }
 
@@ -207,7 +217,9 @@ fn try_connect_single(
 }
 
 pub struct TcpTransport {
-    stream: TcpStream,
+    /// In an `Arc` so that the [`ShutdownHandle`] can share it (weakly) and shut the
+    /// socket down while this transport is in use. All I/O goes via `&TcpStream`.
+    stream: Arc<TcpStream>,
     buffers: LazyBuffers,
     timeout_write: Option<Duration>,
     timeout_read: Option<Duration>,
@@ -216,11 +228,16 @@ pub struct TcpTransport {
 impl TcpTransport {
     pub fn new(stream: TcpStream, buffers: LazyBuffers) -> TcpTransport {
         TcpTransport {
-            stream,
+            stream: Arc::new(stream),
             buffers,
             timeout_read: None,
             timeout_write: None,
         }
+    }
+
+    /// A handle to shut down the socket while this transport is in use.
+    pub(crate) fn shutdown_handle(&self) -> Weak<dyn ShutdownHandle> {
+        Arc::downgrade(&self.stream) as Weak<dyn ShutdownHandle>
     }
 }
 
@@ -256,7 +273,7 @@ impl Transport for TcpTransport {
         )?;
 
         let output = &self.buffers.output()[..amount];
-        match self.stream.write_all(output).normalize_would_block() {
+        match (&*self.stream).write_all(output).normalize_would_block() {
             Ok(v) => Ok(v),
             Err(e) if e.kind() == io::ErrorKind::TimedOut => Err(Error::Timeout(timeout.reason)),
             Err(e) => Err(e.into()),
@@ -277,8 +294,9 @@ impl Transport for TcpTransport {
 
         let input = self.buffers.input_append_buf();
         let started = time::Instant::now();
+        let mut stream = &*self.stream;
         let result = read_retrying_interrupts(
-            &mut self.stream,
+            &mut stream,
             input,
             timeout.not_zero().map(|t| *t),
             || started.elapsed(),
@@ -300,7 +318,7 @@ impl Transport for TcpTransport {
     }
 
     fn is_open(&mut self) -> bool {
-        probe_tcp_stream(&mut self.stream).unwrap_or(false)
+        probe_tcp_stream(&self.stream).unwrap_or(false)
     }
 }
 
@@ -334,7 +352,7 @@ fn read_retrying_interrupts<R: Read>(
     }
 }
 
-fn probe_tcp_stream(stream: &mut TcpStream) -> Result<bool, Error> {
+fn probe_tcp_stream(mut stream: &TcpStream) -> Result<bool, Error> {
     // Temporary do non-blocking IO
     stream.set_nonblocking(true)?;
 

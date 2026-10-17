@@ -23,7 +23,7 @@
 //! connector handling other schemes than `http`/`https` without affecting "regular" connections.
 
 use std::fmt::Debug;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use http::Uri;
 use http::uri::Scheme;
@@ -225,10 +225,33 @@ pub struct ConnectionDetails<'a> {
     ///
     /// Used for CONNECT proxy to establish a connection to the proxy server itself.
     pub run_connector: Arc<RunConnector>,
+
+    /// Register a [`ShutdownHandle`] with the [`Agent`](crate::Agent).
+    ///
+    /// A connector that creates an underlying transport, such as a socket, registers a
+    /// handle to it straight after creating it, before any TLS, SOCKS or CONNECT
+    /// negotiation. [`Agent::shutdown()`](crate::Agent::shutdown) then shuts the handle
+    /// down, which interrupts I/O blocked on the transport in other threads.
+    ///
+    /// Only the [`Weak`] is kept, so the transport closes as usual when dropped.
+    /// Fails once the agent is shut down, and the connector returns that error.
+    pub register_shutdown: Arc<RegisterShutdown>,
 }
 
 pub(crate) type RunConnector =
     dyn Fn(&ConnectionDetails) -> Result<Box<dyn Transport>, Error> + Send + Sync;
+
+pub(crate) type RegisterShutdown =
+    dyn Fn(Weak<dyn ShutdownHandle>) -> Result<(), Error> + Send + Sync;
+
+/// Shuts down a transport from another thread.
+///
+/// See [`ConnectionDetails::register_shutdown`].
+pub trait ShutdownHandle: Send + Sync {
+    /// Shut down the underlying resource, so that reads and writes blocked on it
+    /// return an error straight away.
+    fn shutdown(&self);
+}
 
 impl<'a> ConnectionDetails<'a> {
     /// Tell if the requested socket need TLS wrapping.
