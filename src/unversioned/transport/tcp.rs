@@ -105,7 +105,7 @@ impl OpenSockets {
     }
 }
 
-fn try_connect(
+pub(super) fn try_connect(
     addrs: &ResolvedSocketAddrs,
     start: Instant,
     timeout: NextTimeout,

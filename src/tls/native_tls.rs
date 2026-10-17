@@ -61,8 +61,13 @@ impl<In: Transport> Connector<In> for NativeTlsConnector {
             .host_bare()
             .to_string();
 
-        let mut adapter = ErrorCapture::wrap(TransportAdapter::new(transport.boxed()));
-        adapter.get_mut().set_timeout(details.timeout);
+        let mut adapter = ErrorCapture::wrap(TransportAdapter::new(
+            transport.boxed(),
+            details.current_time.clone(),
+        ));
+        adapter
+            .get_mut()
+            .set_timeout_at(details.timeout, details.now);
         let capture = adapter.capture();
 
         let result = connector.connect(&domain, adapter).map_err(|e| match e {

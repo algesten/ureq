@@ -1,6 +1,14 @@
 # Unreleased
 
   * Add Agent::shutdown() to interrupt requests in flight and close all connections
+  * Preserve validated request header casing with RequestBuilder::header_raw #1214
+  * Decode proxy URL credentials once; literal percent signs must be escaped as %25 #1215
+  * Encode ProxyBuilder credentials and preserve colons in proxy passwords #1215
+  * Apply remaining timeout budgets to SOCKS setup and drop the socks dependency #1209
+  * Check NO_PROXY before resolving a SOCKS proxy, so excluded hosts connect directly #1209
+  * Clarify timeout budgets, phase boundaries, and proxy DNS #1213
+  * Bump minimum rustls version to 0.23.46 for security fixes #1208
+  * Bound TLS handshake I/O by the remaining connect/global timeout #1208
   * Retry socket reads interrupted by a signal (EINTR) when a timeout applies (technically breaking) #1205
   * Fix native-tls-no-default enabling dependencies without enabling the TLS connector
   * Add timeout_per_read and timeout_per_write independently of total phase budgets

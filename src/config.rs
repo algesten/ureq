@@ -429,7 +429,7 @@ impl Config {
         self.timeout_per_write
     }
 
-    /// Total and phase timeout budgets.
+    /// Total and phase timeout budgets. See [`Timeouts`] for how these limits combine.
     ///
     /// Per-operation limits are available via [`Self::timeout_per_read`] and
     /// [`Self::timeout_per_write`].
@@ -746,10 +746,16 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
         self
     }
 
-    /// Timeout for the entire call
+    /// Max total duration for the entire operation.
     ///
     /// This is end-to-end, from DNS lookup to finishing reading the response body.
-    /// Thus it covers all other timeouts.
+    /// The same budget applies across all phases and redirects. It is not restarted
+    /// for each connection attempt, handshake, read, or write.
+    ///
+    /// The budget continues after the response is returned, while its body is read.
+    /// Time between application reads counts toward this limit. Timeouts are checked
+    /// when ureq performs network I/O; they do not interrupt application code or a
+    /// user-provided request body reader.
     ///
     /// Defaults to `None`.
     pub fn timeout_global(mut self, v: Option<Duration>) -> Self {
@@ -757,12 +763,15 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
         self
     }
 
-    /// Timeout for call-by-call when following redirects
+    /// Max total duration for a single HTTP exchange.
     ///
-    /// This covers a single call and the timeout is reset when
-    /// ureq follows a redirections.
+    /// This covers DNS lookup, connection setup, sending the request, and receiving
+    /// the response headers and body. It is reset when ureq follows a redirect.
+    /// The [`timeout_global`] budget continues across redirects.
     ///
-    /// Defaults to `None`..
+    /// Defaults to `None`.
+    ///
+    /// [`timeout_global`]: ConfigBuilder::timeout_global
     pub fn timeout_per_call(mut self, v: Option<Duration>) -> Self {
         self.config().timeouts.per_call = v;
         self
@@ -770,13 +779,13 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
 
     /// Max duration for each transport read
     ///
-    /// This covers headers, body, TLS handshakes and HTTP CONNECT responses.
+    /// This covers headers, body, TLS handshakes, HTTP CONNECT responses, and
+    /// SOCKS handshakes.
     /// The timeout restarts for each read. Phase, per-call and global timeouts
     /// still apply, including the total body timeout set by [`timeout_recv_body`].
     ///
     /// This applies to transport I/O, not time spent between application reads
-    /// or reading buffered data. DNS, TCP connection establishment and SOCKS
-    /// negotiation are not covered.
+    /// or reading buffered data. DNS and TCP connection establishment are not covered.
     ///
     /// Defaults to `None`.
     ///
@@ -788,13 +797,14 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
 
     /// Max duration for each transport write
     ///
-    /// This covers headers, body, TLS handshakes and HTTP CONNECT requests.
+    /// This covers headers, body, TLS handshakes, HTTP CONNECT requests, and
+    /// SOCKS handshakes.
     /// The timeout restarts for each write. Phase, per-call and global timeouts
     /// still apply, including the total body timeout set by [`timeout_send_body`].
     ///
     /// Socket buffering and partial writes mean this is not a total duration
     /// for an application write. Reading from the request body, DNS, TCP
-    /// connection establishment and SOCKS negotiation are not covered.
+    /// connection establishment are not covered.
     ///
     /// Defaults to `None`.
     ///
@@ -804,23 +814,33 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
         self
     }
 
-    /// Max duration for doing the DNS lookup when establishing the connection
+    /// Max total duration for resolving the target hostname locally.
     ///
-    /// Because most platforms do not have an async syscall for looking up
-    /// a host name, setting this might force str0m to spawn a thread to handle
-    /// the timeout.
+    /// This phase is skipped when a proxy resolves the target hostname. Resolving
+    /// the proxy's own hostname is part of [`timeout_connect`]. The global and
+    /// per-call budgets also apply to both kinds of lookup.
+    ///
+    /// Because most platforms do not have an async syscall for looking up a host
+    /// name, setting a timeout may cause ureq to spawn a thread for the lookup.
     ///
     /// Defaults to `None`.
+    ///
+    /// [`timeout_connect`]: ConfigBuilder::timeout_connect
     pub fn timeout_resolve(mut self, v: Option<Duration>) -> Self {
         self.config().timeouts.resolve = v;
         self
     }
 
-    /// Max duration for establishing the connection
+    /// Max total duration for establishing the connection.
     ///
-    /// This covers opening the socket, negotiating with any proxy, and for a
-    /// TLS connection, completing the TLS handshake. The handshake is done as
-    /// part of connecting, so it is not covered by [`timeout_send_request`].
+    /// This starts after local target hostname resolution. One budget covers
+    /// resolving a proxy's hostname, trying the resolved socket addresses,
+    /// negotiating with any proxy, and completing any TLS handshakes. It is not
+    /// restarted for each address, proxy step, or handshake read or write.
+    ///
+    /// The global and per-call budgets continue throughout connection setup.
+    /// TLS handshakes are part of connecting, so they are not covered by
+    /// [`timeout_send_request`].
     ///
     /// Defaults to `None`.
     ///
@@ -830,10 +850,11 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
         self
     }
 
-    /// Max duration for sending the request headers, but not the request body.
+    /// Max total duration for sending the request headers, excluding the request body.
     ///
     /// This starts after the connection (including any TLS handshake) is
-    /// established, see [`timeout_connect`].
+    /// established, see [`timeout_connect`]. The budget is not restarted for
+    /// each write and stops applying once all request headers have been sent.
     ///
     /// Defaults to `None`.
     ///
@@ -848,13 +869,23 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
     /// Only used if there is a request body and we sent the `Expect: 100-continue`
     /// header to indicate we want the server to respond with 100.
     ///
+    /// When this budget expires, ureq proceeds to send the request body. This
+    /// expiry does not return [`Error::Timeout`]. Other applicable timeouts,
+    /// including the global, per-call, and per-read limits, still return an error
+    /// if they expire first.
+    ///
     /// This defaults to 1 second.
     pub fn timeout_await_100(mut self, v: Option<Duration>) -> Self {
         self.config().timeouts.await_100 = v;
         self
     }
 
-    /// Max duration for sending a request body (if there is one)
+    /// Max total duration for sending a request body (if there is one).
+    ///
+    /// This starts after the request headers have been sent, or after the
+    /// 100-continue wait when used. The budget is not restarted for each write.
+    /// Time spent reading a user-provided request body counts toward this limit,
+    /// but ureq cannot interrupt the body reader itself.
     ///
     /// Defaults to `None`.
     pub fn timeout_send_body(mut self, v: Option<Duration>) -> Self {
@@ -862,7 +893,11 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
         self
     }
 
-    /// Max duration for receiving the response headers, but not the body
+    /// Max total duration for receiving the response headers, excluding the body.
+    ///
+    /// This starts after sending the request, including its body when present.
+    /// It includes the wait for the first response byte and is not restarted
+    /// when only part of the headers has been received.
     ///
     /// This stops applying once the response headers have been received.
     /// Reading the body is covered separately by [`timeout_recv_body`].
@@ -879,6 +914,9 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
     ///
     /// This starts when the response headers have been received, see
     /// [`timeout_recv_response`]. The budget is not restarted for each read.
+    ///
+    /// The budget keeps running after the response is returned and between
+    /// application reads. Further network I/O is limited by the remaining budget.
     ///
     /// Defaults to `None`.
     ///
@@ -966,33 +1004,55 @@ impl<'a, S: AsSendBody> ConfigBuilder<RequestExtScope<'a, S>> {
 /// Request timeout configuration.
 ///
 /// This can be configured both on Agent level as well as per request.
+/// Agent settings provide defaults for each operation; request settings override them.
+///
+/// Global and per-call budgets apply throughout an operation. Each phase has its
+/// own total budget, which stops applying when that phase finishes. A redirect
+/// starts new per-call and phase budgets while preserving the global budget.
+/// Network operations use the shortest applicable remaining budget.
+///
+/// Per-operation read and write limits are configured separately through
+/// [`ConfigBuilder::timeout_per_read`] and [`ConfigBuilder::timeout_per_write`].
+/// Those limits restart for each transport read or write; total budgets do not.
+/// `None` disables only the corresponding limit. All limits default to `None`
+/// except [`await_100`](Self::await_100), which defaults to one second and allows
+/// the upload to proceed when that wait expires.
 #[derive(Clone, Copy)]
 pub struct Timeouts {
-    /// Timeout for the entire call
+    /// Total operation budget, including redirects and the response body.
+    /// See [`ConfigBuilder::timeout_global`].
     pub global: Option<Duration>,
 
-    /// Timeout for call-by-call when following redirects
+    /// Total budget for one HTTP exchange, reset for each redirect.
+    /// See [`ConfigBuilder::timeout_per_call`].
     pub per_call: Option<Duration>,
 
-    /// Max duration for doing the DNS lookup when establishing the connection
+    /// Total local target hostname resolution budget.
+    /// See [`ConfigBuilder::timeout_resolve`].
     pub resolve: Option<Duration>,
 
-    /// Max duration for establishing the connection, including any TLS handshake.
+    /// Total connection setup budget, including proxy DNS, negotiation, and TLS.
+    /// See [`ConfigBuilder::timeout_connect`].
     pub connect: Option<Duration>,
 
-    /// Max duration for sending the request, but not the request body.
+    /// Total request header sending budget.
+    /// See [`ConfigBuilder::timeout_send_request`].
     pub send_request: Option<Duration>,
 
-    /// Max duration for awaiting a 100-continue response.
+    /// Wait for a 100-continue response before proceeding with the upload.
+    /// See [`ConfigBuilder::timeout_await_100`].
     pub await_100: Option<Duration>,
 
-    /// Max duration for sending a request body (if there is one)
+    /// Total request body sending budget.
+    /// See [`ConfigBuilder::timeout_send_body`].
     pub send_body: Option<Duration>,
 
-    /// Max duration for receiving the response headers, but not the body
+    /// Total response header receiving budget.
+    /// See [`ConfigBuilder::timeout_recv_response`].
     pub recv_response: Option<Duration>,
 
-    /// Max total duration for receiving the response body.
+    /// Total response body receiving budget, starting after complete response headers.
+    /// See [`ConfigBuilder::timeout_recv_body`].
     pub recv_body: Option<Duration>,
 }
 

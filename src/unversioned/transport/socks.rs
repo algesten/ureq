@@ -1,20 +1,16 @@
 use std::fmt;
-use std::iter::once;
-use std::net::{SocketAddr, TcpStream};
-use std::sync::mpsc::{self, RecvTimeoutError};
-use std::{io, thread};
-
-use socks::{Socks4Stream, Socks5Stream, ToTargetAddr};
+use std::io::{self, Read, Write};
+use std::net::SocketAddr;
 
 use crate::Error;
 use crate::proxy::{Proxy, ProxyProtocol};
-use crate::util::UriExt;
+use crate::util::{AuthorityExt, UriExt};
 
-use super::ResolvedSocketAddrs;
 use super::chain::Either;
 
-use super::tcp::{OpenSockets, TcpTransport};
-use super::{ConnectionDetails, Connector, LazyBuffers, NextTimeout, Transport};
+use super::tcp::{self, OpenSockets, TcpTransport};
+use super::time::Instant;
+use super::{ConnectionDetails, Connector, LazyBuffers, Transport, TransportAdapter};
 
 /// Connector for SOCKS proxies.
 ///
@@ -49,36 +45,40 @@ impl<In: Transport> Connector<In> for SocksConnector {
             return Ok(chained.map(Either::A));
         }
 
-        let proxy_addrs = details
-            .resolver
-            .resolve(proxy.uri(), details.config, details.timeout)?;
-
-        // Check if this host is not supposed to be proxied.
-        let is_no_proxy = details
-            .config
-            .proxy()
-            .map(|p| p.is_no_proxy(details.uri))
-            .unwrap_or(false);
-
-        if is_no_proxy {
+        // Check if this host is not supposed to be proxied. A direct connection
+        // does not need the proxy, so do this before resolving it.
+        if proxy.is_no_proxy(details.uri) {
             return Ok(None);
         }
 
-        let stream = if proxy.resolve_target() {
-            // The target is already resolved by run().
-            let resolved = details.addrs.iter().cloned();
+        let target = Target::new(details, proxy)?;
 
-            try_connect(&proxy_addrs, resolved, proxy, details.timeout)?
-        } else {
-            // Do not to resolve the target locally, instead pass (host, port)
-            // to the proxy and let it resolve.
-            let iter = once(details.uri.host_port());
-            try_connect(&proxy_addrs, iter, proxy, details.timeout)?
+        // Keep all setup steps within the budget that started before this connector.
+        let timeout_at = |now: Instant| {
+            let mut timeout = details.timeout;
+            if !timeout.after.is_not_happening() {
+                let elapsed = now.duration_since(details.now);
+                timeout.after = timeout.after.saturating_sub(*elapsed).into();
+            }
+            timeout.check()
         };
 
-        if details.config.no_delay() {
-            stream.set_nodelay(true)?;
-        }
+        let proxy_addrs = details.resolver.resolve(
+            proxy.uri(),
+            details.config,
+            timeout_at((details.current_time)())?,
+        )?;
+
+        // Connect to the proxy like TcpConnector connects to a server, within the
+        // connect timeout and trying each resolved address.
+        let now = (details.current_time)();
+        let stream = tcp::try_connect(
+            &proxy_addrs,
+            now,
+            timeout_at(now)?,
+            details.current_time.clone(),
+            details.config,
+        )?;
 
         let buffers = LazyBuffers::new(
             details.config.input_buffer_size(),
@@ -87,7 +87,16 @@ impl<In: Transport> Connector<In> for SocksConnector {
         let transport = TcpTransport::new(stream, buffers);
         self.open.track(&transport)?;
 
-        Ok(Some(Either::B(transport)))
+        // The adapter deducts elapsed time between handshake reads and writes,
+        // while TcpTransport also enforces the per-read and per-write limits.
+        let mut w = TransportAdapter::new(transport, details.current_time.clone());
+        w.set_timeout(timeout_at((details.current_time)())?);
+
+        trace!("Try connect {} -> {:?}", proxy.protocol(), target);
+        handshake(&mut w, proxy, target)?;
+        debug!("{} connected -> {:?}", proxy.protocol(), target);
+
+        Ok(Some(Either::B(w.into_inner())))
     }
 
     fn shutdown(&self) {
@@ -95,113 +104,1078 @@ impl<In: Transport> Connector<In> for SocksConnector {
     }
 }
 
-fn try_connect<'a, T: ToTargetAddr + fmt::Debug + Send + 'a + Clone>(
-    proxy_addrs: &ResolvedSocketAddrs,
-    target_addrs: impl Iterator<Item = T>,
-    proxy: &Proxy,
-    timeout: NextTimeout,
-) -> Result<TcpStream, Error> {
-    for target_addr in target_addrs {
-        for proxy_addr in proxy_addrs {
-            trace!(
-                "Try connect {} {} -> {:?}",
-                proxy.protocol(),
-                proxy_addr,
-                target_addr
-            );
+/// The address the proxy is asked to connect to.
+#[derive(Debug, Clone, Copy)]
+enum Target<'a> {
+    Ip(SocketAddr),
+    Domain(&'a str, u16),
+}
 
-            match try_connect_single(*proxy_addr, target_addr.clone(), proxy, timeout) {
-                Ok(v) => {
-                    debug!(
-                        "{} connected {} -> {:?}",
-                        proxy.protocol(),
-                        proxy_addr,
-                        target_addr
-                    );
-                    return Ok(v);
-                }
-                // Intercept ConnectionRefused to try next addrs
-                Err(Error::Io(e)) if e.kind() == io::ErrorKind::ConnectionRefused => {
-                    trace!(
-                        "{} -> {:?} proxy connection refused",
-                        proxy_addr, target_addr
-                    );
-                    continue;
-                }
-                // Other errors bail
-                Err(e) => return Err(e),
-            }
+impl<'a> Target<'a> {
+    fn new(details: &ConnectionDetails<'a>, proxy: &Proxy) -> Result<Self, Error> {
+        if proxy.resolve_target() {
+            // The target is already resolved by run().
+            let addr = details.addrs.first().ok_or(Error::HostNotFound)?;
+            return Ok(Target::Ip(*addr));
+        }
+
+        // Do not resolve the target locally, instead pass (host, port)
+        // to the proxy and let it resolve. An IP address is passed as one.
+        let (_, port) = details.uri.host_port();
+        // unwrap is ok because run() checks ensure_valid_url().
+        let host = details.uri.authority().unwrap().host_bare();
+
+        match host.parse() {
+            Ok(ip) => Ok(Target::Ip(SocketAddr::new(ip, port))),
+            Err(_) => Ok(Target::Domain(host, port)),
         }
     }
 
-    debug!("Proxy failed to to connect to any resolved address");
-    Err(Error::Io(io::Error::new(
-        io::ErrorKind::ConnectionRefused,
-        "Connection refused",
-    )))
-}
-
-fn try_connect_single<'a, T: ToTargetAddr + Send + 'a>(
-    proxy_addr: SocketAddr,
-    target_addr: T,
-    proxy: &Proxy,
-    timeout: NextTimeout,
-) -> Result<TcpStream, Error> {
-    // The async behavior is only used if we want to time cap connecting.
-    let use_sync = timeout.after.is_not_happening();
-
-    if use_sync {
-        connect_proxy(proxy, proxy_addr, target_addr)
-    } else {
-        let (tx, rx) = mpsc::sync_channel(1);
-        let proxy = proxy.clone();
-
-        thread::scope(move |s| {
-            s.spawn(move || tx.send(connect_proxy(&proxy, proxy_addr, target_addr)));
-
-            match rx.recv_timeout(*timeout.after) {
-                Ok(v) => v,
-                Err(RecvTimeoutError::Timeout) => Err(Error::Timeout(timeout.reason)),
-                Err(RecvTimeoutError::Disconnected) => unreachable!("mpsc sender gone"),
-            }
-        })
+    fn port(&self) -> u16 {
+        match self {
+            Target::Ip(addr) => addr.port(),
+            Target::Domain(_, port) => *port,
+        }
     }
 }
 
-fn connect_proxy<'a, T: ToTargetAddr + 'a>(
-    proxy: &Proxy,
-    proxy_addr: SocketAddr,
-    target_addr: T,
-) -> Result<TcpStream, Error> {
-    let stream = match proxy.protocol() {
+fn handshake<S: Read + Write>(w: &mut S, proxy: &Proxy, target: Target) -> io::Result<()> {
+    match proxy.protocol() {
         ProxyProtocol::Socks4 | ProxyProtocol::Socks4A => {
             if proxy.username().is_some() {
                 debug!("SOCKS4 does not support username/password");
             }
 
-            Socks4Stream::connect(proxy_addr, target_addr, "")?.into_inner()
+            socks4(w, target)
         }
 
-        ProxyProtocol::Socks5 | ProxyProtocol::Socks5h => {
-            if let Some(username) = proxy.username() {
-                // Connect with authentication.
-                let password = proxy.password().unwrap_or("");
-
-                Socks5Stream::connect_with_password(proxy_addr, target_addr, username, password)?
-            } else {
-                Socks5Stream::connect(proxy_addr, target_addr)?
-            }
-            .into_inner()
-        }
+        ProxyProtocol::Socks5 | ProxyProtocol::Socks5h => socks5(w, proxy, target),
 
         _ => unreachable!(), // HTTP(s) proxies.
+    }
+}
+
+/// SOCKS4 CONNECT, and SOCKS4A when the target is a host name. The user id is empty.
+fn socks4<S: Read + Write>(w: &mut S, target: Target) -> io::Result<()> {
+    // Version, command (CONNECT), port.
+    let mut request = vec![4, 1];
+    request.extend_from_slice(&target.port().to_be_bytes());
+
+    match target {
+        Target::Ip(SocketAddr::V4(addr)) => {
+            request.extend_from_slice(&addr.ip().octets());
+            request.push(0); // user id
+        }
+        Target::Ip(SocketAddr::V6(_)) => {
+            return Err(invalid_input("SOCKS4 does not support IPv6"));
+        }
+        Target::Domain(host, _) => {
+            // SOCKS4A: the address 0.0.0.1 tells the proxy to resolve the host
+            // name sent after the user id.
+            request.extend_from_slice(&[0, 0, 0, 1]);
+            request.push(0); // user id
+            request.extend_from_slice(host.as_bytes());
+            request.push(0);
+        }
+    }
+
+    w.write_all(&request)?;
+
+    // Version (0), status, then a port and address that are not used for CONNECT.
+    let mut reply = [0; 8];
+    w.read_exact(&mut reply)?;
+
+    if reply[0] != 0 {
+        return Err(invalid_data("invalid response version"));
+    }
+
+    match reply[1] {
+        90 => Ok(()),
+        91 => Err(io::Error::other("request rejected or failed")),
+        92 => Err(permission_denied(
+            "request rejected because SOCKS server cannot connect to identd on the client",
+        )),
+        93 => Err(permission_denied(
+            "request rejected because the client program and identd report different user-ids",
+        )),
+        _ => Err(invalid_data("invalid response code")),
+    }
+}
+
+/// SOCKS5 CONNECT (RFC 1928), with username/password authentication (RFC 1929)
+/// when the proxy has a username.
+fn socks5<S: Read + Write>(w: &mut S, proxy: &Proxy, target: Target) -> io::Result<()> {
+    let username = proxy.username();
+
+    // Version, then the offered methods. No authentication (0) is always offered,
+    // username/password (2) only when there is a username.
+    let greeting: &[u8] = if username.is_some() {
+        &[5, 2, 2, 0]
+    } else {
+        &[5, 1, 0]
+    };
+    w.write_all(greeting)?;
+
+    // Version, then the method the proxy chose.
+    let mut reply = [0; 2];
+    w.read_exact(&mut reply)?;
+
+    if reply[0] != 5 {
+        return Err(invalid_data("invalid response version"));
+    }
+
+    match (reply[1], username) {
+        (0, _) => {}
+        (2, Some(username)) => {
+            let password = proxy.password().unwrap_or("");
+            authenticate(w, username, password)?;
+        }
+        (0xff, _) => return Err(io::Error::other("no acceptable auth methods")),
+        _ => return Err(io::Error::other("unknown auth method")),
+    }
+
+    // Version, command (CONNECT), reserved, address type, address, port.
+    let mut request = vec![5, 1, 0];
+
+    match target {
+        Target::Ip(SocketAddr::V4(addr)) => {
+            request.push(1);
+            request.extend_from_slice(&addr.ip().octets());
+        }
+        Target::Ip(SocketAddr::V6(addr)) => {
+            request.push(4);
+            request.extend_from_slice(&addr.ip().octets());
+        }
+        Target::Domain(host, _) => {
+            let len =
+                u8::try_from(host.len()).map_err(|_| invalid_input("domain name too long"))?;
+            request.push(3);
+            request.push(len);
+            request.extend_from_slice(host.as_bytes());
+        }
+    }
+
+    request.extend_from_slice(&target.port().to_be_bytes());
+    w.write_all(&request)?;
+
+    // Version, then status.
+    w.read_exact(&mut reply)?;
+
+    if reply[0] != 5 {
+        return Err(invalid_data("invalid response version"));
+    }
+
+    if reply[1] != 0 {
+        return Err(socks5_failure(reply[1]));
+    }
+
+    // Reserved, then the type of the address the proxy bound. The address and
+    // port are not used for CONNECT, but must be read past.
+    w.read_exact(&mut reply)?;
+
+    if reply[0] != 0 {
+        return Err(invalid_data("invalid reserved byte"));
+    }
+
+    let len = match reply[1] {
+        1 => 4,
+        3 => {
+            let mut len = [0];
+            w.read_exact(&mut len)?;
+            len[0] as usize
+        }
+        4 => 16,
+        _ => return Err(io::Error::other("unsupported address type")),
     };
 
-    Ok(stream)
+    let mut bound = [0; u8::MAX as usize + 2];
+    w.read_exact(&mut bound[..len + 2])?;
+
+    Ok(())
+}
+
+/// The error for a SOCKS5 reply other than succeeded (0).
+fn socks5_failure(reply: u8) -> io::Error {
+    let reason = match reply {
+        1 => "general SOCKS server failure",
+        2 => "connection not allowed by ruleset",
+        3 => "network unreachable",
+        4 => "host unreachable",
+        5 => "connection refused",
+        6 => "TTL expired",
+        7 => "command not supported",
+        8 => "address kind not supported",
+        _ => "unknown error",
+    };
+
+    io::Error::other(reason)
+}
+
+fn authenticate<S: Read + Write>(w: &mut S, username: &str, password: &str) -> io::Result<()> {
+    // Each is sent after its length in one byte, and must not be empty.
+    let valid = 1..=u8::MAX as usize;
+
+    if !valid.contains(&username.len()) {
+        return Err(invalid_input("invalid username"));
+    }
+    if !valid.contains(&password.len()) {
+        return Err(invalid_input("invalid password"));
+    }
+
+    // Version, username, password.
+    let mut request = vec![1];
+    request.push(username.len() as u8);
+    request.extend_from_slice(username.as_bytes());
+    request.push(password.len() as u8);
+    request.extend_from_slice(password.as_bytes());
+    w.write_all(&request)?;
+
+    // Version, then status.
+    let mut reply = [0; 2];
+    w.read_exact(&mut reply)?;
+
+    if reply[0] != 1 {
+        return Err(invalid_data("invalid response version"));
+    }
+
+    if reply[1] != 0 {
+        return Err(permission_denied("password authentication failed"));
+    }
+
+    Ok(())
+}
+
+fn invalid_input(reason: &'static str) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidInput, reason)
+}
+
+fn invalid_data(reason: &'static str) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidData, reason)
+}
+
+fn permission_denied(reason: &'static str) -> io::Error {
+    io::Error::new(io::ErrorKind::PermissionDenied, reason)
 }
 
 impl fmt::Debug for SocksConnector {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SocksConnector").finish()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::io::Cursor;
+    use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, TcpListener, TcpStream};
+    use std::sync::{Arc, Mutex};
+    use std::thread;
+    use std::time::{Duration, Instant};
+
+    use super::*;
+    use crate::config::Config;
+    use crate::http::Uri;
+    use crate::transport::{Buffers, NextTimeout, TcpConnector};
+    use crate::unversioned::resolver::{ResolvedSocketAddrs, Resolver};
+    use crate::{Agent, Timeout};
+
+    // Resolves IP addresses only, so no test depends on DNS.
+    #[derive(Debug)]
+    struct IpOnly;
+
+    impl Resolver for IpOnly {
+        fn resolve(
+            &self,
+            uri: &Uri,
+            _: &Config,
+            _: NextTimeout,
+        ) -> Result<ResolvedSocketAddrs, Error> {
+            let (host, port) = uri.host_port();
+            let ip: IpAddr = host.parse().map_err(|_| Error::HostNotFound)?;
+            let mut addrs = self.empty();
+            addrs.push(SocketAddr::new(ip, port));
+            Ok(addrs)
+        }
+    }
+
+    // Advance the shared clock to simulate time spent before and during proxy DNS.
+    #[derive(Debug)]
+    struct TimedProxyResolver {
+        elapsed: Arc<Mutex<Duration>>,
+        lookup_time: Duration,
+        seen: Mutex<Option<NextTimeout>>,
+    }
+
+    impl Resolver for TimedProxyResolver {
+        fn resolve(
+            &self,
+            uri: &Uri,
+            config: &Config,
+            timeout: NextTimeout,
+        ) -> Result<ResolvedSocketAddrs, Error> {
+            *self.seen.lock().unwrap() = Some(timeout);
+            *self.elapsed.lock().unwrap() += self.lookup_time;
+            IpOnly.resolve(uri, config, timeout)
+        }
+    }
+
+    fn connect_with_elapsed(
+        proxy: Proxy,
+        resolver: &TimedProxyResolver,
+        timeout: NextTimeout,
+    ) -> Result<(), Error> {
+        let uri: Uri = "http://127.0.0.1:1/".parse().unwrap();
+        let config = Agent::config_builder().proxy(Some(proxy)).build();
+        let mut addrs = resolver.empty();
+        addrs.push("127.0.0.1:1".parse().unwrap());
+        let elapsed = Arc::clone(&resolver.elapsed);
+        let details = ConnectionDetails {
+            uri: &uri,
+            addrs,
+            config: &config,
+            request_level: false,
+            resolver,
+            now: crate::transport::time::Instant::now(),
+            timeout,
+            current_time: Arc::new(move || {
+                crate::transport::time::Instant::now() + (*elapsed.lock().unwrap()).into()
+            }),
+            run_connector: Arc::new(|_| unreachable!()),
+        };
+        SocksConnector::default()
+            .connect(&details, None::<()>)
+            .map(|_| ())
+    }
+
+    #[test]
+    fn proxy_lookup_preserves_remaining_budget() {
+        for reason in [Timeout::Global, Timeout::PerCall, Timeout::Connect] {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let proxy =
+                Proxy::new(&format!("socks5h://{}", listener.local_addr().unwrap())).unwrap();
+            let hung_up = thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(3)))
+                    .unwrap();
+                stream.read_to_end(&mut Vec::new()).is_ok()
+            });
+            let resolver = TimedProxyResolver {
+                elapsed: Arc::new(Mutex::new(Duration::from_millis(250))),
+                lookup_time: Duration::from_millis(500),
+                seen: Mutex::new(None),
+            };
+            let timeout = NextTimeout {
+                after: Duration::from_secs(1).into(),
+                reason,
+                per_read: Some(Duration::from_secs(2).into()),
+                per_write: Some(Duration::from_secs(3).into()),
+            };
+            let start = Instant::now();
+            let result = connect_with_elapsed(proxy, &resolver, timeout);
+            let elapsed = start.elapsed();
+            assert!(hung_up.join().unwrap(), "{reason}: connection left open");
+            assert!(matches!(result, Err(Error::Timeout(actual)) if actual == reason));
+
+            let seen = resolver.seen.lock().unwrap().unwrap();
+            assert!(seen.after <= Duration::from_millis(750).into(), "{seen:?}");
+            assert_eq!(seen.reason, reason);
+            assert_eq!(seen.per_read, timeout.per_read);
+            assert_eq!(seen.per_write, timeout.per_write);
+            // The lookup leaves 250 ms for the handshake. Allow scheduling slack,
+            // but distinguish that from restarting the full one-second budget.
+            assert!(
+                elapsed < Duration::from_millis(750),
+                "{reason}: {elapsed:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn expired_proxy_lookup_does_not_open_socket() {
+        for reason in [Timeout::Global, Timeout::PerCall, Timeout::Connect] {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            listener.set_nonblocking(true).unwrap();
+            let proxy =
+                Proxy::new(&format!("socks5h://{}", listener.local_addr().unwrap())).unwrap();
+            let resolver = TimedProxyResolver {
+                elapsed: Arc::new(Mutex::new(Duration::ZERO)),
+                lookup_time: Duration::from_secs(1),
+                seen: Mutex::new(None),
+            };
+            let result = connect_with_elapsed(
+                proxy,
+                &resolver,
+                NextTimeout {
+                    after: Duration::from_secs(1).into(),
+                    reason,
+                    per_read: Some(Duration::from_millis(20).into()),
+                    ..NextTimeout::default()
+                },
+            );
+            assert!(matches!(result, Err(Error::Timeout(actual)) if actual == reason));
+            let error = listener.accept().unwrap_err();
+            assert_eq!(error.kind(), io::ErrorKind::WouldBlock);
+        }
+    }
+
+    #[test]
+    fn proxy_lookup_does_not_spend_per_read_limit() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let proxy = Proxy::new(&format!("socks5h://{}", listener.local_addr().unwrap())).unwrap();
+        let hung_up = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            stream.read_to_end(&mut Vec::new()).is_ok()
+        });
+        let resolver = TimedProxyResolver {
+            elapsed: Arc::new(Mutex::new(Duration::from_millis(250))),
+            lookup_time: Duration::from_secs(2),
+            seen: Mutex::new(None),
+        };
+        let start = Instant::now();
+        let result = connect_with_elapsed(
+            proxy,
+            &resolver,
+            NextTimeout {
+                per_read: Some(Duration::from_millis(100).into()),
+                ..NextTimeout::default()
+            },
+        );
+        let elapsed = start.elapsed();
+        assert!(hung_up.join().unwrap(), "connection left open");
+        assert!(matches!(result, Err(Error::Timeout(Timeout::PerRead))));
+        assert!(elapsed >= Duration::from_millis(80), "{elapsed:?}");
+        let seen = resolver.seen.lock().unwrap().unwrap();
+        assert!(seen.after.is_not_happening());
+    }
+
+    #[cfg(any(feature = "_rustls", feature = "native-tls-no-default"))]
+    fn tls_after_socks_preserves_remaining_budget<C>(
+        make_tls: impl Fn() -> C,
+        tls_config: crate::tls::TlsConfig,
+    ) where
+        C: Connector<Either<(), TcpTransport>>,
+    {
+        let mut elapsed_by_reason = Vec::new();
+        for reason in [Timeout::Global, Timeout::PerCall, Timeout::Connect] {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let proxy =
+                Proxy::new(&format!("socks5h://{}", listener.local_addr().unwrap())).unwrap();
+            let peer = thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(3)))
+                    .unwrap();
+                let mut greeting = [0; 3];
+                stream.read_exact(&mut greeting).unwrap();
+                assert_eq!(greeting, [5, 1, 0]);
+                stream.write_all(&[5, 0]).unwrap();
+                let mut request = [0; 10];
+                stream.read_exact(&mut request).unwrap();
+                assert_eq!(request, [5, 1, 0, 1, 127, 0, 0, 1, 1, 187]);
+                stream.write_all(SUCCEEDED5).unwrap();
+
+                // SOCKS succeeds, then the target accepts ClientHello and stays silent.
+                let mut tls_header = [0; 3];
+                stream.read_exact(&mut tls_header).unwrap();
+                assert_eq!(&tls_header[..2], &[22, 3]);
+                stream.read_to_end(&mut Vec::new()).is_ok()
+            });
+            let resolver = TimedProxyResolver {
+                elapsed: Arc::new(Mutex::new(Duration::ZERO)),
+                lookup_time: Duration::from_millis(750),
+                seen: Mutex::new(None),
+            };
+            let uri: Uri = "https://127.0.0.1/".parse().unwrap();
+            let config = Agent::config_builder()
+                .proxy(Some(proxy))
+                .tls_config(tls_config.clone())
+                .build();
+            let elapsed = Arc::clone(&resolver.elapsed);
+            let details = ConnectionDetails {
+                uri: &uri,
+                addrs: resolver.empty(),
+                config: &config,
+                request_level: false,
+                resolver: &resolver,
+                now: crate::transport::time::Instant::now(),
+                timeout: NextTimeout {
+                    after: Duration::from_secs(1).into(),
+                    reason,
+                    ..NextTimeout::default()
+                },
+                current_time: Arc::new(move || {
+                    crate::transport::time::Instant::now() + (*elapsed.lock().unwrap()).into()
+                }),
+                run_connector: Arc::new(|_| unreachable!()),
+            };
+            let start = Instant::now();
+            let result = SocksConnector::default()
+                .chain(make_tls())
+                .connect(&details, None::<()>);
+            let elapsed = start.elapsed();
+            assert!(peer.join().unwrap(), "{reason}: connection left open");
+            assert!(
+                matches!(result, Err(Error::Timeout(actual)) if actual == reason),
+                "{reason}: {result:?}"
+            );
+            elapsed_by_reason.push((reason, elapsed));
+        }
+        // Proxy DNS spent 750 ms of the shared second. TLS has 250 ms left;
+        // allow scheduling slack while detecting a restarted full second.
+        assert!(
+            elapsed_by_reason
+                .iter()
+                .all(|(_, elapsed)| *elapsed < Duration::from_millis(750)),
+            "{elapsed_by_reason:?}"
+        );
+    }
+
+    #[cfg(feature = "_rustls")]
+    #[test]
+    fn rustls_after_socks_uses_remaining_budget() {
+        tls_after_socks_preserves_remaining_budget(
+            crate::transport::RustlsConnector::default,
+            crate::tls::TlsConfig::builder()
+                .disable_verification(true)
+                .unversioned_rustls_crypto_provider(Arc::new(
+                    rustls::crypto::aws_lc_rs::default_provider(),
+                ))
+                .build(),
+        );
+    }
+
+    #[cfg(feature = "native-tls-no-default")]
+    #[test]
+    fn native_tls_after_socks_uses_remaining_budget() {
+        tls_after_socks_preserves_remaining_budget(
+            crate::transport::NativeTlsConnector::default,
+            crate::tls::TlsConfig::builder()
+                .provider(crate::tls::TlsProvider::NativeTls)
+                .disable_verification(true)
+                .build(),
+        );
+    }
+
+    // SOCKS, then plain TCP, without the in-memory transport of the _test feature.
+    fn agent(proxy: Proxy, timeout_global: Option<Duration>) -> Agent {
+        let config = Agent::config_builder()
+            .proxy(Some(proxy))
+            .timeout_global(timeout_global)
+            .build();
+        let connector = ().chain(SocksConnector::default()).chain(TcpConnector::default());
+        Agent::with_parts(config, connector, IpOnly)
+    }
+
+    fn respond_ok(stream: &mut TcpStream) {
+        let _ = stream.read(&mut [0; 4096]);
+        let response = b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok";
+        stream.write_all(response).unwrap();
+    }
+
+    #[test]
+    fn no_proxy_goes_direct_without_resolving_proxy() {
+        let server = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/", server.local_addr().unwrap());
+        thread::spawn(move || respond_ok(&mut server.accept().unwrap().0));
+
+        // IpOnly cannot resolve the proxy, like a proxy name that is not in DNS.
+        let proxy = Proxy::builder(ProxyProtocol::Socks5)
+            .host("proxy.invalid")
+            .no_proxy("127.0.0.1")
+            .build()
+            .unwrap();
+
+        let mut response = agent(proxy, None).get(&url).call().unwrap();
+        assert_eq!(response.body_mut().read_to_string().unwrap(), "ok");
+    }
+
+    #[test]
+    fn silent_proxy_times_out() {
+        for protocol in ["socks4", "socks4a", "socks5", "socks5h"] {
+            let silent = TcpListener::bind("127.0.0.1:0").unwrap();
+            let proxy = format!("{}://{}", protocol, silent.local_addr().unwrap());
+            let proxy = Proxy::new(&proxy).unwrap();
+
+            // Accepts the connection, but never answers the handshake. Returns
+            // whether ureq hung up before the proxy gave up after 5 seconds.
+            let hung_up = thread::spawn(move || {
+                let (mut stream, _) = silent.accept().unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
+                stream.read_to_end(&mut Vec::new()).is_ok()
+            });
+
+            let limit = Duration::from_millis(200);
+            let start = Instant::now();
+            let error = agent(proxy, Some(limit))
+                .get("http://127.0.0.1:1/")
+                .call()
+                .unwrap_err();
+            let elapsed = start.elapsed();
+
+            assert!(
+                matches!(error, Error::Timeout(Timeout::Global)),
+                "{protocol}: {error:?}"
+            );
+            assert!(
+                elapsed < limit + Duration::from_secs(1),
+                "{protocol}: timed out after {elapsed:?}"
+            );
+            assert!(hung_up.join().unwrap(), "{protocol}: connection left open");
+        }
+    }
+
+    #[test]
+    fn request_through_proxy() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let proxy = format!("socks5h://{}", listener.local_addr().unwrap());
+        let proxy = Proxy::new(&proxy).unwrap();
+
+        // Neither side waits forever if the handshake goes wrong.
+        let limit = Duration::from_secs(5);
+
+        // Answers the handshake, then the request as if it were the target.
+        let proxy_side = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream.set_read_timeout(Some(limit)).unwrap();
+            let mut greeting = [0; 3];
+            stream.read_exact(&mut greeting).unwrap();
+            stream.write_all(&[5, 0]).unwrap();
+            let mut request = [0; 18];
+            stream.read_exact(&mut request).unwrap();
+            stream.write_all(&[5, 0, 0, 1, 0, 0, 0, 0, 0, 0]).unwrap();
+            respond_ok(&mut stream);
+            [&greeting[..], &request[..]].concat()
+        });
+
+        let mut response = agent(proxy, Some(limit))
+            .get("http://example.com/")
+            .call()
+            .unwrap();
+        assert_eq!(response.body_mut().read_to_string().unwrap(), "ok");
+
+        let sent = proxy_side.join().unwrap();
+        let expected = [&[5, 1, 0, 5, 1, 0, 3, 11][..], b"example.com", &[0, 80]].concat();
+        assert_eq!(sent, expected);
+    }
+
+    // Plays the proxy's side of a handshake from memory.
+    struct Script {
+        replies: Cursor<Vec<u8>>,
+        sent: Vec<u8>,
+    }
+
+    impl Read for Script {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            // Force fragmented I/O even when a whole reply is available.
+            let len = buf.len().min(1);
+            self.replies.read(&mut buf[..len])
+        }
+    }
+
+    impl Write for Script {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            let len = buf.len().min(1);
+            self.sent.extend_from_slice(&buf[..len]);
+            Ok(len)
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    // Bytes in parts, so that text can be written as text.
+    type Parts = &'static [&'static [u8]];
+
+    fn script(proxy: &str, target: Target, replies: Parts) -> (io::Result<()>, Script) {
+        let proxy = Proxy::new(proxy).unwrap();
+        let mut script = Script {
+            replies: Cursor::new(replies.concat()),
+            sent: vec![],
+        };
+        let result = handshake(&mut script, &proxy, target);
+        (result, script)
+    }
+
+    const IPV4: Target = Target::Ip(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1)), 80));
+    const IPV6: Target = Target::Ip(SocketAddr::new(IpAddr::V6(Ipv6Addr::LOCALHOST), 80));
+    const DOMAIN: Target = Target::Domain("example.com", 443);
+
+    const GRANTED4: &[u8] = &[0, 90, 0, 0, 0, 0, 0, 0];
+    const SUCCEEDED5: &[u8] = &[5, 0, 0, 1, 0, 0, 0, 0, 0, 0];
+
+    #[derive(Debug)]
+    struct ReadAheadTransport {
+        buffers: LazyBuffers,
+        replies: Cursor<Vec<u8>>,
+        reads: usize,
+    }
+
+    impl Transport for ReadAheadTransport {
+        fn buffers(&mut self) -> &mut dyn Buffers {
+            &mut self.buffers
+        }
+
+        fn transmit_output(&mut self, _: usize, timeout: NextTimeout) -> Result<(), Error> {
+            timeout.for_write().check()?;
+            Ok(())
+        }
+
+        fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
+            timeout.for_read().check()?;
+            self.reads += 1;
+            let len = self.replies.read(self.buffers.input_append_buf())?;
+            self.buffers.input_appended(len);
+            Ok(len > 0)
+        }
+
+        fn is_open(&mut self) -> bool {
+            true
+        }
+    }
+
+    // rust-socks #17 lost application data read alongside the SOCKS reply when
+    // its temporary BufReader was dropped. Exercise actual adapter read-ahead
+    // and retain the unread data when handing the transport back to the caller.
+    // https://github.com/sfackler/rust-socks/pull/17
+    #[test]
+    fn handshake_read_ahead_preserves_application_data() {
+        let application = b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok";
+        for (proxy, target, replies) in [
+            ("socks4://proxy", IPV4, GRANTED4.to_vec()),
+            ("socks4a://proxy", DOMAIN, GRANTED4.to_vec()),
+            ("socks5://proxy", IPV4, [&[5, 0][..], SUCCEEDED5].concat()),
+            (
+                "socks5h://proxy",
+                DOMAIN,
+                [&[5, 0, 5, 0, 0, 3, 4][..], b"host", &[0, 0]].concat(),
+            ),
+            (
+                "socks5://user:pass@proxy",
+                IPV6,
+                [&[5, 2, 1, 0, 5, 0, 0, 4][..], &[0; 18]].concat(),
+            ),
+        ] {
+            let proxy = Proxy::new(proxy).unwrap();
+            let transport = ReadAheadTransport {
+                buffers: LazyBuffers::new(512, 512),
+                replies: Cursor::new([replies, application.to_vec()].concat()),
+                reads: 0,
+            };
+            let current_time = Arc::new(crate::transport::time::Instant::now);
+            let mut adapter = TransportAdapter::new(transport, current_time.clone());
+            handshake(&mut adapter, &proxy, target).unwrap();
+
+            let transport = adapter.into_inner();
+            assert_eq!(
+                transport.reads, 1,
+                "reply and application data must be read together"
+            );
+            assert_eq!(transport.buffers.input(), application);
+
+            let mut adapter = TransportAdapter::new(transport, current_time);
+            let mut received = vec![0; application.len()];
+            adapter.read_exact(&mut received).unwrap();
+            assert_eq!(received, application);
+            assert_eq!(
+                adapter.into_inner().reads,
+                1,
+                "use the retained input buffer"
+            );
+        }
+    }
+
+    #[test]
+    fn handshakes() {
+        let cases: &[(&str, Target, Parts, Parts)] = &[
+            (
+                "socks4://proxy",
+                IPV4,
+                &[&[4, 1, 0, 80, 10, 0, 0, 1, 0]],
+                &[GRANTED4],
+            ),
+            (
+                "socks4a://proxy",
+                DOMAIN,
+                &[&[4, 1, 1, 187, 0, 0, 0, 1, 0], b"example.com", &[0]],
+                &[GRANTED4],
+            ),
+            (
+                // ureq has always sent an empty SOCKS4 user id.
+                "socks4://user:pass@proxy",
+                IPV4,
+                &[&[4, 1, 0, 80, 10, 0, 0, 1, 0]],
+                &[GRANTED4],
+            ),
+            (
+                "socks5://proxy",
+                IPV4,
+                &[&[5, 1, 0], &[5, 1, 0, 1, 10, 0, 0, 1, 0, 80]],
+                &[&[5, 0], SUCCEEDED5],
+            ),
+            (
+                // The proxy names the bound address by host name.
+                "socks5h://proxy",
+                DOMAIN,
+                &[&[5, 1, 0], &[5, 1, 0, 3, 11], b"example.com", &[1, 187]],
+                &[&[5, 0], &[5, 0, 0, 3, 4], b"host", &[0, 0]],
+            ),
+            (
+                "socks5://user:pass@proxy",
+                IPV6,
+                &[
+                    &[5, 2, 2, 0],
+                    &[1, 4],
+                    b"user",
+                    &[4],
+                    b"pass",
+                    &[5, 1, 0, 4],
+                    &[0; 15], // ::1
+                    &[1, 0, 80],
+                ],
+                &[&[5, 2], &[1, 0], &[5, 0, 0, 4], &[0; 18]],
+            ),
+            (
+                // The proxy may choose no authentication even when offered a password.
+                "socks5://user:pass@proxy",
+                IPV4,
+                &[&[5, 2, 2, 0], &[5, 1, 0, 1, 10, 0, 0, 1, 0, 80]],
+                &[&[5, 0], SUCCEEDED5],
+            ),
+        ];
+
+        for (proxy, target, sent, replies) in cases {
+            let proxy_config = Proxy::new(proxy).unwrap();
+            let mut script = Script {
+                replies: Cursor::new([replies.concat(), b"application data".to_vec()].concat()),
+                sent: vec![],
+            };
+            let result = handshake(&mut script, &proxy_config, *target);
+            result.unwrap_or_else(|e| panic!("{proxy}: {e}"));
+            assert_eq!(script.sent, sent.concat(), "{proxy}");
+
+            // Consume exactly the reply, leaving application bytes for the caller.
+            let mut remaining = Vec::new();
+            script.read_to_end(&mut remaining).unwrap();
+            assert_eq!(remaining, b"application data", "{proxy}");
+        }
+    }
+
+    #[test]
+    fn handshake_failures() {
+        use io::ErrorKind::{InvalidInput, Other, PermissionDenied, UnexpectedEof};
+
+        let cases: &[(&str, Target, Parts, io::ErrorKind, &str)] = &[
+            (
+                "socks4://proxy",
+                IPV4,
+                &[&[0, 91, 0, 0, 0, 0, 0, 0]],
+                Other,
+                "request rejected or failed",
+            ),
+            (
+                "socks4://proxy",
+                IPV6,
+                &[],
+                InvalidInput,
+                "SOCKS4 does not support IPv6",
+            ),
+            (
+                "socks5://proxy",
+                IPV4,
+                &[&[5, 0xff]],
+                Other,
+                "no acceptable auth methods",
+            ),
+            (
+                // A password was not offered, so the proxy cannot ask for one.
+                "socks5://proxy",
+                IPV4,
+                &[&[5, 2]],
+                Other,
+                "unknown auth method",
+            ),
+            (
+                "socks5://user:pass@proxy",
+                IPV4,
+                &[&[5, 2], &[1, 1]],
+                PermissionDenied,
+                "password authentication failed",
+            ),
+            (
+                "socks5://proxy",
+                IPV4,
+                &[&[5, 0], &[5, 5, 0, 1, 0, 0, 0, 0, 0, 0]],
+                Other,
+                "connection refused",
+            ),
+        ];
+
+        for (proxy, target, replies, kind, reason) in cases {
+            let (result, _) = script(proxy, *target, replies);
+            let error = result.unwrap_err();
+            assert_eq!(error.kind(), *kind, "{proxy}: {error}");
+            assert_eq!(error.to_string(), *reason, "{proxy}");
+        }
+
+        // A reply cut short is an error, not a connection.
+        let (result, _) = script("socks5://proxy", IPV4, &[&[5, 0], &[5, 0, 0, 1, 0, 0]]);
+        assert_eq!(result.unwrap_err().kind(), UnexpectedEof);
+    }
+
+    #[test]
+    fn domain_name_length() {
+        let proxy = Proxy::new("socks5h://proxy").unwrap();
+        for len in [1, 254, 255, 256] {
+            let host = "x".repeat(len);
+            let mut script = Script {
+                replies: Cursor::new([&[5, 0][..], SUCCEEDED5].concat()),
+                sent: vec![],
+            };
+            let result = handshake(&mut script, &proxy, Target::Domain(&host, 443));
+            if len == 256 {
+                let error = result.unwrap_err();
+                assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+                assert_eq!(error.to_string(), "domain name too long");
+                assert_eq!(script.sent, [5, 1, 0]);
+            } else {
+                result.unwrap();
+                assert_eq!(
+                    script.sent,
+                    [
+                        &[5, 1, 0, 5, 1, 0, 3, len as u8][..],
+                        host.as_bytes(),
+                        &[1, 187]
+                    ]
+                    .concat()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn every_truncated_reply_is_an_error() {
+        let domain_reply = [&[5, 0, 0, 3, 255][..], &[b'x'; 255], &[0, 0]].concat();
+        let ipv6_reply = [&[5, 0, 0, 4][..], &[0; 18]].concat();
+        for (proxy, reply) in [
+            ("socks4://proxy", GRANTED4.to_vec()),
+            ("socks4a://proxy", GRANTED4.to_vec()),
+            ("socks5://proxy", [&[5, 0][..], SUCCEEDED5].concat()),
+            ("socks5://proxy", [&[5, 0][..], &domain_reply].concat()),
+            ("socks5://proxy", [&[5, 0][..], &ipv6_reply].concat()),
+            (
+                "socks5://user:pass@proxy",
+                [&[5, 2, 1, 0][..], SUCCEEDED5].concat(),
+            ),
+        ] {
+            let proxy = Proxy::new(proxy).unwrap();
+            for len in 0..=reply.len() {
+                let mut script = Script {
+                    replies: Cursor::new(reply[..len].to_vec()),
+                    sent: vec![],
+                };
+                let result = handshake(&mut script, &proxy, IPV4);
+                if len == reply.len() {
+                    result.unwrap();
+                    assert_eq!(script.replies.position(), len as u64);
+                } else {
+                    let error = result.unwrap_err();
+                    assert_eq!(error.kind(), io::ErrorKind::UnexpectedEof, "prefix {len}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn malformed_handshake_replies() {
+        use io::ErrorKind::{InvalidData, Other};
+        let cases: &[(&str, Parts, io::ErrorKind, &str)] = &[
+            (
+                "socks4://proxy",
+                &[&[4, 90, 0, 0, 0, 0, 0, 0]],
+                InvalidData,
+                "invalid response version",
+            ),
+            (
+                "socks4://proxy",
+                &[&[0, 94, 0, 0, 0, 0, 0, 0]],
+                InvalidData,
+                "invalid response code",
+            ),
+            (
+                "socks5://proxy",
+                &[&[4, 0]],
+                InvalidData,
+                "invalid response version",
+            ),
+            (
+                "socks5://proxy",
+                &[&[5, 0], &[4, 0]],
+                InvalidData,
+                "invalid response version",
+            ),
+            (
+                "socks5://proxy",
+                &[&[5, 0], &[5, 0, 1, 1]],
+                InvalidData,
+                "invalid reserved byte",
+            ),
+            (
+                "socks5://proxy",
+                &[&[5, 0], &[5, 0, 0, 2]],
+                Other,
+                "unsupported address type",
+            ),
+            (
+                "socks5://user:pass@proxy",
+                &[&[5, 2], &[2, 0]],
+                InvalidData,
+                "invalid response version",
+            ),
+        ];
+        for (proxy, replies, kind, reason) in cases {
+            let (result, _) = script(proxy, IPV4, replies);
+            let error = result.unwrap_err();
+            assert_eq!(error.kind(), *kind, "{proxy}: {error}");
+            assert_eq!(error.to_string(), *reason, "{proxy}");
+        }
+    }
+
+    #[test]
+    fn proxy_failure_codes() {
+        for (code, reason) in [
+            (1, "general SOCKS server failure"),
+            (2, "connection not allowed by ruleset"),
+            (3, "network unreachable"),
+            (4, "host unreachable"),
+            (5, "connection refused"),
+            (6, "TTL expired"),
+            (7, "command not supported"),
+            (8, "address kind not supported"),
+            (255, "unknown error"),
+        ] {
+            let mut script = Script {
+                replies: Cursor::new(vec![5, 0, 5, code]),
+                sent: vec![],
+            };
+            let proxy = Proxy::new("socks5://proxy").unwrap();
+            let error = handshake(&mut script, &proxy, IPV4).unwrap_err();
+            assert_eq!(error.kind(), io::ErrorKind::Other);
+            assert_eq!(error.to_string(), reason);
+        }
+        for code in [92, 93] {
+            let mut script = Script {
+                replies: Cursor::new(vec![0, code, 0, 0, 0, 0, 0, 0]),
+                sent: vec![],
+            };
+            let proxy = Proxy::new("socks4://proxy").unwrap();
+            let error = handshake(&mut script, &proxy, IPV4).unwrap_err();
+            assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+        }
     }
 }

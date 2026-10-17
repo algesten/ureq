@@ -84,7 +84,7 @@ impl<In: Transport> Connector<In> for ConnectProxyConnector {
         // unwrap is ok because connect_proxy_uri() above checks it.
         let proxy = details.config.proxy().unwrap();
 
-        let mut w = TransportAdapter::new(transport);
+        let mut w = TransportAdapter::new(transport, details.current_time.clone());
         w.set_timeout(details.timeout);
 
         target.ensure_valid_url()?;

@@ -18,19 +18,19 @@ pub enum Timeout {
     /// Timeout for an individual transport write.
     PerWrite,
 
-    /// Timeout for entire operation.
+    /// Total operation timeout, including redirects and the response body.
     Global,
 
-    /// Timeout for the current call (when redirected).
+    /// Total timeout for one HTTP exchange, reset when following a redirect.
     PerCall,
 
-    /// Timeout in the resolver.
+    /// Timeout while resolving the target hostname locally.
     Resolve,
 
-    /// Timeout while opening the connection, including any TLS handshake.
+    /// Total connection setup timeout, including proxy DNS, negotiation, and TLS.
     Connect,
 
-    /// Timeout while sending the request headers.
+    /// Total timeout while sending the request headers.
     SendRequest,
 
     /// Internal value never seen outside ureq (since awaiting 100 is expected
@@ -38,13 +38,13 @@ pub enum Timeout {
     #[doc(hidden)]
     Await100,
 
-    /// Timeout when sending then request body.
+    /// Total timeout while sending the request body.
     SendBody,
 
-    /// Timeout while receiving the response headers.
+    /// Total timeout while waiting for and receiving the response headers.
     RecvResponse,
 
-    /// Timeout while receiving the response body.
+    /// Total response body timeout, starting after complete response headers.
     RecvBody,
 }
 
