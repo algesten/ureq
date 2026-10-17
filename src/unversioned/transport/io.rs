@@ -38,8 +38,13 @@ impl<T: Transport> TransportAdapter<T> {
 
     /// Set a new value of the timeout.
     pub fn set_timeout(&mut self, timeout: NextTimeout) {
+        self.set_timeout_at(timeout, (self.current_time)());
+    }
+
+    /// Set a timeout measured from an earlier stage of the connection setup.
+    pub(crate) fn set_timeout_at(&mut self, timeout: NextTimeout, started: Instant) {
         self.timeout = timeout;
-        self.timeout_set_at = (self.current_time)();
+        self.timeout_set_at = started;
     }
 
     fn timeout_now(&self) -> NextTimeout {

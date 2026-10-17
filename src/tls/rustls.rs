@@ -74,7 +74,7 @@ impl<In: Transport> Connector<In> for RustlsConnector {
 
         let mut conn = ClientConnection::new(config, name)?;
         let mut sock = TransportAdapter::new(transport.boxed(), details.current_time.clone());
-        sock.set_timeout(details.timeout);
+        sock.set_timeout_at(details.timeout, details.now);
         conn.complete_io(&mut sock)?;
         let stream = StreamOwned { conn, sock };
 
