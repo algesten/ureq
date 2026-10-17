@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Clarify timeout budgets, phase boundaries, and proxy DNS #1213
   * Bump minimum rustls version to 0.23.46 for security fixes #1208
   * Bound TLS handshake I/O by the remaining connect/global timeout #1208
   * Retry socket reads interrupted by a signal (EINTR) when a timeout applies (technically breaking) #1205
