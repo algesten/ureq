@@ -1,5 +1,7 @@
 # Unreleased
 
+  * Decode proxy URL credentials once; literal percent signs must be escaped as %25 #1215
+  * Encode ProxyBuilder credentials and preserve colons in proxy passwords #1215
   * Apply remaining timeout budgets to SOCKS setup and drop the socks dependency #1209
   * Check NO_PROXY before resolving a SOCKS proxy, so excluded hosts connect directly #1209
   * Clarify timeout budgets, phase boundaries, and proxy DNS #1213

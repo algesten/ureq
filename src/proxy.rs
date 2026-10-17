@@ -138,6 +138,10 @@ impl Proxy {
     /// * `proxy` - a str of format `<protocol>://<user>:<password>@<host>:port` . All parts
     ///   except host are optional.
     ///
+    /// Percent-encode the username and password in the URI. They are decoded exactly once,
+    /// and `+` is preserved as a literal plus sign. Use `%25` for a literal percent sign.
+    /// Credentials that decode to invalid UTF-8 return [`Error::InvalidProxyUrl`].
+    ///
     /// ###  Protocols
     ///
     /// * `http`: HTTP CONNECT proxy
@@ -300,12 +304,12 @@ impl Proxy {
             .unwrap_or_else(|| self.inner.proto.default_port())
     }
 
-    /// The username of the proxy uri
+    /// The decoded username of the proxy URI.
     pub fn username(&self) -> Option<&str> {
         self.inner.username.as_deref()
     }
 
-    /// The password of the proxy uri
+    /// The decoded password of the proxy URI.
     pub fn password(&self) -> Option<&str> {
         self.inner.password.as_deref()
     }
@@ -388,6 +392,8 @@ impl ProxyBuilder {
 
     /// Set the username
     ///
+    /// The value is used verbatim and percent-encoded when constructing the proxy URI.
+    ///
     /// Defaults to none. Invalid usernames surface in [`ProxyBuilder::build()`].
     pub fn username(mut self, v: &str) -> Self {
         self.username = Some(v.to_string());
@@ -395,6 +401,8 @@ impl ProxyBuilder {
     }
 
     /// Set the password
+    ///
+    /// The value is used verbatim and percent-encoded when constructing the proxy URI.
     ///
     /// If you want to set only a password, no username, i.e. `https://secret@foo.com`,
     /// you need to set it as [`ProxyBuilder::username()`].
