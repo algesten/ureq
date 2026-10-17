@@ -65,7 +65,9 @@ impl<In: Transport> Connector<In> for NativeTlsConnector {
             transport.boxed(),
             details.current_time.clone(),
         ));
-        adapter.get_mut().set_timeout(details.timeout);
+        adapter
+            .get_mut()
+            .set_timeout_at(details.timeout, details.now);
         let capture = adapter.capture();
 
         let result = connector.connect(&domain, adapter).map_err(|e| match e {
