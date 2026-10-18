@@ -201,8 +201,9 @@ impl Agent {
     /// CONNECT handshake in progress fails too.
     ///
     /// A custom [`Connector`] that creates its own transports takes part by
-    /// registering them via
-    /// [`ConnectionDetails::register_shutdown`](crate::unversioned::transport::ConnectionDetails::register_shutdown).
+    /// registering them via [`ConnectionDetails::register_shutdown`][register_shutdown].
+    ///
+    /// [register_shutdown]: crate::unversioned::transport::ConnectionDetails::register_shutdown
     ///
     /// Clones share the pool, so this shuts down all of them. Afterwards they fail
     /// new requests with an [`Error::Io`] of kind
