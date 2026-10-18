@@ -53,6 +53,18 @@ impl<In: Transport> Connector<In> for TcpConnector {
 
 impl ShutdownHandle for TcpStream {
     fn shutdown(&self) {
+        // Shutdown can wake a read with EOF rather than an error. We considered
+        // distinguishing this for close-delimited bodies (e.g. Connection: close
+        // without Content-Length or chunked framing), which can then appear
+        // complete despite missing data. That framing already cannot distinguish
+        // a complete body from a premature connection close. With Content-Length,
+        // missing bytes still produce an error.
+        //
+        // We deliberately accept the close-delimited ambiguity: guaranteeing a
+        // cancellation error would require extra synchronized state, such as an
+        // atomic flag checked by the I/O path. That edge case does not justify
+        // the machinery. Sharing the socket lets us interrupt I/O directly,
+        // without a mutex around it or a separate cancellation flag.
         debug!("Shutdown: {:?}", self.peer_addr().ok());
         // An error means the socket is already closed or shut down.
         let _ = TcpStream::shutdown(self, Shutdown::Both);
