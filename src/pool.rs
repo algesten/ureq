@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex, Weak};
-use std::{fmt, mem};
+use std::{fmt, io, mem};
 
 use http::Uri;
 use http::uri::{Authority, Scheme};
@@ -39,7 +39,8 @@ impl ConnectionPool {
             let mut pool = self.pool.lock().unwrap();
 
             if pool.closed {
-                return Err(Error::shut_down());
+                let e = io::Error::new(io::ErrorKind::NotConnected, "Agent is shut down");
+                return Err(e.into());
             }
 
             if use_pool {
@@ -82,7 +83,7 @@ impl ConnectionPool {
 
     /// The [`RegisterShutdown`] for [`ConnectionDetails`], which tracks transports
     /// in this pool until [`shutdown()`](Self::shutdown).
-    pub fn register_shutdown(&self) -> Arc<RegisterShutdown> {
+    pub fn make_register_shutdown(&self) -> Arc<RegisterShutdown> {
         let pool = Arc::downgrade(&self.pool);
         Arc::new(move |handle| match pool.upgrade() {
             Some(pool) => pool.lock().unwrap().register_shutdown(handle),
@@ -289,7 +290,8 @@ impl Pool {
         // Checked under the same lock as shutdown(), so that a connection made
         // while the shutdown runs cannot escape it.
         if self.closed {
-            return Err(Error::shut_down());
+            let e = io::Error::new(io::ErrorKind::NotConnected, "Agent is shut down");
+            return Err(e.into());
         }
 
         self.prune_shutdown_handles();
@@ -640,7 +642,6 @@ mod config_pooling_tests {
 mod shutdown_registry_tests {
     use super::*;
     use crate::transport::{TcpConnector, boxed_connector};
-    use std::io;
     use std::sync::atomic::{AtomicBool, Ordering};
 
     #[derive(Default)]
@@ -664,7 +665,7 @@ mod shutdown_registry_tests {
     fn shutdown_reaches_live_handles_and_refuses_new_ones() {
         let connector = boxed_connector(TcpConnector::default());
         let pool = ConnectionPool::new(connector, &Config::default());
-        let register = pool.register_shutdown();
+        let register = pool.make_register_shutdown();
 
         let live = Arc::new(Flag::default());
         let dropped = Arc::new(Flag::default());

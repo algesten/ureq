@@ -15,7 +15,7 @@ use crate::request::ForceSendBody;
 use crate::resolver::{DefaultResolver, Resolver};
 use crate::send_body::AsSendBody;
 use crate::transport::{Connector, DefaultConnector, Transport, boxed_connector};
-use crate::unversioned::transport::{ConnectionDetails, RegisterShutdown, RunConnector};
+use crate::unversioned::transport::{ConnectionDetails, RunConnector};
 use crate::{Error, RequestBuilder, SendBody};
 use crate::{WithBody, WithoutBody};
 
@@ -96,7 +96,6 @@ pub struct Agent {
     pub(crate) jar: Arc<crate::cookies::SharedCookieJar>,
 
     pub(crate) run_connector: Arc<RunConnector>,
-    pub(crate) register_shutdown: Arc<RegisterShutdown>,
 }
 
 impl Agent {
@@ -146,8 +145,6 @@ impl Agent {
             Arc::new(move |details: &ConnectionDetails| pool.run_connector(details))
         };
 
-        let register_shutdown = pool.register_shutdown();
-
         Agent {
             config: Arc::new(config),
             pool,
@@ -157,7 +154,6 @@ impl Agent {
             jar: Arc::new(crate::cookies::SharedCookieJar::new()),
 
             run_connector,
-            register_shutdown,
         }
     }
 
