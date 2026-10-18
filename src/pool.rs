@@ -103,13 +103,16 @@ impl ConnectionPool {
             )
         };
 
-        // Transport I/O happens outside the lock.
+        // Drop idle connections outside the lock before upgrading the handles.
+        // This closes their transports and lets their weak handles expire,
+        // avoiding redundant shutdown calls. Weak::upgrade skips expired handles
+        // without a separate purge.
+        drop(idle);
+
+        // Shut down the remaining live transports outside the lock.
         for handle in handles.iter().filter_map(Weak::upgrade) {
             handle.shutdown();
         }
-
-        // Dropping closes the idle connections.
-        drop(idle);
     }
 
     #[cfg(test)]
