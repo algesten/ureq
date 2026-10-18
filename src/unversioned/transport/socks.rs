@@ -82,13 +82,12 @@ impl<In: Transport> Connector<In> for SocksConnector {
             details.config.input_buffer_size(),
             details.config.output_buffer_size(),
         );
+        let transport = TcpTransport::new(stream, buffers);
+        (details.register_shutdown)(transport.shutdown_handle())?;
 
         // The adapter deducts elapsed time between handshake reads and writes,
         // while TcpTransport also enforces the per-read and per-write limits.
-        let mut w = TransportAdapter::new(
-            TcpTransport::new(stream, buffers),
-            details.current_time.clone(),
-        );
+        let mut w = TransportAdapter::new(transport, details.current_time.clone());
         w.set_timeout(timeout_at((details.current_time)())?);
 
         trace!("Try connect {} -> {:?}", proxy.protocol(), target);
@@ -435,6 +434,7 @@ mod test {
                 crate::transport::time::Instant::now() + (*elapsed.lock().unwrap()).into()
             }),
             run_connector: Arc::new(|_| unreachable!()),
+            register_shutdown: Arc::new(|_| Ok(())),
         };
         SocksConnector::default()
             .connect(&details, None::<()>)
@@ -605,6 +605,7 @@ mod test {
                     crate::transport::time::Instant::now() + (*elapsed.lock().unwrap()).into()
                 }),
                 run_connector: Arc::new(|_| unreachable!()),
+                register_shutdown: Arc::new(|_| Ok(())),
             };
             let start = Instant::now();
             let result = SocksConnector::default()

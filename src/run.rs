@@ -398,6 +398,7 @@ fn connect(
         timeout: timings.next_timeout(Timeout::Connect),
         current_time: timings.current_time(),
         run_connector: agent.run_connector.clone(),
+        register_shutdown: agent.pool.make_register_shutdown(),
     };
 
     let use_pool = config.can_share_pool_with(&agent.config);

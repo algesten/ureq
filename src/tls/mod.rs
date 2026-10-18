@@ -542,6 +542,7 @@ mod test {
                     timeout,
                     current_time: Arc::new(Instant::now),
                     run_connector: Arc::new(|_| unreachable!("TLS must use the chained transport")),
+                    register_shutdown: Arc::new(|_| Ok(())),
                 };
                 let transport = TimeoutTransport {
                     buffers: LazyBuffers::new(1024, 1024),
