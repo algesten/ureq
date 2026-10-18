@@ -35,23 +35,20 @@ impl ConnectionPool {
     ) -> Result<Connection, Error> {
         let key = details.into();
 
-        {
-            let mut pool = self.pool.lock().unwrap();
+        let mut pool = self.pool.lock().unwrap();
+        if pool.closed {
+            let e = io::Error::new(io::ErrorKind::NotConnected, "Agent is shut down");
+            return Err(e.into());
+        }
+        pool.purge(details.now);
 
-            if pool.closed {
-                let e = io::Error::new(io::ErrorKind::NotConnected, "Agent is shut down");
-                return Err(e.into());
-            }
-
-            if use_pool {
-                pool.purge(details.now);
-
-                if let Some(conn) = pool.get(&key, max_idle_age, details.now) {
-                    debug!("Use pooled: {:?}", key);
-                    return Ok(conn);
-                }
+        if use_pool {
+            if let Some(conn) = pool.get(&key, max_idle_age, details.now) {
+                debug!("Use pooled: {:?}", key);
+                return Ok(conn);
             }
         }
+        drop(pool);
 
         let transport = self.run_connector(details)?;
 
@@ -294,19 +291,12 @@ impl Pool {
             return Err(e.into());
         }
 
-        self.prune_shutdown_handles();
         self.shutdown_handles.push(handle);
 
         Ok(())
     }
 
-    fn prune_shutdown_handles(&mut self) {
-        self.shutdown_handles.retain(|h| h.strong_count() > 0);
-    }
-
     fn purge(&mut self, now: Instant) {
-        self.prune_shutdown_handles();
-
         while self.lru.len() > self.max_idle_connections || self.front_is_too_old(now) {
             self.lru.pop_front();
         }
@@ -317,6 +307,9 @@ impl Pool {
 
         // unwrap is ok because update_position_per_host() should have set all
         self.lru.retain(|c| c.position_per_host.unwrap() < max);
+
+        // Evicting idle connections can expire their shutdown handles.
+        self.shutdown_handles.retain(|h| h.strong_count() > 0);
     }
 
     fn front_is_too_old(&self, now: Instant) -> bool {
@@ -641,10 +634,13 @@ mod config_pooling_tests {
 #[cfg(test)]
 mod shutdown_registry_tests {
     use super::*;
+    use crate::Agent;
+    use crate::config::RequestLevelConfig;
     use crate::transport::{TcpConnector, boxed_connector};
+    use crate::unversioned::resolver::DefaultResolver;
     use std::sync::atomic::{AtomicBool, Ordering};
 
-    #[derive(Default)]
+    #[derive(Debug, Default)]
     struct Flag(AtomicBool);
 
     impl ShutdownHandle for Flag {
@@ -661,6 +657,74 @@ mod shutdown_registry_tests {
         pool.pool.lock().unwrap().shutdown_handles.len()
     }
 
+    #[derive(Debug)]
+    struct IdleTransport {
+        _handle: Arc<Flag>,
+    }
+
+    impl Transport for IdleTransport {
+        fn buffers(&mut self) -> &mut dyn Buffers {
+            unreachable!("only used for idle eviction")
+        }
+
+        fn transmit_output(&mut self, _: usize, _: NextTimeout) -> Result<(), Error> {
+            unreachable!("only used for idle eviction")
+        }
+
+        fn await_input(&mut self, _: NextTimeout) -> Result<bool, Error> {
+            unreachable!("only used for idle eviction")
+        }
+
+        fn is_open(&mut self) -> bool {
+            unreachable!("only used for idle eviction")
+        }
+    }
+
+    #[test]
+    fn purge_removes_handles_of_evicted_connections() {
+        for config in [
+            Agent::config_builder().max_idle_connections(0).build(),
+            Agent::config_builder()
+                .max_idle_connections_per_host(0)
+                .build(),
+        ] {
+            let mut pool = Pool::new(&config);
+            let now = Instant::now();
+            let handle = Arc::new(Flag::default());
+            pool.register_shutdown(weak(&handle)).unwrap();
+            pool.add(Connection {
+                transport: Box::new(IdleTransport { _handle: handle }),
+                key: PoolKey::new(&Uri::from_static("http://example.test/"), None),
+                last_use: now,
+                pool: Weak::new(),
+                position_per_host: None,
+            });
+
+            pool.purge(now);
+
+            assert!(pool.lru.is_empty());
+            assert!(pool.shutdown_handles.is_empty());
+        }
+    }
+
+    #[test]
+    fn bypassing_pool_purges_expired_shutdown_handles() {
+        let config = Agent::config_builder().proxy(None).build();
+        // This connector returns no transport, so registration cannot hide a
+        // missing purge when the request bypasses connection reuse.
+        let agent = Agent::with_parts(config, (), DefaultResolver::default());
+        let handle = Arc::new(Flag::default());
+        agent.pool.make_register_shutdown()(weak(&handle)).unwrap();
+        drop(handle);
+
+        let config = Agent::config_builder().proxy(None).no_delay(false).build();
+        let mut request = http::Request::get("http://127.0.0.1/").body(()).unwrap();
+        request.extensions_mut().insert(RequestLevelConfig(config));
+
+        assert!(matches!(agent.run(request), Err(Error::ConnectionFailed)));
+        assert_eq!(handle_count(&agent.pool), 0);
+    }
+
     #[test]
     fn shutdown_reaches_live_handles_and_refuses_new_ones() {
         let connector = boxed_connector(TcpConnector::default());
@@ -673,8 +737,9 @@ mod shutdown_registry_tests {
         register(weak(&dropped)).unwrap();
         assert_eq!(handle_count(&pool), 2);
 
-        // The pool only holds a Weak. The entry of a dropped transport is pruned.
+        // The pool only holds a Weak. Purging removes a dropped transport's entry.
         drop(dropped);
+        pool.pool.lock().unwrap().purge(Instant::now());
         let other = Arc::new(Flag::default());
         register(weak(&other)).unwrap();
         assert_eq!(handle_count(&pool), 2);
