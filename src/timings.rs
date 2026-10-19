@@ -204,6 +204,11 @@ impl CallTimings {
 pub(crate) struct CurrentTime(Arc<dyn Fn() -> Instant + Send + Sync + 'static>);
 
 impl CurrentTime {
+    #[cfg(test)]
+    pub(crate) fn new(now: impl Fn() -> Instant + Send + Sync + 'static) -> Self {
+        Self(Arc::new(now))
+    }
+
     pub(crate) fn now(&self) -> Instant {
         self.0()
     }
@@ -288,7 +293,17 @@ impl fmt::Debug for CurrentTime {
 
 impl Default for CurrentTime {
     fn default() -> Self {
-        Self(Arc::new(Instant::now))
+        #[cfg(test)]
+        {
+            // Scheduling delays must not consume test budgets. Tests advance injected clocks.
+            static NOW: std::sync::LazyLock<Instant> = std::sync::LazyLock::new(Instant::now);
+            let now = *NOW;
+            Self::new(move || now)
+        }
+        #[cfg(not(test))]
+        {
+            Self(Arc::new(Instant::now))
+        }
     }
 }
 

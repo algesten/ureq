@@ -493,13 +493,7 @@ mod test {
         }
 
         fn assert_remaining_timeout(actual: NextTimeout, original: NextTimeout) {
-            assert_eq!(actual.reason, original.reason);
-            assert_eq!(actual.per_read, original.per_read);
-            assert_eq!(actual.per_write, original.per_write);
-            assert!(
-                actual.after <= original.after,
-                "remaining {actual:?} exceeded the original {original:?}"
-            );
+            assert_eq!(actual, original);
         }
 
         fn check_timeout(connector: impl Connector<TimeoutTransport>, tls_config: TlsConfig) {
@@ -532,15 +526,16 @@ mod test {
                     per_read,
                     per_write,
                 };
+                let now = Instant::now();
                 let details = ConnectionDetails {
                     uri: &uri,
                     addrs: resolver.empty(),
                     resolver: &resolver,
                     config: &config,
                     request_level: false,
-                    now: Instant::now(),
+                    now,
                     timeout,
-                    current_time: Arc::new(Instant::now),
+                    current_time: Arc::new(move || now),
                     run_connector: Arc::new(|_| unreachable!("TLS must use the chained transport")),
                     register_shutdown: Arc::new(|_| Ok(())),
                 };

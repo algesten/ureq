@@ -156,8 +156,9 @@ mod test {
 
     #[test]
     fn time_ord() {
-        assert!(Instant::AlreadyHappened < Instant::now());
-        assert!(Instant::now() < Instant::NotHappening);
+        let now = Instant::now();
+        assert!(Instant::AlreadyHappened < now);
+        assert!(now < Instant::NotHappening);
         assert!(Instant::AlreadyHappened < Instant::NotHappening);
     }
 }

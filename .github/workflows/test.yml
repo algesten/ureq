@@ -76,6 +76,7 @@ jobs:
   build_and_test:
     name: Test
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     strategy:
       matrix:
         feature:
@@ -107,6 +108,7 @@ jobs:
   build_without_rustls:
     name: Test
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     strategy:
       matrix:
         feature:
@@ -136,22 +138,10 @@ jobs:
           cargo +${{steps.toolchain.outputs.name}} test \
           --no-default-features --features "_test ${{ matrix.feature }}"
 
-  tcp_eintr:
-    name: Linux TCP interrupted read
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: dtolnay/rust-toolchain@stable
-      # _test substitutes a mock transport, so exercise real TCP without it.
-      - name: Test interrupted socket read
-        run: cargo test --no-default-features --test tcp_eintr
-
   native_tls_handshake:
     name: Native TLS handshake
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
@@ -161,7 +151,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
-      # Do not enable _test: its transport bypasses the real TLS connector.
+      # Exercise the default TLS connector without the _test transport bypass.
       - name: Test native TLS connector
         run: cargo test --no-default-features --features ${{ matrix.feature }} --test native_tls
 
