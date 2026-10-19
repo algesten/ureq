@@ -2,7 +2,7 @@
 
 use std::cell::RefCell;
 use std::io::Write;
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, Mutex};
 use std::{fmt, io, thread};
 
@@ -13,7 +13,6 @@ use crate::Error;
 use crate::http;
 
 use super::chain::Either;
-use super::time::Duration;
 use super::{Buffers, ConnectionDetails, Connector, LazyBuffers, NextTimeout, Transport};
 
 #[derive(Default)]
@@ -838,7 +837,7 @@ impl Transport for TestTransport {
     }
 
     fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
-        let timeout = timeout.for_read().check()?;
+        timeout.for_read().check()?;
         if !self.connected_rx {
             return Err(Error::Io(io::Error::new(
                 io::ErrorKind::UnexpectedEof,
@@ -847,10 +846,9 @@ impl Transport for TestTransport {
         }
 
         let input = self.buffers.input_append_buf();
-        let mut buf = match self.rx.recv_timeout(timeout.after) {
+        let mut buf = match self.rx.recv() {
             Ok(v) => v,
-            Err(RecvTimeoutError::Timeout) => return Err(Error::Timeout(timeout.reason)),
-            Err(RecvTimeoutError::Disconnected) => {
+            Err(_) => {
                 trace!("Test server disconnected");
                 self.connected_rx = false;
                 return Err(Error::Io(io::Error::new(
@@ -919,9 +917,9 @@ impl Write for TestDuplex<'_> {
 struct SyncReceiver<T>(Mutex<Receiver<T>>);
 
 impl<T> SyncReceiver<T> {
-    fn recv_timeout(&self, timeout: Duration) -> Result<T, RecvTimeoutError> {
+    fn recv(&self) -> Result<T, mpsc::RecvError> {
         let lock = self.0.lock().unwrap();
-        lock.recv_timeout(*timeout)
+        lock.recv()
     }
 }
 

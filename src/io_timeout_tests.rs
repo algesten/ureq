@@ -89,6 +89,43 @@ fn config() -> Config {
 const HEADERS: &[u8] = b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n";
 
 #[test]
+fn recv_body_timeout_is_total() {
+    use crate::timings::CurrentTime;
+    use crate::transport::time::Instant;
+
+    for elapsed in [0, 499, 500, 700] {
+        let config = Agent::config_builder()
+            .proxy(None)
+            .timeout_recv_body(Some(Duration::from_millis(500)))
+            .build();
+        let (agent, state) = setup(config);
+        state.lock().unwrap().responses.extend([HEADERS, b"ok"]);
+        let start = Instant::now();
+        let clock = Arc::new(Mutex::new(start));
+        let current_time = CurrentTime::new({
+            let clock = clock.clone();
+            move || *clock.lock().unwrap()
+        });
+        let request = crate::http::Request::get("http://127.0.0.1/")
+            .extension(current_time)
+            .body(())
+            .unwrap();
+        let mut response = agent.run(request).unwrap();
+
+        *clock.lock().unwrap() = start + Duration::from_millis(elapsed).into();
+        let result = response.body_mut().read_to_string();
+        if elapsed < 500 {
+            assert_eq!(result.unwrap(), "ok");
+            assert_eq!(state.lock().unwrap().reads.len(), 2);
+        } else {
+            assert!(matches!(result, Err(Error::Timeout(Timeout::RecvBody))));
+            // An expired body budget must leave the scripted body unread.
+            assert_eq!(state.lock().unwrap().reads.len(), 1);
+        }
+    }
+}
+
+#[test]
 fn headers_and_bodies_use_directional_limits_and_pool_overrides() {
     let (agent, state) = setup(config());
     for limits in [None, Some((2, 3)), Some((0, 0)), None] {
@@ -223,19 +260,20 @@ fn connect_proxy_negotiation_uses_both_limits() {
     let script = Script(state.clone());
     let resolver = DefaultResolver::default();
     let uri = "http://example.com/".parse().unwrap();
+    let now = Instant::now();
     let details = ConnectionDetails {
         uri: &uri,
         addrs: resolver.empty(),
         config: &config,
         request_level: false,
         resolver: &resolver,
-        now: Instant::now(),
+        now,
         timeout: NextTimeout {
             per_read: Some(Duration::from_secs(2).into()),
             per_write: Some(Duration::from_secs(3).into()),
             ..NextTimeout::default()
         },
-        current_time: Arc::new(Instant::now),
+        current_time: Arc::new(move || now),
         run_connector: Arc::new(move |details| Ok(script.connect(details, None)?.unwrap().boxed())),
         register_shutdown: Arc::new(|_| Ok(())),
     };

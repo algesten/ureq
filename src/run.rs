@@ -47,7 +47,13 @@ pub(crate) fn run(
 
     let timeouts = config.timeouts();
 
-    let mut timings = CallTimings::new(timeouts, CurrentTime::default()).with_io_timeouts(&config);
+    let current_time = CurrentTime::default();
+    #[cfg(test)]
+    let current_time = request
+        .extensions_mut()
+        .remove::<CurrentTime>()
+        .unwrap_or(current_time);
+    let mut timings = CallTimings::new(timeouts, current_time).with_io_timeouts(&config);
 
     let mut call = Call::new(request)?;
 

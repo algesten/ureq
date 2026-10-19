@@ -10,7 +10,6 @@ use std::io::{self, Read, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant};
 
 use ureq::config::Config;
 use ureq::http::Uri;
@@ -18,7 +17,6 @@ use ureq::unversioned::resolver::{ResolvedSocketAddrs, Resolver};
 use ureq::unversioned::transport::{Connector, NextTimeout, SocksConnector, TcpConnector};
 use ureq::{Agent, Error, Proxy, ProxyProtocol};
 
-const LIMIT: Duration = Duration::from_secs(5);
 const GRANTED4: &[u8] = &[0, 90, 0, 0, 0, 0, 0, 0];
 const GRANTED5: &[u8] = &[5, 0, 0, 1, 0, 0, 0, 0, 0, 0];
 
@@ -45,10 +43,7 @@ impl Resolver for LocalResolver {
 
 fn agent(proxy: Proxy) -> (Agent, Arc<Mutex<Vec<String>>>) {
     let lookups = Arc::new(Mutex::new(Vec::new()));
-    let config = Agent::config_builder()
-        .proxy(Some(proxy))
-        .timeout_global(Some(LIMIT))
-        .build();
+    let config = Agent::config_builder().proxy(Some(proxy)).build();
     // Exercise real sockets even when CI enables the _test transport.
     let connector = ().chain(SocksConnector::default()).chain(TcpConnector::default());
     let agent = Agent::with_parts(config, connector, LocalResolver(Arc::clone(&lookups)));
@@ -56,25 +51,9 @@ fn agent(proxy: Proxy) -> (Agent, Arc<Mutex<Vec<String>>>) {
 }
 
 fn accept(listener: TcpListener) -> TcpStream {
-    listener.set_nonblocking(true).unwrap();
-    let deadline = Instant::now() + LIMIT;
-    loop {
-        match listener.accept() {
-            Ok((stream, _)) => {
-                // Windows may inherit the listener's nonblocking mode.
-                stream.set_nonblocking(false).unwrap();
-                stream.set_read_timeout(Some(LIMIT)).unwrap();
-                stream.set_write_timeout(Some(LIMIT)).unwrap();
-                stream.set_nodelay(true).unwrap();
-                return stream;
-            }
-            Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
-                assert!(Instant::now() < deadline, "client never connected");
-                thread::sleep(Duration::from_millis(5));
-            }
-            Err(error) => panic!("accept failed: {error}"),
-        }
-    }
+    let (stream, _) = listener.accept().unwrap();
+    stream.set_nodelay(true).unwrap();
+    stream
 }
 
 fn read_headers(stream: &mut TcpStream) -> Vec<u8> {
@@ -120,9 +99,7 @@ fn proxy_server(
             stream.write_all(&reply).unwrap();
         }
         if let Some(origin) = origin {
-            let mut upstream = TcpStream::connect_timeout(&origin, LIMIT).unwrap();
-            upstream.set_read_timeout(Some(LIMIT)).unwrap();
-            upstream.set_write_timeout(Some(LIMIT)).unwrap();
+            let mut upstream = TcpStream::connect(origin).unwrap();
             upstream.write_all(&read_headers(&mut stream)).unwrap();
             io::copy(&mut upstream, &mut stream).unwrap();
         } else {
@@ -159,15 +136,15 @@ fn http_exchange(
     let (address, proxy) = proxy_server(exchanges(target.port()), Some(target));
     let config = configured_proxy(address, protocol, resolve_target, credentials);
     let (agent, lookups) = agent(config);
-    let result = agent
+    let mut response = agent
         .get(format!(
             "http://origin.test:{}/through-socks",
             target.port()
         ))
-        .call();
+        .call()
+        .unwrap();
     proxy.join().unwrap();
     origin.join().unwrap();
-    let mut response = result.unwrap();
     assert_eq!(response.status(), 200);
     assert_eq!(
         response.body_mut().read_to_string().unwrap(),
