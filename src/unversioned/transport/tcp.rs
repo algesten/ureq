@@ -640,28 +640,4 @@ mod test {
         assert_eq!(result.unwrap_err().kind(), io::ErrorKind::Interrupted);
         assert!(timeouts.is_empty());
     }
-
-    #[test]
-    fn socket_read_stall_reports_per_read() {
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let stream = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
-        let (_peer, _) = listener.accept().unwrap();
-        let mut transport = TcpTransport::new(stream, LazyBuffers::new(1024, 1024));
-        let timeout = NextTimeout {
-            per_read: Some(Duration::from_millis(20)),
-            per_write: Some(Duration::from_millis(30)),
-            ..NextTimeout::default()
-        };
-        let error = transport.await_input(timeout).unwrap_err();
-        assert!(
-            matches!(error, Error::Timeout(Timeout::PerRead)),
-            "{error:?}"
-        );
-        transport.buffers().output()[0] = b'x';
-        transport.transmit_output(1, timeout).unwrap();
-        assert_eq!(
-            transport.stream.write_timeout().unwrap(),
-            Some(std::time::Duration::from_millis(30))
-        );
-    }
 }

@@ -160,6 +160,17 @@ fn read_timeout_while_awaiting_100_is_not_swallowed() {
 }
 
 #[test]
+fn read_timeout_reports_per_read() {
+    let (agent, state) = setup(config());
+    state.lock().unwrap().fail_read = true;
+    let error = agent.get("http://127.0.0.1/").call().unwrap_err();
+    assert!(
+        matches!(error, Error::Timeout(Timeout::PerRead)),
+        "{error:?}"
+    );
+}
+
+#[test]
 fn write_timeout_reports_per_write() {
     let (agent, state) = setup(config());
     state.lock().unwrap().fail_write = true;
