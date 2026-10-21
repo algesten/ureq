@@ -1,5 +1,9 @@
 # Unreleased
 
+# 3.4.3
+
+  * Update TLS dependencies for security fixes #1218
+
 # 3.4.2
 
   * Bump ureq-proto to 0.6.3 (fixes network-path references in redirects)
