@@ -1,6 +1,6 @@
 # Unreleased
 
-  * Update WebPKI dependencies to reject distrusted emSign certificates
+  * Update WebPKI dependencies to reject distrusted emSign certificates #1217
   * Add Agent::shutdown() to interrupt requests in flight and close all connections #1211
   * Preserve validated request header casing with RequestBuilder::header_raw #1214
   * Decode proxy URL credentials once; literal percent signs must be escaped as %25 #1215
