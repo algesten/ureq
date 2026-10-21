@@ -1073,8 +1073,8 @@ mod tests {
         assert_eq!(proxy.port(), 5551);
         assert_eq!(proxy.username(), None);
         assert_eq!(proxy.password(), None);
-        assert_eq!(proxy.is_from_env(), false);
-        assert_eq!(proxy.resolve_target(), false);
+        assert!(!proxy.is_from_env());
+        assert!(!proxy.resolve_target());
     }
 
     #[test]
@@ -1090,8 +1090,8 @@ mod tests {
         assert_eq!(proxy.port(), 443);
         assert_eq!(proxy.username(), Some("hemligearne"));
         assert_eq!(proxy.password(), None);
-        assert_eq!(proxy.is_from_env(), false);
-        assert_eq!(proxy.resolve_target(), false);
+        assert!(!proxy.is_from_env());
+        assert!(!proxy.resolve_target());
     }
 
     #[test]
@@ -1108,8 +1108,8 @@ mod tests {
         assert_eq!(proxy.port(), 443);
         assert_eq!(proxy.username(), Some("hemligearne"));
         assert_eq!(proxy.password(), Some("kulgrej"));
-        assert_eq!(proxy.is_from_env(), false);
-        assert_eq!(proxy.resolve_target(), false);
+        assert!(!proxy.is_from_env());
+        assert!(!proxy.resolve_target());
     }
 
     #[test]
