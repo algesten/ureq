@@ -716,6 +716,6 @@ mod tests {
         let ct = content_type.unwrap();
         let ct_str = ct.to_str().unwrap();
         assert!(ct_str.starts_with("multipart/form-data; boundary="));
-        assert!(ct_str.contains(&form.boundary()));
+        assert!(ct_str.contains(form.boundary()));
     }
 }

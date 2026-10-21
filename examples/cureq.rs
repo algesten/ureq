@@ -53,10 +53,7 @@ fn run(opt: &Opt) -> Result<(), ureq::Error> {
     let lines = reader.lines();
 
     for r in lines {
-        let line = match r {
-            Ok(v) => v,
-            Err(e) => return Err(e.into()),
-        };
+        let line = r?;
         println!("{}", line);
     }
 

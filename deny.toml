@@ -9,6 +9,8 @@
 # Note: running just `cargo deny check` without a `--target` can result in
 # false positives due to https://github.com/EmbarkStudios/cargo-deny/issues/324
 [graph]
+all-features = true
+
 targets = [
   { triple = "aarch64-apple-darwin" },
   { triple = "i686-pc-windows-gnu" },
@@ -50,7 +52,6 @@ skip-tree = []
 private = { ignore = true }
 confidence-threshold = 0.92 # We want really high confidence when inferring licenses from text
 allow = [
-  "Apache-2.0 WITH LLVM-exception", # https://spdx.org/licenses/LLVM-exception.html
   "Apache-2.0",                     # https://tldrlegal.com/license/apache-license-2.0-(apache-2.0)
   "BSD-3-Clause",                   # https://tldrlegal.com/license/bsd-3-clause-license-(revised)
   "CC0-1.0",                        # https://creativecommons.org/publicdomain/zero/1.0/
