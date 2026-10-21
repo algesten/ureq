@@ -2,7 +2,7 @@
 
 # 3.4.3
 
-  * Update TLS dependencies for security fixes
+  * Update TLS dependencies for security fixes #1218
 
 # 3.4.2
 
