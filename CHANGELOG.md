@@ -1,6 +1,6 @@
 # Unreleased
 
-  * Preserve readable responses after macOS rejects timeout changes on closed sockets
+  * Preserve readable responses after macOS rejects timeout changes on closed sockets #1220
 
 # 3.5.0
 
