@@ -267,10 +267,27 @@ fn maybe_update_timeout(
     let maybe_timeout = timeout.not_zero();
 
     if maybe_timeout != *previous {
-        (f)(stream, maybe_timeout.map(|t| *t))?;
-        *previous = maybe_timeout;
+        update_timeout(previous, maybe_timeout, || {
+            (f)(stream, maybe_timeout.map(|t| *t))
+        })?;
     }
 
+    Ok(())
+}
+
+fn update_timeout(
+    previous: &mut Option<Duration>,
+    timeout: Option<Duration>,
+    set_timeout: impl FnOnce() -> io::Result<()>,
+) -> io::Result<()> {
+    match set_timeout() {
+        Ok(()) => *previous = timeout,
+        // macOS can reject timeout changes after the peer closes with unread
+        // request data. The response may still be readable: let I/O report the
+        // outcome instead. Leave the cache unchanged since the setter failed.
+        Err(e) if cfg!(target_os = "macos") && e.kind() == io::ErrorKind::InvalidInput => {}
+        Err(e) => return Err(e),
+    }
     Ok(())
 }
 
@@ -317,10 +334,10 @@ impl Transport for TcpTransport {
             timeout.not_zero().map(|t| *t),
             || started.elapsed(),
             |stream, left| {
-                stream.set_read_timeout(Some(left))?;
                 // Keep the cache in step so maybe_update_timeout() later restores the full value.
-                self.timeout_read = Some(left.into());
-                Ok(())
+                update_timeout(&mut self.timeout_read, Some(left.into()), || {
+                    stream.set_read_timeout(Some(left))
+                })
             },
         );
         let amount = match result.normalize_would_block() {
@@ -380,6 +397,75 @@ impl fmt::Debug for TcpTransport {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn successful_timeout_update_changes_cache() {
+        let mut previous = Some(Duration::from_secs(5));
+        update_timeout(&mut previous, Some(Duration::from_secs(2)), || Ok(())).unwrap();
+        assert_eq!(previous, Some(Duration::from_secs(2)));
+        update_timeout(&mut previous, None, || Ok(())).unwrap();
+        assert_eq!(previous, None);
+    }
+
+    #[test]
+    fn failed_timeout_update_preserves_cache() {
+        let mut previous = Some(Duration::from_secs(5));
+        let error = update_timeout(&mut previous, Some(Duration::from_secs(2)), || {
+            Err(io::ErrorKind::PermissionDenied.into())
+        })
+        .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+        assert_eq!(previous, Some(Duration::from_secs(5)));
+    }
+
+    #[test]
+    fn invalid_timeout_update_is_tolerated_only_on_macos() {
+        for initial in [None, Some(Duration::from_secs(5))] {
+            let mut previous = initial;
+            let result = update_timeout(&mut previous, Some(Duration::from_secs(2)), || {
+                Err(io::ErrorKind::InvalidInput.into())
+            });
+            if cfg!(target_os = "macos") {
+                result.unwrap();
+            } else {
+                assert_eq!(result.unwrap_err().kind(), io::ErrorKind::InvalidInput);
+            }
+            assert_eq!(previous, initial);
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn interrupted_read_survives_rejected_timeout_update() {
+        struct InterruptedOnce<'a>(bool, &'a [u8]);
+        impl Read for InterruptedOnce<'_> {
+            fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+                if std::mem::take(&mut self.0) {
+                    return Err(io::ErrorKind::Interrupted.into());
+                }
+                self.1.read(buf)
+            }
+        }
+
+        let response = b"HTTP/1.1 302 Found\r\nContent-Length: 0\r\n\r\n";
+        let mut reader = InterruptedOnce(true, response);
+        let mut buf = [0; 128];
+        let mut previous = Some(Duration::from_secs(5));
+        let amount = read_retrying_interrupts(
+            &mut reader,
+            &mut buf,
+            Some(time::Duration::from_secs(5)),
+            || time::Duration::from_secs(1),
+            |_, left| {
+                update_timeout(&mut previous, Some(left.into()), || {
+                    Err(io::Error::from_raw_os_error(22))
+                })
+            },
+        )
+        .unwrap();
+        assert_eq!(&buf[..amount], response);
+        assert_eq!(previous, Some(Duration::from_secs(5)));
+    }
 
     // Script connect outcomes so routing failures and timeouts are deterministic.
     fn scripted_connect(

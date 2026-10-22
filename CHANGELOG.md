@@ -1,5 +1,7 @@
 # Unreleased
 
+  * Preserve readable responses after macOS rejects timeout changes on closed sockets
+
 # 3.5.0
 
   * Prepare 3.5.0 and fix dependency advisories and warnings - #1217
