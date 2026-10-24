@@ -603,6 +603,7 @@ mod request;
 mod response;
 mod run;
 mod send_body;
+mod serde;
 mod timings;
 mod util;
 

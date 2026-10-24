@@ -96,7 +96,7 @@ impl<'a> QueryParam<'a> {
         }
     }
 
-    fn as_str(&self) -> &str {
+    pub(crate) fn as_str(&self) -> &str {
         match &self.source {
             Source::Borrowed(v) => v,
             Source::Owned(v) => v.as_str(),
