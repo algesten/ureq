@@ -272,6 +272,16 @@ impl Agent {
         RequestLevelConfig(self.config.as_ref().clone())
     }
 
+    /// Makes a `method` request using this agent.
+    #[must_use]
+    pub fn request<T>(&self, method: http::Method, uri: T) -> RequestBuilder<WithoutBody>
+    where
+        Uri: TryFrom<T>,
+        <Uri as TryFrom<T>>::Error: Into<http::Error>,
+    {
+        RequestBuilder::<WithoutBody>::new(self.clone(), method, uri)
+    }
+
     /// Make a GET request using this agent.
     #[must_use]
     pub fn get<T>(&self, uri: T) -> RequestBuilder<WithoutBody>
