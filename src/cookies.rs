@@ -210,11 +210,16 @@ impl SharedCookieJar {
                 continue;
             }
 
+            // The Cookie header carries only the name and value of each cookie,
+            // separated by "; " (RFC 6265bis 5.8.3). Formatting the cookie itself
+            // would also write its attributes, such as Path and Expires.
             if !cookies.is_empty() {
-                cookies.push(';');
+                cookies.push_str("; ");
             }
 
-            cookies.push_str(&c.to_string());
+            cookies.push_str(c.name());
+            cookies.push('=');
+            cookies.push_str(c.value());
         }
 
         cookies

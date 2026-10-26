@@ -1247,9 +1247,12 @@ pub(crate) mod test {
         let uri2 = Uri::from_static("http://cookie2.test/cookie-test");
 
         let mut jar = agent.cookie_jar_lock();
-        jar.insert(Cookie::parse("a=1", &uri).unwrap(), &uri)
-            .unwrap();
-        jar.insert(Cookie::parse("b=2", &uri).unwrap(), &uri)
+        jar.insert(
+            Cookie::parse("a=1; Path=/; Max-Age=600", &uri).unwrap(),
+            &uri,
+        )
+        .unwrap();
+        jar.insert(Cookie::parse("b=2; HttpOnly", &uri).unwrap(), &uri)
             .unwrap();
         jar.insert(Cookie::parse("c=3", &uri2).unwrap(), &uri2)
             .unwrap();
