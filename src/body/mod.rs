@@ -498,7 +498,9 @@ impl<'a> BodyWithConfig<'a> {
     /// Controls how many bytes we should read before throwing an error. This is used
     /// to ensure RAM isn't exhausted by a server sending a very large response body.
     ///
-    /// The default limit is `u64::MAX` (unlimited).
+    /// Unlike the convenience read methods on [`Body`], which default to 10MB,
+    /// `BodyWithConfig` starts with a limit of `u64::MAX` (unlimited). Call
+    /// `limit()` to set a finite cap before reading the response body.
     pub fn limit(mut self, value: u64) -> Self {
         self.limit = value;
         self
