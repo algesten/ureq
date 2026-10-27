@@ -83,14 +83,6 @@ impl<'a> Cookie<'a> {
             CookieInner::Owned(v) => v.value(),
         }
     }
-
-    #[cfg(test)]
-    fn as_cookie_store(&self) -> &cookie_store::Cookie<'a> {
-        match &self.0 {
-            CookieInner::Borrowed(v) => v,
-            CookieInner::Owned(v) => v,
-        }
-    }
 }
 
 impl Cookie<'static> {
@@ -204,24 +196,28 @@ impl SharedCookieJar {
 
         let store = self.inner.lock().unwrap();
 
-        for c in store.matches(&url) {
-            if !is_cookie_rfc_compliant(c) {
-                debug!("Do not send non compliant cookie: {:?}", c.name());
+        for (name, value) in store.get_request_values(&url) {
+            if !is_cookie_rfc_compliant(name, value) {
+                debug!("Do not send non compliant cookie: {:?}", name);
                 continue;
             }
 
+            // The Cookie header carries only the name and value of each cookie,
+            // separated by "; " (RFC 6265bis 5.8.3).
             if !cookies.is_empty() {
-                cookies.push(';');
+                cookies.push_str("; ");
             }
 
-            cookies.push_str(&c.to_string());
+            cookies.push_str(name);
+            cookies.push('=');
+            cookies.push_str(value);
         }
 
         cookies
     }
 }
 
-fn is_cookie_rfc_compliant(cookie: &cookie_store::Cookie) -> bool {
+fn is_cookie_rfc_compliant(name: &str, value: &str) -> bool {
     // https://tools.ietf.org/html/rfc6265#page-9
     // set-cookie-header = "Set-Cookie:" SP set-cookie-string
     // set-cookie-string = cookie-pair *( ";" SP cookie-av )
@@ -260,16 +256,14 @@ fn is_cookie_rfc_compliant(cookie: &cookie_store::Cookie) -> bool {
             && *b != b'\\'
     }
 
-    let name = cookie.name().as_bytes();
-
-    let valid_name = name.iter().all(is_valid_name);
+    let valid_name = name.as_bytes().iter().all(is_valid_name);
 
     if !valid_name {
-        log::trace!("cookie name is not valid: {:?}", cookie.name());
+        log::trace!("cookie name is not valid: {:?}", name);
         return false;
     }
 
-    let value = cookie.value().as_bytes();
+    let value = value.as_bytes();
 
     let valid_value = value
         .strip_prefix(br#"""#)
@@ -280,7 +274,7 @@ fn is_cookie_rfc_compliant(cookie: &cookie_store::Cookie) -> bool {
 
     if !valid_value {
         // NB. Do not log cookie value since it might be secret
-        log::trace!("cookie value is not valid: {:?}", cookie.name());
+        log::trace!("cookie value is not valid: {:?}", name);
         return false;
     }
 
@@ -321,26 +315,26 @@ mod test {
     #[test]
     fn illegal_cookie_name() {
         let cookie = Cookie::parse("borked/=value", &uri()).unwrap();
-        assert!(!is_cookie_rfc_compliant(cookie.as_cookie_store()));
+        assert!(!is_cookie_rfc_compliant(cookie.name(), cookie.value()));
     }
 
     #[test]
     fn illegal_cookie_value() {
         let cookie = Cookie::parse("name=borked,", &uri()).unwrap();
-        assert!(!is_cookie_rfc_compliant(cookie.as_cookie_store()));
+        assert!(!is_cookie_rfc_compliant(cookie.name(), cookie.value()));
         let cookie = Cookie::parse("name=\"borked", &uri()).unwrap();
-        assert!(!is_cookie_rfc_compliant(cookie.as_cookie_store()));
+        assert!(!is_cookie_rfc_compliant(cookie.name(), cookie.value()));
         let cookie = Cookie::parse("name=borked\"", &uri()).unwrap();
-        assert!(!is_cookie_rfc_compliant(cookie.as_cookie_store()));
+        assert!(!is_cookie_rfc_compliant(cookie.name(), cookie.value()));
         let cookie = Cookie::parse("name=\"\"borked\"", &uri()).unwrap();
-        assert!(!is_cookie_rfc_compliant(cookie.as_cookie_store()));
+        assert!(!is_cookie_rfc_compliant(cookie.name(), cookie.value()));
     }
 
     #[test]
     fn legal_cookie_name_value() {
         let cookie = Cookie::parse("name=value", &uri()).unwrap();
-        assert!(is_cookie_rfc_compliant(cookie.as_cookie_store()));
+        assert!(is_cookie_rfc_compliant(cookie.name(), cookie.value()));
         let cookie = Cookie::parse("name=\"value\"", &uri()).unwrap();
-        assert!(is_cookie_rfc_compliant(cookie.as_cookie_store()));
+        assert!(is_cookie_rfc_compliant(cookie.name(), cookie.value()));
     }
 }

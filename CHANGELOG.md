@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Send only cookie names and values in request Cookie headers #1222
   * Preserve readable responses after macOS rejects timeout changes on closed sockets #1220
 
 # 3.5.0

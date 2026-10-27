@@ -497,7 +497,7 @@ fn setup_default_handlers(handlers: &mut Vec<TestHandler>) {
 
             all.sort();
 
-            assert_eq!(all, ["a=1;b=2"]);
+            assert_eq!(all, ["a=1; b=2"]);
 
             write!(
                 w,
