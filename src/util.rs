@@ -371,6 +371,7 @@ pub(crate) trait HeaderMapExt {
     fn has_accept(&self) -> bool;
     fn has_content_type(&self) -> bool;
     fn has_location(&self) -> bool;
+    fn has_token(&self, k: HeaderName, token: &str) -> bool;
 }
 
 impl HeaderMapExt for HeaderMap {
@@ -408,6 +409,14 @@ impl HeaderMapExt for HeaderMap {
 
     fn has_location(&self) -> bool {
         self.contains_key(LOCATION)
+    }
+
+    fn has_token(&self, k: HeaderName, token: &str) -> bool {
+        self.get_all(k)
+            .iter()
+            .filter_map(|value| value.to_str().ok())
+            .flat_map(|value| value.split(','))
+            .any(|element| element.trim().eq_ignore_ascii_case(token))
     }
 }
 

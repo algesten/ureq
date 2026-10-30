@@ -438,6 +438,37 @@ mod test {
 
         assert_eq!(agent.pool_count(), 0);
     }
+
+    #[test]
+    fn http10_response_reuse_requires_keep_alive() {
+        use crate::test::init_test_log;
+        use crate::transport::set_handler_raw;
+
+        init_test_log();
+
+        set_handler_raw("/http10-close", |w| {
+            w.write_all(b"HTTP/1.0 200 OK\r\nContent-Length: 2\r\n\r\nok")
+        });
+        set_handler_raw("/http10-keep-alive", |w| {
+            w.write_all(b"HTTP/1.0 200 OK\r\nConnection: keep-alive\r\nContent-Length: 2\r\n\r\nok")
+        });
+
+        let agent = crate::Agent::new_with_defaults();
+
+        let mut res = agent
+            .get("https://example.test/http10-close")
+            .call()
+            .unwrap();
+        assert_eq!(res.body_mut().read_to_string().unwrap(), "ok");
+        assert_eq!(agent.pool_count(), 0);
+
+        let mut res = agent
+            .get("https://example.test/http10-keep-alive")
+            .call()
+            .unwrap();
+        assert_eq!(res.body_mut().read_to_string().unwrap(), "ok");
+        assert_eq!(agent.pool_count(), 1);
+    }
 }
 
 #[cfg(test)]

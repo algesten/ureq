@@ -195,6 +195,10 @@ fn call_run(
 
     debug!("{:?}", DebugResponse(&response));
 
+    // RFC 9112 §9.3: an HTTP/1.0 response closes the connection after the
+    // current response unless the server signals keep-alive.
+    let must_close = http10_must_close(&response);
+
     #[cfg(feature = "cookies")]
     {
         let mut jar = agent.cookie_jar_lock();
@@ -224,6 +228,7 @@ fn call_run(
                 call: Some(call),
                 connection: Some(connection),
                 timings,
+                must_close,
                 ..Default::default()
             };
 
@@ -242,7 +247,11 @@ fn call_run(
             }
         }
         RecvResponseResult::Redirect(call) => {
-            cleanup(connection, call.must_close_connection(), timings.now());
+            cleanup(
+                connection,
+                must_close || call.must_close_connection(),
+                timings.now(),
+            );
 
             if is_following_redirects {
                 CallResult::Redirect(call, mem::take(timings))
@@ -253,7 +262,11 @@ fn call_run(
             }
         }
         RecvResponseResult::Cleanup(call) => {
-            cleanup(connection, call.must_close_connection(), timings.now());
+            cleanup(
+                connection,
+                must_close || call.must_close_connection(),
+                timings.now(),
+            );
             CallResult::Response(response, BodyHandler::default())
         }
     };
@@ -619,6 +632,15 @@ fn handle_redirect(mut call: Call<Redirect>, config: &Config) -> Result<Call<Pre
     }
 }
 
+/// RFC 9112 §9.3: an HTTP/1.0 response only keeps the connection open when it
+/// carries `Connection: keep-alive`.
+fn http10_must_close(response: &Response<()>) -> bool {
+    response.version() == http::Version::HTTP_10
+        && !response
+            .headers()
+            .has_token(header::CONNECTION, "keep-alive")
+}
+
 fn cleanup(connection: Connection, must_close: bool, now: Instant) {
     if must_close {
         connection.close();
@@ -634,6 +656,8 @@ pub(crate) struct BodyHandler {
     timings: CallTimings,
     remote_closed: bool,
     redirect: Option<Box<Call<Redirect>>>,
+    /// The response was HTTP/1.0 without `Connection: keep-alive`.
+    must_close: bool,
 }
 
 impl BodyHandler {
@@ -745,7 +769,8 @@ impl BodyHandler {
             }
         }
 
-        let must_close_connection = force_close
+        let must_close_connection = self.must_close
+            || force_close
             || match call.proceed().unwrap() {
                 RecvBodyResult::Redirect(call) => {
                     let c = call.must_close_connection();
