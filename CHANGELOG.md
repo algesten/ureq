@@ -1,5 +1,8 @@
 # Unreleased
 
+# 3.5.1
+
+  * Bump ureq-proto to 0.7.1 (fixes to connection reuse and transfer encoding) #1224
   * Send only cookie names and values in request Cookie headers #1222
   * Preserve readable responses after macOS rejects timeout changes on closed sockets #1220
 
