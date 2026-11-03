@@ -1,5 +1,5 @@
 use std::collections::VecDeque;
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Mutex, MutexGuard, Weak};
 use std::{fmt, io, mem};
 
 use http::Uri;
@@ -27,28 +27,45 @@ impl ConnectionPool {
         }
     }
 
-    pub fn connect(
-        &self,
-        details: &ConnectionDetails,
-        max_idle_age: Duration,
-        use_pool: bool,
-    ) -> Result<Connection, Error> {
-        let key = details.into();
-
+    fn open_pool(&self, now: Instant) -> Result<MutexGuard<'_, Pool>, Error> {
         let mut pool = self.pool.lock().unwrap();
         if pool.closed {
             let e = io::Error::new(io::ErrorKind::NotConnected, "Agent is shut down");
             return Err(e.into());
         }
-        pool.purge(details.now);
+        pool.purge(now);
+        Ok(pool)
+    }
 
-        if use_pool {
-            if let Some(conn) = pool.get(&key, max_idle_age, details.now) {
-                debug!("Use pooled: {:?}", key);
-                return Ok(conn);
-            }
+    /// An idle connection for the uri and proxy, if the pool has one.
+    ///
+    /// It needs no resolved addresses, so it is tried before resolving.
+    pub fn get(
+        &self,
+        uri: &Uri,
+        proxy: Option<&Proxy>,
+        max_idle_age: Duration,
+        now: Instant,
+    ) -> Result<Option<Connection>, Error> {
+        let key = PoolKey::new(uri, proxy);
+
+        let conn = self.open_pool(now)?.get(&key, max_idle_age, now);
+        if conn.is_some() {
+            debug!("Use pooled: {:?}", key);
         }
-        drop(pool);
+
+        Ok(conn)
+    }
+
+    /// A new connection, which goes back to the pool afterwards if `use_pool` is set.
+    pub fn connect(
+        &self,
+        details: &ConnectionDetails,
+        use_pool: bool,
+    ) -> Result<Connection, Error> {
+        let key = details.into();
+
+        drop(self.open_pool(details.now)?);
 
         let transport = self.run_connector(details)?;
 
@@ -445,7 +462,7 @@ mod config_pooling_tests {
     use super::*;
     use crate::Agent;
     use crate::transport::LazyBuffers;
-    use crate::unversioned::resolver::DefaultResolver;
+    use crate::unversioned::resolver::{DefaultResolver, ResolvedSocketAddrs, Resolver};
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     #[derive(Debug)]
@@ -497,6 +514,38 @@ mod config_pooling_tests {
         fn is_tls(&self) -> bool {
             true
         }
+    }
+
+    #[derive(Debug)]
+    struct CountingResolver(Arc<AtomicUsize>);
+
+    impl Resolver for CountingResolver {
+        fn resolve(
+            &self,
+            uri: &Uri,
+            config: &Config,
+            timeout: NextTimeout,
+        ) -> Result<ResolvedSocketAddrs, Error> {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            DefaultResolver::default().resolve(uri, config, timeout)
+        }
+    }
+
+    #[test]
+    fn pooled_connection_is_not_resolved_again() {
+        let resolves = Arc::new(AtomicUsize::new(0));
+        let agent = Agent::with_parts(
+            Agent::config_builder().proxy(None).build(),
+            CountingConnector(Arc::new(AtomicUsize::new(0))),
+            CountingResolver(resolves.clone()),
+        );
+
+        for _ in 0..3 {
+            let mut res = agent.get("https://127.0.0.1/").call().unwrap();
+            assert_eq!(res.body_mut().read_to_string().unwrap(), "1");
+        }
+
+        assert_eq!(resolves.load(Ordering::SeqCst), 1);
     }
 
     fn agent(config: Config) -> Agent {

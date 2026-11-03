@@ -375,6 +375,19 @@ fn connect(
     // cannot make requests with partial uri like "/path".
     uri.ensure_valid_url()?;
 
+    let use_pool = config.can_share_pool_with(&agent.config);
+    let max_idle_age = config.max_idle_age().into();
+
+    if use_pool {
+        let now = timings.now();
+        if let Some(connection) = agent.pool.get(uri, config.proxy(), max_idle_age, now)? {
+            // Nothing to resolve for a pooled connection.
+            timings.record_time(Timeout::Resolve);
+            timings.record_time(Timeout::Connect);
+            return Ok(connection);
+        }
+    }
+
     let is_proxy = config.proxy().is_some();
 
     // For most proxy configs, the proxy itself should resolve the host name we are connecting to.
@@ -407,9 +420,7 @@ fn connect(
         register_shutdown: agent.pool.make_register_shutdown(),
     };
 
-    let use_pool = config.can_share_pool_with(&agent.config);
-    let max_idle_age = config.max_idle_age().into();
-    let connection = agent.pool.connect(&details, max_idle_age, use_pool)?;
+    let connection = agent.pool.connect(&details, use_pool)?;
 
     if details.needs_tls() && !connection.is_tls() {
         return Err(Error::TlsRequired);

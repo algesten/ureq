@@ -1,5 +1,7 @@
 # Unreleased
 
+  * Reuse pooled connections without resolving the host name again #1227
+
 # 3.5.1
 
   * Bump ureq-proto to 0.7.1 (fixes to connection reuse and transfer encoding) #1224
