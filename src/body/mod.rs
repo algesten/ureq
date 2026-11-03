@@ -580,10 +580,16 @@ impl<'a> BodyWithConfig<'a> {
     /// ```
     pub fn read_to_string(self) -> Result<String, Error> {
         use std::io::Read;
+        let mut buf = String::with_capacity(self.capacity());
         let mut reader = self.do_build();
-        let mut buf = String::new();
         reader.read_to_string(&mut buf)?;
         Ok(buf)
+    }
+
+    /// Content-Length is untrusted, so the buffer is presized to at most MAX_BODY_SIZE.
+    fn capacity(&self) -> usize {
+        let len = self.info.content_length().unwrap_or(0);
+        len.min(self.limit).min(MAX_BODY_SIZE) as usize
     }
 
     /// Read into vector.
@@ -606,8 +612,8 @@ impl<'a> BodyWithConfig<'a> {
     /// ```
     pub fn read_to_vec(self) -> Result<Vec<u8>, Error> {
         use std::io::Read;
+        let mut buf = Vec::with_capacity(self.capacity());
         let mut reader = self.do_build();
-        let mut buf = Vec::new();
         reader.read_to_end(&mut buf)?;
         Ok(buf)
     }
@@ -995,6 +1001,22 @@ mod test {
     use crate::Error;
     use crate::test::init_test_log;
     use crate::transport::set_handler;
+
+    #[test]
+    fn read_to_vec_presizes_from_content_length() {
+        init_test_log();
+        let body = vec![b'x'; 100_000];
+        set_handler("/get", 200, &[("content-length", "100000")], &body);
+
+        let mut res = crate::get("https://my.test/get").call().unwrap();
+        let vec = res.body_mut().with_config().read_to_vec().unwrap();
+        assert_eq!(vec.capacity(), body.len());
+
+        set_handler("/get", 200, &[("content-length", "100000")], &body);
+        let mut res = crate::get("https://my.test/get").call().unwrap();
+        let vec = res.body_mut().with_config().limit(10).read_to_vec();
+        assert!(matches!(vec, Err(Error::BodyExceedsLimit(10))));
+    }
 
     #[test]
     fn content_type_without_charset() {
