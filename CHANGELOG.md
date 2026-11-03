@@ -1,5 +1,7 @@
 # Unreleased
 
+  * Presize read_to_vec and read_to_string buffers from Content-Length #1228
+
 # 3.5.1
 
   * Bump ureq-proto to 0.7.1 (fixes to connection reuse and transfer encoding) #1224
