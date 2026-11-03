@@ -40,6 +40,14 @@ pub(crate) fn run(
         .map(|rl| (Arc::new(rl.0), true))
         .unwrap_or_else(|| (agent.config.clone(), false));
 
+    // Connectors cache their TLS setup, and with it session resumption, for the agent's
+    // TlsConfig only. A request level config that keeps that TlsConfig can use the cache.
+    #[cfg(feature = "_tls")]
+    let request_level = request_level
+        && !config
+            .tls_config()
+            .can_share_pool_with(agent.config.tls_config());
+
     let force_send_body = request.extensions_mut().remove::<ForceSendBody>().is_some();
 
     let mut redirect_history: Option<Vec<Uri>> =

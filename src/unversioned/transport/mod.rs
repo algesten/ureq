@@ -200,6 +200,9 @@ pub struct ConnectionDetails<'a> {
     pub config: &'a Config,
 
     /// Whether the config is request level.
+    ///
+    /// A request level config that keeps the agent's TLS config counts as agent level,
+    /// so connectors can use what they cached for it.
     pub request_level: bool,
 
     /// The resolver configured on [`Agent`](crate::Agent).
