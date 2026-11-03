@@ -1,5 +1,7 @@
 # Unreleased
 
+  * Reuse cached TLS setup for request level config with the agent's TLS config #1226
+
 # 3.5.1
 
   * Bump ureq-proto to 0.7.1 (fixes to connection reuse and transfer encoding) #1224

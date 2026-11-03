@@ -632,6 +632,42 @@ mod config_pooling_tests {
             check_override(Agent::config_builder().proxy(None).tls_config(tls).build());
         }
     }
+
+    #[derive(Debug)]
+    struct RequestLevelConnector(Arc<std::sync::Mutex<Vec<bool>>>);
+
+    impl Connector for RequestLevelConnector {
+        type Out = TestTransport;
+
+        fn connect(
+            &self,
+            details: &ConnectionDetails,
+            _: Option<()>,
+        ) -> Result<Option<Self::Out>, Error> {
+            self.0.lock().unwrap().push(details.request_level);
+            let buffers = LazyBuffers::new(1024, 1024);
+            Ok(Some(TestTransport { id: 1, buffers }))
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "_tls")]
+    fn request_level_config_with_agent_tls_is_not_request_level() {
+        use crate::tls::TlsConfig;
+        let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let base = || Agent::config_builder().proxy(None).max_idle_connections(0);
+        let agent = Agent::with_parts(
+            base().build(),
+            RequestLevelConnector(seen.clone()),
+            DefaultResolver::default(),
+        );
+        let timeout = Some(std::time::Duration::from_secs(5));
+        let tls = TlsConfig::builder().disable_verification(true).build();
+
+        request(&agent, base().timeout_global(timeout).build());
+        request(&agent, base().tls_config(tls).build());
+        assert_eq!(*seen.lock().unwrap(), [false, true]);
+    }
 }
 
 #[cfg(test)]
