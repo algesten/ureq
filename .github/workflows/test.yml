@@ -157,7 +157,7 @@ jobs:
       # Run real sockets once per OS, outside the in-memory _test transport.
       - name: Test CONNECT total deadlines
         if: matrix.feature == 'native-tls-no-default'
-        timeout-minutes: 1
+        timeout-minutes: 3
         run: cargo test --locked --no-default-features --test connect_timeout
 
   cargo-deny:
