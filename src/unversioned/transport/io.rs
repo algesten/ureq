@@ -74,7 +74,7 @@ impl<T: Transport> TransportAdapter<T> {
     }
 }
 
-fn remaining_after(after: Duration, started: Instant, now: Instant) -> Duration {
+pub(super) fn remaining_after(after: Duration, started: Instant, now: Instant) -> Duration {
     if after.is_not_happening() {
         return after;
     }
