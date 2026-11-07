@@ -475,7 +475,12 @@ mod test {
     ) -> (Result<(), Error>, usize) {
         let mut addrs = ResolvedSocketAddrs::from_fn(|_| SocketAddr::from(([0, 0, 0, 0], 0)));
         for i in 0..outcomes.len() {
-            addrs.push(SocketAddr::from(([127, 0, 0, 1], 10000 + i as u16)));
+            let addr = if i == 0 {
+                SocketAddr::from(([0, 0, 0, 0, 0, 0, 0, 1], 10000))
+            } else {
+                SocketAddr::from(([127, 0, 0, 1], 10000 + i as u16))
+            };
+            addrs.push(addr);
         }
         let start = Instant::now();
         let mut outcomes = outcomes.into_iter();
@@ -521,6 +526,7 @@ mod test {
             io_error(io::ErrorKind::ConnectionRefused),
             io_error(io::ErrorKind::HostUnreachable),
             io_error(io::ErrorKind::NetworkUnreachable),
+            io_error(io::ErrorKind::NetworkDown),
             io_error(io::ErrorKind::AddrNotAvailable),
             Err(Error::Timeout(Timeout::Connect)),
         ] {
@@ -531,6 +537,38 @@ mod test {
             assert!(result.is_ok());
             assert_eq!(attempts, 2);
         }
+    }
+
+    #[test]
+    fn network_down_on_every_address_preserves_last_error() {
+        let (result, attempts) = scripted_connect(
+            vec![
+                Err(io::Error::new(io::ErrorKind::NetworkDown, "first address").into()),
+                Err(io::Error::new(io::ErrorKind::NetworkDown, "last address").into()),
+            ],
+            Duration::from_secs(1),
+        );
+        assert_eq!(attempts, 2);
+        let Err(Error::Io(error)) = result else {
+            panic!("expected last I/O error: {result:?}");
+        };
+        assert_eq!(error.kind(), io::ErrorKind::NetworkDown);
+        assert_eq!(error.to_string(), "last address");
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn enetdown_tries_the_next_address() {
+        let (result, attempts) = scripted_connect(
+            vec![
+                Err(io::Error::from_raw_os_error(50).into()),
+                Ok(()),
+                io_error(io::ErrorKind::PermissionDenied),
+            ],
+            Duration::from_secs(1),
+        );
+        assert!(result.is_ok());
+        assert_eq!(attempts, 2);
     }
 
     #[test]
