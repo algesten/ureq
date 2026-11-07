@@ -196,6 +196,7 @@ fn is_addr_specific_error(e: &io::Error) -> bool {
         io::ErrorKind::ConnectionRefused
             | io::ErrorKind::HostUnreachable
             | io::ErrorKind::NetworkUnreachable
+            | io::ErrorKind::NetworkDown
             | io::ErrorKind::AddrNotAvailable
     )
 }
@@ -601,6 +602,7 @@ mod test {
             io::ErrorKind::ConnectionRefused,
             io::ErrorKind::HostUnreachable,
             io::ErrorKind::NetworkUnreachable,
+            io::ErrorKind::NetworkDown,
             io::ErrorKind::AddrNotAvailable,
         ] {
             assert!(
