@@ -1,5 +1,7 @@
 # Unreleased
 
+  * Try the next address when connecting fails with NetworkDown (ENETDOWN), e.g. IPv6 blocked by a VPN
+
 # 3.5.1
 
   * Bump ureq-proto to 0.7.1 (fixes to connection reuse and transfer encoding) #1224
