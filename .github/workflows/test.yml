@@ -151,6 +151,10 @@ jobs:
         with:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
+      - name: Test TCP address fallback
+        run: >-
+          cargo test --no-default-features --features ${{ matrix.feature }}
+          --lib unversioned::transport::tcp::test
       # Exercise the default TLS connector without the _test transport bypass.
       - name: Test native TLS connector
         run: cargo test --no-default-features --features ${{ matrix.feature }} --test native_tls
