@@ -40,8 +40,8 @@ const JSON_BUFFER_DIVISOR: u64 = 3;
 /// # Default size limit
 ///
 /// Methods like `read_to_string()`, `read_to_vec()`, and `read_json()` have a **default 10MB limit**
-/// to prevent memory exhaustion. The limit counts bytes after decompression but before charset
-/// conversion, which can expand the final UTF-8 output beyond the limit.
+/// to prevent memory exhaustion. The limit counts output bytes after decompression,
+/// charset conversion, and lossy UTF-8 handling.
 /// To download larger files, use `with_config().limit(new_size)`:
 ///
 /// ```
@@ -497,13 +497,14 @@ impl<'a> BodyWithConfig<'a> {
 
     /// Limit the response body.
     ///
-    /// Limits the bytes read after gzip/brotli decompression (when enabled), but before
-    /// charset conversion. Charset conversion can expand the final UTF-8 output beyond
-    /// this limit. This helps prevent memory exhaustion from very large response bodies.
+    /// Limits the output bytes after all enabled body decoding: gzip/brotli decompression,
+    /// charset conversion, and lossy UTF-8 handling. This helps prevent memory exhaustion
+    /// from very large response bodies. It does not cap internal decoder buffers or
+    /// allocations made when deserializing JSON.
     ///
     /// A body exactly equal to the limit is allowed. Reading beyond it returns
     /// [`Error::BodyExceedsLimit`]. Detecting this requires reading one additional byte
-    /// from the decompressed body, which is not returned to the caller.
+    /// from the decoded body, which is not returned to the caller.
     ///
     /// Unlike the convenience read methods on [`Body`], which default to 10MB,
     /// `BodyWithConfig` starts with a limit of `u64::MAX` (unlimited). Call
@@ -764,7 +765,7 @@ fn split_content_type(content_type: &str) -> (Option<String>, Option<String>) {
 ///    length regardless of how many bytes the server sends.
 /// 5. If no length header, the reader is until server stream end.
 /// 6. The limit in the body method used to obtain the reader applies after
-///    decompression but before charset conversion.
+///    decompression, charset conversion, and lossy UTF-8 handling.
 ///
 /// Note: The reader is also limited by the [`Body::as_reader`] and
 /// [`Body::into_reader`] calls. If that limit is set very high, a malicious
@@ -791,9 +792,8 @@ fn split_content_type(content_type: &str) -> (Option<String>, Option<String>) {
 /// # Ok::<_, ureq::Error>(())
 /// ```
 pub struct BodyReader<'a> {
-    // The limit sits after decompression so that it bounds the decoded size, not
-    // the compressed bytes on the wire, and before charset conversion as in 2.x.
-    reader: MaybeLossyDecoder<CharsetDecoder<LimitReader<ContentDecoder<BodySourceRef<'a>>>>>,
+    // Limit the final output after all body decoding.
+    reader: LimitReader<MaybeLossyDecoder<CharsetDecoder<ContentDecoder<BodySourceRef<'a>>>>>,
     // If this reader is used as SendBody for another request, this
     // body mode can indiciate the content-length. Gzip, charset etc
     // would mean input is not same as output.
@@ -832,8 +832,6 @@ impl<'a> BodyReader<'a> {
             ContentEncoding::Brotli => ContentDecoder::PassThrough(reader),
         };
 
-        let reader = LimitReader::new(reader, limit);
-
         let reader = if info.is_text() {
             charset_decoder(
                 reader,
@@ -850,6 +848,8 @@ impl<'a> BodyReader<'a> {
         } else {
             MaybeLossyDecoder::PassThrough(reader)
         };
+
+        let reader = LimitReader::new(reader, limit);
 
         BodyReader {
             outgoing_body_mode,

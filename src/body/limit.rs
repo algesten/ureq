@@ -173,14 +173,39 @@ mod test {
 
     #[test]
     #[cfg(feature = "charset")]
-    fn limit_precedes_charset_conversion() {
+    fn limit_applies_to_charset_output() {
+        for lossy in [false, true] {
+            for limit in [5, 14, 15, 16] {
+                let mut body = crate::Body::builder()
+                    .mime_type("text/plain")
+                    .charset("windows-1252")
+                    .data([0x80; 5]);
+                let result = body
+                    .with_config()
+                    .limit(limit)
+                    .lossy_utf8(lossy)
+                    .read_to_string();
+                if limit < 15 {
+                    assert!(matches!(result, Err(Error::BodyExceedsLimit(n)) if n == limit));
+                } else {
+                    assert_eq!(result.unwrap(), "€".repeat(5));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn limit_applies_after_lossy_utf8() {
+        use std::io::Read;
+
         let mut body = crate::Body::builder()
             .mime_type("text/plain")
-            .charset("windows-1252")
-            .data([0x80; 5]);
-        let text = body.with_config().limit(5).read_to_string().unwrap();
-        assert_eq!(text, "€".repeat(5));
-        assert_eq!(text.len(), 15);
+            .data(b"hello\xff");
+        let mut reader = body.with_config().limit(5).lossy_utf8(true).reader();
+        let mut bytes = Vec::new();
+        let err = reader.read_to_end(&mut bytes).unwrap_err();
+        assert!(matches!(Error::from(err), Error::BodyExceedsLimit(5)));
+        assert_eq!(bytes, b"hello");
     }
 
     #[test]

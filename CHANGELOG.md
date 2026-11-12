@@ -1,6 +1,6 @@
 # Unreleased
 
-  * Limit decompressed response bodies #1231
+  * Apply response body limits after all decoding #1231
   * Accept response bodies exactly at the size limit #1231
   * Try the next address on NetworkDown errors #1230
 
