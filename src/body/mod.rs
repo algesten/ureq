@@ -499,8 +499,7 @@ impl<'a> BodyWithConfig<'a> {
     ///
     /// Limits the output bytes after all enabled body decoding: gzip/brotli decompression,
     /// charset conversion, and lossy UTF-8 handling. This helps prevent memory exhaustion
-    /// from very large response bodies. It does not cap internal decoder buffers or
-    /// allocations made when deserializing JSON.
+    /// from very large response bodies.
     ///
     /// A body exactly equal to the limit is allowed. Reading beyond it returns
     /// [`Error::BodyExceedsLimit`]. Detecting this requires reading one additional byte
