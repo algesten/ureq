@@ -6,6 +6,7 @@ pub(crate) struct LimitReader<R> {
     reader: R,
     limit: u64,
     left: u64,
+    exceeded: bool,
 }
 
 impl<R> LimitReader<R> {
@@ -14,6 +15,7 @@ impl<R> LimitReader<R> {
             reader,
             limit,
             left: limit,
+            exceeded: false,
         }
     }
 }
@@ -24,6 +26,10 @@ impl<R: io::Read> io::Read for LimitReader<R> {
             return Ok(0);
         }
 
+        if self.exceeded {
+            return Err(Error::BodyExceedsLimit(self.limit).into_io());
+        }
+
         if self.left == 0 {
             // A body exactly `limit` bytes long is allowed: only fail if the
             // inner reader has more data, not when it is at the end.
@@ -31,6 +37,7 @@ impl<R: io::Read> io::Read for LimitReader<R> {
             if self.reader.read(&mut probe)? == 0 {
                 return Ok(0);
             }
+            self.exceeded = true;
             return Err(Error::BodyExceedsLimit(self.limit).into_io());
         }
 
@@ -86,22 +93,37 @@ mod test {
         let mut enc = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::best());
         enc.write_all(&[0_u8; 10_000]).unwrap();
         let gz = enc.finish().unwrap();
-        assert!(gz.len() < 100);
-        let len = gz.len().to_string();
-        set_handler(
-            "/get",
-            200,
-            &[("content-encoding", "gzip"), ("content-length", &len)],
-            &gz,
-        );
-        let mut res = crate::get("https://my.test/get").call().unwrap();
-        let err = res
-            .body_mut()
-            .with_config()
-            .limit(1_000)
-            .read_to_vec()
-            .unwrap_err();
-        assert!(matches!(err, Error::BodyExceedsLimit(1_000)));
+        check_compressed_limits("gzip", &gz);
+    }
+
+    #[cfg(any(feature = "gzip", feature = "brotli"))]
+    fn check_compressed_limits(encoding: &str, compressed: &[u8]) {
+        assert!(compressed.len() < 1_000);
+        let len = compressed.len().to_string();
+        for limit in [1_000, 9_999, 10_000, 10_001] {
+            set_handler(
+                "/get",
+                200,
+                &[("content-encoding", encoding), ("content-length", &len)],
+                compressed,
+            );
+            let mut res = crate::get("https://my.test/get").call().unwrap();
+            let result = res.body_mut().with_config().limit(limit).read_to_vec();
+            if limit < 10_000 {
+                assert!(matches!(result, Err(Error::BodyExceedsLimit(n)) if n == limit));
+            } else {
+                assert_eq!(result.unwrap(), vec![0; 10_000]);
+            }
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "brotli")]
+    fn brotli_limit_applies_to_decompressed_size() {
+        init_test_log();
+        // 10,000 zero bytes compressed with the brotli CLI's default settings.
+        let compressed = [31, 15, 39, 248, 39, 0, 226, 177, 64, 32, 217, 3, 0];
+        check_compressed_limits("br", &compressed);
     }
 
     #[test]
@@ -116,6 +138,49 @@ mod test {
         assert_eq!(reader.read(&mut []).unwrap(), 0);
         let err = reader.read(&mut [0_u8; 8]).unwrap_err();
         assert!(err.to_string().contains("larger than request limit"));
+    }
+
+    #[test]
+    fn overflow_remains_an_error_without_consuming_more() {
+        use std::io::Read;
+
+        let mut source = io::Cursor::new(b"hello!!");
+        {
+            let mut reader = super::LimitReader::new(&mut source, 5);
+            reader.read_exact(&mut [0; 5]).unwrap();
+            for _ in 0..3 {
+                let err = reader.read(&mut [0]).unwrap_err();
+                assert!(matches!(Error::from(err), Error::BodyExceedsLimit(5)));
+                assert_eq!(reader.read(&mut []).unwrap(), 0);
+            }
+        }
+        // Only the first excess byte is consumed to distinguish overflow from EOF.
+        assert_eq!(source.position(), 6);
+    }
+
+    #[test]
+    fn zero_limit() {
+        for data in [b"".as_slice(), b"x".as_slice()] {
+            let mut body = crate::Body::builder().data(data);
+            let result = body.with_config().limit(0).read_to_vec();
+            if data.is_empty() {
+                assert_eq!(result.unwrap(), b"");
+            } else {
+                assert!(matches!(result, Err(Error::BodyExceedsLimit(0))));
+            }
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "charset")]
+    fn limit_precedes_charset_conversion() {
+        let mut body = crate::Body::builder()
+            .mime_type("text/plain")
+            .charset("windows-1252")
+            .data([0x80; 5]);
+        let text = body.with_config().limit(5).read_to_string().unwrap();
+        assert_eq!(text, "€".repeat(5));
+        assert_eq!(text.len(), 15);
     }
 
     #[test]

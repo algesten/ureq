@@ -40,7 +40,9 @@ const JSON_BUFFER_DIVISOR: u64 = 3;
 /// # Default size limit
 ///
 /// Methods like `read_to_string()`, `read_to_vec()`, and `read_json()` have a **default 10MB limit**
-/// to prevent memory exhaustion. To download larger files, use `with_config().limit(new_size)`:
+/// to prevent memory exhaustion. The limit counts bytes after decompression but before charset
+/// conversion, which can expand the final UTF-8 output beyond the limit.
+/// To download larger files, use `with_config().limit(new_size)`:
 ///
 /// ```
 /// // Download a 20MB file
@@ -495,8 +497,13 @@ impl<'a> BodyWithConfig<'a> {
 
     /// Limit the response body.
     ///
-    /// Controls how many bytes we should read before throwing an error. This is used
-    /// to ensure RAM isn't exhausted by a server sending a very large response body.
+    /// Limits the bytes read after gzip/brotli decompression (when enabled), but before
+    /// charset conversion. Charset conversion can expand the final UTF-8 output beyond
+    /// this limit. This helps prevent memory exhaustion from very large response bodies.
+    ///
+    /// A body exactly equal to the limit is allowed. Reading beyond it returns
+    /// [`Error::BodyExceedsLimit`]. Detecting this requires reading one additional byte
+    /// from the decompressed body, which is not returned to the caller.
     ///
     /// Unlike the convenience read methods on [`Body`], which default to 10MB,
     /// `BodyWithConfig` starts with a limit of `u64::MAX` (unlimited). Call
@@ -756,7 +763,8 @@ fn split_content_type(content_type: &str) -> (Option<String>, Option<String>) {
 /// 4. If `Content-Length` is set, the returned reader is limited to this byte
 ///    length regardless of how many bytes the server sends.
 /// 5. If no length header, the reader is until server stream end.
-/// 6. The limit in the body method used to obtain the reader.
+/// 6. The limit in the body method used to obtain the reader applies after
+///    decompression but before charset conversion.
 ///
 /// Note: The reader is also limited by the [`Body::as_reader`] and
 /// [`Body::into_reader`] calls. If that limit is set very high, a malicious
