@@ -67,4 +67,30 @@ mod test {
         println!("{:?}", err);
         assert!(matches!(err, Error::BodyExceedsLimit(3)));
     }
+
+    #[test]
+    #[cfg(feature = "gzip")]
+    fn limit_applies_to_decompressed_size() {
+        use std::io::Write;
+        init_test_log();
+        let mut enc = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::best());
+        enc.write_all(&[0_u8; 10_000]).unwrap();
+        let gz = enc.finish().unwrap();
+        assert!(gz.len() < 100);
+        let len = gz.len().to_string();
+        set_handler(
+            "/get",
+            200,
+            &[("content-encoding", "gzip"), ("content-length", &len)],
+            &gz,
+        );
+        let mut res = crate::get("https://my.test/get").call().unwrap();
+        let err = res
+            .body_mut()
+            .with_config()
+            .limit(1_000)
+            .read_to_vec()
+            .unwrap_err();
+        assert!(matches!(err, Error::BodyExceedsLimit(1_000)));
+    }
 }

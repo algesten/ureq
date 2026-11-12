@@ -520,7 +520,8 @@ impl<'a> BodyWithConfig<'a> {
 
     fn do_build(self) -> BodyReader<'a> {
         BodyReader::new(
-            LimitReader::new(self.handler, self.limit),
+            self.handler,
+            self.limit,
             &self.info,
             self.info.body_mode,
             self.lossy_utf8,
@@ -782,7 +783,9 @@ fn split_content_type(content_type: &str) -> (Option<String>, Option<String>) {
 /// # Ok::<_, ureq::Error>(())
 /// ```
 pub struct BodyReader<'a> {
-    reader: MaybeLossyDecoder<CharsetDecoder<ContentDecoder<LimitReader<BodySourceRef<'a>>>>>,
+    // The limit sits after decompression so that it bounds the decoded size, not
+    // the compressed bytes on the wire, and before charset conversion as in 2.x.
+    reader: MaybeLossyDecoder<CharsetDecoder<LimitReader<ContentDecoder<BodySourceRef<'a>>>>>,
     // If this reader is used as SendBody for another request, this
     // body mode can indiciate the content-length. Gzip, charset etc
     // would mean input is not same as output.
@@ -791,7 +794,8 @@ pub struct BodyReader<'a> {
 
 impl<'a> BodyReader<'a> {
     fn new(
-        reader: LimitReader<BodySourceRef<'a>>,
+        reader: BodySourceRef<'a>,
+        limit: u64,
         info: &ResponseInfo,
         incoming_body_mode: BodyMode,
         lossy_utf8: bool,
@@ -819,6 +823,8 @@ impl<'a> BodyReader<'a> {
             #[cfg(not(feature = "brotli"))]
             ContentEncoding::Brotli => ContentDecoder::PassThrough(reader),
         };
+
+        let reader = LimitReader::new(reader, limit);
 
         let reader = if info.is_text() {
             charset_decoder(
