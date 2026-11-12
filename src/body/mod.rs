@@ -40,8 +40,7 @@ const JSON_BUFFER_DIVISOR: u64 = 3;
 /// # Default size limit
 ///
 /// Methods like `read_to_string()`, `read_to_vec()`, and `read_json()` have a **default 10MB limit**
-/// to prevent memory exhaustion. The limit counts output bytes after decompression,
-/// charset conversion, and lossy UTF-8 handling.
+/// to prevent memory exhaustion. The limit counts bytes returned after all decoding.
 /// To download larger files, use `with_config().limit(new_size)`:
 ///
 /// ```
@@ -497,9 +496,8 @@ impl<'a> BodyWithConfig<'a> {
 
     /// Limit the response body.
     ///
-    /// Limits the output bytes after all enabled body decoding: gzip/brotli decompression,
-    /// charset conversion, and lossy UTF-8 handling. This helps prevent memory exhaustion
-    /// from very large response bodies.
+    /// Limits the bytes returned to the caller after all decoding. This helps prevent
+    /// memory exhaustion from very large response bodies.
     ///
     /// A body exactly equal to the limit is allowed. Reading beyond it returns
     /// [`Error::BodyExceedsLimit`]. Detecting this requires reading one additional byte
@@ -763,8 +761,8 @@ fn split_content_type(content_type: &str) -> (Option<String>, Option<String>) {
 /// 4. If `Content-Length` is set, the returned reader is limited to this byte
 ///    length regardless of how many bytes the server sends.
 /// 5. If no length header, the reader is until server stream end.
-/// 6. The limit in the body method used to obtain the reader applies after
-///    decompression, charset conversion, and lossy UTF-8 handling.
+/// 6. The limit in the body method used to obtain the reader applies to the bytes
+///    returned after all decoding.
 ///
 /// Note: The reader is also limited by the [`Body::as_reader`] and
 /// [`Body::into_reader`] calls. If that limit is set very high, a malicious
