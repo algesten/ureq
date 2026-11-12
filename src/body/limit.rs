@@ -20,7 +20,17 @@ impl<R> LimitReader<R> {
 
 impl<R: io::Read> io::Read for LimitReader<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if buf.is_empty() {
+            return Ok(0);
+        }
+
         if self.left == 0 {
+            // A body exactly `limit` bytes long is allowed: only fail if the
+            // inner reader has more data, not when it is at the end.
+            let mut probe = [0_u8; 1];
+            if self.reader.read(&mut probe)? == 0 {
+                return Ok(0);
+            }
             return Err(Error::BodyExceedsLimit(self.limit).into_io());
         }
 
@@ -92,5 +102,52 @@ mod test {
             .read_to_vec()
             .unwrap_err();
         assert!(matches!(err, Error::BodyExceedsLimit(1_000)));
+    }
+
+    #[test]
+    fn empty_read_at_limit_does_not_consume() {
+        use std::io::Read;
+        init_test_log();
+        set_handler("/get", 200, &[("content-length", "6")], b"hello!");
+        let mut res = crate::get("https://my.test/get").call().unwrap();
+        let mut reader = res.body_mut().with_config().limit(5).reader();
+        let mut buf = [0_u8; 5];
+        reader.read_exact(&mut buf).unwrap();
+        assert_eq!(reader.read(&mut []).unwrap(), 0);
+        let err = reader.read(&mut [0_u8; 8]).unwrap_err();
+        assert!(err.to_string().contains("larger than request limit"));
+    }
+
+    #[test]
+    fn limit_equal_to_size() {
+        init_test_log();
+        set_handler("/get", 200, &[("content-length", "5")], b"hello");
+        let mut res = crate::get("https://my.test/get").call().unwrap();
+        let s = res
+            .body_mut()
+            .with_config()
+            .limit(5)
+            .read_to_string()
+            .unwrap();
+        assert_eq!(s, "hello");
+    }
+
+    #[test]
+    fn limit_equal_to_size_chunked() {
+        init_test_log();
+        set_handler(
+            "/get",
+            200,
+            &[("transfer-encoding", "chunked")],
+            b"5\r\nhello\r\n0\r\n\r\n",
+        );
+        let mut res = crate::get("https://my.test/get").call().unwrap();
+        let s = res
+            .body_mut()
+            .with_config()
+            .limit(5)
+            .read_to_string()
+            .unwrap();
+        assert_eq!(s, "hello");
     }
 }

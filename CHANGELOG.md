@@ -2,6 +2,7 @@
 
   * Try the next address when connecting fails with NetworkDown (ENETDOWN), e.g. IPv6 blocked by a VPN
   * Apply the response body limit after gzip/brotli decompression, so compressed bodies can't exceed it
+  * Accept a response body exactly at the limit instead of failing with BodyExceedsLimit
 
 # 3.5.1
 
