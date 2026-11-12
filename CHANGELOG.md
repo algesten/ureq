@@ -1,6 +1,8 @@
 # Unreleased
 
-  * Try the next address when connecting fails with NetworkDown (ENETDOWN), e.g. IPv6 blocked by a VPN
+  * Apply response body limits after all decoding #1231
+  * Accept response bodies exactly at the size limit #1231
+  * Try the next address on NetworkDown errors #1230
 
 # 3.5.1
 
