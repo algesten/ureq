@@ -14,6 +14,7 @@ use self::read::read_retrying_interrupts;
 
 use super::ResolvedSocketAddrs;
 use super::chain::Either;
+use super::io::remaining_after;
 
 use super::time::Duration;
 use super::{Buffers, ConnectionDetails, Connector, LazyBuffers, NextTimeout};
@@ -126,15 +127,25 @@ fn try_connect_with<T>(
     // fails reports what actually happened instead of a synthesized refusal.
     let mut last_err: Option<Error> = None;
 
+    let remaining = || {
+        let mut left = timeout;
+        left.after = remaining_after(timeout.after, start, current_time());
+        left.check()
+    };
+
     for addr in addrs {
-        // Calculate this address's timeout using geometric series.
+        let left = remaining()?;
+        // Keep the geometric allocation, capped by the total time still available.
         let per_addr = timeout.not_zero().map(|t| {
             let secs = t.as_secs_f64() * weight / total_weight;
             let timeout = Duration::from_millis((secs * 1000.0) as u64);
-            timeout.max(MIN_PER_ADDRESS_TIMEOUT)
+            timeout.max(MIN_PER_ADDRESS_TIMEOUT).min(left.after)
         });
 
-        match connect(*addr, per_addr) {
+        let result = connect(*addr, per_addr);
+        // Ordinary address failures and successful connections spend the same budget.
+        remaining()?;
+        match result {
             // First that connects
             Ok(v) => return Ok(v),
             // Intercept errors that concern only this address to try next addrs
@@ -144,20 +155,14 @@ fn try_connect_with<T>(
                 continue;
             }
             Err(e @ Error::Timeout(_)) => {
-                // Check if we hit the overall global timeout for the connect.
-                let elapsed = current_time().duration_since(start);
-                if elapsed > timeout.after {
-                    return Err(Error::Timeout(timeout.reason));
-                }
-
-                // We still got time to try the next address.
+                // We still have time to try the next address.
                 last_err = Some(e);
             }
             // Other errors bail
             Err(e) => return Err(e),
         }
-
-        // Halve the weight for the next address
+        // Keep the allocation after address-specific failures, which can be
+        // immediate routing errors. The remaining total still caps every attempt.
         weight /= 2.0;
     }
 
@@ -602,7 +607,95 @@ mod test {
     }
 
     #[test]
-    fn overall_timeout_takes_precedence_and_stops_attempts() {
+    fn address_allowances_preserve_total_budget() {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        for reason in [Timeout::Global, Timeout::PerCall, Timeout::Connect] {
+            let mut addrs = ResolvedSocketAddrs::from_fn(|_| SocketAddr::from(([127, 0, 0, 1], 0)));
+            addrs.push(SocketAddr::from(([127, 0, 0, 1], 10001)));
+            addrs.push(SocketAddr::from(([127, 0, 0, 1], 10002)));
+            let start = Instant::now();
+            let elapsed = Arc::new(AtomicU64::new(0));
+            let clock = elapsed.clone();
+            let mut budgets = Vec::new();
+            let result: Result<(), Error> = try_connect_with(
+                &addrs,
+                start,
+                NextTimeout {
+                    after: Duration::from_millis(100),
+                    reason,
+                    ..NextTimeout::default()
+                },
+                Arc::new(move || start + Duration::from_millis(clock.load(Ordering::SeqCst))),
+                |_, budget| {
+                    budgets.push(budget.unwrap().as_millis());
+                    elapsed.fetch_add(if budgets.len() == 1 { 60 } else { 30 }, Ordering::SeqCst);
+                    Err(io::Error::from(io::ErrorKind::ConnectionRefused).into())
+                },
+            );
+            assert_eq!(budgets, [66, 40]);
+            assert!(matches!(result, Err(Error::Io(_))));
+
+            // The minimum per-address allowance must not extend a nearly spent budget.
+            elapsed.store(99, Ordering::SeqCst);
+            let clock = elapsed.clone();
+            let mut attempts = 0;
+            let result: Result<(), Error> = try_connect_with(
+                &addrs,
+                start,
+                NextTimeout {
+                    after: Duration::from_millis(100),
+                    reason,
+                    ..NextTimeout::default()
+                },
+                Arc::new(move || start + Duration::from_millis(clock.load(Ordering::SeqCst))),
+                |_, budget| {
+                    attempts += 1;
+                    assert_eq!(budget.unwrap(), Duration::from_millis(1));
+                    elapsed.store(100, Ordering::SeqCst);
+                    Ok(())
+                },
+            );
+            assert_eq!(attempts, 1);
+            assert!(matches!(result, Err(Error::Timeout(actual)) if actual == reason));
+        }
+    }
+
+    #[test]
+    fn immediate_routing_failures_leave_time_for_a_healthy_address() {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        let mut addrs = ResolvedSocketAddrs::from_fn(|_| SocketAddr::from(([127, 0, 0, 1], 0)));
+        for port in 10001..=10007 {
+            addrs.push(SocketAddr::from(([127, 0, 0, 1], port)));
+        }
+        let elapsed = Arc::new(AtomicU64::new(0));
+        let clock = elapsed.clone();
+        let start = Instant::now();
+        let mut attempts = 0;
+        let result = try_connect_with(
+            &addrs,
+            start,
+            NextTimeout {
+                after: Duration::from_secs(1),
+                reason: Timeout::Global,
+                ..NextTimeout::default()
+            },
+            Arc::new(move || start + Duration::from_millis(clock.load(Ordering::SeqCst))),
+            |_, budget| {
+                attempts += 1;
+                if attempts < 7 {
+                    return Err(io::Error::from(io::ErrorKind::NetworkUnreachable).into());
+                }
+                assert!(budget.unwrap() >= Duration::from_millis(50));
+                elapsed.store(50, Ordering::SeqCst);
+                Ok(())
+            },
+        );
+        assert!(result.is_ok());
+        assert_eq!(attempts, 7);
+    }
+
+    #[test]
+    fn expired_overall_timeout_prevents_attempts() {
         let (result, attempts) = scripted_connect(
             vec![
                 io_error(io::ErrorKind::NetworkUnreachable),
@@ -611,7 +704,7 @@ mod test {
             ],
             Duration::from_secs(11),
         );
-        assert_eq!(attempts, 2);
+        assert_eq!(attempts, 0);
         assert!(matches!(result, Err(Error::Timeout(Timeout::Global))));
     }
 

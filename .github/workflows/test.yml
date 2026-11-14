@@ -158,6 +158,11 @@ jobs:
       # Exercise the default TLS connector without the _test transport bypass.
       - name: Test native TLS connector
         run: cargo test --no-default-features --features ${{ matrix.feature }} --test native_tls
+      # Run real sockets once per OS, outside the in-memory _test transport.
+      - name: Test CONNECT total deadlines
+        if: matrix.feature == 'native-tls-no-default'
+        timeout-minutes: 3
+        run: cargo test --locked --no-default-features --test connect_timeout
 
   cargo-deny:
     name: cargo-deny
