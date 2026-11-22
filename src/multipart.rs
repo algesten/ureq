@@ -286,7 +286,7 @@ impl<'a> AsSendBody for Form<'a> {
     fn as_body(&mut self) -> SendBody {
         use crate::send_body::BodyInner;
 
-        let size = self.calculate_size();
+        let size = self.content_length();
         let content_type = format!("multipart/form-data; boundary={}", self.boundary());
         let body: SendBody = (size, BodyInner::Reader(self)).into();
         body.with_content_type(HeaderValue::from_str(&content_type).unwrap())
@@ -334,8 +334,8 @@ impl Default for ReadState {
 
 impl<'a> Form<'a> {
     /// Calculate the total size of the multipart body if all parts have known sizes.
-    /// Returns None if any part has an unknown size.
-    fn calculate_size(&self) -> Option<u64> {
+    /// Return None if any part has an unknown size.
+    pub fn content_length(&self) -> Option<u64> {
         let mut total_size: u64 = 0;
 
         for (idx, (name, part)) in self.parts.iter().enumerate() {
@@ -665,7 +665,7 @@ mod tests {
             .text("field2", "value2");
 
         // Calculate expected size
-        let size = form.calculate_size();
+        let size = form.content_length();
         assert!(size.is_some(), "Size should be calculable for text fields");
 
         // Read the actual data
@@ -690,7 +690,7 @@ mod tests {
         let form = Form::new().part("file", Part::reader(&mut data));
 
         // Should not be able to calculate size for readers without known size
-        let size = form.calculate_size();
+        let size = form.content_length();
         assert!(
             size.is_none(),
             "Size should be None for readers without known size"

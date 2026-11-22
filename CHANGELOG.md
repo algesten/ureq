@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Add `Form::content_length` from existing private method #1235
   * Honor connection deadlines during CONNECT and TCP fallback #1233
 
 # 3.5.2
