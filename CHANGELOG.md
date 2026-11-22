@@ -1,6 +1,6 @@
 # Unreleased
 
-  * Preserve total connection deadlines across CONNECT proxy setup and TCP address attempts #1233
+  * Honor connection deadlines during CONNECT and TCP fallback #1233
 
 # 3.5.2
 
