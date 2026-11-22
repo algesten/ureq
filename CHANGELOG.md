@@ -1,6 +1,6 @@
 # Unreleased
 
-  * Preserve total connection deadlines across CONNECT proxy setup and TCP address attempts #1232
+  * Preserve total connection deadlines across CONNECT proxy setup and TCP address attempts #1233
 
 # 3.5.2
 
