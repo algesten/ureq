@@ -596,6 +596,7 @@ mod tests {
     #[test]
     fn test_form_read_empty() {
         let form = Form::new();
+        assert_eq!(form.content_length(), Some(0));
         let mut result = Vec::new();
         let mut form = form;
         form.read_to_end(&mut result).unwrap();
