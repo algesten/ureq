@@ -333,9 +333,14 @@ impl Default for ReadState {
 }
 
 impl<'a> Form<'a> {
-    /// Calculate the total size of the multipart body if all parts have known sizes.
-    /// Return None if any part has an unknown size.
+    /// Returns the total encoded length of the form in bytes, including boundaries and part headers.
+    ///
+    /// Call this before reading from the form. Returns `None` if any part has an unknown size.
     pub fn content_length(&self) -> Option<u64> {
+        if self.parts.is_empty() {
+            return Some(0);
+        }
+
         let mut total_size: u64 = 0;
 
         for (idx, (name, part)) in self.parts.iter().enumerate() {
