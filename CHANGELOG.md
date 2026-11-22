@@ -1,5 +1,7 @@
 # Unreleased
 
+  * Preserve total connection deadlines across CONNECT proxy setup and TCP address attempts #1232
+
 # 3.5.2
 
   * Apply response body limits after all decoding #1231
