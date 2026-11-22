@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Expose the encoded multipart body length via `Form::content_length` #1235
   * Honor connection deadlines during CONNECT and TCP fallback #1233
 
 # 3.5.2

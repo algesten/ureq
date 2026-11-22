@@ -286,7 +286,7 @@ impl<'a> AsSendBody for Form<'a> {
     fn as_body(&mut self) -> SendBody {
         use crate::send_body::BodyInner;
 
-        let size = self.calculate_size();
+        let size = self.content_length();
         let content_type = format!("multipart/form-data; boundary={}", self.boundary());
         let body: SendBody = (size, BodyInner::Reader(self)).into();
         body.with_content_type(HeaderValue::from_str(&content_type).unwrap())
@@ -333,9 +333,33 @@ impl Default for ReadState {
 }
 
 impl<'a> Form<'a> {
-    /// Calculate the total size of the multipart body if all parts have known sizes.
-    /// Returns None if any part has an unknown size.
-    fn calculate_size(&self) -> Option<u64> {
+    /// Returns the total encoded length of the form in bytes, including boundaries and part headers.
+    ///
+    /// The total includes any bytes already consumed through [`std::io::Read`].
+    /// Returns `None` if any part has an unknown size.
+    ///
+    /// # Example
+    ///
+    /// Set a title-case `Content-Length` header before sending the form.
+    ///
+    /// ```no_run
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// use ureq::unversioned::multipart::Form;
+    ///
+    /// let form = Form::new().file("upload", "path/to/file.txt")?;
+    /// let mut request = ureq::post("https://example.com/upload");
+    /// if let Some(length) = form.content_length() {
+    ///     request = request.header_raw("Content-Length", length.to_string().as_bytes());
+    /// }
+    /// request.send(form)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn content_length(&self) -> Option<u64> {
+        if self.parts.is_empty() {
+            return Some(0);
+        }
+
         let mut total_size: u64 = 0;
 
         for (idx, (name, part)) in self.parts.iter().enumerate() {
@@ -596,6 +620,7 @@ mod tests {
     #[test]
     fn test_form_read_empty() {
         let form = Form::new();
+        assert_eq!(form.content_length(), Some(0));
         let mut result = Vec::new();
         let mut form = form;
         form.read_to_end(&mut result).unwrap();
@@ -665,7 +690,7 @@ mod tests {
             .text("field2", "value2");
 
         // Calculate expected size
-        let size = form.calculate_size();
+        let size = form.content_length();
         assert!(size.is_some(), "Size should be calculable for text fields");
 
         // Read the actual data
@@ -690,7 +715,7 @@ mod tests {
         let form = Form::new().part("file", Part::reader(&mut data));
 
         // Should not be able to calculate size for readers without known size
-        let size = form.calculate_size();
+        let size = form.content_length();
         assert!(
             size.is_none(),
             "Size should be None for readers without known size"
