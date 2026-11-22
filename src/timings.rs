@@ -263,6 +263,13 @@ impl NextTimeout {
         self
     }
 
+    pub(crate) fn remaining_at(mut self, started: Instant, now: Instant) -> Self {
+        if let Duration::Exact(limit) = self.after {
+            self.after = Duration::Exact(limit.saturating_sub(*now.duration_since(started)));
+        }
+        self
+    }
+
     pub(crate) fn check(self) -> Result<Self, crate::Error> {
         if self.after.is_zero() {
             Err(crate::Error::Timeout(self.reason))

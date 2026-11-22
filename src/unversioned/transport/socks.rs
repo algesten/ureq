@@ -78,14 +78,7 @@ impl SocksConnector {
         let target = Target::new(details, proxy)?;
 
         // Keep all setup steps within the budget that started before this connector.
-        let timeout_at = |now: Instant| {
-            let mut timeout = details.timeout;
-            if !timeout.after.is_not_happening() {
-                let elapsed = now.duration_since(details.now);
-                timeout.after = timeout.after.saturating_sub(*elapsed).into();
-            }
-            timeout.check()
-        };
+        let timeout_at = |now| details.timeout.remaining_at(details.now, now).check();
 
         let proxy_addrs = details.resolver.resolve(
             proxy.uri(),

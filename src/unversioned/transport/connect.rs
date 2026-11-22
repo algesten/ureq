@@ -14,8 +14,6 @@ use crate::transport::{Buffers, ConnectionDetails, Connector, Either};
 use crate::transport::{NextTimeout, Transport, TransportAdapter};
 use crate::util::{SchemeExt, UriExt};
 
-use super::io::remaining_after;
-
 /// Connector for CONNECT proxy settings.
 ///
 /// This operates on the previous chained transport typically a TcpConnector optionally
@@ -61,19 +59,14 @@ impl<In: Transport> Connector<In> for ConnectProxyConnector {
         // TODO(martin): it's a bit weird to put the CONNECT proxy
         // resolver timeout as part of Timeout::Connect, but we don't
         // have anything more granular for now.
-        let timeout_at = |now| {
-            let mut timeout = details.timeout;
-            timeout.after = remaining_after(timeout.after, details.now, now);
-            timeout.check()
-        };
+        let timeout_at = |now| details.timeout.remaining_at(details.now, now).check();
         let proxy_addrs = details.resolver.resolve(
             connect_uri,
             details.config,
             timeout_at((details.current_time)())?,
         )?;
-        let now = (details.current_time)();
-
         let proxy_config = details.config.clone_without_proxy();
+        let now = (details.current_time)();
 
         // ConnectionDetails to establish a connection to the CONNECT
         // proxy itself.

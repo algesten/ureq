@@ -14,7 +14,6 @@ use self::read::read_retrying_interrupts;
 
 use super::ResolvedSocketAddrs;
 use super::chain::Either;
-use super::io::remaining_after;
 
 use super::time::Duration;
 use super::{Buffers, ConnectionDetails, Connector, LazyBuffers, NextTimeout};
@@ -83,7 +82,7 @@ pub(super) fn try_connect(
     current_time: Arc<dyn Fn() -> Instant + Send + Sync + 'static>,
     config: &Config,
 ) -> Result<TcpStream, Error> {
-    try_connect_with(addrs, start, timeout, current_time, |addr, per_addr| {
+    try_connect_with(addrs, start, timeout, &*current_time, |addr, per_addr| {
         try_connect_single(addr, per_addr, config)
     })
 }
@@ -92,7 +91,7 @@ fn try_connect_with<T>(
     addrs: &ResolvedSocketAddrs,
     start: Instant,
     timeout: NextTimeout,
-    current_time: Arc<dyn Fn() -> Instant + Send + Sync + 'static>,
+    current_time: impl Fn() -> Instant,
     mut connect: impl FnMut(SocketAddr, Option<Duration>) -> Result<T, Error>,
 ) -> Result<T, Error> {
     // The idea here is to give each attempt a budget of the total time to try.
@@ -127,11 +126,7 @@ fn try_connect_with<T>(
     // fails reports what actually happened instead of a synthesized refusal.
     let mut last_err: Option<Error> = None;
 
-    let remaining = || {
-        let mut left = timeout;
-        left.after = remaining_after(timeout.after, start, current_time());
-        left.check()
-    };
+    let remaining = || timeout.remaining_at(start, current_time()).check();
 
     for addr in addrs {
         let left = remaining()?;
@@ -142,28 +137,23 @@ fn try_connect_with<T>(
             timeout.max(MIN_PER_ADDRESS_TIMEOUT).min(left.after)
         });
 
-        let result = connect(*addr, per_addr);
-        // Ordinary address failures and successful connections spend the same budget.
-        remaining()?;
-        match result {
-            // First that connects
-            Ok(v) => return Ok(v),
-            // Intercept errors that concern only this address to try next addrs
+        match connect(*addr, per_addr) {
+            Ok(v) => {
+                remaining()?;
+                return Ok(v);
+            }
             Err(Error::Io(e)) if is_addr_specific_error(&e) => {
                 trace!("{} failed: {}", addr, e);
                 last_err = Some(Error::Io(e));
-                continue;
             }
             Err(e @ Error::Timeout(_)) => {
-                // We still have time to try the next address.
                 last_err = Some(e);
+                // Immediate routing failures leave the next address's share intact.
+                weight /= 2.0;
             }
-            // Other errors bail
             Err(e) => return Err(e),
         }
-        // Keep the allocation after address-specific failures, which can be
-        // immediate routing errors. The remaining total still caps every attempt.
-        weight /= 2.0;
+        remaining()?;
     }
 
     debug!("Failed to connect to any resolved address");
@@ -498,7 +488,7 @@ mod test {
                 reason: Timeout::Global,
                 ..NextTimeout::default()
             },
-            Arc::new(move || start + elapsed),
+            move || start + elapsed,
             |addr, _| {
                 assert_eq!(addr, addrs[attempts]);
                 attempts += 1;
@@ -625,7 +615,7 @@ mod test {
                     reason,
                     ..NextTimeout::default()
                 },
-                Arc::new(move || start + Duration::from_millis(clock.load(Ordering::SeqCst))),
+                move || start + Duration::from_millis(clock.load(Ordering::SeqCst)),
                 |_, budget| {
                     budgets.push(budget.unwrap().as_millis());
                     elapsed.fetch_add(if budgets.len() == 1 { 60 } else { 30 }, Ordering::SeqCst);
@@ -647,7 +637,7 @@ mod test {
                     reason,
                     ..NextTimeout::default()
                 },
-                Arc::new(move || start + Duration::from_millis(clock.load(Ordering::SeqCst))),
+                move || start + Duration::from_millis(clock.load(Ordering::SeqCst)),
                 |_, budget| {
                     attempts += 1;
                     assert_eq!(budget.unwrap(), Duration::from_millis(1));
@@ -679,7 +669,7 @@ mod test {
                 reason: Timeout::Global,
                 ..NextTimeout::default()
             },
-            Arc::new(move || start + Duration::from_millis(clock.load(Ordering::SeqCst))),
+            move || start + Duration::from_millis(clock.load(Ordering::SeqCst)),
             |_, budget| {
                 attempts += 1;
                 if attempts < 7 {
@@ -692,6 +682,39 @@ mod test {
         );
         assert!(result.is_ok());
         assert_eq!(attempts, 7);
+    }
+
+    #[test]
+    fn overall_timeout_takes_precedence_and_stops_attempts() {
+        use std::cell::Cell;
+
+        let mut addrs = ResolvedSocketAddrs::from_fn(|_| SocketAddr::from(([127, 0, 0, 1], 0)));
+        for port in 10001..=10003 {
+            addrs.push(SocketAddr::from(([127, 0, 0, 1], port)));
+        }
+        let start = Instant::now();
+        let elapsed = Cell::new(Duration::from_secs(0));
+        let mut attempts = 0;
+        let result: Result<(), Error> = try_connect_with(
+            &addrs,
+            start,
+            NextTimeout {
+                after: Duration::from_secs(10),
+                reason: Timeout::Global,
+                ..NextTimeout::default()
+            },
+            || start + elapsed.get(),
+            |_, _| {
+                attempts += 1;
+                if attempts == 1 {
+                    return io_error(io::ErrorKind::NetworkUnreachable);
+                }
+                elapsed.set(Duration::from_secs(10));
+                Err(Error::Timeout(Timeout::Connect))
+            },
+        );
+        assert_eq!(attempts, 2);
+        assert!(matches!(result, Err(Error::Timeout(Timeout::Global))));
     }
 
     #[test]

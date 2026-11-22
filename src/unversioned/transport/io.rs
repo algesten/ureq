@@ -48,9 +48,8 @@ impl<T: Transport> TransportAdapter<T> {
     }
 
     fn timeout_now(&self) -> NextTimeout {
-        let mut timeout = self.timeout;
-        timeout.after = remaining_after(timeout.after, self.timeout_set_at, (self.current_time)());
-        timeout
+        self.timeout
+            .remaining_at(self.timeout_set_at, (self.current_time)())
     }
 
     /// Reference to the adapted transport
@@ -71,19 +70,6 @@ impl<T: Transport> TransportAdapter<T> {
     /// Turn the adapter back into the wrapped transport
     pub fn into_inner(self) -> T {
         self.transport
-    }
-}
-
-pub(super) fn remaining_after(after: Duration, started: Instant, now: Instant) -> Duration {
-    if after.is_not_happening() {
-        return after;
-    }
-    match (after, now.duration_since(started)) {
-        (Duration::Exact(limit), Duration::Exact(elapsed)) => {
-            Duration::Exact(limit.saturating_sub(elapsed))
-        }
-        (Duration::Exact(_), Duration::NotHappening) => Duration::from_secs(0),
-        (Duration::NotHappening, _) => Duration::NotHappening,
     }
 }
 
