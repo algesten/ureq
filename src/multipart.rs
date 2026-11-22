@@ -335,7 +335,26 @@ impl Default for ReadState {
 impl<'a> Form<'a> {
     /// Returns the total encoded length of the form in bytes, including boundaries and part headers.
     ///
-    /// Call this before reading from the form. Returns `None` if any part has an unknown size.
+    /// The total includes any bytes already consumed through [`std::io::Read`].
+    /// Returns `None` if any part has an unknown size.
+    ///
+    /// # Example
+    ///
+    /// Set a title-case `Content-Length` header before sending the form.
+    ///
+    /// ```no_run
+    /// # fn main() -> Result<(), ureq::Error> {
+    /// use ureq::unversioned::multipart::Form;
+    ///
+    /// let form = Form::new().file("upload", "path/to/file.txt")?;
+    /// let mut request = ureq::post("https://example.com/upload");
+    /// if let Some(length) = form.content_length() {
+    ///     request = request.header_raw("Content-Length", length.to_string().as_bytes());
+    /// }
+    /// request.send(form)?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn content_length(&self) -> Option<u64> {
         if self.parts.is_empty() {
             return Some(0);
