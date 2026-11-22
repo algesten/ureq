@@ -1,5 +1,7 @@
 # Unreleased
 
+  * Honor connection deadlines during CONNECT and TCP fallback #1233
+
 # 3.5.2
 
   * Apply response body limits after all decoding #1231
