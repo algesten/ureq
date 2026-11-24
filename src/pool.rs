@@ -63,7 +63,6 @@ impl ConnectionPool {
                 // its newly established connection to the Agent's pool.
                 Weak::new()
             },
-            position_per_host: None,
         };
 
         Ok(conn)
@@ -128,26 +127,6 @@ pub(crate) struct Connection {
     key: PoolKey,
     last_use: Instant,
     pool: Weak<Mutex<Pool>>,
-
-    /// Used to prune max_idle_connections_by_host.
-    ///
-    /// # Example
-    ///
-    /// If we have a max idle per hosts set to 3, and we have the following LRU:
-    ///
-    /// ```text
-    /// [B, A, A, B, A, B, A]
-    /// ```
-    ///
-    /// This field is used to enumerate the elements per host reverse:
-    ///
-    /// ```text
-    /// [B2, A3, A2, B1, A1, B0, A0]
-    /// ```
-    ///
-    /// Once we have that enumeration, we can drop elements from the front where there
-    /// position_per_host >= idle_per_host.
-    position_per_host: Option<usize>,
 }
 
 impl Connection {
@@ -214,7 +193,6 @@ impl Connection {
         }
 
         pool.add(self);
-        pool.purge(now);
     }
 
     pub fn is_tls(&self) -> bool {
@@ -304,13 +282,6 @@ impl Pool {
             self.lru.pop_front();
         }
 
-        self.update_position_per_host();
-
-        let max = self.max_idle_connections_per_host;
-
-        // unwrap is ok because update_position_per_host() should have set all
-        self.lru.retain(|c| c.position_per_host.unwrap() < max);
-
         // Evicting idle connections can expire their shutdown handles.
         self.shutdown_handles.retain(|h| h.strong_count() > 0);
     }
@@ -319,39 +290,25 @@ impl Pool {
         self.lru.front().map(|c| c.age(now)) > Some(self.max_idle_age)
     }
 
-    fn update_position_per_host(&mut self) {
-        // Reset position counters
-        for c in &mut self.lru {
-            c.position_per_host = None;
-        }
-
-        loop {
-            let maybe_uncounted = self
-                .lru
-                .iter()
-                .rev()
-                .find(|c| c.position_per_host.is_none());
-
-            let Some(uncounted) = maybe_uncounted else {
-                break; // nothing more to count.
-            };
-
-            let key_to_count = uncounted.key.clone();
-
-            for (position, c) in self
-                .lru
-                .iter_mut()
-                .rev()
-                .filter(|c| c.key == key_to_count)
-                .enumerate()
-            {
-                c.position_per_host = Some(position);
-            }
-        }
-    }
-
     fn add(&mut self, conn: Connection) {
-        self.lru.push_back(conn)
+        let key = conn.key.clone();
+        let now = conn.last_use;
+        self.lru.push_back(conn);
+        self.purge(now);
+
+        // Only the host of the added connection can have gone over the per host
+        // limit, and only by this one connection. Checking that here, for this
+        // host alone, keeps purge() from comparing the keys of all idle
+        // connections with each other on every request. The keys hold the uri
+        // authority, which a redirect can make very long.
+        let same_host = self.lru.iter().filter(|c| c.key == key).count();
+
+        if same_host > self.max_idle_connections_per_host {
+            // Drop the oldest connection of this host.
+            // unwrap is ok because we just added one with this key.
+            let oldest = self.lru.iter().position(|c| c.key == key).unwrap();
+            self.lru.remove(oldest);
+        }
     }
 
     fn get(&mut self, key: &PoolKey, max_idle_age: Duration, now: Instant) -> Option<Connection> {
@@ -700,7 +657,6 @@ mod shutdown_registry_tests {
                 key: PoolKey::new(&Uri::from_static("http://example.test/"), None),
                 last_use: now,
                 pool: Weak::new(),
-                position_per_host: None,
             });
 
             pool.purge(now);
@@ -708,6 +664,36 @@ mod shutdown_registry_tests {
             assert!(pool.lru.is_empty());
             assert!(pool.shutdown_handles.is_empty());
         }
+    }
+
+    #[test]
+    fn add_drops_oldest_connection_over_per_host_limit() {
+        let config = Agent::config_builder()
+            .max_idle_connections_per_host(3)
+            .build();
+        let mut pool = Pool::new(&config);
+        let now = Instant::now();
+
+        let key = |uri| PoolKey::new(&Uri::from_static(uri), None);
+        let (a, b) = ("http://a.test/", "http://b.test/");
+
+        // The fourth connection to a is one too many. Its oldest must go.
+        for uri in [a, b, a, a, a] {
+            pool.add(Connection {
+                transport: Box::new(IdleTransport {
+                    _handle: Arc::new(Flag::default()),
+                }),
+                key: key(uri),
+                last_use: now,
+                pool: Weak::new(),
+            });
+        }
+
+        // Nothing is left for purge to do.
+        pool.purge(now);
+
+        let keys: Vec<_> = pool.lru.iter().map(|c| c.key.clone()).collect();
+        assert_eq!(keys, [b, a, a, a].map(key));
     }
 
     #[test]
