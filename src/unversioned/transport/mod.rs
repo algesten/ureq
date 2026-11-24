@@ -410,7 +410,7 @@ impl Default for DefaultConnector {
         #[cfg(feature = "_rustls")]
         let inner = inner.chain(RustlsConnector::default());
 
-        // Panic if the config calls for rustls, the uri scheme is https and that
+        // Error if the config calls for rustls, the uri scheme is https and that
         // TLS provider is not enabled by feature flags.
         #[cfg(feature = "_tls")]
         let inner = inner.chain(no_tls::WarnOnMissingTlsProvider(
@@ -421,7 +421,7 @@ impl Default for DefaultConnector {
         #[cfg(feature = "native-tls-no-default")]
         let inner = inner.chain(NativeTlsConnector::default());
 
-        // Panic if the config calls for native-tls, the uri scheme is https and that
+        // Error if the config calls for native-tls, the uri scheme is https and that
         // TLS provider is not enabled by feature flags.
         #[cfg(feature = "_tls")]
         let inner = inner.chain(no_tls::WarnOnMissingTlsProvider(
@@ -514,11 +514,9 @@ mod no_tls {
                 && tls_config.provider() == self.0
                 && !self.0.is_feature_enabled()
             {
-                panic!(
-                    "uri scheme is https, provider is {:?} but feature is not enabled: {}",
-                    self.0,
-                    self.0.feature_name()
-                );
+                // Not a panic. The https uri is not necessarily chosen by the
+                // caller, a server can redirect a plain http request to it.
+                return Err(Error::Tls(self.0.feature_missing()));
             }
 
             Ok(chained)

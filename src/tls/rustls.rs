@@ -143,20 +143,20 @@ fn build_config(tls_config: &TlsConfig) -> Result<CachedRustlConfig, Error> {
         .rustls_crypto_provider
         .clone()
         .or(rustls::crypto::CryptoProvider::get_default().cloned())
-        .unwrap_or_else(ring_if_enabled);
+        .map_or_else(ring_if_enabled, Ok)?;
 
     #[cfg(feature = "_ring")]
-    fn ring_if_enabled() -> Arc<CryptoProvider> {
-        Arc::new(rustls::crypto::ring::default_provider())
+    fn ring_if_enabled() -> Result<Arc<CryptoProvider>, Error> {
+        Ok(Arc::new(rustls::crypto::ring::default_provider()))
     }
 
     #[cfg(not(feature = "_ring"))]
-    fn ring_if_enabled() -> Arc<CryptoProvider> {
-        panic!(
-            "No CryptoProvider for Rustls. Either enable feature `rustls`, or set process
-            default using CryptoProvider::set_default(), or configure
-            TlsConfig::rustls_crypto_provider()"
-        );
+    fn ring_if_enabled() -> Result<Arc<CryptoProvider>, Error> {
+        Err(Error::Tls(
+            "No CryptoProvider for Rustls. Either enable feature `rustls`, or set process \
+            default using CryptoProvider::set_default(), or configure \
+            TlsConfig::rustls_crypto_provider()",
+        ))
     }
 
     let builder = ClientConfig::builder_with_provider(provider.clone())
@@ -181,7 +181,9 @@ fn build_config(tls_config: &TlsConfig) -> Result<CachedRustlConfig, Error> {
             }
             #[cfg(not(feature = "platform-verifier"))]
             RootCerts::PlatformVerifier => {
-                panic!("Rustls + PlatformVerifier requires feature: platform-verifier");
+                return Err(Error::Tls(
+                    "Rustls + PlatformVerifier requires feature: platform-verifier",
+                ));
             }
             #[cfg(feature = "platform-verifier")]
             RootCerts::PlatformVerifier => builder
@@ -199,7 +201,9 @@ fn build_config(tls_config: &TlsConfig) -> Result<CachedRustlConfig, Error> {
             }
             #[cfg(not(feature = "rustls-webpki-roots"))]
             RootCerts::WebPki => {
-                panic!("WebPki is disabled. You need to explicitly configure root certs on Agent");
+                return Err(Error::Tls(
+                    "WebPki is disabled. You need to explicitly configure root certs on Agent",
+                ));
             }
         }
     };
@@ -339,5 +343,29 @@ impl fmt::Debug for RustlsTransport {
         f.debug_struct("RustlsTransport")
             .field("chained", &self.stream.sock.inner())
             .finish()
+    }
+}
+
+#[cfg(all(test, not(feature = "platform-verifier")))]
+mod test {
+    use super::*;
+
+    // An https uri can come from a redirect, so a TlsConfig that can't be
+    // used must be an error and not a panic.
+    #[test]
+    fn platform_verifier_without_feature_is_error() {
+        let tls_config = TlsConfig::builder()
+            .root_certs(RootCerts::PlatformVerifier)
+            .build();
+        assert!(matches!(build_config(&tls_config), Err(Error::Tls(_))));
+    }
+
+    #[test]
+    #[cfg(not(feature = "rustls-webpki-roots"))]
+    fn default_roots_without_webpki_is_error() {
+        assert!(matches!(
+            build_config(&TlsConfig::default()),
+            Err(Error::Tls(_))
+        ));
     }
 }

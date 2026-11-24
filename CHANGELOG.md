@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Return TLS errors for unavailable provider configurations #1236
   * Enforce the per-host pool limit when returning a connection #1236
   * Avoid reparsing response heads on every transport read #1236
   * Check cookie scope against the request URI #1236

@@ -56,10 +56,12 @@ impl TlsProvider {
         }
     }
 
-    pub(crate) fn feature_name(&self) -> &'static str {
+    pub(crate) fn feature_missing(&self) -> &'static str {
         match self {
-            TlsProvider::Rustls => "rustls",
-            TlsProvider::NativeTls => "native-tls",
+            TlsProvider::Rustls => "uri scheme is https, provider Rustls requires feature: rustls",
+            TlsProvider::NativeTls => {
+                "uri scheme is https, provider NativeTls requires feature: native-tls"
+            }
         }
     }
 }
