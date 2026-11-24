@@ -215,6 +215,8 @@ impl TlsConfigBuilder {
     ///
     /// An HTTPS redirect target can request this certificate, including on another
     /// origin. This matches [curl with `--cert`](https://curl.se/docs/manpage.html#-E).
+    /// An HTTPS CONNECT proxy can also request this certificate during the TLS
+    /// handshake with the proxy.
     pub fn client_cert(mut self, v: Option<ClientCert>) -> Self {
         self.config.client_cert = v;
         self
