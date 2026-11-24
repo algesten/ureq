@@ -87,6 +87,24 @@ mod test {
 
     #[test]
     #[cfg(feature = "gzip")]
+    fn compressed_input_can_exceed_limit_with_empty_output() {
+        let gzip = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default())
+            .finish()
+            .unwrap();
+        let len = gzip.len().to_string();
+        set_handler(
+            "/empty-gzip",
+            200,
+            &[("content-encoding", "gzip"), ("content-length", &len)],
+            &gzip,
+        );
+        let mut res = crate::get("https://my.test/empty-gzip").call().unwrap();
+        let result = res.body_mut().with_config().limit(1).read_to_vec();
+        assert!(matches!(result, Err(Error::BodyExceedsLimit(1))));
+    }
+
+    #[test]
+    #[cfg(feature = "gzip")]
     fn limit_applies_to_decompressed_size() {
         use std::io::Write;
         init_test_log();

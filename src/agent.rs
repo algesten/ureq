@@ -163,6 +163,9 @@ impl Agent {
     /// all clones of the same [`Agent`], meaning you must drop the CookieJar
     /// before using the agent, or end up with a deadlock.
     ///
+    /// Cookies in the jar are not sent for a request that sets its own `Cookie`
+    /// header. That header is used as is.
+    ///
     /// ```rust
     /// # #[cfg(feature = "json")]
     /// # fn no_run() -> Result<(), ureq::Error> {
@@ -455,5 +458,23 @@ mod test {
     fn agent_clone_does_not_allocate() {
         let a = Agent::new_with_defaults();
         assert_no_alloc(|| a.clone());
+    }
+
+    #[test]
+    #[cfg(feature = "cookies")]
+    fn agent_debug_does_not_print_cookies() {
+        use crate::Cookie;
+
+        let a = Agent::new_with_defaults();
+        let uri = Uri::from_static("https://example.test");
+
+        let mut jar = a.cookie_jar_lock();
+        let cookie = Cookie::parse("session=s3cr3t; Secure; HttpOnly", &uri).unwrap();
+        jar.insert(cookie, &uri).unwrap();
+        jar.release();
+
+        let dbg = format!("{:?}", a);
+        assert!(dbg.contains("jar: SharedCookieJar"));
+        assert!(!dbg.contains("s3cr3t"));
     }
 }

@@ -8,21 +8,39 @@ use http::Uri;
 
 use crate::Error;
 use crate::http;
-use crate::util::UriExt;
+use crate::util::{DebugUri, UriExt};
 
 #[cfg(feature = "json")]
 use std::io;
 
 #[derive(Debug)]
 pub(crate) struct SharedCookieJar {
-    inner: Mutex<CookieStore>,
+    inner: Mutex<RedactedCookieStore>,
+}
+
+struct RedactedCookieStore(CookieStore);
+impl std::ops::Deref for RedactedCookieStore {
+    type Target = CookieStore;
+    fn deref(&self) -> &CookieStore {
+        &self.0
+    }
+}
+impl std::ops::DerefMut for RedactedCookieStore {
+    fn deref_mut(&mut self) -> &mut CookieStore {
+        &mut self.0
+    }
+}
+impl fmt::Debug for RedactedCookieStore {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CookieStore").finish_non_exhaustive()
+    }
 }
 
 /// Collection of cookies.
 ///
 /// The jar is accessed using [`Agent::cookie_jar_lock`][crate::Agent::cookie_jar_lock].
 /// It can be saved and loaded.
-pub struct CookieJar<'a>(MutexGuard<'a, CookieStore>);
+pub struct CookieJar<'a>(MutexGuard<'a, RedactedCookieStore>);
 
 /// Representation of an HTTP cookie.
 ///
@@ -143,7 +161,7 @@ impl<'a> CookieJar<'a> {
     #[cfg(feature = "json")]
     pub fn load_json<R: io::BufRead>(&mut self, reader: R) -> Result<(), Error> {
         let store = cookie_store::serde::json::load(reader)?;
-        *self.0 = store;
+        **self.0 = store;
         Ok(())
     }
 
@@ -153,12 +171,34 @@ impl<'a> CookieJar<'a> {
         uri: &Uri,
     ) {
         let url = uri.try_into_url().expect("uri to be a url");
+
+        if !is_same_target(uri, &url) {
+            debug!("Ignore cookies from rewritten url: {:?}", DebugUri(uri));
+            return;
+        }
+
         let raw_cookies = iter.map(|c| c.0.into_static().into());
         self.0.store_response_cookies(raw_cookies, &url);
     }
 
     /// Release the cookie jar.
     pub fn release(self) {}
+}
+
+/// Whether `url`, which the jar matches cookies against, has the host and path that
+/// the request for `uri` goes to.
+///
+/// The host is resolved and the path is sent as they are in the `Uri`. `Url` follows
+/// the WHATWG rules instead: a host that ends in a number is rewritten to an IPv4 address
+/// (`127.1`, `0x7f.0.0.1`, `127.0.0.1.`), `\` is a path separator and dot segments
+/// (also spelled `%2e`) are resolved. The jar must not be used with a `Url` that was
+/// rewritten like that, since it stands for another host or path than the one that
+/// the request is sent to.
+fn is_same_target(uri: &Uri, url: &url::Url) -> bool {
+    uri.host()
+        .zip(url.host_str())
+        .is_some_and(|(raw, parsed)| raw.eq_ignore_ascii_case(parsed))
+        && uri.path() == url.path()
 }
 
 // CookieStore::new() changes parameters depending on feature flag "public_suffix".
@@ -174,7 +214,7 @@ fn instantiate_cookie_store() -> CookieStore {
 impl SharedCookieJar {
     pub(crate) fn new() -> Self {
         SharedCookieJar {
-            inner: Mutex::new(instantiate_cookie_store()),
+            inner: Mutex::new(RedactedCookieStore(instantiate_cookie_store())),
         }
     }
 
@@ -193,6 +233,11 @@ impl SharedCookieJar {
                 return cookies;
             }
         };
+
+        if !is_same_target(uri, &url) {
+            debug!("No cookies for rewritten url: {:?}", DebugUri(uri));
+            return cookies;
+        }
 
         let store = self.inner.lock().unwrap();
 
@@ -310,6 +355,54 @@ mod test {
 
     fn uri() -> Uri {
         Uri::try_from("https://example.test").unwrap()
+    }
+
+    #[test]
+    fn no_request_cookies_where_url_differs_from_uri() {
+        // Same host and path, whatever the spelling.
+        assert_eq!(cookies_for("http://a.test/alice/x"), "a=1");
+        assert_eq!(cookies_for("http://A.test:80/alice/..x?y=/../"), "a=1");
+        assert_eq!(cookies_for("http://a.test/alice/%2e%2E%2f{x}/ä"), "");
+        assert_eq!(cookies_for("http://10.0.0.5/alice"), "a=1");
+        assert_eq!(cookies_for("http://[0:0::1]/alice"), "");
+
+        // These are names to resolve, Url makes them the address 10.0.0.5.
+        assert_eq!(cookies_for("http://10.0.0.5./alice"), "");
+        assert_eq!(cookies_for("http://10.5/alice"), "");
+        assert_eq!(cookies_for("http://0xa.0.0.5/alice"), "");
+
+        // These are sent as they are, Url makes them /alice.
+        assert_eq!(cookies_for("http://a.test/mallory/../alice"), "");
+        assert_eq!(cookies_for("http://a.test/mallory/.%2E/alice"), "");
+        assert_eq!(cookies_for("http://a.test/mallory\\..\\alice"), "");
+        assert_eq!(cookies_for("http://a.test/./alice"), "");
+    }
+
+    fn cookies_for(uri: &'static str) -> String {
+        let jar = SharedCookieJar::new();
+        for origin in ["http://a.test/", "http://10.0.0.5/", "http://[::1]/"] {
+            let origin = Uri::from_static(origin);
+            let cookie = Cookie::parse("a=1; Path=/alice", &origin).unwrap();
+            jar.lock().insert(cookie, &origin).unwrap();
+        }
+        jar.get_request_cookies(&Uri::from_static(uri))
+    }
+
+    #[test]
+    fn no_response_cookies_where_url_differs_from_uri() {
+        assert_eq!(stored_from("http://10.0.0.5/alice"), 1);
+        assert_eq!(stored_from("http://10.0.0.5./alice"), 0);
+        assert_eq!(stored_from("http://a.test/alice/x"), 1);
+        assert_eq!(stored_from("http://a.test/mallory/../alice/x"), 0);
+    }
+
+    fn stored_from(uri: &'static str) -> usize {
+        let uri = Uri::from_static(uri);
+        let jar = SharedCookieJar::new();
+        let cookie = Cookie::parse("a=1", &uri).unwrap();
+        let mut lock = jar.lock();
+        lock.store_response_cookies(iter::once(cookie), &uri);
+        lock.iter().count()
     }
 
     #[test]

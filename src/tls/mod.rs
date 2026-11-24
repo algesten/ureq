@@ -56,10 +56,12 @@ impl TlsProvider {
         }
     }
 
-    pub(crate) fn feature_name(&self) -> &'static str {
+    pub(crate) fn feature_missing(&self) -> &'static str {
         match self {
-            TlsProvider::Rustls => "rustls",
-            TlsProvider::NativeTls => "native-tls",
+            TlsProvider::Rustls => "uri scheme is https, provider Rustls requires feature: rustls",
+            TlsProvider::NativeTls => {
+                "uri scheme is https, provider NativeTls requires feature: native-tls"
+            }
         }
     }
 }
@@ -210,6 +212,11 @@ impl TlsConfigBuilder {
     /// Client certificate chain with corresponding private key.
     ///
     /// Defaults to `None`.
+    ///
+    /// An HTTPS redirect target can request this certificate, including on another
+    /// origin. This matches [curl with `--cert`](https://curl.se/docs/manpage.html#-E).
+    /// An HTTPS CONNECT proxy can also request this certificate during the TLS
+    /// handshake with the proxy.
     pub fn client_cert(mut self, v: Option<ClientCert>) -> Self {
         self.config.client_cert = v;
         self
@@ -344,7 +351,8 @@ pub enum RootCerts {
     /// * For **native-tls**, this uses the roots that native-tls loads by default.
     PlatformVerifier,
 
-    /// Use Mozilla's root certificates instead of the platform.
+    /// Use Mozilla's root certificates instead of the platform. With native-tls,
+    /// this omits name constraints supplied separately from the certificates.
     ///
     /// This is useful when you can't trust the system roots, such as in
     /// environments where TLS is intercepted and decrypted by a proxy (MITM attack).

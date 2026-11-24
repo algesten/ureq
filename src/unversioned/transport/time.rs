@@ -86,7 +86,11 @@ impl Add<Duration> for Instant {
         match (self, rhs) {
             (Instant::AlreadyHappened, Duration::Exact(_)) => Instant::AlreadyHappened,
             (Instant::AlreadyHappened, Duration::NotHappening) => Instant::AlreadyHappened,
-            (Instant::Exact(v1), Duration::Exact(v2)) => Instant::Exact(v1.add(v2)),
+            (Instant::Exact(v1), Duration::Exact(v2)) => match v1.checked_add(v2) {
+                Some(v) => Instant::Exact(v),
+                // Too far ahead to represent, e.g. a timeout of Duration::MAX.
+                None => Instant::NotHappening,
+            },
             (Instant::Exact(_), Duration::NotHappening) => Instant::NotHappening,
             (Instant::NotHappening, Duration::Exact(_)) => Instant::NotHappening,
             (Instant::NotHappening, Duration::NotHappening) => Instant::NotHappening,
@@ -160,5 +164,12 @@ mod test {
         assert!(Instant::AlreadyHappened < now);
         assert!(now < Instant::NotHappening);
         assert!(Instant::AlreadyHappened < Instant::NotHappening);
+    }
+
+    #[test]
+    fn add_overflow_is_not_happening() {
+        let now = Instant::now();
+        assert_eq!(now + time::Duration::MAX.into(), Instant::NotHappening);
+        assert!(matches!(now + Duration::from_secs(1), Instant::Exact(_)));
     }
 }

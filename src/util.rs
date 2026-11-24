@@ -111,7 +111,8 @@ impl ConsumeBuf {
         if size > 100 * 1024 * 1024 {
             panic!("ConsumeBuf grown to unreasonable size (>100MB)");
         }
-        self.buf.resize(size, 0);
+        // Shrinking must never cut off data that is filled but not yet consumed.
+        self.buf.resize(size.max(self.filled), 0);
     }
 
     pub fn add_space(&mut self, size: usize) {
@@ -327,7 +328,7 @@ impl UriExt for Uri {
     fn ensure_valid_url(&self) -> Result<(), Error> {
         let scheme = self
             .scheme()
-            .ok_or_else(|| Error::BadUri(format!("{} is missing scheme", self)))?;
+            .ok_or_else(|| Error::BadUri(format!("{:?} is missing scheme", DebugUri(self))))?;
 
         scheme
             .default_port()
@@ -411,6 +412,42 @@ impl HeaderMapExt for HeaderMap {
     }
 }
 
+/// Tells when a response head that is still being received is worth parsing.
+///
+/// Parsing a head is stateless: every attempt starts over from the status line.
+/// Attempting after every read makes the total work quadratic in the size of a
+/// head that arrives in many small reads. Neither the end of the head, nor a
+/// header such as `Location`, is complete before its line ending. Waiting for
+/// line endings bounds the number of attempts by the number of lines the parser
+/// accepts.
+#[derive(Debug, Default)]
+pub(crate) struct HeadScan {
+    /// How much of the input we have looked at.
+    scanned: usize,
+    /// Whether we are past the empty lines that may precede the status line.
+    started: bool,
+}
+
+impl HeadScan {
+    /// Whether to try parsing `input`, which is all the bytes buffered for the head.
+    ///
+    /// That is when a line has ended since the previous call. The first bytes are
+    /// always tried, to discover straight away a peer that is not talking HTTP.
+    ///
+    /// Start over with a new `HeadScan` when input is consumed.
+    pub fn should_parse(&mut self, input: &[u8]) -> bool {
+        let is_first = self.scanned == 0;
+        let fresh = &input[self.scanned.min(input.len())..];
+        self.scanned = input.len();
+
+        // The parser skips any number of empty lines before the status line.
+        // They must not count, or each of them would cause an attempt.
+        self.started |= fresh.iter().any(|b| !matches!(b, b'\r' | b'\n'));
+
+        is_first || (self.started && fresh.contains(&b'\n'))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -435,5 +472,49 @@ mod tests {
             authority("https://127.0.0.1:8443/").host_bare(),
             "127.0.0.1"
         );
+    }
+
+    #[test]
+    fn head_scan_tries_once_per_line() {
+        let head = b"HTTP/1.1 302 Found\r\nLocation: /somewhere\r\nX-Other: 1\r\n\r\n";
+        let bytewise: Vec<&[u8]> = head.chunks(1).collect();
+
+        // The first byte, and then every line ending.
+        assert_eq!(head_scan_attempts(&bytewise), 1 + 4);
+        assert_eq!(head_scan_attempts(&[head]), 1);
+    }
+
+    /// Feed the input in the given pieces, count the parse attempts.
+    fn head_scan_attempts(pieces: &[&[u8]]) -> usize {
+        let mut scan = HeadScan::default();
+        let mut input = Vec::new();
+        let mut attempts = 0;
+        for piece in pieces {
+            input.extend_from_slice(piece);
+            if scan.should_parse(&input) {
+                attempts += 1;
+            }
+        }
+        attempts
+    }
+
+    #[test]
+    fn head_scan_tries_first_bytes() {
+        // No line ending, but we want to find out it is not HTTP.
+        assert_eq!(head_scan_attempts(&[b"\x16\x03\x01", b"\x02", b"\x00"]), 1);
+    }
+
+    #[test]
+    fn head_scan_ignores_leading_empty_lines() {
+        let pieces: &[&[u8]] = &[
+            b"\r",
+            b"\n",
+            b"\n",
+            b"\r\n",
+            b"HTTP/1.1 200 OK",
+            b"\r",
+            b"\n",
+        ];
+        assert_eq!(head_scan_attempts(pieces), 1 + 1);
     }
 }

@@ -1263,6 +1263,52 @@ pub(crate) mod test {
     }
 
     #[test]
+    #[cfg(all(feature = "cookies", feature = "_test"))]
+    fn request_cookie_header_overrides_jar() {
+        use crate::transport::set_handler_cb;
+        use std::sync::{Arc, Mutex};
+        init_test_log();
+
+        let agent = Agent::new_with_defaults();
+        let uri = Uri::from_static("http://cookie.test/cookie-override");
+
+        let mut jar = agent.cookie_jar_lock();
+        jar.insert(Cookie::parse("session=jar; Path=/", &uri).unwrap(), &uri)
+            .unwrap();
+        jar.release();
+
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let seen2 = seen.clone();
+        set_handler_cb("/cookie-override", 200, &[], &[], move |req| {
+            let all: Vec<_> = req
+                .headers()
+                .get_all("cookie")
+                .iter()
+                .map(|c| c.to_str().unwrap().to_string())
+                .collect();
+            seen2.lock().unwrap().push(all);
+        });
+
+        // A Cookie header set on the request is the only one sent.
+        agent
+            .get("http://cookie.test/cookie-override")
+            .header("Cookie", "session=request")
+            .call()
+            .unwrap();
+
+        // Without it, the jar is used.
+        agent
+            .get("http://cookie.test/cookie-override")
+            .call()
+            .unwrap();
+
+        assert_eq!(
+            *seen.lock().unwrap(),
+            [["session=request"], ["session=jar"]]
+        );
+    }
+
+    #[test]
     #[cfg(all(feature = "_test", not(feature = "cookies")))]
     fn partial_redirect_when_following() {
         init_test_log();
@@ -1286,6 +1332,77 @@ pub(crate) mod test {
 
     #[test]
     #[cfg(feature = "_test")]
+    fn response_head_byte_by_byte() {
+        init_test_log();
+        // Empty lines, an interim response and then the response.
+        unversioned::transport::set_handler_raw("/head-byte-by-byte", |w| {
+            write_byte_by_byte(w, b"\r\n\nHTTP/1.1 103 Early Hints\r\nLink: </a>\r\n\r\n")?;
+            write_byte_by_byte(w, b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n")?;
+            w.write_all(b"ok")
+        });
+
+        let mut res = get("http://my-host.com/head-byte-by-byte").call().unwrap();
+        assert_eq!(res.status(), 200);
+        assert_eq!(res.body_mut().read_to_string().unwrap(), "ok");
+    }
+
+    /// Write the bytes one at a time. Every write is one read for the client.
+    #[cfg(feature = "_test")]
+    fn write_byte_by_byte(w: &mut dyn io::Write, bytes: &[u8]) -> io::Result<()> {
+        bytes.chunks(1).try_for_each(|b| w.write_all(b))
+    }
+
+    #[test]
+    #[cfg(feature = "_test")]
+    fn interim_response_and_response_in_one_read() {
+        init_test_log();
+        unversioned::transport::set_handler_raw("/interim-one-read", |w| {
+            w.write_all(
+                b"HTTP/1.1 103 Early Hints\r\nLink: </a>\r\n\r\n\
+                HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok",
+            )
+        });
+
+        let mut res = get("http://my-host.com/interim-one-read").call().unwrap();
+        assert_eq!(res.status(), 200);
+        assert_eq!(res.body_mut().read_to_string().unwrap(), "ok");
+    }
+
+    #[test]
+    #[cfg(all(feature = "_test", not(feature = "cookies")))]
+    fn partial_redirect_byte_by_byte() {
+        init_test_log();
+        // As /partial-redirect, the final \r\n is missing.
+        unversioned::transport::set_handler_raw("/partial-bytewise", |w| {
+            write_byte_by_byte(w, b"HTTP/1.1 302 OK\r\nLocation: /get\r\n")
+        });
+
+        let res = get("http://my-host.com/partial-bytewise").call().unwrap();
+        assert_eq!(res.status(), 200);
+    }
+
+    #[test]
+    #[cfg(feature = "_test")]
+    fn http_connect_proxy_byte_by_byte() {
+        init_test_log();
+        unversioned::transport::set_handler_raw("/proxy-byte-by-byte", |w| {
+            write_byte_by_byte(w, b"HTTP/1.1 200 OK\r\nVia: 1.1 my_proxy\r\n\r\n")?;
+            w.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")
+        });
+
+        let proxy = Proxy::new("http://my_proxy:1234/proxy-byte-by-byte").unwrap();
+
+        let agent = Agent::config_builder()
+            .proxy(Some(proxy))
+            .build()
+            .new_agent();
+
+        let mut res = agent.get("http://httpbin.org/get").call().unwrap();
+        assert_eq!(res.body_mut().read_to_string().unwrap(), "ok");
+    }
+
+    #[test]
+    #[cfg(feature = "_test")]
     fn http_connect_proxy() {
         init_test_log();
 
@@ -1298,6 +1415,36 @@ pub(crate) mod test {
 
         let mut res = agent.get("http://httpbin.org/get").call().unwrap();
         res.body_mut().read_to_string().unwrap();
+    }
+
+    #[test]
+    #[cfg(feature = "_test")]
+    fn http_connect_proxy_rejects_invalid_user_agent() {
+        init_test_log();
+
+        let proxy = Proxy::new("http://my_proxy:1234/connect-proxy").unwrap();
+
+        for user_agent in [
+            "bad\r\nX-Injected: 1",
+            "bad\r\n\r\nGET http://other.test/ HTTP/1.1\r\nX-Rest: ",
+            "bad\nX-Injected: 1",
+        ] {
+            let agent = Agent::config_builder()
+                .proxy(Some(proxy.clone()))
+                .user_agent(user_agent)
+                .build()
+                .new_agent();
+
+            // With a user-agent header on the request, the configured
+            // value is only used for the CONNECT request to the proxy.
+            let err = agent
+                .get("http://httpbin.org/get")
+                .header("user-agent", "request-level")
+                .call()
+                .unwrap_err();
+
+            assert!(matches!(err, Error::Http(_)), "{:?}", err);
+        }
     }
 
     #[test]

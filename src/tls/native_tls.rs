@@ -176,7 +176,9 @@ fn build_connector(tls_config: &TlsConfig) -> Result<CachedNativeTlsConnector, E
             }
             #[cfg(not(feature = "native-tls-webpki-roots"))]
             RootCerts::WebPki => {
-                panic!("WebPki is disabled. You need to explicitly configure root certs on Agent");
+                return Err(Error::Tls(
+                    "WebPki is disabled. You need to explicitly configure root certs on Agent",
+                ));
             }
         }
     }
@@ -386,4 +388,19 @@ fn capture_error(e: io::Error, capture: &Arc<Mutex<Option<Error>>>) -> io::Error
     *lock = Some(error);
 
     io::Error::other("fake error towards native-tls")
+}
+
+#[cfg(all(test, not(feature = "native-tls-webpki-roots")))]
+mod test {
+    use super::*;
+
+    // An https uri can come from a redirect, so a TlsConfig that can't be
+    // used must be an error and not a panic.
+    #[test]
+    fn default_roots_without_webpki_is_error() {
+        assert!(matches!(
+            build_connector(&TlsConfig::default()),
+            Err(Error::Tls(_))
+        ));
+    }
 }

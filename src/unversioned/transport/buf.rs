@@ -130,7 +130,7 @@ impl Buffers for LazyBuffers {
             // started sending a ton of data before we asked for it.
             // It's a pathological situation that we don't need to make work well.
             let needed = MIN_TMP_SIZE - tmp_available;
-            self.input.resize(self.input.unconsumed().len() + needed);
+            self.input.add_space(needed);
         }
 
         (self.input.free_mut(), &mut self.output)
@@ -147,5 +147,73 @@ impl Buffers for LazyBuffers {
 
     fn can_use_input(&self) -> bool {
         !self.input.unconsumed().is_empty() && self.progress
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn tmp_is_min_size_when_input_is_nearly_full() {
+        const INPUT: usize = 128 * 1024;
+
+        // 1, 5120 and 10239 bytes short of the 10 KiB scratch space.
+        for missing in [1, 5120, 10 * 1024 - 1] {
+            let mut buffers = LazyBuffers::new(INPUT, INPUT);
+            let filled = INPUT - 10 * 1024 + missing;
+            buffers.input_append_buf()[..filled].fill(b'a');
+            buffers.input_appended(filled);
+
+            // The second call sees the buffer the first one resized.
+            for _ in 0..2 {
+                let (tmp, _) = buffers.tmp_and_output();
+                assert_eq!(tmp.len(), 10 * 1024, "missing {missing}");
+                assert_eq!(buffers.input().len(), filled);
+            }
+        }
+    }
+
+    #[test]
+    fn tmp_keeps_input_after_partial_consume() {
+        // Small enough that the consumed bytes are not shifted away.
+        const INPUT: usize = 16 * 1024;
+
+        let mut buffers = LazyBuffers::new(INPUT, INPUT);
+        let filled = INPUT - 10 * 1024 + 10;
+        buffers.input_append_buf()[..filled].fill(b'a');
+        buffers.input_appended(filled);
+
+        // More consumed than the 10 bytes tmp is missing.
+        buffers.input_consume(25);
+
+        let (tmp, _) = buffers.tmp_and_output();
+        assert_eq!(tmp.len(), 10 * 1024);
+        assert_eq!(buffers.input(), vec![b'a'; filled - 25]);
+    }
+
+    #[test]
+    fn input_grown_for_tmp_is_not_cut_below_filled() {
+        const INPUT: usize = 128 * 1024;
+
+        let mut buffers = LazyBuffers::new(INPUT, INPUT);
+        buffers.input_append_buf().fill(b'a');
+        buffers.input_appended(INPUT);
+
+        // Input is full, tmp grows it beyond the configured size.
+        let (tmp, _) = buffers.tmp_and_output();
+        assert_eq!(tmp.len(), 10 * 1024);
+
+        // The extra space is filled with more input...
+        let extra = buffers.input_append_buf().len();
+        assert_eq!(extra, 10 * 1024);
+        buffers.input_append_buf().fill(b'b');
+        buffers.input_appended(extra);
+
+        // ...and consuming brings the unconsumed below the configured size.
+        buffers.input_consume(INPUT + 100);
+
+        assert!(!buffers.input_append_buf().is_empty());
+        assert_eq!(buffers.input(), vec![b'b'; extra - 100]);
     }
 }

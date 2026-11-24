@@ -628,9 +628,9 @@ impl RequestBuilder<WithBody> {
     ///
     /// Requires the **json** feature.
     ///
-    /// The data typically derives [`Serialize`](serde::Serialize) and is converted
-    /// to a string before sending (does allocate). Will set the content-type header
-    /// `application/json`.
+    /// Sets `Content-Type` to `application/json` and buffers the JSON before sending.
+    /// The body is pretty-printed so it is easy to read when debugging requests.
+    /// Deeply nested values can take up considerably more space when indented.
     ///
     /// ```
     /// use serde::Serialize;
@@ -647,6 +647,17 @@ impl RequestBuilder<WithBody> {
     /// let res = ureq::post("http://httpbin.org/post")
     ///     .send_json(&body)?;
     /// # Ok::<_, ureq::Error>(())
+    /// ```
+    ///
+    /// To send compact JSON, serialize the value and send the bytes as a reader.
+    ///
+    /// ```no_run
+    /// let value = serde_json::json!({ "hello": "world" });
+    /// let bytes = serde_json::to_vec(&value)?;
+    /// ureq::post("https://example.com/")
+    ///     .header("Content-Type", "application/json")
+    ///     .send(ureq::SendBody::from_owned_reader(std::io::Cursor::new(bytes)))?;
+    /// # Ok::<_, Box<dyn std::error::Error>>(())
     /// ```
     #[cfg(feature = "json")]
     pub fn send_json(self, data: impl serde::ser::Serialize) -> Result<Response<Body>, Error> {

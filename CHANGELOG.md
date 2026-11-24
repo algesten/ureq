@@ -1,5 +1,23 @@
 # Unreleased
 
+  * Redact URIs in HTTPS-only and missing-scheme errors #1236
+  * Exclude IPv4-mapped addresses from IPv6-only resolution #1236
+  * Handle timeout deadlines beyond the clock range #1236
+  * Validate the user agent sent in proxy CONNECT requests #1236
+  * Omit cookie values from Agent debug output #1236
+  * Preserve upload scratch capacity alongside unread response bytes #1236
+  * Handle buffered final responses while awaiting 100 Continue #1236
+  * Propagate TLS transport write failures before connection reuse #1236
+  * Apply response body limits to compressed input as well as output #1236
+  * Reject proxy builder hosts that alter the parsed endpoint #1236
+  * Validate HTTP framing at the end of a Brotli stream #1236
+  * Enforce remaining TLS adapter deadlines #1236
+  * Return an I/O error when a resolver thread cannot start #1236
+  * Return TLS errors for unavailable provider configurations #1236
+  * Enforce the per-host pool limit when returning a connection #1236
+  * Avoid reparsing response heads on every transport read #1236
+  * Check cookie scope against the request URI #1236
+  * Honor explicit Cookie headers when using a cookie jar #1236
   * Expose the encoded multipart body length via `Form::content_length` #1235
   * Honor connection deadlines during CONNECT and TCP fallback #1233
   * Update cookie to 0.18.3 for RUSTSEC-2026-0594 #1240

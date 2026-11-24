@@ -2,14 +2,15 @@ use std::io;
 
 use flate2::read::MultiGzDecoder;
 
+use super::LimitReader;
 use crate::Error;
 use crate::error::is_wrapped_ureq_error;
 
-pub(crate) struct GzipDecoder<R>(MultiGzDecoder<R>);
+pub(crate) struct GzipDecoder<R>(MultiGzDecoder<LimitReader<R>>);
 
 impl<R: io::Read> GzipDecoder<R> {
-    pub fn new(reader: R) -> Self {
-        GzipDecoder(MultiGzDecoder::new(reader))
+    pub fn new(reader: R, limit: u64) -> Self {
+        GzipDecoder(MultiGzDecoder::new(LimitReader::new(reader, limit)))
     }
 }
 

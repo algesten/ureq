@@ -5,14 +5,14 @@ use std::fmt;
 use std::io::Write;
 use ureq_proto::parser::try_parse_response;
 
-use http::StatusCode;
+use http::{HeaderValue, StatusCode};
 
 use crate::Error;
 use crate::config::DEFAULT_USER_AGENT;
 use crate::http;
 use crate::transport::{Buffers, ConnectionDetails, Connector, Either};
 use crate::transport::{NextTimeout, Transport, TransportAdapter};
-use crate::util::{SchemeExt, UriExt};
+use crate::util::{HeadScan, SchemeExt, UriExt};
 
 /// Connector for CONNECT proxy settings.
 ///
@@ -54,6 +54,15 @@ impl<In: Transport> Connector<In> for ConnectProxyConnector {
 
         if is_no_proxy {
             return Ok(None);
+        }
+
+        // The configured User-Agent is written as-is into the CONNECT request below.
+        // It must hold up as a header value, or a CR/LF in it would add headers or
+        // start a new request to the proxy. The check in run.rs doesn't cover this,
+        // since it is skipped when the request has its own user-agent header.
+        let user_agent = details.config.user_agent().as_str(DEFAULT_USER_AGENT);
+        if let Some(v) = user_agent {
+            HeaderValue::from_str(v).map_err(http::Error::from)?;
         }
 
         // TODO(martin): it's a bit weird to put the CONNECT proxy
@@ -111,7 +120,7 @@ impl<In: Transport> Connector<In> for ConnectProxyConnector {
 
         write!(w, "CONNECT {}:{} HTTP/1.1\r\n", target_host, target_port)?;
         write!(w, "Host: {}:{}\r\n", target_host, target_port)?;
-        if let Some(v) = details.config.user_agent().as_str(DEFAULT_USER_AGENT) {
+        if let Some(v) = user_agent {
             write!(w, "User-Agent: {}\r\n", v)?;
         }
         write!(w, "Proxy-Connection: Keep-Alive\r\n")?;
@@ -132,12 +141,18 @@ impl<In: Transport> Connector<In> for ConnectProxyConnector {
 
         let mut transport = w.into_inner();
 
+        let mut head_scan = HeadScan::default();
         let response = loop {
             let made_progress =
                 transport.maybe_await_input(timeout_at((details.current_time)())?)?;
             let buffers = transport.buffers();
             let input = buffers.input();
+            if !head_scan.should_parse(input) && made_progress {
+                buffers.input_consume(0);
+                continue;
+            }
             let Some((used_input, response)) = try_parse_response::<20>(input)? else {
+                buffers.input_consume(0);
                 if !made_progress {
                     let reason = "proxy server did not respond".to_string();
                     return Err(Error::ConnectProxyFailed(reason));
