@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Validate the user agent sent in proxy CONNECT requests #1236
   * Omit cookie values from Agent debug output #1236
   * Preserve upload scratch capacity alongside unread response bytes #1236
   * Handle buffered final responses while awaiting 100 Continue #1236

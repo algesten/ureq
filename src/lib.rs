@@ -1418,6 +1418,36 @@ pub(crate) mod test {
     }
 
     #[test]
+    #[cfg(feature = "_test")]
+    fn http_connect_proxy_rejects_invalid_user_agent() {
+        init_test_log();
+
+        let proxy = Proxy::new("http://my_proxy:1234/connect-proxy").unwrap();
+
+        for user_agent in [
+            "bad\r\nX-Injected: 1",
+            "bad\r\n\r\nGET http://other.test/ HTTP/1.1\r\nX-Rest: ",
+            "bad\nX-Injected: 1",
+        ] {
+            let agent = Agent::config_builder()
+                .proxy(Some(proxy.clone()))
+                .user_agent(user_agent)
+                .build()
+                .new_agent();
+
+            // With a user-agent header on the request, the configured
+            // value is only used for the CONNECT request to the proxy.
+            let err = agent
+                .get("http://httpbin.org/get")
+                .header("user-agent", "request-level")
+                .call()
+                .unwrap_err();
+
+            assert!(matches!(err, Error::Http(_)), "{:?}", err);
+        }
+    }
+
+    #[test]
     #[cfg(all(feature = "_test", feature = "_ring"))]
     fn https_connect_proxy_to_https_target() {
         init_test_log();
