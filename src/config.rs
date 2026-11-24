@@ -822,10 +822,14 @@ impl<Scope: private::ConfigScope> ConfigBuilder<Scope> {
     ///
     /// Because most platforms do not have an async syscall for looking up a host
     /// name, setting a timeout may cause ureq to spawn a thread for the lookup.
+    /// The timeout ends the wait, not the lookup. The thread stays around until
+    /// the system resolver gives up, which can be much later than the timeout.
+    /// If the thread cannot be started, the call fails with [`Error::Io`].
     ///
     /// Defaults to `None`.
     ///
     /// [`timeout_connect`]: ConfigBuilder::timeout_connect
+    /// [`Error::Io`]: crate::Error::Io
     pub fn timeout_resolve(mut self, v: Option<Duration>) -> Self {
         self.config().timeouts.resolve = v;
         self

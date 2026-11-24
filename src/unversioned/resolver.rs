@@ -62,6 +62,9 @@ pub type ResolvedSocketAddrs = ArrayVec<SocketAddr, MAX_ADDRS>;
 ///
 /// Uses std::net [`ToSocketAddrs`](https://doc.rust-lang.org/std/net/trait.ToSocketAddrs.html) to
 /// do the lookup. Can optionally spawn a thread to abort lookup if the relevant timeout is set.
+///
+/// The lookup itself cannot be cancelled. When the timeout expires the thread is left to
+/// finish in the background, which it does when the system resolver gives up.
 #[derive(Default)]
 pub struct DefaultResolver {
     _private: (),
@@ -118,7 +121,7 @@ impl Resolver for DefaultResolver {
             addr.to_socket_addrs()?
         } else {
             trace!("Resolve with timeout ({:?}): {} ", timeout, addr);
-            resolve_async(addr, timeout)?
+            resolve_async(thread::Builder::new(), addr, timeout)?
         };
 
         let ip_family = config.ip_family();
@@ -139,12 +142,19 @@ impl Resolver for DefaultResolver {
     }
 }
 
-fn resolve_async(addr: String, timeout: NextTimeout) -> Result<IntoIter<SocketAddr>, Error> {
+fn resolve_async(
+    builder: thread::Builder,
+    addr: String,
+    timeout: NextTimeout,
+) -> Result<IntoIter<SocketAddr>, Error> {
     // TODO(martin): On Linux we have getaddrinfo_a which is a libc async way of
     // doing host lookup. We should make a subcrate that uses a native async method
     // when possible, and otherwise fall back on this thread behavior.
     let (tx, rx) = mpsc::sync_channel(1);
-    thread::spawn(move || tx.send(addr.to_socket_addrs()).ok());
+
+    // The OS can refuse to start a thread (process/thread limit, out of memory).
+    // thread::spawn() panics when that happens. This makes it an error for the lookup.
+    builder.spawn(move || tx.send(addr.to_socket_addrs()).ok())?;
 
     match rx.recv_timeout(*timeout.after) {
         Ok(v) => Ok(v?),
@@ -186,5 +196,24 @@ mod test {
             .unwrap_err();
         assert!(matches!(err, Error::BadUri(_)));
         assert_eq!(err.to_string(), "bad uri: unknown scheme: foo");
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn lookup_thread_not_started_is_an_error() {
+        // A stack no address space can hold. The OS refuses the thread with
+        // EAGAIN, which is also what it does at a process/thread limit.
+        let builder = thread::Builder::new().stack_size(usize::MAX - 0xffff);
+        let err = resolve_async(
+            builder,
+            "localhost:80".to_string(),
+            NextTimeout {
+                after: Duration::from_secs(1),
+                reason: crate::Timeout::Resolve,
+                ..NextTimeout::default()
+            },
+        )
+        .unwrap_err();
+        assert!(matches!(err, Error::Io(_)), "unexpected error: {err:?}");
     }
 }

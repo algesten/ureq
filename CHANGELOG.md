@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Return an I/O error when a resolver thread cannot start #1236
   * Return TLS errors for unavailable provider configurations #1236
   * Enforce the per-host pool limit when returning a connection #1236
   * Avoid reparsing response heads on every transport read #1236
