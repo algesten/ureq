@@ -40,7 +40,8 @@ const JSON_BUFFER_DIVISOR: u64 = 3;
 /// # Default size limit
 ///
 /// Methods like `read_to_string()`, `read_to_vec()`, and `read_json()` have a **default 10MB limit**
-/// to prevent memory exhaustion. The limit counts bytes returned after all decoding.
+/// to prevent memory exhaustion. The limit bounds decoded output and, for gzip and Brotli,
+/// compressed input.
 /// To download larger files, use `with_config().limit(new_size)`:
 ///
 /// ```
@@ -497,7 +498,8 @@ impl<'a> BodyWithConfig<'a> {
     /// Limit the response body.
     ///
     /// Limits the bytes returned to the caller after all decoding. This helps prevent
-    /// memory exhaustion from very large response bodies.
+    /// memory exhaustion from very large response bodies. For gzip and Brotli the same
+    /// limit independently bounds the compressed input.
     ///
     /// A body exactly equal to the limit is allowed. Reading beyond it returns
     /// [`Error::BodyExceedsLimit`]. Detecting this requires reading one additional byte
@@ -762,7 +764,7 @@ fn split_content_type(content_type: &str) -> (Option<String>, Option<String>) {
 ///    length regardless of how many bytes the server sends.
 /// 5. If no length header, the reader is until server stream end.
 /// 6. The limit in the body method used to obtain the reader applies to the bytes
-///    returned after all decoding.
+///    returned after all decoding and independently to gzip or Brotli input.
 ///
 /// Note: The reader is also limited by the [`Body::as_reader`] and
 /// [`Body::into_reader`] calls. If that limit is set very high, a malicious
@@ -815,7 +817,7 @@ impl<'a> BodyReader<'a> {
             ContentEncoding::Gzip => {
                 debug!("Decoding gzip");
                 outgoing_body_mode = BodyMode::Chunked;
-                ContentDecoder::Gzip(Box::new(gzip::GzipDecoder::new(reader)))
+                ContentDecoder::Gzip(Box::new(gzip::GzipDecoder::new(reader, limit)))
             }
             #[cfg(not(feature = "gzip"))]
             ContentEncoding::Gzip => ContentDecoder::PassThrough(reader),
@@ -823,7 +825,7 @@ impl<'a> BodyReader<'a> {
             ContentEncoding::Brotli => {
                 debug!("Decoding brotli");
                 outgoing_body_mode = BodyMode::Chunked;
-                ContentDecoder::Brotli(Box::new(brotli::BrotliDecoder::new(reader)))
+                ContentDecoder::Brotli(Box::new(brotli::BrotliDecoder::new(reader, limit)))
             }
             #[cfg(not(feature = "brotli"))]
             ContentEncoding::Brotli => ContentDecoder::PassThrough(reader),

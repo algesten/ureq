@@ -2,14 +2,15 @@ use std::io::{self, Read};
 
 use brotli_decompressor::Decompressor;
 
+use super::LimitReader;
 use crate::Error;
 use crate::error::is_wrapped_ureq_error;
 
-pub(crate) struct BrotliDecoder<R: io::Read>(Decompressor<R>);
+pub(crate) struct BrotliDecoder<R: io::Read>(Decompressor<LimitReader<R>>);
 
 impl<R: io::Read> BrotliDecoder<R> {
-    pub fn new(reader: R) -> Self {
-        BrotliDecoder(Decompressor::new(reader, 4096))
+    pub fn new(reader: R, limit: u64) -> Self {
+        BrotliDecoder(Decompressor::new(LimitReader::new(reader, limit), 4096))
     }
 }
 
