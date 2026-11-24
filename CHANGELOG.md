@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Exclude IPv4-mapped addresses from IPv6-only resolution #1236
   * Handle timeout deadlines beyond the clock range #1236
   * Validate the user agent sent in proxy CONNECT requests #1236
   * Omit cookie values from Agent debug output #1236

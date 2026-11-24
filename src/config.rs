@@ -1125,6 +1125,9 @@ pub enum IpFamily {
     /// Just Ipv4
     Ipv4Only,
     /// Just Ipv6
+    ///
+    /// IPv4-mapped addresses (`::ffff:a.b.c.d`) are not considered Ipv6,
+    /// since the OS connects to them over Ipv4.
     Ipv6Only,
 }
 
@@ -1141,7 +1144,12 @@ impl IpFamily {
         match self {
             IpFamily::Any => true,
             IpFamily::Ipv4Only => addr.is_ipv4(),
-            IpFamily::Ipv6Only => addr.is_ipv6(),
+            // An IPv4-mapped address (::ffff:a.b.c.d) is a SocketAddr::V6,
+            // but the OS connects to it over IPv4.
+            IpFamily::Ipv6Only => match addr {
+                SocketAddr::V4(_) => false,
+                SocketAddr::V6(a) => a.ip().to_ipv4_mapped().is_none(),
+            },
         }
     }
 }
@@ -1207,5 +1215,19 @@ mod test {
     fn default_config_clone_does_not_allocate() {
         let c = Config::default();
         assert_no_alloc(|| c.clone());
+    }
+
+    #[test]
+    fn ip_family_keep_wanted() {
+        let addrs: Vec<SocketAddr> = ["127.0.0.1:80", "[::1]:80", "[::ffff:127.0.0.1]:80"]
+            .iter()
+            .map(|a| a.parse().unwrap())
+            .collect();
+        let keep = |f: IpFamily| f.keep_wanted(addrs.iter().copied()).collect::<Vec<_>>();
+
+        assert_eq!(keep(IpFamily::Any), addrs);
+        assert_eq!(keep(IpFamily::Ipv4Only), [addrs[0]]);
+        // The IPv4-mapped address is reached over IPv4, so it is not wanted.
+        assert_eq!(keep(IpFamily::Ipv6Only), [addrs[1]]);
     }
 }
