@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Reject proxy builder hosts that alter the parsed endpoint #1236
   * Validate HTTP framing at the end of a Brotli stream #1236
   * Enforce remaining TLS adapter deadlines #1236
   * Return an I/O error when a resolver thread cannot start #1236

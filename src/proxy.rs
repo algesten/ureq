@@ -376,6 +376,9 @@ pub struct ProxyBuilder {
 impl ProxyBuilder {
     /// Set the proxy hostname
     ///
+    /// The value is a host name or IP address only (IPv6 in brackets, `[::1]`). The port
+    /// and credentials have their own setters.
+    ///
     /// Defaults to `localhost`. Invalid hostnames surface in [`ProxyBuilder::build()`].
     pub fn host(mut self, host: &str) -> Self {
         self.host = Some(host.to_string());
@@ -477,7 +480,15 @@ impl ProxyBuilder {
         // validation and normalization in new_with_flag. This could be refactored
         // in the future.
         let proxy = format!("{}://{}{}:{}", self.protocol, userpass, host, port);
-        Proxy::new_with_flag(&proxy, self.no_proxy, false, Some(self.resolve_target))
+        let proxy = Proxy::new_with_flag(&proxy, self.no_proxy, false, Some(self.resolve_target))?;
+
+        // The host went verbatim into the uri above. A uri delimiter in it (`/`, `?`,
+        // `#`, `@`, `:`) makes the parsed proxy differ from the one that was configured.
+        if host.is_empty() || proxy.host() != host || proxy.port() != port {
+            return Err(Error::InvalidProxyUrl);
+        }
+
+        Ok(proxy)
     }
 }
 
@@ -1123,5 +1134,58 @@ mod tests {
         assert_eq!(proxy.username(), Some("user/name"));
         assert_eq!(proxy.password(), Some("p:ss ?#é"));
         assert_eq!(proxy.host(), "localhost");
+    }
+
+    #[test]
+    fn proxy_builder_host() {
+        for host in ["my-proxy.com", "My-Proxy.COM", "10.0.0.1", "[::1]"] {
+            let proxy = Proxy::builder(ProxyProtocol::Http)
+                .host(host)
+                .port(3128)
+                .username("user")
+                .password("secret")
+                .build()
+                .unwrap();
+
+            assert_eq!(proxy.host(), host);
+            assert_eq!(proxy.port(), 3128);
+            assert_eq!(proxy.username(), Some("user"));
+            assert_eq!(proxy.password(), Some("secret"));
+        }
+    }
+
+    #[test]
+    fn proxy_builder_rejects_host_with_uri_delimiters() {
+        const INVALID: &[&str] = &[
+            "",
+            "evil.test/",
+            "evil.test/.my-proxy.com",
+            "evil.test:8080/.my-proxy.com",
+            "evil.test?.my-proxy.com",
+            "evil.test#.my-proxy.com",
+            "my-proxy.com@evil.test",
+            "my-proxy.com:8080",
+            "my-proxy.com:",
+            "[::1]:8080",
+            "[::1].my-proxy.com",
+            "::1",
+            "my proxy.com",
+            "my%2Dproxy.com",
+        ];
+
+        for host in INVALID {
+            for with_credentials in [false, true] {
+                let mut builder = Proxy::builder(ProxyProtocol::Http).host(host).port(3128);
+                if with_credentials {
+                    builder = builder.username("user").password("secret");
+                }
+
+                let result = builder.build();
+                assert!(
+                    matches!(result, Err(Error::InvalidProxyUrl)),
+                    "host {host:?} should be rejected"
+                );
+            }
+        }
     }
 }
