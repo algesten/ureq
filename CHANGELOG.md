@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Enforce remaining TLS adapter deadlines #1236
   * Return an I/O error when a resolver thread cannot start #1236
   * Return TLS errors for unavailable provider configurations #1236
   * Enforce the per-host pool limit when returning a connection #1236

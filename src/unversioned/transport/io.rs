@@ -47,11 +47,6 @@ impl<T: Transport> TransportAdapter<T> {
         self.timeout_set_at = started;
     }
 
-    fn timeout_now(&self) -> NextTimeout {
-        self.timeout
-            .remaining_at(self.timeout_set_at, (self.current_time)())
-    }
-
     /// Reference to the adapted transport
     pub fn get_ref(&self) -> &dyn Transport {
         &self.transport
@@ -76,7 +71,7 @@ impl<T: Transport> TransportAdapter<T> {
 impl<T: Transport> io::Read for TransportAdapter<T> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.transport
-            .maybe_await_input(self.timeout_now())
+            .maybe_await_input(self.timeout_now()?)
             .map_err(|e| e.into_io())?;
         let input = self.transport.buffers().input();
 
@@ -88,6 +83,15 @@ impl<T: Transport> io::Read for TransportAdapter<T> {
     }
 }
 
+impl<T: Transport> TransportAdapter<T> {
+    fn timeout_now(&self) -> io::Result<NextTimeout> {
+        self.timeout
+            .remaining_at(self.timeout_set_at, (self.current_time)())
+            .check()
+            .map_err(|e| e.into_io())
+    }
+}
+
 impl<T: Transport> io::Write for TransportAdapter<T> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         let output = self.transport.buffers().output();
@@ -95,7 +99,7 @@ impl<T: Transport> io::Write for TransportAdapter<T> {
         let max = buf.len().min(output.len());
         output[..max].copy_from_slice(&buf[..max]);
         self.transport
-            .transmit_output(max, self.timeout_now())
+            .transmit_output(max, self.timeout_now()?)
             .map_err(|e| e.into_io())?;
 
         Ok(max)
@@ -126,13 +130,11 @@ mod test {
         }
 
         fn transmit_output(&mut self, _: usize, timeout: NextTimeout) -> Result<(), Error> {
-            let timeout = timeout.check()?;
             self.seen.push(timeout.after);
             Ok(())
         }
 
         fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
-            let timeout = timeout.check()?;
             self.seen.push(timeout.after);
             let buf = self.buffers.input_append_buf();
             buf[0] = 1;
