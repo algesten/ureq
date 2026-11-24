@@ -153,7 +153,7 @@ fn call_run(
     debug!("{} {:?}", call.method(), DebugUri(call.uri()));
 
     if config.https_only() && uri.scheme() != Some(&Scheme::HTTPS) {
-        return Err(Error::RequireHttpsOnly(uri.to_string()));
+        return Err(Error::RequireHttpsOnly(format!("{:?}", DebugUri(&uri))));
     }
 
     add_headers(&mut call, agent, config, body, &uri)?;

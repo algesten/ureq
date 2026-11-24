@@ -328,7 +328,7 @@ impl UriExt for Uri {
     fn ensure_valid_url(&self) -> Result<(), Error> {
         let scheme = self
             .scheme()
-            .ok_or_else(|| Error::BadUri(format!("{} is missing scheme", self)))?;
+            .ok_or_else(|| Error::BadUri(format!("{:?} is missing scheme", DebugUri(self))))?;
 
         scheme
             .default_port()
