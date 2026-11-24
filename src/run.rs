@@ -18,7 +18,7 @@ use crate::response::{RedirectHistory, ResponseUri};
 use crate::timings::{CallTimings, CurrentTime};
 use crate::transport::ConnectionDetails;
 use crate::transport::time::{Duration, Instant};
-use crate::util::{DebugRequest, DebugResponse, DebugUri, HeaderMapExt, UriExt};
+use crate::util::{DebugRequest, DebugResponse, DebugUri, HeadScan, HeaderMapExt, UriExt};
 use crate::{Agent, Body, Error, SendBody, Timeout};
 
 type Call<T> = ureq_proto::client::Call<T>;
@@ -553,6 +553,8 @@ fn recv_response(
     timings: &mut CallTimings,
     is_following_redirects: bool,
 ) -> Result<(Response<()>, RecvResponseResult), Error> {
+    let mut head_scan = HeadScan::default();
+
     let response = loop {
         let timeout = timings.next_timeout(Timeout::RecvResponse);
         let made_progress = connection.maybe_await_input(timeout)?;
@@ -573,7 +575,13 @@ fn recv_response(
         // 302 responses.
         let allow_partial_redirect = !cookies_enabled && is_following_redirects;
 
-        let (amount, maybe_response) = call.try_response(input, allow_partial_redirect)?;
+        // try_response() parses the input from the start every time. Only do that
+        // when there is something new to find, or this is the last chance.
+        let (amount, maybe_response) = if head_scan.should_parse(input) || !made_progress {
+            call.try_response(input, allow_partial_redirect)?
+        } else {
+            (0, None)
+        };
 
         let check_size = if maybe_response.is_some() {
             // We got a parsed response, ensure the size is within
@@ -593,6 +601,11 @@ fn recv_response(
         }
 
         connection.consume_input(amount);
+
+        if amount > 0 {
+            // An interim 1xx response was consumed. The next head starts here.
+            head_scan = HeadScan::default();
+        }
 
         if let Some(response) = maybe_response {
             assert!(call.can_proceed());

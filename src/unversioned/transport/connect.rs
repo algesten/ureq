@@ -12,7 +12,7 @@ use crate::config::DEFAULT_USER_AGENT;
 use crate::http;
 use crate::transport::{Buffers, ConnectionDetails, Connector, Either};
 use crate::transport::{NextTimeout, Transport, TransportAdapter};
-use crate::util::{SchemeExt, UriExt};
+use crate::util::{HeadScan, SchemeExt, UriExt};
 
 /// Connector for CONNECT proxy settings.
 ///
@@ -132,12 +132,18 @@ impl<In: Transport> Connector<In> for ConnectProxyConnector {
 
         let mut transport = w.into_inner();
 
+        let mut head_scan = HeadScan::default();
         let response = loop {
             let made_progress =
                 transport.maybe_await_input(timeout_at((details.current_time)())?)?;
             let buffers = transport.buffers();
             let input = buffers.input();
+            if !head_scan.should_parse(input) && made_progress {
+                buffers.input_consume(0);
+                continue;
+            }
             let Some((used_input, response)) = try_parse_response::<20>(input)? else {
+                buffers.input_consume(0);
                 if !made_progress {
                     let reason = "proxy server did not respond".to_string();
                     return Err(Error::ConnectProxyFailed(reason));

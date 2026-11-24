@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Avoid reparsing response heads on every transport read #1236
   * Check cookie scope against the request URI #1236
   * Honor explicit Cookie headers when using a cookie jar #1236
   * Expose the encoded multipart body length via `Form::content_length` #1235
