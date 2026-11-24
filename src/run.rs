@@ -467,16 +467,22 @@ fn await_100(
         }
 
         match connection.maybe_await_input(timeout) {
-            Ok(_) => {
+            Ok(made_progress) => {
                 let input = connection.buffers().input();
                 if input.is_empty() {
                     return Err(Error::disconnected("await_100 empty input"));
                 }
 
                 let amount = call.try_read_100(input)?;
+
+                // Also report 0 consumed. Without that the buffers consider the
+                // input usable and we never wait for the rest from the transport.
+                connection.consume_input(amount);
+
                 if amount > 0 {
-                    connection.consume_input(amount);
                     break;
+                } else if !made_progress && call.can_keep_await_100() {
+                    return Err(Error::disconnected("await_100 made no progress"));
                 }
             }
             Err(Error::Timeout(Timeout::Await100)) => {
@@ -553,11 +559,18 @@ fn recv_response(
     timings: &mut CallTimings,
     is_following_redirects: bool,
 ) -> Result<(Response<()>, RecvResponseResult), Error> {
+    // Await100 leaves a response that isn't 100-continue unconsumed in the input.
+    // Parse what is already buffered before waiting for more from the transport.
     let mut head_scan = HeadScan::default();
+    let mut try_buffered_input = !connection.buffers().input().is_empty();
 
     let response = loop {
-        let timeout = timings.next_timeout(Timeout::RecvResponse);
-        let made_progress = connection.maybe_await_input(timeout)?;
+        let made_progress = if mem::take(&mut try_buffered_input) {
+            true
+        } else {
+            let timeout = timings.next_timeout(Timeout::RecvResponse);
+            connection.maybe_await_input(timeout)?
+        };
 
         let input = connection.buffers().input();
 

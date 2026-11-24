@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Handle buffered final responses while awaiting 100 Continue #1236
   * Propagate TLS transport write failures before connection reuse #1236
   * Apply response body limits to compressed input as well as output #1236
   * Reject proxy builder hosts that alter the parsed endpoint #1236

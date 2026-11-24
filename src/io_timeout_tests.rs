@@ -196,6 +196,74 @@ fn read_timeout_while_awaiting_100_is_not_swallowed() {
     );
 }
 
+const REJECTION: &[u8] = b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n";
+
+#[test]
+fn final_response_while_awaiting_100_needs_no_further_read() {
+    let (agent, state) = setup(config());
+    state.lock().unwrap().responses.push_back(REJECTION);
+    // The connection stays open and the script has nothing more to read.
+    let error = agent
+        .post("http://127.0.0.1/")
+        .header("expect", "100-continue")
+        .send("body")
+        .unwrap_err();
+    assert!(matches!(error, Error::StatusCode(401)), "{error:?}");
+    let state = state.lock().unwrap();
+    assert_eq!(state.reads.len(), 1);
+    assert_eq!(state.writes.len(), 1, "body must not be sent");
+}
+
+#[test]
+fn split_final_response_while_awaiting_100_is_read_before_sending_body() {
+    for reuse in [false, true] {
+        let (agent, state) = setup(config());
+        if reuse {
+            state.lock().unwrap().responses.extend([HEADERS, b"ok"]);
+            let mut response = agent.get("http://127.0.0.1/").call().unwrap();
+            assert_eq!(response.body_mut().read_to_string().unwrap(), "ok");
+        }
+        {
+            let mut state = state.lock().unwrap();
+            // The status line arrives in a read of its own.
+            let (status_line, headers) = REJECTION.split_at(27);
+            state.responses.extend([status_line, headers]);
+            state.reads.clear();
+            state.writes.clear();
+        }
+        let error = agent
+            .post("http://127.0.0.1/")
+            .header("expect", "100-continue")
+            .send("body")
+            .unwrap_err();
+        assert!(matches!(error, Error::StatusCode(401)), "{error:?}");
+        let state = state.lock().unwrap();
+        assert_eq!(state.connections, 1);
+        assert_eq!(state.reads.len(), 2, "status line and headers");
+        assert_eq!(state.writes.len(), 1, "body must not be sent");
+    }
+}
+
+#[test]
+fn remote_close_while_awaiting_100_is_not_retried() {
+    let (agent, state) = setup(config());
+    // An incomplete status line followed by end of input.
+    let responses: [&[u8]; 2] = [b"HTTP/1.1 10", b""];
+    state.lock().unwrap().responses.extend(responses);
+    let error = agent
+        .post("http://127.0.0.1/")
+        .header("expect", "100-continue")
+        .send("body")
+        .unwrap_err();
+    assert!(
+        matches!(&error, Error::Io(e) if e.kind() == std::io::ErrorKind::UnexpectedEof),
+        "{error:?}"
+    );
+    let state = state.lock().unwrap();
+    assert_eq!(state.reads.len(), 2);
+    assert_eq!(state.writes.len(), 1, "body must not be sent");
+}
+
 #[test]
 fn read_timeout_reports_per_read() {
     let (agent, state) = setup(config());
