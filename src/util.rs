@@ -111,7 +111,8 @@ impl ConsumeBuf {
         if size > 100 * 1024 * 1024 {
             panic!("ConsumeBuf grown to unreasonable size (>100MB)");
         }
-        self.buf.resize(size, 0);
+        // Shrinking must never cut off data that is filled but not yet consumed.
+        self.buf.resize(size.max(self.filled), 0);
     }
 
     pub fn add_space(&mut self, size: usize) {
