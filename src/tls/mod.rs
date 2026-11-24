@@ -210,6 +210,9 @@ impl TlsConfigBuilder {
     /// Client certificate chain with corresponding private key.
     ///
     /// Defaults to `None`.
+    ///
+    /// An HTTPS redirect target can request this certificate, including on another
+    /// origin. This matches [curl with `--cert`](https://curl.se/docs/manpage.html#-E).
     pub fn client_cert(mut self, v: Option<ClientCert>) -> Self {
         self.config.client_cert = v;
         self
