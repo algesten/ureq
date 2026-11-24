@@ -459,4 +459,22 @@ mod test {
         let a = Agent::new_with_defaults();
         assert_no_alloc(|| a.clone());
     }
+
+    #[test]
+    #[cfg(feature = "cookies")]
+    fn agent_debug_does_not_print_cookies() {
+        use crate::Cookie;
+
+        let a = Agent::new_with_defaults();
+        let uri = Uri::from_static("https://example.test");
+
+        let mut jar = a.cookie_jar_lock();
+        let cookie = Cookie::parse("session=s3cr3t; Secure; HttpOnly", &uri).unwrap();
+        jar.insert(cookie, &uri).unwrap();
+        jar.release();
+
+        let dbg = format!("{:?}", a);
+        assert!(dbg.contains("jar: SharedCookieJar"));
+        assert!(!dbg.contains("s3cr3t"));
+    }
 }

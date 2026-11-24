@@ -15,14 +15,32 @@ use std::io;
 
 #[derive(Debug)]
 pub(crate) struct SharedCookieJar {
-    inner: Mutex<CookieStore>,
+    inner: Mutex<RedactedCookieStore>,
+}
+
+struct RedactedCookieStore(CookieStore);
+impl std::ops::Deref for RedactedCookieStore {
+    type Target = CookieStore;
+    fn deref(&self) -> &CookieStore {
+        &self.0
+    }
+}
+impl std::ops::DerefMut for RedactedCookieStore {
+    fn deref_mut(&mut self) -> &mut CookieStore {
+        &mut self.0
+    }
+}
+impl fmt::Debug for RedactedCookieStore {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CookieStore").finish_non_exhaustive()
+    }
 }
 
 /// Collection of cookies.
 ///
 /// The jar is accessed using [`Agent::cookie_jar_lock`][crate::Agent::cookie_jar_lock].
 /// It can be saved and loaded.
-pub struct CookieJar<'a>(MutexGuard<'a, CookieStore>);
+pub struct CookieJar<'a>(MutexGuard<'a, RedactedCookieStore>);
 
 /// Representation of an HTTP cookie.
 ///
@@ -143,7 +161,7 @@ impl<'a> CookieJar<'a> {
     #[cfg(feature = "json")]
     pub fn load_json<R: io::BufRead>(&mut self, reader: R) -> Result<(), Error> {
         let store = cookie_store::serde::json::load(reader)?;
-        *self.0 = store;
+        **self.0 = store;
         Ok(())
     }
 
@@ -196,7 +214,7 @@ fn instantiate_cookie_store() -> CookieStore {
 impl SharedCookieJar {
     pub(crate) fn new() -> Self {
         SharedCookieJar {
-            inner: Mutex::new(instantiate_cookie_store()),
+            inner: Mutex::new(RedactedCookieStore(instantiate_cookie_store())),
         }
     }
 

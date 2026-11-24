@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Omit cookie values from Agent debug output #1236
   * Preserve upload scratch capacity alongside unread response bytes #1236
   * Handle buffered final responses while awaiting 100 Continue #1236
   * Propagate TLS transport write failures before connection reuse #1236
