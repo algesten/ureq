@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Check cookie scope against the request URI #1236
   * Honor explicit Cookie headers when using a cookie jar #1236
   * Expose the encoded multipart body length via `Form::content_length` #1235
   * Honor connection deadlines during CONNECT and TCP fallback #1233
