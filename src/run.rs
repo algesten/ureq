@@ -598,7 +598,12 @@ fn recv_response(
     };
 
     timings.record_time(Timeout::RecvResponse);
-    Ok((response, call.proceed().unwrap()))
+    let next = if is_following_redirects {
+        call.proceed_following_redirects()
+    } else {
+        call.proceed()
+    };
+    Ok((response, next.unwrap()))
 }
 
 fn handle_redirect(mut call: Call<Redirect>, config: &Config) -> Result<Call<Prepare>, Error> {
