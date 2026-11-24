@@ -1104,6 +1104,22 @@ pub(crate) mod test {
     }
 
     #[test]
+    #[cfg(feature = "_test")]
+    fn follow_closing_redirect_without_reading_its_body() {
+        init_test_log();
+        crate::unversioned::transport::set_handler_raw("/closing-redirect", |w| {
+            w.write_all(b"HTTP/1.1 302 Found\r\nLocation: /get\r\nConnection: close\r\nContent-Length: 100\r\n\r\n")
+        });
+        assert_eq!(
+            get("http://example.test/closing-redirect")
+                .call()
+                .unwrap()
+                .status(),
+            200
+        );
+    }
+
+    #[test]
     fn redirect_history_none() {
         init_test_log();
         let res = get("http://httpbin.org/redirect-to?url=%2Fget")
