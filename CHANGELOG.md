@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Propagate TLS transport write failures before connection reuse #1236
   * Apply response body limits to compressed input as well as output #1236
   * Reject proxy builder hosts that alter the parsed endpoint #1236
   * Validate HTTP framing at the end of a Brotli stream #1236

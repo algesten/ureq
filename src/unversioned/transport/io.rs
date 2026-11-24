@@ -1,7 +1,7 @@
 use std::io;
 use std::sync::Arc;
 
-use crate::Timeout;
+use crate::{Error, Timeout};
 
 use super::time::{Duration, Instant};
 use super::{NextTimeout, Transport};
@@ -16,6 +16,15 @@ pub struct TransportAdapter<T: Transport = Box<dyn Transport>> {
     timeout_set_at: Instant,
     current_time: Arc<dyn Fn() -> Instant + Send + Sync + 'static>,
     transport: T,
+    write_failed: Option<WriteFailed>,
+}
+
+/// What we keep of a failed [`Transport::transmit_output()`] to fail later writes the same way.
+#[derive(Clone, Copy)]
+enum WriteFailed {
+    Timeout(Timeout),
+    Os(i32),
+    Io(io::ErrorKind),
 }
 
 impl<T: Transport> TransportAdapter<T> {
@@ -33,6 +42,7 @@ impl<T: Transport> TransportAdapter<T> {
             timeout_set_at: current_time(),
             current_time,
             transport,
+            write_failed: None,
         }
     }
 
@@ -71,7 +81,7 @@ impl<T: Transport> TransportAdapter<T> {
 impl<T: Transport> io::Read for TransportAdapter<T> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.transport
-            .maybe_await_input(self.timeout_now()?)
+            .maybe_await_input(self.timeout_now().map_err(Error::into_io)?)
             .map_err(|e| e.into_io())?;
         let input = self.transport.buffers().input();
 
@@ -84,29 +94,66 @@ impl<T: Transport> io::Read for TransportAdapter<T> {
 }
 
 impl<T: Transport> TransportAdapter<T> {
-    fn timeout_now(&self) -> io::Result<NextTimeout> {
+    fn timeout_now(&self) -> Result<NextTimeout, Error> {
         self.timeout
             .remaining_at(self.timeout_set_at, (self.current_time)())
             .check()
-            .map_err(|e| e.into_io())
     }
 }
 
 impl<T: Transport> io::Write for TransportAdapter<T> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.check_write()?;
         let output = self.transport.buffers().output();
 
         let max = buf.len().min(output.len());
         output[..max].copy_from_slice(&buf[..max]);
-        self.transport
-            .transmit_output(max, self.timeout_now()?)
-            .map_err(|e| e.into_io())?;
+        let result = self
+            .timeout_now()
+            .and_then(|timeout| self.transport.transmit_output(max, timeout));
+        if let Err(error) = result {
+            self.write_failed = Some(WriteFailed::new(&error));
+            return Err(error.into_io());
+        }
 
         Ok(max)
     }
 
     fn flush(&mut self) -> io::Result<()> {
         Ok(())
+    }
+}
+
+impl<T: Transport> TransportAdapter<T> {
+    pub(crate) fn check_write(&self) -> io::Result<()> {
+        match self.write_failed {
+            Some(error) => Err(error.into_io()),
+            None => Ok(()),
+        }
+    }
+}
+
+impl WriteFailed {
+    fn into_io(self) -> io::Error {
+        match self {
+            Self::Timeout(reason) => Error::Timeout(reason).into_io(),
+            Self::Os(code) => io::Error::from_raw_os_error(code),
+            Self::Io(kind) => kind.into(),
+        }
+    }
+
+    fn new(e: &Error) -> Self {
+        match e {
+            Error::Timeout(reason) => Self::Timeout(*reason),
+            Error::Io(e) if e.kind() == io::ErrorKind::Interrupted => {
+                Self::Io(io::ErrorKind::Other)
+            }
+            Error::Io(e) => match e.raw_os_error() {
+                Some(code) => Self::Os(code),
+                None => Self::Io(e.kind()),
+            },
+            _ => Self::Io(io::ErrorKind::Other),
+        }
     }
 }
 
@@ -219,5 +266,62 @@ mod test {
             .and_then(|e| e.downcast_ref::<Error>())
             .expect("ureq timeout");
         assert!(matches!(inner, Error::Timeout(Timeout::Connect)));
+    }
+
+    #[test]
+    fn adapter_write_stays_failed_after_partial_transmit() {
+        use std::io::Write;
+
+        let mut adapter = TransportAdapter::new(
+            HalfThenTimeout {
+                buffers: LazyBuffers::new(16, 16),
+                sent: Vec::new(),
+                failed: false,
+            },
+            Arc::new(Instant::now),
+        );
+
+        assert!(adapter.write(b"record-1").is_err());
+
+        // A TLS library offers the same record again, although half of it is on the wire.
+        let error = adapter.write(b"record-1").unwrap_err();
+        assert!(matches!(
+            Error::from(error),
+            Error::Timeout(Timeout::PerWrite)
+        ));
+        assert_eq!(adapter.into_inner().sent, b"reco");
+    }
+
+    // Sends half of the first output before timing out.
+    #[derive(Debug)]
+    struct HalfThenTimeout {
+        buffers: LazyBuffers,
+        sent: Vec<u8>,
+        failed: bool,
+    }
+
+    impl Transport for HalfThenTimeout {
+        fn buffers(&mut self) -> &mut dyn Buffers {
+            &mut self.buffers
+        }
+
+        fn transmit_output(&mut self, amount: usize, _: NextTimeout) -> Result<(), Error> {
+            let output = &self.buffers.output()[..amount];
+            if !self.failed {
+                self.failed = true;
+                self.sent.extend_from_slice(&output[..amount / 2]);
+                return Err(Error::Timeout(Timeout::PerWrite));
+            }
+            self.sent.extend_from_slice(output);
+            Ok(())
+        }
+
+        fn await_input(&mut self, _: NextTimeout) -> Result<bool, Error> {
+            Ok(false)
+        }
+
+        fn is_open(&mut self) -> bool {
+            true
+        }
     }
 }

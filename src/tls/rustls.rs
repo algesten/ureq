@@ -259,7 +259,8 @@ impl Transport for RustlsTransport {
         let output = &self.buffers.output()[..amount];
         self.stream.write_all(output)?;
 
-        Ok(())
+        // rustls can accept plaintext while deferring a ciphertext write error.
+        self.stream.get_ref().check_write().map_err(Error::from)
     }
 
     fn await_input(&mut self, timeout: NextTimeout) -> Result<bool, Error> {
@@ -367,5 +368,120 @@ mod test {
             build_config(&TlsConfig::default()),
             Err(Error::Tls(_))
         ));
+    }
+}
+
+#[cfg(test)]
+mod write_tests {
+    use std::sync::Mutex;
+
+    use rustls::{ServerConfig, ServerConnection};
+    use rustls_pki_types::pem::PemObject;
+
+    use crate::Timeout;
+    use crate::transport::time::Instant;
+
+    use super::*;
+
+    #[test]
+    fn partly_sent_record_is_not_sent_again() {
+        let provider = Arc::new(rustls::crypto::aws_lc_rs::default_provider());
+
+        let cert = include_bytes!("../unversioned/transport/testdata/cert.pem");
+        let cert = CertificateDer::from_pem_slice(cert).unwrap();
+        let key = include_bytes!("../unversioned/transport/testdata/key.pem");
+        let key = PrivateSec1KeyDer::from_pem_slice(key).unwrap();
+        let config = ServerConfig::builder_with_provider(provider.clone())
+            .with_safe_default_protocol_versions()
+            .unwrap()
+            .with_no_client_auth()
+            .with_single_cert(vec![cert], PrivateKeyDer::Sec1(key))
+            .unwrap();
+        let server = Arc::new(Mutex::new(Server {
+            tls: ServerConnection::new(Arc::new(config)).unwrap(),
+            stalled: false,
+        }));
+
+        let tls_config = TlsConfig::builder()
+            .disable_verification(true)
+            .unversioned_rustls_crypto_provider(provider)
+            .build();
+        let config = build_config(&tls_config).unwrap().rustls_config;
+        let mut conn = ClientConnection::new(config, "localhost".try_into().unwrap()).unwrap();
+        let chained = ToServer {
+            buffers: LazyBuffers::new(8192, 8192),
+            server: server.clone(),
+        };
+        let mut sock = TransportAdapter::new(chained.boxed(), Arc::new(Instant::now));
+        conn.complete_io(&mut sock).unwrap();
+        let mut transport = RustlsTransport {
+            buffers: LazyBuffers::new(8192, 8192),
+            stream: StreamOwned { conn, sock },
+        };
+
+        let amount = 1024;
+        transport.buffers().output()[..amount].fill(b'a');
+
+        // The write that times out is reported by the call that caused it.
+        transport
+            .transmit_output(amount, NextTimeout::default())
+            .unwrap();
+        server.lock().unwrap().stalled = true;
+        let error = transport
+            .transmit_output(amount, NextTimeout::default())
+            .unwrap_err();
+        assert!(matches!(error, Error::Timeout(Timeout::PerWrite)));
+
+        // The server reads again. It must not get the start of the record a second time.
+        server.lock().unwrap().stalled = false;
+        let error = transport
+            .transmit_output(amount, NextTimeout::default())
+            .unwrap_err();
+        assert!(matches!(error, Error::Timeout(Timeout::PerWrite)));
+    }
+
+    #[derive(Debug)]
+    struct Server {
+        tls: ServerConnection,
+        stalled: bool,
+    }
+
+    /// Transport to a TLS server in memory. While the server is stalled, it takes
+    /// half of the output before the write times out, like a full socket buffer.
+    #[derive(Debug)]
+    struct ToServer {
+        buffers: LazyBuffers,
+        server: Arc<Mutex<Server>>,
+    }
+
+    impl Transport for ToServer {
+        fn buffers(&mut self) -> &mut dyn Buffers {
+            &mut self.buffers
+        }
+
+        fn transmit_output(&mut self, amount: usize, _: NextTimeout) -> Result<(), Error> {
+            let mut output = &self.buffers.output()[..amount];
+            let mut server = self.server.lock().unwrap();
+            if server.stalled {
+                server.tls.read_tls(&mut &output[..amount / 2])?;
+                return Err(Error::Timeout(Timeout::PerWrite));
+            }
+            while !output.is_empty() {
+                server.tls.read_tls(&mut output)?;
+                server.tls.process_new_packets()?;
+            }
+            Ok(())
+        }
+
+        fn await_input(&mut self, _: NextTimeout) -> Result<bool, Error> {
+            let mut input = self.buffers.input_append_buf();
+            let amount = self.server.lock().unwrap().tls.write_tls(&mut input)?;
+            self.buffers.input_appended(amount);
+            Ok(amount > 0)
+        }
+
+        fn is_open(&mut self) -> bool {
+            true
+        }
     }
 }
