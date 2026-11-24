@@ -376,6 +376,33 @@ mod test {
     }
 
     #[test]
+    fn unrepresentable_deadline_never_happens() {
+        let (timings, _) = with_clock(Timeouts {
+            global: Some(StdDuration::MAX),
+            ..Timeouts::default()
+        });
+        assert_eq!(
+            timings.next_timeout(Timeout::Resolve),
+            NextTimeout::default()
+        );
+
+        // A shorter timeout still applies.
+        let (timings, _) = with_clock(Timeouts {
+            global: Some(StdDuration::MAX),
+            per_call: Some(StdDuration::from_secs(10)),
+            ..Timeouts::default()
+        });
+        assert_eq!(
+            timings.next_timeout(Timeout::Resolve),
+            NextTimeout {
+                after: Duration::from_secs(10),
+                reason: Timeout::PerCall,
+                ..NextTimeout::default()
+            }
+        );
+    }
+
+    #[test]
     fn phase_budget_starts_after_latest_predecessor() {
         use Timeout::*;
 

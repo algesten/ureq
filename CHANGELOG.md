@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Handle timeout deadlines beyond the clock range #1236
   * Validate the user agent sent in proxy CONNECT requests #1236
   * Omit cookie values from Agent debug output #1236
   * Preserve upload scratch capacity alongside unread response bytes #1236
