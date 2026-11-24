@@ -1,5 +1,6 @@
 # Unreleased
 
+  * Honor explicit Cookie headers when using a cookie jar #1236
   * Expose the encoded multipart body length via `Form::content_length` #1235
   * Honor connection deadlines during CONNECT and TCP fallback #1233
   * Update cookie to 0.18.3 for RUSTSEC-2026-0594 #1240

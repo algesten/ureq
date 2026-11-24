@@ -1263,6 +1263,52 @@ pub(crate) mod test {
     }
 
     #[test]
+    #[cfg(all(feature = "cookies", feature = "_test"))]
+    fn request_cookie_header_overrides_jar() {
+        use crate::transport::set_handler_cb;
+        use std::sync::{Arc, Mutex};
+        init_test_log();
+
+        let agent = Agent::new_with_defaults();
+        let uri = Uri::from_static("http://cookie.test/cookie-override");
+
+        let mut jar = agent.cookie_jar_lock();
+        jar.insert(Cookie::parse("session=jar; Path=/", &uri).unwrap(), &uri)
+            .unwrap();
+        jar.release();
+
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let seen2 = seen.clone();
+        set_handler_cb("/cookie-override", 200, &[], &[], move |req| {
+            let all: Vec<_> = req
+                .headers()
+                .get_all("cookie")
+                .iter()
+                .map(|c| c.to_str().unwrap().to_string())
+                .collect();
+            seen2.lock().unwrap().push(all);
+        });
+
+        // A Cookie header set on the request is the only one sent.
+        agent
+            .get("http://cookie.test/cookie-override")
+            .header("Cookie", "session=request")
+            .call()
+            .unwrap();
+
+        // Without it, the jar is used.
+        agent
+            .get("http://cookie.test/cookie-override")
+            .call()
+            .unwrap();
+
+        assert_eq!(
+            *seen.lock().unwrap(),
+            [["session=request"], ["session=jar"]]
+        );
+    }
+
+    #[test]
     #[cfg(all(feature = "_test", not(feature = "cookies")))]
     fn partial_redirect_when_following() {
         init_test_log();

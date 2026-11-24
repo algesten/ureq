@@ -163,6 +163,9 @@ impl Agent {
     /// all clones of the same [`Agent`], meaning you must drop the CookieJar
     /// before using the agent, or end up with a deadlock.
     ///
+    /// Cookies in the jar are not sent for a request that sets its own `Cookie`
+    /// header. That header is used as is.
+    ///
     /// ```rust
     /// # #[cfg(feature = "json")]
     /// # fn no_run() -> Result<(), ureq::Error> {
